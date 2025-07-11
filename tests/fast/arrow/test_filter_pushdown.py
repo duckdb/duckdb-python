@@ -737,7 +737,7 @@ class TestArrowFilterPushdown(object):
         match = re.search("│ +b +│", query_res[0][1])
         assert not match
 
-    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
+    @pytest.mark.skipif(sys.version_info <= (3, 9), reason="Requires python 3.9")
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
@@ -808,7 +808,7 @@ class TestArrowFilterPushdown(object):
         match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NULL.*", query_res[0][1], flags=re.DOTALL)
         assert not match
 
-    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
+    @pytest.mark.skipif(sys.version_info <= (3, 9), reason="Requires python 3.9")
     @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
     def test_nested_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
@@ -1013,3 +1013,9 @@ class TestArrowFilterPushdown(object):
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a <= 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a = 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a != 'NaN'::FLOAT")
+
+    def test_dynamic_filter(self, duckdb_cursor):
+        t = pa.Table.from_pydict({"a": [3, 24, 234, 234, 234, 234, 234, 234, 234, 45, 2, 5, 2, 45]})
+        duckdb_cursor.register("t", t)
+        res = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
+        assert len(res) == 11

@@ -68,7 +68,6 @@ requires = [
 ]
 
 [tool.scikit-build]
-logging.level = "DEBUG"
 minimum-version = "0.10"
 cmake.version = ">=3.29.0"
 ninja.version = ">=1.10"
