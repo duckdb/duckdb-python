@@ -19,8 +19,7 @@ on:
       git_ref:
         type: string
         description: Git ref of the DuckDB python package
-        required: true
-        default: refs/heads/main
+        required: false
       duckdb_git_ref:
         type: string
         description: Git ref of DuckDB
@@ -44,11 +43,11 @@ on:
       git_ref:
         type: string
         description: Git ref of the DuckDB python package
-        required: true
+        required: false
       duckdb_git_ref:
         type: string
         description: Git ref of DuckDB
-        required: true
+        required: false
       force_version:
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
