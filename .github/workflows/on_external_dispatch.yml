@@ -10,6 +10,11 @@ on:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
+      publish_to_pypi:
+        type: boolean
+        description: Publish packages to PyPI?
+        required: true
+        default: false
 
 jobs:
   externally_triggered_build:
