@@ -114,8 +114,9 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sdist-main
+          name: sdist
           path: dist/*.tar.gz
+          compression-level: 0
 
   build_wheels:
     name: 'Wheel: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
@@ -186,3 +187,4 @@ jobs:
         with:
           name: wheel-${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
           path: wheelhouse/*.whl
+          compression-level: 0
