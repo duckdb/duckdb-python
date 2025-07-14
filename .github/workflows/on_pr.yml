@@ -28,7 +28,6 @@ jobs:
     with:
       minimal: true
       testsuite: all
-      git_ref: ${{ github.head_ref }}
       duckdb_git_ref: ${{ github.base_ref }}
 
   coverage_test:
@@ -36,6 +35,5 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     uses: ./.github/workflows/coverage.yml
     with:
-      git_ref: ${{ github.head_ref }}
       duckdb_git_ref: ${{ github.base_ref }}
       testsuite: all
