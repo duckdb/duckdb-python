@@ -1,0 +1,23 @@
+name: Builds triggered externally by DuckDB
+on:
+  workflow_dispatch:
+    inputs:
+      duckdb-sha:
+        type: string
+        description: The DuckDB SHA to build against
+        required: true
+      force_version:
+        type: string
+        description: Force version (vX.Y.Z-((rc|post)N))
+        required: false
+
+jobs:
+  externally_triggered_build:
+    name: Build and test releases
+    uses: ./.github/workflows/pypi_packaging.yml
+    with:
+      minimal: false
+      testsuite: all
+      git_ref: ${{ github.ref }}
+      duckdb_git_ref: ${{ inputs.duckdb-sha }}
+      force_version: ${{ inputs.force_version }}
