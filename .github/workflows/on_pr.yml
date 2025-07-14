@@ -19,6 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+
   packaging_test:
     name: Build a minimal set of packages and run all tests on them
     # Skip packaging tests for draft PRs
@@ -27,13 +28,14 @@ jobs:
     with:
       minimal: true
       testsuite: all
-      git_ref: ${{ github.ref }}
-      duckdb_git_ref: ${{ github.ref_name }}
+      git_ref: ${{ github.head_ref }}
+      duckdb_git_ref: ${{ github.base_ref }}
 
   coverage_test:
     name: Run coverage tests
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     uses: ./.github/workflows/coverage.yml
     with:
-      git_ref: ${{ github.ref }}
+      git_ref: ${{ github.head_ref }}
+      duckdb_git_ref: ${{ github.base_ref }}
       testsuite: all
