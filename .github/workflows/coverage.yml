@@ -5,11 +5,11 @@ on:
       git_ref:
         type: string
         description: Git ref of the DuckDB python package
-        default: refs/heads/main
-        required: true
+        required: false
       duckdb_git_ref:
         type: string
         description: Git ref of DuckDB
+        required: false
       testsuite:
         type: choice
         description: Testsuite to run ('all' or 'fast')
@@ -23,9 +23,10 @@ on:
       git_ref:
         type: string
         description: Git ref of the DuckDB python package
-        required: true
+        required: false
       duckdb_git_ref:
         type: string
+        required: false
       testsuite:
         type: string
         description: Testsuite to run ('all' or 'fast')
