@@ -44,18 +44,26 @@ pip install 'duckdb[all]'
 
 ## Development
 
-### Building wheels and sdists
+### Cloning
 
-  To build a wheel and sdist for your system and the default Python version:
-```bash
-uv build
-````
-
-  To build a wheel for a different Python version:
-```bash
-# E.g. for Python 3.9
-uv build -p 3.9
+When you clone the repo or your fork, make sure you initialize the duckdb submodule:
+```shell
+git clone --recurse-submodules <repo>
 ```
+
+... or, if  you already have the repo locally:
+```shell
+git clone <your-repo>
+cd <your-repo>
+git submodule update --init --recursive
+```
+
+If you'll be switching between branches that are have the submodule set to different refs, then make your life 
+easier and add the git hooks in the .githooks directory to your local config: 
+```shell
+git config --local core.hooksPath .githooks/
+```
+
 
 ### Editable installs (general)
 
@@ -72,7 +80,7 @@ uv build -p 3.9
 # install all dev dependencies without building the project (needed once)
 uv sync -p 3.9 --no-install-project
 # build and install without build isolation
-uv sync  --no-build-isolation
+uv sync --no-build-isolation
 ```
 
 ### Editable installs (IDEs)
@@ -81,6 +89,28 @@ uv sync  --no-build-isolation
   steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
   compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
   management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
+
+
+### Cleaning
+
+```shell
+uv cache clean
+rm -rf build .venv uv.lock
+```
+
+
+### Building wheels and sdists
+
+To build a wheel and sdist for your system and the default Python version:
+```bash
+uv build
+````
+
+To build a wheel for a different Python version:
+```bash
+# E.g. for Python 3.9
+uv build -p 3.9
+```
 
 ### Running tests
 
