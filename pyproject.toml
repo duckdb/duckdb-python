@@ -112,6 +112,7 @@ if.state = "editable"
 if.env.COVERAGE = false
 build-dir = "build/debug/"
 editable.rebuild = true
+editable.mode = "redirect"
 cmake.build-type = "Debug"
 
 # Separate override because we have to append to cmake.define with `inherit` in order not to overwrite other defines.

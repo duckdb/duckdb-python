@@ -17,12 +17,6 @@ setup_compiler_launcher_if_available()
 # ────────────────────────────────────────────
 # Create compile_commands.json for IntelliSense and clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-# If we're not building through scikit-build-core then we have to set a different dest dir
-include(GNUInstallDirs)
-set(_DUCKDB_PY_INSTALL_DIR "${SKBUILD_PLATLIB_DIR}")
-if(NOT _DUCKDB_PY_INSTALL_DIR)
-  set(_DUCKDB_PY_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}")
-endif()
 
 # ────────────────────────────────────────────
 # Policy hygiene
@@ -87,4 +81,16 @@ target_link_libraries(_duckdb PRIVATE _duckdb_dependencies)
 # ────────────────────────────────────────────
 # Put the object file in the correct place
 # ────────────────────────────────────────────
+
+# If we're not building through scikit-build-core then we have to set a different dest dir
+include(GNUInstallDirs)
+if(DEFINED SKBUILD_PLATLIB_DIR)
+  set(_DUCKDB_PY_INSTALL_DIR "${SKBUILD_PLATLIB_DIR}")
+elseif(DEFINED Python_SITEARCH)
+  set(_DUCKDB_PY_INSTALL_DIR "${Python_SITEARCH}")
+else()
+  message(WARNING "Could not determine Python install dir. Falling back to CMAKE_INSTALL_LIBDIR.")
+  set(_DUCKDB_PY_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}")
+endif()
+
 install(TARGETS _duckdb LIBRARY DESTINATION "${_DUCKDB_PY_INSTALL_DIR}")

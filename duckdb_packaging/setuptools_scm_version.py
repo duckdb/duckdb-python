@@ -12,8 +12,8 @@ from typing import Any
 # Import from our own versioning module to avoid duplication
 from ._versioning import parse_version, format_version
 
-# MAIN_BRANCH_VERSIONING default should be 'True' for main branch and feature branches
-MAIN_BRANCH_VERSIONING = True
+# MAIN_BRANCH_VERSIONING should be 'True' on main branch only
+MAIN_BRANCH_VERSIONING = False
 
 SCM_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"
 SCM_GLOBAL_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION"
