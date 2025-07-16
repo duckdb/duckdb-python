@@ -53,5 +53,5 @@ jobs:
           DUCKDB_SHA="${{ inputs.duckdb-sha }}"
           aws s3 cp \
             artifacts \
-            s3://duckdb-staging/${DUCKDB_SHA:0:7}/${{ github.repository }}/ \
+            s3://duckdb-staging/${DUCKDB_SHA:0:10}/${{ github.repository }}/ \
             --recursive
