@@ -13,7 +13,7 @@ from typing import Any
 from ._versioning import parse_version, format_version
 
 # MAIN_BRANCH_VERSIONING should be 'True' on main branch only
-MAIN_BRANCH_VERSIONING = False
+MAIN_BRANCH_VERSIONING = True
 
 SCM_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"
 SCM_GLOBAL_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION"
