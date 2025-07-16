@@ -65,19 +65,6 @@ git config --local core.hooksPath .githooks/
 ```
 
 
-### Building wheels and sdists
-
-  To build a wheel and sdist for your system and the default Python version:
-```bash
-uv build
-````
-
-  To build a wheel for a different Python version:
-```bash
-# E.g. for Python 3.9
-uv build -p 3.9
-```
-
 ### Editable installs (general)
 
   It's good to be aware of the following when creating an editable install:
@@ -93,7 +80,7 @@ uv build -p 3.9
 # install all dev dependencies without building the project (needed once)
 uv sync -p 3.9 --no-install-project
 # build and install without build isolation
-uv sync  --no-build-isolation
+uv sync --no-build-isolation
 ```
 
 ### Editable installs (IDEs)
@@ -102,6 +89,28 @@ uv sync  --no-build-isolation
   steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
   compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
   management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
+
+
+### Cleaning
+
+```shell
+uv cache clean
+rm -rf build .venv uv.lock
+```
+
+
+### Building wheels and sdists
+
+To build a wheel and sdist for your system and the default Python version:
+```bash
+uv build
+````
+
+To build a wheel for a different Python version:
+```bash
+# E.g. for Python 3.9
+uv build -p 3.9
+```
 
 ### Running tests
 
