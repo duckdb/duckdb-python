@@ -109,9 +109,9 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
         assert _bump_version("1.2.3", 0, False) == "1.2.3"
         assert _bump_version("1.2.3.post1", 0, False) == "1.2.3.post1"
 
+    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
     def test_bump_version_with_distance(self):
         """Test bump_version with distance from tag."""
-        # Main branch versioning (default)
         assert _bump_version("1.2.3", 5, False) == "1.3.0.dev5"
         
         # Post-release development
@@ -119,19 +119,16 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
 
     @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '0'})
     def test_bump_version_release_branch(self):
-        """Test bump_version on release branch (MAIN_BRANCH_VERSIONING=False)."""
-        # Need to reload the module to pick up the environment variable
-        import importlib
-        from duckdb_packaging import setuptools_scm_version
-        importlib.reload(setuptools_scm_version)
-        
-        assert setuptools_scm_version._bump_version("1.2.3", 5, False) == "1.2.4.dev5"
+        """Test bump_version on bugfix branch."""
+        assert _bump_version("1.2.3", 5, False) == "1.2.4.dev5"
 
+    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
     def test_bump_version_dirty(self):
         """Test bump_version with dirty working directory."""
         assert _bump_version("1.2.3", 0, True) == "1.3.0.dev0"
         assert _bump_version("1.2.3.post1", 0, True) == "1.2.3.post2.dev0"
 
+    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
     def test_version_scheme_function(self):
         """Test the version_scheme function that setuptools_scm calls."""
         # Mock setuptools_scm version object
