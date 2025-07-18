@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}
-    if: ${{ vars.PYPI_URL != '' }}
+    #if: ${{ vars.PYPI_URL != '' }}
     permissions:
       # this is needed for the OIDC flow that is used with trusted publishing on PyPI
       id-token: write
