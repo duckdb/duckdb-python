@@ -22,6 +22,8 @@ on:
         type: string
         required: true
 
+concurrency: ${{ inputs.artifact_folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}
+
 jobs:
   prepare:
     name: Prepare and guard upload
@@ -33,11 +35,7 @@ jobs:
       - name: Determine S3 Prefix
         id: get_s3_prefix
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            artifact_folder="${{ inputs.artifact_folder }}"
-          elif [[ -n "${{ github.event.workflow_run.id }}" && -n "${{ github.event.workflow_run.run_attempt }}" ]]; then
-            artifact_folder="${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}"
-          fi
+          artifact_folder="${{ inputs.artifact_folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}"
           if [[ -n "${artifact_folder}" ]]; then
             s3_prefix="${{ github.repository }}/${artifact_folder}"
             echo "Created S3 prefix: ${s3_prefix}"
@@ -74,11 +72,18 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}
-    #if: ${{ vars.PYPI_URL != '' }}
     permissions:
       # this is needed for the OIDC flow that is used with trusted publishing on PyPI
       id-token: write
     steps:
+      - name: Fail if PYPI_URL is not set
+        if: ${{ vars.PYPI_URL == '' }}
+        shell: bash
+        run: |
+          env_name="${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}"
+          echo "Error: vars.PYPI_URL is not set in the resolved environment (${env_name})"
+          exit 1
+
       - name: Authenticate With AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -96,7 +101,6 @@ jobs:
           aws s3 cp --recursive "${S3_URL}" packages
 
       - name: Upload artifacts to PyPI
-        if: ${{ vars.PYPI_URL != '' }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: ${{ vars.PYPI_URL }}
