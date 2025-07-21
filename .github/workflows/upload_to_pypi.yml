@@ -17,12 +17,12 @@ on:
         options:
           - test.pypi
           - production.pypi
-      artifact_folder:
-        description: The S3 folder that contains the artifacts (s3://duckdb-staging/duckdb/duckdb-python/<artifact_folder>)
+      artifact-folder:
+        description: The S3 folder that contains the artifacts (s3://duckdb-staging/duckdb/duckdb-python/<artifact-folder>)
         type: string
         required: true
 
-concurrency: ${{ inputs.artifact_folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}
+concurrency: ${{ inputs.artifact-folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}
 
 jobs:
   prepare:
@@ -35,7 +35,7 @@ jobs:
       - name: Determine S3 Prefix
         id: get_s3_prefix
         run: |
-          artifact_folder="${{ inputs.artifact_folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}"
+          artifact_folder="${{ inputs.artifact-folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}"
           if [[ -n "${artifact_folder}" ]]; then
             s3_prefix="${{ github.repository }}/${artifact_folder}"
             echo "Created S3 prefix: ${s3_prefix}"

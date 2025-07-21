@@ -6,32 +6,68 @@ on:
         type: string
         description: The DuckDB SHA to build against
         required: true
-      force_version:
+      commit-duckdb-sha:
+        type: boolean
+        description: Set (commit) the DuckDB submodule to the given SHA
+        default: true
+      force-version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
-      publish_packages:
+      publish-packages:
         type: boolean
         description: Publish to S3
         required: true
         default: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  commit_duckdb_submodule_sha:
+    name: Commit the submodule to the given DuckDB sha
+    if: ${{ inputs.commit-duckdb-sha }}
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Checkout DuckDB
+        run: |
+          cd external/duckdb
+          git fetch origin
+          git checkout ${{ inputs.duckdb_git_ref }}
+
+      - name: Commit and push new submodule ref
+        # see https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-to-a-pr-using-the-built-in-token
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add external/duckdb
+          git commit -m "Update submodule ref"
+          git push
+
   externally_triggered_build:
     name: Build and test releases
-    uses: ./.github/workflows/pypi_packaging.yml
+    uses:  ./.github/workflows/packaging.yml
     with:
       minimal: false
       testsuite: all
-      git_ref: ${{ github.ref }}
-      duckdb_git_ref: ${{ inputs.duckdb-sha }}
-      force_version: ${{ inputs.force_version }}
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      force-version: ${{ inputs.force-version }}
 
-  publish-s3:
+  publish_s3:
     name: Publish Artifacts to the S3 Staging Bucket
     runs-on: ubuntu-latest
     needs: [ externally_triggered_build ]
-    if: ${{ github.repository_owner == 'duckdb' && inputs.publish_packages }}
+    if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages }}
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
@@ -51,7 +87,6 @@ jobs:
         # semantics: if a version is forced then we upload into a folder by the version name, otherwise we upload
         #   into a folder that is named <run id>-<run-attempt>. Only the latter will be discovered be
         #   upload_to_pypi.yml.
-        shell: bash
         run: |
-          FOLDER="${{ inputs.force_version != '' && inputs.force_version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
+          FOLDER="${{ inputs.force-version != '' && inputs.force-version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
           aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${FOLDER}/ --recursive

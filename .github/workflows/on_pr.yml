@@ -24,11 +24,11 @@ jobs:
     name: Build a minimal set of packages and run all tests on them
     # Skip packaging tests for draft PRs
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    uses: ./.github/workflows/pypi_packaging.yml
+    uses: ./.github/workflows/packaging.yml
     with:
       minimal: true
       testsuite: all
-      duckdb_git_ref: ${{ github.base_ref }}
+      duckdb-git-ref: ${{ github.base_ref }}
 
   coverage_test:
     name: Run coverage tests
