@@ -37,6 +37,6 @@ jobs:
     with:
       minimal: false
       testsuite: all
-      git_ref: ${{ github.ref }}
-      duckdb_git_ref: ${{ needs.extract_duckdb_tag.outputs.duckdb_version }}
-      force_version: ${{ github.ref_name }}
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ needs.extract_duckdb_tag.outputs.duckdb_version }}
+      force-version: ${{ github.ref_name }}
