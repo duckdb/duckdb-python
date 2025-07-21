@@ -4,6 +4,8 @@ project(duckdb_py LANGUAGES CXX)
 
 # Always use C++11
 set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Set the library name
 set(DUCKDB_PYTHON_LIB_NAME "_duckdb")

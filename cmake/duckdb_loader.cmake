@@ -147,6 +147,23 @@ function(_duckdb_create_interface_target target_name)
             $<$<CONFIG:Debug>:DUCKDB_DEBUG_MODE>
     )
 
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        target_compile_options(${target_name} INTERFACE
+                /wd4244 # suppress Conversion from 'type1' to 'type2', possible loss of data
+                /wd4267 # suppress Conversion from ‘size_t’ to ‘type’, possible loss of data
+                /wd4200 # suppress Nonstandard extension used: zero-sized array in struct/union
+                /wd26451 /wd26495 # suppress Code Analysis
+                /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe functions
+                /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # see https://github.com/duckdblabs/duckdb-internal/issues/5151
+                /utf-8 # treat source files as UTF-8 encoded
+        )
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        target_compile_options(${target_name} INTERFACE
+                -stdlib=libc++ # for libc++ in favor of older libstdc++
+                -mmacosx-version-min=10.7 # minimum osx version compatibility
+        )
+    endif()
+
     # Link to the DuckDB static library
     target_link_libraries(${target_name} INTERFACE duckdb_static)
 
