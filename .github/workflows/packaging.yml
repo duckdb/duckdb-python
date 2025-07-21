@@ -1,5 +1,5 @@
 name: Packaging
-run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.force_version != '' && inputs.force_version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.git_ref }}, duckdb ref=${{ inputs.duckdb_git_ref }})
+run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.force-version != '' && inputs.force-version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.git-ref }}, duckdb ref=${{ inputs.duckdb-git-ref }})
 on:
   workflow_dispatch:
     inputs:
@@ -16,16 +16,16 @@ on:
           - none
           - fast
           - all
-      git_ref:
+      git-ref:
         type: string
         description: Git ref of the DuckDB python package
         required: false
-      duckdb_git_ref:
+      duckdb-git-ref:
         type: string
         description: Git ref of DuckDB
         required: true
         default: refs/heads/main
-      force_version:
+      force-version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
@@ -40,15 +40,15 @@ on:
         description: Testsuite to run (none, fast, all)
         required: true
         default: all
-      git_ref:
+      git-ref:
         type: string
         description: Git ref of the DuckDB python package
         required: false
-      duckdb_git_ref:
+      duckdb-git-ref:
         type: string
         description: Git ref of DuckDB
         required: false
-      force_version:
+      force-version:
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
         type: string
@@ -70,7 +70,7 @@ jobs:
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.git-ref }}
           fetch-depth: 0
           submodules: true
 
@@ -79,11 +79,11 @@ jobs:
         run: |
           cd external/duckdb
           git fetch origin
-          git checkout ${{ inputs.duckdb_git_ref }}
+          git checkout ${{ inputs.duckdb-git-ref }}
 
       - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.force_version != '' }}
-        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.force_version }}" >> $GITHUB_ENV
+        if: ${{ inputs.force-version != '' }}
+        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.force-version }}" >> $GITHUB_ENV
 
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v6
@@ -153,7 +153,7 @@ jobs:
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.git-ref }}
           fetch-depth: 0
           submodules: true
 
@@ -162,12 +162,12 @@ jobs:
         run: |
           cd external/duckdb
           git fetch origin
-          git checkout ${{ inputs.duckdb_git_ref }}
+          git checkout ${{ inputs.duckdb-git-ref }}
 
       # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
       - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.force_version != '' }}
-        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.force_version }}" >> $GITHUB_ENV
+        if: ${{ inputs.force-version != '' }}
+        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.force-version }}" >> $GITHUB_ENV
 
       # Install Astral UV, which will be used as build-frontend for cibuildwheel
       - uses: astral-sh/setup-uv@v6
