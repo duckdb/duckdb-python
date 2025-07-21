@@ -4,12 +4,12 @@ on:
     inputs:
       duckdb-sha:
         type: string
-        description: The DuckDB SHA to build against
+        description: The DuckDB submodule commit to build against
         required: true
       commit-duckdb-sha:
         type: boolean
-        description: Set (commit) the DuckDB submodule to the given SHA
-        default: true
+        description: Commit and push the DuckDB submodule ref
+        default: false
       force-version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
