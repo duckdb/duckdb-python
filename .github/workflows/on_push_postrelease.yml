@@ -33,7 +33,7 @@ jobs:
   packaging_test:
     name: Build and test post release packages and upload to S3
     needs: extract_duckdb_tag
-    uses: ./.github/workflows/pypi_packaging.yml
+    uses: ./.github/workflows/packaging.yml
     with:
       minimal: false
       testsuite: all
