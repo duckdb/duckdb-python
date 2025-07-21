@@ -27,7 +27,9 @@ defaults:
 jobs:
   commit_duckdb_submodule_sha:
     name: Commit the submodule to the given DuckDB sha
-    if: ${{ inputs.commit-duckdb-sha }}
+    if: ${{ inputs.commit-duckdb-sha && false }}
+    outputs:
+      sha-after-commit: ${{ steps.commit_and_push.outputs.commit_sha }}
     runs-on: ubuntu-24.04
     steps:
 
@@ -52,18 +54,21 @@ jobs:
           git add external/duckdb
           if git diff --cached --quiet; then
             echo "No changes to commit: submodule ref is unchanged."
-            exit 0
+          else
+            git commit -m "Update submodule ref"
+            git push
           fi
-          git commit -m "Update submodule ref"
-          git push
+          echo 'commit_sha=$( git log -1 --format="%h" )' >> $GITHUB_OUTPUT
 
   externally_triggered_build:
     name: Build and test releases
+    needs: commit_duckdb_submodule_sha
+    if: always()
     uses:  ./.github/workflows/packaging.yml
     with:
       minimal: false
       testsuite: all
-      git-ref: ${{ github.ref }}
+      git-ref: ${{ needs.commit_duckdb_submodule_sha.outputs.sha-after-commit || github.ref }}
       duckdb-git-ref: ${{ inputs.duckdb-sha }}
       force-version: ${{ inputs.force-version }}
 
