@@ -6,6 +6,10 @@ on:
         type: string
         description: The DuckDB SHA to build against
         required: true
+      commit_duckdb_sha:
+        type: boolean
+        description: Set (commit) the DuckDB submodule to the given SHA
+        default: false
       force_version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
@@ -14,12 +18,44 @@ on:
         type: boolean
         description: Publish to S3
         required: true
-        default: false
+        default: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
+  commit_duckdb_submodule_sha:
+    name: Commit the submodule to the given DuckDB sha
+    if: ${{ inputs.commit_duckdb_sha }}
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Checkout DuckDB
+        run: |
+          cd external/duckdb
+          git fetch origin
+          git checkout ${{ inputs.duckdb_git_ref }}
+
+      - name: Commit and push new submodule ref
+        # see https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-to-a-pr-using-the-built-in-token
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add external/duckdb
+          git commit -m "Update submodule ref"
+          git push
+
   externally_triggered_build:
     name: Build and test releases
-    uses: ./.github/workflows/pypi_packaging.yml
+    uses:  ./.github/workflows/packaging.yml
     with:
       minimal: false
       testsuite: all
@@ -51,7 +87,6 @@ jobs:
         # semantics: if a version is forced then we upload into a folder by the version name, otherwise we upload
         #   into a folder that is named <run id>-<run-attempt>. Only the latter will be discovered be
         #   upload_to_pypi.yml.
-        shell: bash
         run: |
           FOLDER="${{ inputs.force_version != '' && inputs.force_version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
           aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${FOLDER}/ --recursive
