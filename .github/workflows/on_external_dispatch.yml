@@ -42,7 +42,7 @@ jobs:
         run: |
           cd external/duckdb
           git fetch origin
-          git checkout ${{ inputs.duckdb_git_ref }}
+          git checkout ${{ inputs.duckdb-sha }}
 
       - name: Commit and push new submodule ref
         # see https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-to-a-pr-using-the-built-in-token
