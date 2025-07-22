@@ -25,14 +25,14 @@ defaults:
     shell: bash
 
 jobs:
-  commit_duckdb_submodule_sha:
+  commit_submodule:
     name: Commit the submodule to the given DuckDB sha
-    if: ${{ inputs.commit-duckdb-sha && false }}
     outputs:
-      sha-after-commit: ${{ steps.commit_and_push.outputs.commit_sha }}
+      sha-after-commit: ${{ steps.git_commit_sha.outputs.commit_sha }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
         with:
@@ -47,6 +47,7 @@ jobs:
           git checkout ${{ inputs.duckdb-sha }}
 
       - name: Commit and push new submodule ref
+        if: ${{ inputs.commit-duckdb-sha }}
         # see https://github.com/actions/checkout?tab=readme-ov-file#push-a-commit-to-a-pr-using-the-built-in-token
         run: |
           git config user.name "github-actions[bot]"
@@ -58,17 +59,20 @@ jobs:
             git commit -m "Update submodule ref"
             git push
           fi
-          echo 'commit_sha=$( git log -1 --format="%h" )' >> $GITHUB_OUTPUT
+
+      - name: Get the SHA of the latest commit
+        id: git_commit_sha
+        run: |
+          echo "commit_sha=$( git rev-parse HEAD )" >> $GITHUB_OUTPUT
 
   externally_triggered_build:
     name: Build and test releases
-    needs: commit_duckdb_submodule_sha
-    if: always()
+    needs: commit_submodule
     uses:  ./.github/workflows/packaging.yml
     with:
       minimal: false
       testsuite: all
-      git-ref: ${{ needs.commit_duckdb_submodule_sha.outputs.sha-after-commit || github.ref }}
+      git-ref: ${{ needs.commit_submodule.outputs.sha-after-commit }}
       duckdb-git-ref: ${{ inputs.duckdb-sha }}
       force-version: ${{ inputs.force-version }}
 
@@ -76,7 +80,7 @@ jobs:
     name: Publish Artifacts to the S3 Staging Bucket
     runs-on: ubuntu-latest
     needs: [ externally_triggered_build ]
-    if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages && needs.externally_triggered_build.result == 'success' && always() }}
+    if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages }}
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
