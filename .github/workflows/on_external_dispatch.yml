@@ -76,7 +76,7 @@ jobs:
     name: Publish Artifacts to the S3 Staging Bucket
     runs-on: ubuntu-latest
     needs: [ externally_triggered_build ]
-    if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages }}
+    if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages && needs.externally_triggered_build.result == 'success' && always() }}
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
