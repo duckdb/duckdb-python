@@ -76,12 +76,12 @@ jobs:
       # this is needed for the OIDC flow that is used with trusted publishing on PyPI
       id-token: write
     steps:
-      - name: Fail if PYPI_URL is not set
-        if: ${{ vars.PYPI_URL == '' }}
+      - name: Fail if PYPI_HOST is not set
+        if: ${{ vars.PYPI_HOST == '' }}
         shell: bash
         run: |
           env_name="${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}"
-          echo "Error: vars.PYPI_URL is not set in the resolved environment (${env_name})"
+          echo "Error: vars.PYPI_HOST is not set in the resolved environment (${env_name})"
           exit 1
 
       - name: Authenticate With AWS
@@ -103,5 +103,5 @@ jobs:
       - name: Upload artifacts to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          repository-url: ${{ vars.PYPI_URL }}
+          repository-url: 'https://${{ vars.PYPI_HOST }}/legacy/'
           packages-dir: packages
