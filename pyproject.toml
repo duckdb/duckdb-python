@@ -260,6 +260,7 @@ scripts = [ # dependencies used for running scripts
     "pcpp",
     "polars",
     "pyarrow",
+    "pyotp>=2.9.0",
     "pytz"
 ]
 build = [
