@@ -34,11 +34,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - if: ${{ vars.PYPI_HOST == '' }}
-        run: |
-          echo "Error: PYPI_HOST is not set in CI environment '${{ inputs.environment }}'"
-          exit 1
       - if: ${{ vars.PYPI_CLEANUP_USERNAME == '' }}
         run: |
           echo "Error: PYPI_CLEANUP_USERNAME is not set in CI environment '${{ inputs.environment }}'"
@@ -56,9 +51,10 @@ jobs:
       - name: Run Cleanup
         run: |
           set -x
+          pypi_index_flag=${{ inputs.environment == 'production.pypi' && '--prod' || '--test' }}
           uv sync --only-group pypi --no-install-project
           uv run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
-            --index-hostname "${{ vars.PYPI_HOST }}" \
+            ${pypi_index_flag} \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} > cleanup_output 2>&1
 
