@@ -16,6 +16,9 @@ jobs:
       PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v6
         with:
@@ -24,7 +27,6 @@ jobs:
       - name: Run Cleanup
         run: |
           set -x
-          uv -v venv
           uv -v sync --only-group pypi --no-install-project
           uv -v run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
             --index-hostname "${{ vars.PYPI_HOST }}" \
