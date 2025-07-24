@@ -41,9 +41,9 @@ parser = argparse.ArgumentParser(
     epilog="Environment variables required (unless --dry): PYPI_CLEANUP_PASSWORD, PYPI_CLEANUP_OTP"
 )
 parser.add_argument("--dry", action="store_true", help="Show what would be deleted but don't actually do it")
-parser.add_argument("--index-hostname", type=valid_hostname, required=True, help="Index hostname (required)")
-parser.add_argument("--max-nightlies", type=int, default=2, help="Max number of nightlies of unreleased versions (default=2)")
-parser.add_argument("--username", type=non_empty_string, help="Username (required unless --dry)")
+parser.add_argument("-i", "--index-hostname", type=valid_hostname, required=True, help="Index hostname (required)")
+parser.add_argument("-m", "--max-nightlies", type=int, default=2, help="Max number of nightlies of unreleased versions (default=2)")
+parser.add_argument("-u", "--username", type=non_empty_string, help="Username (required unless --dry)")
 args = parser.parse_args()
 
 # Handle secrets from environment variables
