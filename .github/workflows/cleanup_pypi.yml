@@ -23,9 +23,10 @@ jobs:
 
       - name: Run Cleanup
         run: |
-          uv venv
-          uv sync --only-group pypi --no-install-project
-          uv run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
+          set -x
+          uv -v venv
+          uv -v sync --only-group pypi --no-install-project
+          uv -v run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
             --index-hostname "${{ vars.PYPI_HOST }}" \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }}
