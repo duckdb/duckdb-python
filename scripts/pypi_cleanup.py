@@ -185,8 +185,8 @@ class PypiCleanup:
                     sorted_versions = sorted(versions, key=lambda x: int(x.split('dev')[-1]))
                     pkg_vers.extend(sorted_versions[:-self.max_dev_releases])
 
+            print("Following pkg_vers can be deleted: ", pkg_vers)
             if not self.do_it:
-                print("Following pkg_vers can be deleted: ", pkg_vers)
                 return
 
             if not pkg_vers:
@@ -231,9 +231,9 @@ class PypiCleanup:
 
             two_factor = False
             with s.post(
-                f"{self.url}/account/login/",
-                data={"csrf_token": csrf, "username": self.username, "password": self.password},
-                headers={"referer": f"{self.url}/account/login/"},
+                    f"{self.url}/account/login/",
+                    data={"csrf_token": csrf, "username": self.username, "password": self.password},
+                    headers={"referer": f"{self.url}/account/login/"},
             ) as r:
                 r.raise_for_status()
                 if r.url == f"{self.url}/account/login/":
@@ -255,9 +255,9 @@ class PypiCleanup:
                 for i in range(3):
                     auth_code = pyotp.TOTP(self.otp).now()
                     with s.post(
-                        two_factor_url,
-                        data={"csrf_token": csrf, "method": "totp", "totp_value": auth_code},
-                        headers={"referer": two_factor_url},
+                            two_factor_url,
+                            data={"csrf_token": csrf, "method": "totp", "totp_value": auth_code},
+                            headers={"referer": two_factor_url},
                     ) as r:
                         r.raise_for_status()
                         if r.url == two_factor_url:
@@ -286,12 +286,12 @@ class PypiCleanup:
                         referer = r.url
 
                     with s.post(
-                        form_url,
-                        data={
-                            "csrf_token": csrf,
-                            "confirm_delete_version": pkg_ver,
-                        },
-                        headers={"referer": referer},
+                            form_url,
+                            data={
+                                "csrf_token": csrf,
+                                "confirm_delete_version": pkg_ver,
+                            },
+                            headers={"referer": referer},
                     ) as r:
                         r.raise_for_status()
 

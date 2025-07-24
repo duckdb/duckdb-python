@@ -60,4 +60,15 @@ jobs:
           uv run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
             --index-hostname "${{ vars.PYPI_HOST }}" \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
-            --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }}
+            --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} > cleanup_output 2>&1
+
+      - name: PyPI Cleanup Summary
+        run : |
+          echo "## PyPI Cleanup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Dry run: ${{ inputs.dry-run }}" >> $GITHUB_STEP_SUMMARY
+          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "* CI Environment: " >> $GITHUB_STEP_SUMMARY
+          echo "* Output:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat cleanup_output >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
