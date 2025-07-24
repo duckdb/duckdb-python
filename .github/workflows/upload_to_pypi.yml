@@ -1,87 +1,47 @@
 name: Upload Artifacts to PyPI
 on:
-  # this workflow runs after the "External Dispatch" workflow is completed
-  workflow_run:
-    workflows: [ External Dispatch ]
-    types: [ completed ]
-    branches:
-      - main
-      - v*.*-*
+  workflow_call:
+    inputs:
+      environment:
+        description: CI environment to run in (test.pypi or production.pypi)
+        type: string
+        required: true
+      version:
+        description: The version to upload (must be present in the S3 staging bucket)
+        type: string
+        required: true
   workflow_dispatch:
     inputs:
       environment:
-        description: Environment to run in ()
+        description: CI environment to run in (test.pypi or production.pypi)
         type: choice
         required: true
         default: test.pypi
         options:
           - test.pypi
           - production.pypi
-      artifact-folder:
-        description: The S3 folder that contains the artifacts (s3://duckdb-staging/duckdb/duckdb-python/<artifact-folder>)
+      version:
+        description: The version to upload (must be present in the S3 staging bucket)
         type: string
         required: true
 
-concurrency: ${{ inputs.artifact-folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}
+concurrency:
+  group: ${{ inputs.version }}
+  cancel-in-progress: true
 
 jobs:
-  prepare:
-    name: Prepare and guard upload
-    if: ${{ github.repository_owner == 'duckdb' && ( github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' ) }}
-    runs-on: ubuntu-latest
-    outputs:
-      s3_prefix: ${{ steps.get_s3_prefix.outputs.s3_prefix }}
-    steps:
-      - name: Determine S3 Prefix
-        id: get_s3_prefix
-        run: |
-          artifact_folder="${{ inputs.artifact-folder || format('{0}-{1}', github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}"
-          if [[ -n "${artifact_folder}" ]]; then
-            s3_prefix="${{ github.repository }}/${artifact_folder}"
-            echo "Created S3 prefix: ${s3_prefix}"
-            echo "s3_prefix=${s3_prefix}" >> $GITHUB_OUTPUT
-          else
-            echo "Can't determine S3 prefix for event: ${{ github.event_name }}. Quitting."
-            exit 1
-          fi
-
-      - name: Authenticate With AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: 'us-east-2'
-          aws-access-key-id: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          aws-secret-access-key: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-
-      - name: Check S3 Prefix
-        shell: bash
-        run: |
-          if [[ $(aws s3api list-objects-v2 \
-            --bucket duckdb-staging \
-            --prefix "${{ steps.get_s3_prefix.outputs.s3_prefix }}/" \
-            --max-items 1 \
-            --query 'Contents[0].Key' \
-            --output text) == "None" ]]; then
-            echo "Prefix does not exist: ${{ steps.get_s3_prefix.outputs.s3_prefix }}"
-            echo "${{ github.event_name == 'workflow_run' && 'Possibly built a stable release?' || 'Unexpected error' }}"
-            exit 1
-          fi
-
   publish-pypi:
     name: Publish Artifacts to PyPI
-    needs: [ prepare ]
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}
+      name: ${{ inputs.environment }}
     permissions:
       # this is needed for the OIDC flow that is used with trusted publishing on PyPI
       id-token: write
     steps:
-      - name: Fail if PYPI_HOST is not set
-        if: ${{ vars.PYPI_HOST == '' }}
-        shell: bash
+      - if: ${{ vars.PYPI_HOST == '' }}
         run: |
-          env_name="${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'test.pypi' }}"
-          echo "Error: vars.PYPI_HOST is not set in the resolved environment (${env_name})"
+          echo "Error: PYPI_HOST is not set in CI environment '${{ inputs.environment }}'"
           exit 1
 
       - name: Authenticate With AWS
@@ -93,7 +53,7 @@ jobs:
 
       - name: Download Artifacts From S3
         env:
-          S3_URL: 's3://duckdb-staging/${{ needs.prepare.outputs.s3_prefix }}/'
+          S3_URL: 's3://duckdb-staging/${{ github.repository }}/${{ inputs.version }}/'
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -110,3 +70,5 @@ jobs:
     name: Remove Nightlies from PyPI
     needs: publish-pypi
     uses: ./.github/workflows/cleanup_pypi.yml
+    with:
+      environment: ${{ inputs.environment }}
