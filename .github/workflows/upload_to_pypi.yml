@@ -1,6 +1,6 @@
-name: upload_to_pypi.yml
+name: Upload Artifacts to PyPI
 on:
-  # this workflow runs after the below workflows are completed
+  # this workflow runs after the "External Dispatch" workflow is completed
   workflow_run:
     workflows: [ External Dispatch ]
     types: [ completed ]

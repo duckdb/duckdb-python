@@ -1,3 +1,4 @@
+# External Dispatch is called by duckdb's InvokeCI -> NotifyExternalRepositories job
 name: External Dispatch
 on:
   workflow_dispatch:
