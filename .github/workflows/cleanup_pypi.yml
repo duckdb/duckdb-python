@@ -1,12 +1,12 @@
 name: cleanup_pypi.yml
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       dry-run:
         description: List packages that would be deleted but don't delete them
         type: boolean
         default: false
-  workflow_call:
 jobs:
   cleanup_pypi:
     name: Remove Nightlies from PyPI
