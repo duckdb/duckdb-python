@@ -14,6 +14,9 @@ from urllib.parse import urlparse
 import requests
 from requests.exceptions import RequestException
 
+_PYPI_URL_PROD = 'https://pypi.org/'
+_PYPI_URL_TEST = 'https://test.pypi.org/'
+
 def valid_hostname(hostname):
     """Validate hostname format"""
     if len(hostname) > 253:
@@ -63,12 +66,10 @@ if not args.dry:
 dry_run = args.dry
 pypi_username = args.username
 max_dev_releases = args.max_nightlies
-host = None
 if args.prod:
-    host = 'pypi.org'
-elif args.test:
-    host = 'test.pypi.org'
-pypi_url = 'https://{}/'.format(host)
+    pypi_url = _PYPI_URL_PROD
+else:
+    pypi_url = _PYPI_URL_TEST
 pypi_password = password
 pypi_otp = otp
 
