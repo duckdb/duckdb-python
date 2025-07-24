@@ -17,7 +17,7 @@ on:
         required: false
       publish-packages:
         type: boolean
-        description: Publish to S3
+        description: Upload packages to S3
         required: true
         default: false
 
@@ -77,10 +77,12 @@ jobs:
       duckdb-git-ref: ${{ inputs.duckdb-sha }}
       force-version: ${{ inputs.force-version }}
 
-  publish_s3:
-    name: Publish Artifacts to the S3 Staging Bucket
+  upload_s3:
+    name: Upload Artifacts to the S3 Staging Bucket
     runs-on: ubuntu-latest
-    needs: [ externally_triggered_build ]
+    needs: externally_triggered_build
+    outputs:
+      version: ${{ steps.s3_upload.outputs.version }}
     if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages }}
     steps:
       - name: Fetch artifacts
@@ -97,10 +99,18 @@ jobs:
           aws-access-key-id: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           aws-secret-access-key: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
 
-      - name: Upload artifacts to S3 bucket
-        # semantics: if a version is forced then we upload into a folder by the version name, otherwise we upload
-        #   into a folder that is named <run id>-<run-attempt>. Only the latter will be discovered be
-        #   upload_to_pypi.yml.
+      - name: Upload Artifacts
+        id: s3_upload
         run: |
-          FOLDER="${{ inputs.force-version != '' && inputs.force-version || format('{0}-{1}', github.run_id, github.run_attempt) }}"
-          aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${FOLDER}/ --recursive
+          version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${version}/ --recursive
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+  publish_to_pypi:
+    name: Upload Artifacts to PyPI
+    needs: upload_s3
+    if: ${{ force-version == '' }}
+    uses: ./.github/workflows/upload_to_pypi.yml
+    with:
+      version: ${{ needs.upload_s3.outputs.version }}
+      environment: pypi.production
