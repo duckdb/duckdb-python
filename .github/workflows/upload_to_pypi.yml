@@ -1,6 +1,6 @@
-name: upload_to_pypi.yml
+name: Upload Artifacts to PyPI
 on:
-  # this workflow runs after the below workflows are completed
+  # this workflow runs after the "External Dispatch" workflow is completed
   workflow_run:
     workflows: [ External Dispatch ]
     types: [ completed ]
@@ -105,3 +105,8 @@ jobs:
         with:
           repository-url: 'https://${{ vars.PYPI_HOST }}/legacy/'
           packages-dir: packages
+
+  cleanup_nightlies:
+    name: Remove Nightlies from PyPI
+    needs: publish-pypi
+    uses: ./.github/workflows/cleanup_pypi.yml

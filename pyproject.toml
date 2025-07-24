@@ -250,7 +250,6 @@ test = [ # dependencies used for running tests
     "numpy<2; python_version < '3.12'",
     "numpy>=2; python_version >= '3.12'",
 ]
-
 scripts = [ # dependencies used for running scripts
     "cxxheaderparser",
     "ipython",
@@ -261,6 +260,10 @@ scripts = [ # dependencies used for running scripts
     "polars",
     "pyarrow",
     "pytz"
+]
+pypi = [ # dependencies used by the pypi cleanup script
+    "pyotp>=2.9.0",
+    "requests>=2.32.4",
 ]
 build = [
     "cmake>=3.29.0",
