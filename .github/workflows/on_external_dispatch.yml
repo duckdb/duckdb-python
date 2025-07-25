@@ -122,4 +122,4 @@ jobs:
     uses: ./.github/workflows/upload_to_pypi.yml
     with:
       sha: ${{ needs.commit_submodule.outputs.sha-after-commit }}
-      environment: pypi.production
+      environment: production.pypi
