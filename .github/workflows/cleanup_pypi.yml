@@ -49,12 +49,14 @@ jobs:
           version: "0.7.14"
 
       - name: Run Cleanup
+        env:
+          PYTHON_UNBUFFERED: 1
         run: |
           set -x
-          pypi_index_flag=${{ inputs.environment == 'production.pypi' && '--prod' || '--test' }}
           uv sync --only-group pypi --no-install-project
-          uv run --no-sync -s scripts/pypi_cleanup.py ${{ inputs.dry-run && '--dry' || '' }} \
-            ${pypi_index_flag} \
+          # TODO: set test/prod flag according to env (inputs.environment == 'production.pypi' && '--prod' || '--test')
+          uv run --no-sync python -u -m duckdb_packaging.pypi_cleanup ${{ inputs.dry-run && '--dry' || '' }} \
+            --test \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} > cleanup_output 2>&1
 

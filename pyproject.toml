@@ -235,6 +235,7 @@ test = [ # dependencies used for running tests
     "polars",
     "psutil",
     "py4j",
+    "pyotp",
     "pyspark",
     "pytz",
     "requests",
