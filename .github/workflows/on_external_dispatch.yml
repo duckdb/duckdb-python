@@ -80,7 +80,7 @@ jobs:
   upload_s3:
     name: Upload Artifacts to the S3 Staging Bucket
     runs-on: ubuntu-latest
-    needs: externally_triggered_build
+    needs: [commit_submodule, externally_triggered_build]
     outputs:
       version: ${{ steps.s3_upload.outputs.version }}
     if: ${{ github.repository_owner == 'duckdb' && inputs.publish-packages }}
@@ -102,15 +102,24 @@ jobs:
       - name: Upload Artifacts
         id: s3_upload
         run: |
-          version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
-          aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${version}/ --recursive
+          sha=${{ needs.commit_submodule.outputs.sha-after-commit }}
+          aws s3 cp artifacts s3://duckdb-staging/${{ github.repository }}/${sha:0:10}/ --recursive
           echo "version=${version}" >> $GITHUB_OUTPUT
+
+      - name: S3 Upload Summary
+        run : |
+          sha=${{ needs.commit_submodule.outputs.sha-after-commit }}
+          version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Version: ${version}" >> $GITHUB_STEP_SUMMARY
+          echo "* SHA: ${sha:0:10}" >> $GITHUB_STEP_SUMMARY
+          echo "* S3 URL: s3://duckdb-staging/${{ github.repository }}/${sha:0:10}/" >> $GITHUB_STEP_SUMMARY
 
   publish_to_pypi:
     name: Upload Artifacts to PyPI
-    needs: upload_s3
-    if: ${{ force-version == '' }}
+    needs: [ commit_submodule, upload_s3 ]
+    if: ${{ inputs.force-version == '' }}
     uses: ./.github/workflows/upload_to_pypi.yml
     with:
-      version: ${{ needs.upload_s3.outputs.version }}
+      sha: ${{ needs.commit_submodule.outputs.sha-after-commit }}
       environment: pypi.production

@@ -6,8 +6,8 @@ on:
         description: CI environment to run in (test.pypi or production.pypi)
         type: string
         required: true
-      version:
-        description: The version to upload (must be present in the S3 staging bucket)
+      sha:
+        description: The SHA of the commit that the packages were built from
         type: string
         required: true
   workflow_dispatch:
@@ -20,13 +20,13 @@ on:
         options:
           - test.pypi
           - production.pypi
-      version:
-        description: The version to upload (must be present in the S3 staging bucket)
+      sha:
+        description: The SHA of the commit that the packages were built from
         type: string
         required: true
 
 concurrency:
-  group: ${{ inputs.version }}
+  group: ${{ inputs.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -53,7 +53,7 @@ jobs:
 
       - name: Download Artifacts From S3
         env:
-          S3_URL: 's3://duckdb-staging/${{ github.repository }}/${{ inputs.version }}/'
+          S3_URL: 's3://duckdb-staging/${{ github.repository }}/${{ inputs.sha }}/'
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
@@ -65,6 +65,14 @@ jobs:
         with:
           repository-url: 'https://${{ vars.PYPI_HOST }}/legacy/'
           packages-dir: packages
+
+      - name: PyPI Upload Summary
+        run : |
+          version=$(basename packages/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          echo "## PyPI Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Version: ${version}" >> $GITHUB_STEP_SUMMARY
+          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "* CI Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
 
   cleanup_nightlies:
     name: Remove Nightlies from PyPI

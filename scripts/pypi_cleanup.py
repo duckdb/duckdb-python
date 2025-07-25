@@ -14,9 +14,8 @@ from urllib.parse import urlparse
 import requests
 from requests.exceptions import RequestException
 
-import argparse
-import re
-import os
+_PYPI_URL_PROD = 'https://pypi.org/'
+_PYPI_URL_TEST = 'https://test.pypi.org/'
 
 def valid_hostname(hostname):
     """Validate hostname format"""
@@ -41,7 +40,9 @@ parser = argparse.ArgumentParser(
     epilog="Environment variables required (unless --dry): PYPI_CLEANUP_PASSWORD, PYPI_CLEANUP_OTP"
 )
 parser.add_argument("--dry", action="store_true", help="Show what would be deleted but don't actually do it")
-parser.add_argument("-i", "--index-hostname", type=valid_hostname, required=True, help="Index hostname (required)")
+host_group = parser.add_mutually_exclusive_group(required=True)
+host_group.add_argument("--prod", action="store_true", help="Use production PyPI (pypi.org)")
+host_group.add_argument("--test", action="store_true", help="Use test PyPI (test.pypi.org)")
 parser.add_argument("-m", "--max-nightlies", type=int, default=2, help="Max number of nightlies of unreleased versions (default=2)")
 parser.add_argument("-u", "--username", type=non_empty_string, help="Username (required unless --dry)")
 args = parser.parse_args()
@@ -62,20 +63,22 @@ if not args.dry:
     if not otp:
         parser.error("PYPI_CLEANUP_OTP environment variable is required when not in dry-run mode")
 
-print(f"Dry run: {args.dry}")
-print(f"Max nightlies: {args.max_nightlies}")
-if not args.dry:
-    print(f"Hostname: {args.index_hostname}")
-    print(f"Username: {args.username}")
-    print("Password and OTP loaded from environment variables")
-
-# deletes old dev wheels from pypi. evil hack.
-actually_delete = not args.dry
-pypi_username = args.username or "user"
+dry_run = args.dry
+pypi_username = args.username
 max_dev_releases = args.max_nightlies
-host = 'https://{}/'.format(args.index_hostname)
-pypi_password = password or "password"
-pypi_otp = otp or "otp"
+if args.prod:
+    pypi_url = _PYPI_URL_PROD
+else:
+    pypi_url = _PYPI_URL_TEST
+pypi_password = password
+pypi_otp = otp
+
+print(f"Dry run: {dry_run}")
+print(f"Max nightlies: {max_dev_releases}")
+if not args.dry:
+    print(f"URL: {pypi_url}")
+    print(f"Username: {pypi_username}")
+    print("Password and OTP loaded from environment variables")
 
 patterns = [re.compile(r".*\.dev\d+$")]
 ###### NOTE: This code is taken from the pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
@@ -185,8 +188,8 @@ class PypiCleanup:
                     sorted_versions = sorted(versions, key=lambda x: int(x.split('dev')[-1]))
                     pkg_vers.extend(sorted_versions[:-self.max_dev_releases])
 
+            print("Following pkg_vers can be deleted: ", pkg_vers)
             if not self.do_it:
-                print("Following pkg_vers can be deleted: ", pkg_vers)
                 return
 
             if not pkg_vers:
@@ -231,9 +234,9 @@ class PypiCleanup:
 
             two_factor = False
             with s.post(
-                f"{self.url}/account/login/",
-                data={"csrf_token": csrf, "username": self.username, "password": self.password},
-                headers={"referer": f"{self.url}/account/login/"},
+                    f"{self.url}/account/login/",
+                    data={"csrf_token": csrf, "username": self.username, "password": self.password},
+                    headers={"referer": f"{self.url}/account/login/"},
             ) as r:
                 r.raise_for_status()
                 if r.url == f"{self.url}/account/login/":
@@ -255,9 +258,9 @@ class PypiCleanup:
                 for i in range(3):
                     auth_code = pyotp.TOTP(self.otp).now()
                     with s.post(
-                        two_factor_url,
-                        data={"csrf_token": csrf, "method": "totp", "totp_value": auth_code},
-                        headers={"referer": two_factor_url},
+                            two_factor_url,
+                            data={"csrf_token": csrf, "method": "totp", "totp_value": auth_code},
+                            headers={"referer": two_factor_url},
                     ) as r:
                         r.raise_for_status()
                         if r.url == two_factor_url:
@@ -286,12 +289,12 @@ class PypiCleanup:
                         referer = r.url
 
                     with s.post(
-                        form_url,
-                        data={
-                            "csrf_token": csrf,
-                            "confirm_delete_version": pkg_ver,
-                        },
-                        headers={"referer": referer},
+                            form_url,
+                            data={
+                                "csrf_token": csrf,
+                                "confirm_delete_version": pkg_ver,
+                            },
+                            headers={"referer": referer},
                     ) as r:
                         r.raise_for_status()
 
@@ -300,4 +303,4 @@ class PypiCleanup:
                     logging.info(f"Would be deleting {self.package} version {pkg_ver}, but not doing it!")
 
 
-PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, actually_delete, max_dev_releases).run()
+PypiCleanup(pypi_url, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, not dry_run, max_dev_releases).run()
