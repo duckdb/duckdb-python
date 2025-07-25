@@ -118,7 +118,7 @@ jobs:
   publish_to_pypi:
     name: Upload Artifacts to PyPI
     needs: [ commit_submodule, upload_s3 ]
-    if: ${{ force-version == '' }}
+    if: ${{ inputs.force-version == '' }}
     uses: ./.github/workflows/upload_to_pypi.yml
     with:
       sha: ${{ needs.commit_submodule.outputs.sha-after-commit }}
