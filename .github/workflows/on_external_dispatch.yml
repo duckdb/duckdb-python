@@ -120,6 +120,7 @@ jobs:
     needs: [ commit_submodule, upload_s3 ]
     if: ${{ inputs.force-version == '' }}
     uses: ./.github/workflows/upload_to_pypi.yml
+    secrets: inherit
     with:
       sha: ${{ needs.commit_submodule.outputs.sha-after-commit }}
       environment: production.pypi
