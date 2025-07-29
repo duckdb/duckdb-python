@@ -58,7 +58,7 @@ jobs:
           uv run --no-sync python -u -m duckdb_packaging.pypi_cleanup ${{ inputs.dry-run && '--dry' || '' }} \
             --test \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
-            --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} > cleanup_output 2>&1
+            --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} 2>&1 | tee cleanup_output
 
       - name: PyPI Cleanup Summary
         run : |
