@@ -57,8 +57,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
         run: |
+          sha=${{ inputs.sha }}
           mkdir packages
-          aws s3 cp --recursive "${S3_URL}" packages
+          aws s3 cp --recursive s3://duckdb-staging/${{ github.repository }}/${sha:0:10}/ packages
 
       - name: Upload artifacts to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
