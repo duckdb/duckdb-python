@@ -10,7 +10,6 @@ PyPI package cleanup tool. This script will:
 
 import argparse
 import contextlib
-import datetime
 import heapq
 import logging
 import os
@@ -19,7 +18,7 @@ import sys
 import time
 from collections import defaultdict
 from html.parser import HTMLParser
-from typing import Dict, Optional, Set, Generator
+from typing import Optional, Set, Generator
 from urllib.parse import urlparse
 
 import pyotp
@@ -252,7 +251,8 @@ class PyPICleanup:
         logging.info(f"Max development releases to keep per unreleased version: {self._max_dev_releases}")
 
         try:
-            return self._execute_cleanup()
+            with session_with_retries() as http_session:
+                return self._execute_cleanup(http_session)
         except PyPICleanupError as e:
             logging.error(f"Cleanup failed: {e}")
             return 1
@@ -260,11 +260,11 @@ class PyPICleanup:
             logging.error(f"Unexpected error: {e}", exc_info=True)
             return 1
 
-    def _execute_cleanup(self) -> int:
+    def _execute_cleanup(self, http_session: Session) -> int:
         """Execute the main cleanup logic."""
 
         # Get released versions
-        versions = self._fetch_released_versions()
+        versions = self._fetch_released_versions(http_session)
         if not versions:
             logging.info(f"No releases found for {self._package}")
             return 0
@@ -284,24 +284,23 @@ class PyPICleanup:
             return 0
 
         # Perform authentication and deletion
-        self._authenticate()
-        self._delete_versions(versions_to_delete)
+        self._authenticate(http_session)
+        self._delete_versions(http_session, versions_to_delete)
         
         logging.info(f"Successfully cleaned up {len(versions_to_delete)} development versions")
         return 0
     
-    def _fetch_released_versions(self) -> Set[str]:
+    def _fetch_released_versions(self, http_session: Session) -> Set[str]:
         """Fetch package release information from PyPI API."""
         logging.debug(f"Fetching package information for '{self._package}'")
         
         try:
-            with session_with_retries() as session:
-                req = session.get(f"{self._index_url}/pypi/{self._package}/json")
-                req.raise_for_status()
-                data = req.json()
-                versions = {v for v, files in data["releases"].items() if len(files) > 0}
-                logging.debug(f"Found {len(versions)} releases with files")
-                return versions
+            req = http_session.get(f"{self._index_url}/pypi/{self._package}/json")
+            req.raise_for_status()
+            data = req.json()
+            versions = {v for v, files in data["releases"].items() if len(files) > 0}
+            logging.debug(f"Found {len(versions)} releases with files")
+            return versions
         except RequestException as e:
             raise PyPICleanupError(f"Failed to fetch package information for '{self._package}': {e}") from e
 
@@ -394,7 +393,7 @@ class PyPICleanup:
 
         return versions_to_delete
     
-    def _authenticate(self) -> None:
+    def _authenticate(self, http_session: Session) -> None:
         """Authenticate with PyPI."""
         if not self._username or not self._password:
             raise AuthenticationError("Username and password are required for authentication")
@@ -402,63 +401,62 @@ class PyPICleanup:
         logging.info(f"Authenticating user '{self._username}' with PyPI")
 
         try:
-            # Get login form and CSRF token
-            csrf_token = self._get_csrf_token("/account/login/")
-            
             # Attempt login
-            login_response = self._perform_login(csrf_token)
-            
+            login_response = self._perform_login(http_session)
+
             # Handle two-factor authentication if required
             if login_response.url.startswith(f"{self._index_url}/account/two-factor/"):
                 logging.debug("Two-factor authentication required")
-                self._handle_two_factor_auth(login_response)
+                self._handle_two_factor_auth(http_session, login_response)
             
             logging.info("Authentication successful")
-            
+
         except RequestException as e:
             raise AuthenticationError(f"Network error during authentication: {e}") from e
     
-    def _get_csrf_token(self, form_action: str) -> str:
+    def _get_csrf_token(self, http_session: Session, form_action: str) -> str:
         """Extract CSRF token from a form page."""
-        with session_with_retries() as session:
-            req = session.get(f"{self._index_url}{form_action}")
-            req.raise_for_status()
-            parser = CsrfParser(form_action)
-            parser.feed(req.text)
-            if not parser.csrf:
-                raise AuthenticationError(f"No CSRF token found in {form_action}")
-            return parser.csrf
+        resp = http_session.get(f"{self._index_url}{form_action}")
+        resp.raise_for_status()
+        parser = CsrfParser(form_action)
+        parser.feed(resp.text)
+        if not parser.csrf:
+            raise AuthenticationError(f"No CSRF token found in {form_action}")
+        return parser.csrf
     
-    def _perform_login(self, csrf_token: str) -> requests.Response:
+    def _perform_login(self, http_session: Session) -> requests.Response:
         """Perform the initial login with username/password."""
+
+        # Get login form and CSRF token
+        csrf_token = self._get_csrf_token(http_session, "/account/login/")
+
         login_data = {
             "csrf_token": csrf_token,
             "username": self._username,
             "password": self._password
         }
 
-        with session_with_retries() as session:
-            response = session.post(
-                f"{self._index_url}/account/login/",
-                data=login_data,
-                headers={"referer": f"{self._index_url}/account/login/"}
-            )
-            response.raise_for_status()
+        response = http_session.post(
+            f"{self._index_url}/account/login/",
+            data=login_data,
+            headers={"referer": f"{self._index_url}/account/login/"}
+        )
+        response.raise_for_status()
 
-            # Check if login failed (redirected back to login page)
-            if response.url == f"{self._index_url}/account/login/":
-                raise AuthenticationError(f"Login failed for user '{self._username}' - check credentials")
+        # Check if login failed (redirected back to login page)
+        if response.url == f"{self._index_url}/account/login/":
+            raise AuthenticationError(f"Login failed for user '{self._username}' - check credentials")
 
-            return response
+        return response
     
-    def _handle_two_factor_auth(self, response: requests.Response) -> None:
+    def _handle_two_factor_auth(self, http_session: Session, response: requests.Response) -> None:
         """Handle two-factor authentication."""
         if not self._otp:
             raise AuthenticationError("Two-factor authentication required but no OTP secret provided")
         
         two_factor_url = response.url
         form_action = two_factor_url[len(self._index_url):]
-        csrf_token = self._get_csrf_token(form_action)
+        csrf_token = self._get_csrf_token(http_session, form_action)
         
         # Try authentication with retries
         for attempt in range(_LOGIN_RETRY_ATTEMPTS):
@@ -466,22 +464,21 @@ class PyPICleanup:
                 auth_code = pyotp.TOTP(self._otp).now()
                 logging.debug(f"Attempting 2FA with code (attempt {attempt + 1}/{_LOGIN_RETRY_ATTEMPTS})")
 
-                with session_with_retries() as session:
-                    auth_response = session.post(
-                        two_factor_url,
-                        data={"csrf_token": csrf_token, "method": "totp", "totp_value": auth_code},
-                        headers={"referer": two_factor_url}
-                    )
-                    auth_response.raise_for_status()
+                auth_response = http_session.post(
+                    two_factor_url,
+                    data={"csrf_token": csrf_token, "method": "totp", "totp_value": auth_code},
+                    headers={"referer": two_factor_url}
+                )
+                auth_response.raise_for_status()
 
-                    # Check if 2FA succeeded (redirected away from 2FA page)
-                    if auth_response.url != two_factor_url:
-                        logging.debug("Two-factor authentication successful")
-                        return
+                # Check if 2FA succeeded (redirected away from 2FA page)
+                if auth_response.url != two_factor_url:
+                    logging.debug("Two-factor authentication successful")
+                    return
 
-                    if attempt < _LOGIN_RETRY_ATTEMPTS - 1:
-                        logging.debug(f"2FA code rejected, retrying in {_LOGIN_RETRY_DELAY} seconds...")
-                        time.sleep(_LOGIN_RETRY_DELAY)
+                if attempt < _LOGIN_RETRY_ATTEMPTS - 1:
+                    logging.debug(f"2FA code rejected, retrying in {_LOGIN_RETRY_DELAY} seconds...")
+                    time.sleep(_LOGIN_RETRY_DELAY)
                 
             except RequestException as e:
                 if attempt == _LOGIN_RETRY_ATTEMPTS - 1:
@@ -491,14 +488,14 @@ class PyPICleanup:
         
         raise AuthenticationError("Two-factor authentication failed after all attempts")
     
-    def _delete_versions(self, versions_to_delete: Set[str]) -> None:
+    def _delete_versions(self, http_session: Session, versions_to_delete: Set[str]) -> None:
         """Delete the specified package versions."""
         logging.info(f"Starting deletion of {len(versions_to_delete)} development versions")
         
         failed_deletions = list()
         for version in sorted(versions_to_delete):
             try:
-                self._delete_single_version(version)
+                self._delete_single_version(http_session, version)
                 logging.info(f"Successfully deleted {self._package} version {version}")
             except Exception as e:
                 # Continue with other versions rather than failing completely
@@ -510,7 +507,7 @@ class PyPICleanup:
                 f"Failed to delete {len(failed_deletions)}/{len(versions_to_delete)} versions: {failed_deletions}"
             )
     
-    def _delete_single_version(self, version: str) -> None:
+    def _delete_single_version(self, http_session: Session, version: str) -> None:
         """Delete a single package version."""
         # Safety check
         if not self._is_dev_version(version) or self._is_rc_version(version):
@@ -522,19 +519,18 @@ class PyPICleanup:
         form_action = f"/manage/project/{self._package}/release/{version}/"
         form_url = f"{self._index_url}{form_action}"
         
-        csrf_token = self._get_csrf_token(form_action)
+        csrf_token = self._get_csrf_token(http_session, form_action)
 
-        with session_with_retries() as session:
-            # Submit deletion request
-            delete_response = session.post(
-                form_url,
-                data={
-                    "csrf_token": csrf_token,
-                    "confirm_delete_version": version,
-                },
-                headers={"referer": form_url}
-            )
-            delete_response.raise_for_status()
+        # Submit deletion request
+        delete_response = http_session.post(
+            form_url,
+            data={
+                "csrf_token": csrf_token,
+                "confirm_delete_version": version,
+            },
+            headers={"referer": form_url}
+        )
+        delete_response.raise_for_status()
 
 
 def main() -> int:
