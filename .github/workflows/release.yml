@@ -1,4 +1,5 @@
 # Release is called by duckdb's InvokeCI -> NotifyExternalRepositories job
 name: Release
 on:
+  workflow_dispatch: 
 jobs:
