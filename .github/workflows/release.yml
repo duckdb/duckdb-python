@@ -57,10 +57,11 @@ jobs:
           sha=${{ github.sha }}
           dsha=${{ inputs.duckdb-sha }}
           version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          url="s3://duckdb-staging/python/${version}/${sha:0:10}-duckdb-${dsha:0:10}/"
           echo "short_sha=${sha:0:10}" >> $GITHUB_OUTPUT
           echo "short_dsha=${dsha:0:10}" >> $GITHUB_OUTPUT
           echo "version=${version}" >> $GITHUB_OUTPUT
-          echo "s3_upload_url="s3://duckdb-staging/python/${version}/${sha:0:10}-duckdb-${dsha:0:10}/" >> $GITHUB_OUTPUT
+          echo "s3_upload_url=${url}" >> $GITHUB_OUTPUT
 
       - name: Authenticate with AWS
         uses: aws-actions/configure-aws-credentials@v4
