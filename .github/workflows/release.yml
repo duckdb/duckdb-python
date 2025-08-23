@@ -80,7 +80,7 @@ jobs:
           echo "* Version: ${{ steps.input.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "* SHA: ${{ steps.input.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
           echo "* DuckDB SHA: ${{ steps.input.outputs.short_dsha }}" >> $GITHUB_STEP_SUMMARY
-          echo "* S3 URL: ${{ steps.input.outputs.upload_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "* S3 URL: ${{ steps.input.outputs.s3_upload_url }}" >> $GITHUB_STEP_SUMMARY
 
   determine_environment:
     name: Determine the Github Actions environment to use
