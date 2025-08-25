@@ -71,7 +71,6 @@ jobs:
         run : |
           echo "## PyPI Cleanup Summary" >> $GITHUB_STEP_SUMMARY
           echo "* Dry run: ${{ inputs.dry-run }}" >> $GITHUB_STEP_SUMMARY
-          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "* CI Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "* Output:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
