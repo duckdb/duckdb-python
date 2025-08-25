@@ -25,7 +25,6 @@ on:
         required: true
         options:
           - pypi-prod-nightly
-          - pypi-prod
           - pypi-test
 
 jobs:
@@ -60,10 +59,9 @@ jobs:
           PYTHON_UNBUFFERED: 1
         run: |
           set -x
-          env_flag=$( [[ ${{ inputs.environment }} == pypi-prod* ]] && echo "--prod" || echo "--test" ) 
           uv sync --only-group pypi --no-install-project
           uv run --no-sync python -u -m duckdb_packaging.pypi_cleanup ${{ inputs.dry-run && '--dry' || '' }} \
-            $env_flag \
+            ${{ inputs.environment == 'pypi-prod-nightly' && '--prod' || '--test' }} \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} 2>&1 | tee cleanup_output
 
