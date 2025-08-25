@@ -25,6 +25,7 @@ on:
         required: true
         options:
           - pypi-prod-nightly
+          - pypi-prod
           - pypi-test
 
 jobs:
@@ -59,10 +60,10 @@ jobs:
           PYTHON_UNBUFFERED: 1
         run: |
           set -x
+          env_flag=$( [[ ${{ inputs.environment }} == pypi-prod* ]] && echo "--prod" || echo "--test" ) 
           uv sync --only-group pypi --no-install-project
-          # TODO: set test/prod flag according to env (inputs.environment == 'production.pypi' && '--prod' || '--test')
           uv run --no-sync python -u -m duckdb_packaging.pypi_cleanup ${{ inputs.dry-run && '--dry' || '' }} \
-            --test \
+            $env_flag \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} 2>&1 | tee cleanup_output
 
@@ -70,7 +71,6 @@ jobs:
         run : |
           echo "## PyPI Cleanup Summary" >> $GITHUB_STEP_SUMMARY
           echo "* Dry run: ${{ inputs.dry-run }}" >> $GITHUB_STEP_SUMMARY
-          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
           echo "* CI Environment: ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
           echo "* Output:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
