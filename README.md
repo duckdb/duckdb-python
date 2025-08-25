@@ -67,8 +67,8 @@ git config --local core.hooksPath .githooks/
 
 ### Editable installs (general)
 
-  It's good to be aware of the following when creating an editable install:
-- `uv sync` or `uv run [tool]` create editable installs by default, however, it work the way you expect. We have 
+  It's good to be aware of the following when performing an editable install:
+- `uv sync` or `uv run [tool]` perform an editable install by default. We have 
   configured the project so that scikit-build-core will use a persistent build-dir, but since the build itself 
   happens in an isolated, ephemeral environment, cmake's paths will point to non-existing directories. CMake itself 
   will be missing.

@@ -3,8 +3,15 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: CI environment to run in (test.pypi or production.pypi)
+        description: CI environment to run in (pypi-test or pypi-prod-nightly)
         type: string
+        required: true
+    secrets:
+      PYPI_CLEANUP_OTP:
+        description: PyPI OTP
+        required: true
+      PYPI_CLEANUP_PASSWORD:
+        description: PyPI password
         required: true
   workflow_dispatch:
     inputs:
@@ -16,10 +23,9 @@ on:
         description: CI environment to run in
         type: choice
         required: true
-        default: test.pypi
         options:
-          - test.pypi
-          - production.pypi
+          - pypi-prod-nightly
+          - pypi-test
 
 jobs:
   cleanup_pypi:

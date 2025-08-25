@@ -1,4 +1,3 @@
-import glob
 import itertools
 import pathlib
 import pytest
@@ -6,11 +5,12 @@ import random
 import re
 import typing
 import warnings
+import glob
 from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
 SQLLOGIC_TEST_PARAMETER = "test_script_path"
-DUCKDB_ROOT_DIR = pathlib.Path(__file__).parent.joinpath("../../..").resolve()
+DUCKDB_ROOT_DIR = (pathlib.Path(__file__).parent.parent / 'external' / 'duckdb').resolve()
 
 
 def pytest_addoption(parser: pytest.Parser):

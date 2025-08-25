@@ -256,7 +256,8 @@ class TestPyPICleanup:
         mock_fetch.return_value = {"1.0.0.dev1"}
         mock_determine.return_value = {"1.0.0.dev1"}
 
-        result = cleanup_dryrun_max_2._execute_cleanup()
+        with session_with_retries() as session:
+            result = cleanup_dryrun_max_2._execute_cleanup(session)
 
         assert result == 0
         mock_fetch.assert_called_once()
@@ -266,7 +267,8 @@ class TestPyPICleanup:
     @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._fetch_released_versions')
     def test_execute_cleanup_no_releases(self, mock_fetch, cleanup_dryrun_max_2):
         mock_fetch.return_value = {}
-        result = cleanup_dryrun_max_2._execute_cleanup()
+        with session_with_retries() as session:
+            result = cleanup_dryrun_max_2._execute_cleanup(session)
         assert result == 0
 
     @patch('requests.Session.get')
@@ -281,7 +283,8 @@ class TestPyPICleanup:
         }
         mock_get.return_value = mock_response
 
-        releases = cleanup_dryrun_max_2._fetch_released_versions()
+        with session_with_retries() as session:
+            releases = cleanup_dryrun_max_2._fetch_released_versions(session)
 
         assert releases == {"1.0.0", "1.0.0.dev1"}
 
@@ -293,38 +296,41 @@ class TestPyPICleanup:
         mock_get.return_value = mock_response
 
         with pytest.raises(PyPICleanupError, match="Failed to fetch package information"):
-            cleanup_dryrun_max_2._fetch_released_versions()
+            with session_with_retries() as session:
+                cleanup_dryrun_max_2._fetch_released_versions(session)
 
     @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._get_csrf_token')
-    @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._perform_login')
-    def test_authenticate_success(self, mock_login, mock_csrf, cleanup_max_2):
+    @patch('requests.Session.post')
+    def test_authenticate_success(self, mock_post, mock_csrf, cleanup_max_2):
         """Test successful authentication."""
         mock_csrf.return_value = "csrf123"
         mock_response = Mock()
         mock_response.url = "https://test.pypi.org/manage/"
-        mock_login.return_value = mock_response
+        mock_post.return_value = mock_response
 
-        cleanup_max_2._authenticate()  # Should not raise
+        with session_with_retries() as session:
+            cleanup_max_2._authenticate(session)  # Should not raise
+            mock_csrf.assert_called_once_with(session, "/account/login/")
 
-        mock_csrf.assert_called_once_with("/account/login/")
-        mock_login.assert_called_once_with("csrf123")
+        mock_post.assert_called_once()
+        assert mock_post.call_args.args[0].endswith('/account/login/')
 
     @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._get_csrf_token')
-    @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._perform_login')
+    @patch('requests.Session.post')
     @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._handle_two_factor_auth')
-    def test_authenticate_with_2fa(self, mock_2fa, mock_login, mock_csrf, cleanup_max_2):
+    def test_authenticate_with_2fa(self, mock_2fa, mock_post, mock_csrf, cleanup_max_2):
         mock_csrf.return_value = "csrf123"
         mock_response = Mock()
         mock_response.url = "https://test.pypi.org/account/two-factor/totp"
-        mock_login.return_value = mock_response
+        mock_post.return_value = mock_response
 
-        cleanup_max_2._authenticate()
-
-        mock_2fa.assert_called_once_with(mock_response)
+        with session_with_retries() as session:
+            cleanup_max_2._authenticate(session)
+            mock_2fa.assert_called_once_with(session, mock_response)
 
     def test_authenticate_missing_credentials(self, cleanup_dryrun_max_2):
         with pytest.raises(AuthenticationError, match="Username and password are required"):
-            cleanup_dryrun_max_2._authenticate()
+            cleanup_dryrun_max_2._authenticate(None)
 
     @patch('duckdb_packaging.pypi_cleanup.PyPICleanup._delete_single_version')
     def test_delete_versions_success(self, mock_delete, cleanup_max_2):
@@ -332,7 +338,8 @@ class TestPyPICleanup:
         versions = {"1.0.0.dev1", "1.0.0.dev2"}
         mock_delete.side_effect = [None, None]  # Successful deletions
 
-        cleanup_max_2._delete_versions(versions)
+        with session_with_retries() as session:
+            cleanup_max_2._delete_versions(session, versions)
 
         assert mock_delete.call_count == 2
 
@@ -343,12 +350,12 @@ class TestPyPICleanup:
         mock_delete.side_effect = [None, Exception("Delete failed")]
 
         with pytest.raises(PyPICleanupError, match="Failed to delete 1/2 versions"):
-            cleanup_max_2._delete_versions(versions)
+            cleanup_max_2._delete_versions(None, versions)
 
     def test_delete_single_version_safety_check(self, cleanup_max_2):
         """Test single version deletion safety check."""
         with pytest.raises(PyPICleanupError, match="Refusing to delete non-\\[dev\\|rc\\] version"):
-            cleanup_max_2._delete_single_version("1.0.0")  # Non-dev version
+            cleanup_max_2._delete_single_version(None, "1.0.0")  # Non-dev version
 
 
 class TestArgumentParser:

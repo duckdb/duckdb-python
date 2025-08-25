@@ -1,5 +1,160 @@
 # Release is called by duckdb's InvokeCI -> NotifyExternalRepositories job
 name: Release
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
+    inputs:
+      duckdb-sha:
+        type: string
+        description: The DuckDB submodule commit to build against
+        required: true
+      stable-version:
+        type: string
+        description: Release a stable version (vX.Y.Z-((rc|post)N))
+        required: false
+      pypi-index:
+        type: choice
+        description: Which PyPI to use
+        required: true
+        options:
+          - test
+          - prod
+      store-s3:
+        type: boolean
+        description: Also store test packages in S3
+        default: false
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  build_and_test:
+    name: Build and test releases
+    uses:  ./.github/workflows/packaging.yml
+    with:
+      minimal: false
+      testsuite: all
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      set-version: ${{ inputs.stable-version }}
+
+  upload_s3:
+    name: Upload Artifacts to S3
+    runs-on: ubuntu-latest
+    needs: [build_and_test]
+    if: ${{ github.repository_owner == 'duckdb' && ( inputs.pypi-index == 'prod' || inputs.store-s3 ) }}
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{sdist,wheel}*'
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Compute upload input
+        id: input
+        run: |
+          sha=${{ github.sha }}
+          dsha=${{ inputs.duckdb-sha }}
+          version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          url="s3://duckdb-staging/python/${version}/${sha:0:10}-duckdb-${dsha:0:10}/"
+          echo "short_sha=${sha:0:10}" >> $GITHUB_OUTPUT
+          echo "short_dsha=${dsha:0:10}" >> $GITHUB_OUTPUT
+          echo "version=${version}" >> $GITHUB_OUTPUT
+          echo "s3_upload_url=${url}" >> $GITHUB_OUTPUT
+
+      - name: Authenticate with AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: 'us-east-2'
+          aws-access-key-id: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          aws-secret-access-key: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+
+      - name: Upload Artifacts
+        run: |
+          aws s3 cp artifacts ${{ steps.input.outputs.s3_upload_url }} --recursive
+
+      - name: S3 Upload Summary
+        run : |
+          echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Version: ${{ steps.input.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "* SHA: ${{ steps.input.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "* DuckDB SHA: ${{ steps.input.outputs.short_dsha }}" >> $GITHUB_STEP_SUMMARY
+          echo "* S3 URL: ${{ steps.input.outputs.s3_upload_url }}" >> $GITHUB_STEP_SUMMARY
+
+  determine_environment:
+    name: Determine the Github Actions environment to use
+    runs-on: ubuntu-latest
+    needs: build_and_test
+    outputs:
+      env_name: ${{ steps.set-env.outputs.env_name }}
+    steps:
+      - name: Set environment name
+        id: set-env
+        run: |
+          set -euo pipefail
+          case "${{ inputs.pypi-index }}" in
+            test)
+              echo "env_name=pypi-test" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              if [[ -n "${{ inputs.stable-version }}" ]]; then
+                echo "env_name=pypi-prod" >> "$GITHUB_OUTPUT"
+              else
+                echo "env_name=pypi-prod-nightly" >> "$GITHUB_OUTPUT"
+              fi
+              ;;
+            *)
+              echo "Error: invalid combination of inputs.pypi-index='${{ inputs.pypi-index }}' and inputs.stable-version='${{ inputs.stable-version }}'" >&2
+              exit 1
+              ;;
+          esac
+
+  publish_pypi:
+    name: Publish Artifacts to PyPI
+    runs-on: ubuntu-latest
+    needs: determine_environment
+    environment:
+      name: ${{ needs.determine_environment.outputs.env_name }}
+    permissions:
+      # this is needed for the OIDC flow that is used with trusted publishing on PyPI
+      id-token: write
+    steps:
+      - if: ${{ vars.PYPI_HOST == '' }}
+        run: |
+          echo "Error: PYPI_HOST is not set in CI environment '${{ needs.determine_environment.outputs.env_name }}'"
+          exit 1
+
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{sdist,wheel}*'
+          path: packages/
+          merge-multiple: true
+
+      - name: Upload artifacts to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: 'https://${{ vars.PYPI_HOST }}/legacy/'
+          packages-dir: packages
+          verbose: 'true'
+
+      - name: PyPI Upload Summary
+        run : |
+          version=$(basename packages/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          echo "## PyPI Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Version: ${version}" >> $GITHUB_STEP_SUMMARY
+          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "* CI Environment: ${{ needs.determine_environment.outputs.env_name }}" >> $GITHUB_STEP_SUMMARY
+
+  cleanup_nightlies:
+    name: Remove Nightlies from PyPI
+    needs: [determine_environment, publish_pypi]
+    if: ${{ inputs.stable-version == '' }}
+    uses: ./.github/workflows/cleanup_pypi.yml
+    with:
+      environment: ${{ needs.determine_environment.outputs.env_name }}
+    secrets:
+      # reusable workflows and secrets are not great: https://github.com/actions/runner/issues/3206
+      PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
+      PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}

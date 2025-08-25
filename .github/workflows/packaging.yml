@@ -1,5 +1,5 @@
 name: Packaging
-run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.force-version != '' && inputs.force-version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.git-ref }}, duckdb ref=${{ inputs.duckdb-git-ref }})
+run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.set-version != '' && inputs.set-version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.git-ref }}, duckdb ref=${{ inputs.duckdb-git-ref }})
 on:
   workflow_dispatch:
     inputs:
@@ -25,7 +25,7 @@ on:
         description: Git ref of DuckDB
         required: true
         default: refs/heads/main
-      force-version:
+      set-version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
@@ -48,7 +48,7 @@ on:
         type: string
         description: Git ref of DuckDB
         required: false
-      force-version:
+      set-version:
         description: Force version (vX.Y.Z-((rc|post)N))
         required: false
         type: string
@@ -82,8 +82,8 @@ jobs:
           git checkout ${{ inputs.duckdb-git-ref }}
 
       - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.force-version != '' }}
-        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.force-version }}" >> $GITHUB_ENV
+        if: ${{ inputs.set-version != '' }}
+        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
 
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v6
@@ -149,7 +149,6 @@ jobs:
         uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
 
     steps:
-
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
         with:
@@ -166,8 +165,8 @@ jobs:
 
       # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
       - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.force-version != '' }}
-        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.force-version }}" >> $GITHUB_ENV
+        if: ${{ inputs.set-version != '' }}
+        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
 
       # Install Astral UV, which will be used as build-frontend for cibuildwheel
       - uses: astral-sh/setup-uv@v6

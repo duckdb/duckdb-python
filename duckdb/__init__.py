@@ -1,8 +1,17 @@
-_exported_symbols = []
-
 # Modules
 import duckdb.functional as functional
 import duckdb.typing as typing
+from _duckdb import __version__ as duckdb_version
+from importlib.metadata import version
+
+# duckdb.__version__ returns the version of the distribution package, i.e. the pypi version
+__version__ = version("duckdb")
+
+# version() is a more human friendly formatted version string of both the distribution package and the bundled duckdb
+def version():
+    return f"{__version__} (with duckdb {duckdb_version})"
+
+_exported_symbols = ['__version__', 'version']
 
 _exported_symbols.extend([
     "typing",
@@ -248,7 +257,6 @@ from _duckdb import (
     __interactive__,
     __jupyter__,
     __formatted_python_version__,
-    __version__,
     apilevel,
     comment,
     identifier,
@@ -266,7 +274,6 @@ _exported_symbols.extend([
     "__interactive__",
     "__jupyter__",
     "__formatted_python_version__",
-    "__version__",
     "apilevel",
     "comment",
     "identifier",
