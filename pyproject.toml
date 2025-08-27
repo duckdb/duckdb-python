@@ -32,8 +32,8 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: C++",
 ]
-authors = [{name = "DuckDB Labs", email = "info@duckdblabs.nl"}]
-maintainers = [{name = "DuckDB Labs", email = "info@duckdblabs.nl"}]
+authors = [{name = "DuckDB Foundation"}]
+maintainers = [{name = "DuckDB Foundation"}]
 
 [project.urls]
 Documentation = "https://duckdb.org/docs/stable/clients/python/overview"
