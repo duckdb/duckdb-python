@@ -47,8 +47,10 @@ _duckdb_set_default(BUILD_UNITTESTS OFF)
 _duckdb_set_default(BUILD_BENCHMARKS OFF)
 _duckdb_set_default(DISABLE_UNITY OFF)
 
-# Extension configuration - static linking for Python modules
+# Extension configuration
 _duckdb_set_default(DISABLE_BUILTIN_EXTENSIONS OFF)
+_duckdb_set_default(ENABLE_EXTENSION_AUTOINSTALL 1) # todo: set to ON https://github.com/duckdb/duckdb/pull/18778/files
+_duckdb_set_default(ENABLE_EXTENSION_AUTOLOADING ON)
 
 # Performance options - enable optimizations by default
 _duckdb_set_default(NATIVE_ARCH OFF)
@@ -69,6 +71,8 @@ set(BUILD_UNITTESTS "${BUILD_UNITTESTS}" CACHE BOOL "Build DuckDB unit tests")
 set(BUILD_BENCHMARKS "${BUILD_BENCHMARKS}" CACHE BOOL "Build DuckDB benchmarks")
 set(DISABLE_UNITY "${DISABLE_UNITY}" CACHE BOOL "Disable unity builds (slower compilation)")
 set(DISABLE_BUILTIN_EXTENSIONS "${DISABLE_BUILTIN_EXTENSIONS}" CACHE BOOL "Disable all built-in extensions")
+set(ENABLE_EXTENSION_AUTOINSTALL "${ENABLE_EXTENSION_AUTOINSTALL}" CACHE BOOL "Enable extension auto-installing by default.")
+set(ENABLE_EXTENSION_AUTOLOADING "${ENABLE_EXTENSION_AUTOLOADING}" CACHE BOOL "Enable extension auto-loading by default.")
 set(NATIVE_ARCH "${NATIVE_ARCH}" CACHE BOOL "Optimize for native architecture")
 set(ENABLE_SANITIZER "${ENABLE_SANITIZER}" CACHE BOOL "Enable address sanitizer")
 set(ENABLE_UBSAN "${ENABLE_UBSAN}" CACHE BOOL "Enable undefined behavior sanitizer")
