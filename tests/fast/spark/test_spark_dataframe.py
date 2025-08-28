@@ -421,3 +421,11 @@ class TestDataFrame(object):
         assert df.drop("two", "three").columns == expected
         assert df.drop("two", col("three")).columns == expected
         assert df.drop("two", col("three"), col("missing")).columns == expected
+
+    def test_cache(self, spark):
+        data = [(1, 2, 3, 4)]
+        df = spark.createDataFrame(data, ["one", "two", "three", "four"])
+        cached = df.cache()
+        assert df is not cached
+        assert cached.collect() == df.collect()
+        assert cached.collect() == [Row(one=1, two=2, three=3, four=4)]
