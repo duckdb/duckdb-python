@@ -19,6 +19,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  ensure_submodule_sanity:
+    name: Make sure we're not building with a fork
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+
+      - shell: bash
+        run: |
+          submodule_url=$(git config --file .gitmodules --get submodule.external/duckdb.url || true)
+          expected="github.com/duckdb/duckdb"
+          if [[ -z "$submodule_url" ]]; then
+            echo "::error::DuckDB submodule not found in .gitmodules"
+            exit 1
+          fi
+          if [[ "$submodule_url" != *"$expected"* ]]; then
+            echo "::error::DuckDB submodule must point to $expected, found: $submodule_url"
+            exit 1
+          fi
 
   packaging_test:
     name: Build a minimal set of packages and run all tests on them
