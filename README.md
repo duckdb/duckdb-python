@@ -50,7 +50,7 @@ Start by <a href="https://github.com/duckdb/duckdb-python/fork"><svg height="16"
 
 ### Cloning
 
-After forking this duckdb-python, we recommend you clone your fork as follows:
+After forking the duckdb-python repo we recommend you clone your fork as follows:
 ```shell
 git clone --recurse-submodules $REPO_URL
 git remote add upstream https://github.com/duckdb/duckdb-python.git
