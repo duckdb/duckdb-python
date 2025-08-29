@@ -46,17 +46,21 @@ pip install 'duckdb[all]'
 
 ### Cloning
 
-When you clone the repo or your fork, make sure you initialize the duckdb submodule:
+After forking this duckdb-python, we recommend you clone your fork as follows:
 ```shell
-git clone --recurse-submodules <repo>
+git clone --recurse-submodules $REPO_URL
+git remote add upstream https://github.com/duckdb/duckdb-python.git
+git fetch --all
 ```
 
-... or, if  you already have the repo locally:
+... or, if you have already cloned your fork:
 ```shell
-git clone <your-repo>
-cd <your-repo>
 git submodule update --init --recursive
+git remote add upstream https://github.com/duckdb/duckdb-python.git
+git fetch --all
 ```
+
+### Submodule update hook
 
 If you'll be switching between branches that are have the submodule set to different refs, then make your life 
 easier and add the git hooks in the .githooks directory to your local config: 
@@ -78,7 +82,7 @@ git config --local core.hooksPath .githooks/
 
 ```bash
 # install all dev dependencies without building the project (needed once)
-uv sync -p 3.9 --no-install-project
+uv sync -p 3.11 --no-install-project
 # build and install without build isolation
 uv sync --no-build-isolation
 ```
