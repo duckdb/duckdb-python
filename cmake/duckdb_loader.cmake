@@ -49,7 +49,7 @@ _duckdb_set_default(DISABLE_UNITY OFF)
 
 # Extension configuration
 _duckdb_set_default(DISABLE_BUILTIN_EXTENSIONS OFF)
-_duckdb_set_default(ENABLE_EXTENSION_AUTOINSTALL 1) # todo: set to ON https://github.com/duckdb/duckdb/pull/18778/files
+_duckdb_set_default(ENABLE_EXTENSION_AUTOINSTALL ON)
 _duckdb_set_default(ENABLE_EXTENSION_AUTOLOADING ON)
 
 # Performance options - enable optimizations by default
