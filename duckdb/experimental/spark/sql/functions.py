@@ -1851,6 +1851,30 @@ def isnotnull(col: "ColumnOrName") -> Column:
     return Column(_to_column_expr(col).isnotnull())
 
 
+def equal_null(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
+    """
+    Returns same result as the EQUAL(=) operator for non-null operands,
+    but returns true if both are null, false if one of the them is null.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col1 : :class:`~pyspark.sql.Column` or str
+    col2 : :class:`~pyspark.sql.Column` or str
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(None, None,), (1, 9,)], ["a", "b"])
+    >>> df.select(equal_null(df.a, df.b).alias('r')).collect()
+    [Row(r=True), Row(r=False)]
+    """
+    if isinstance(col1, str):
+        col1 = col(col1)
+
+    if isinstance(col2, str):
+        col2 = col(col2)
+
+    return nvl((col1 == col2) | ((col1.isNull() & col2.isNull())), lit(False))
+
+
 def flatten(col: "ColumnOrName") -> Column:
     """
     Collection function: creates a single array from an array of arrays.
@@ -2155,6 +2179,33 @@ def e() -> Column:
     +-----------------+
     """
     return lit(2.718281828459045)
+
+
+def negative(col: "ColumnOrName") -> Column:
+    """
+    Returns the negative value.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column to calculate negative value for.
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        negative value.
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> spark.range(3).select(sf.negative("id")).show()
+    +------------+
+    |negative(id)|
+    +------------+
+    |           0|
+    |          -1|
+    |          -2|
+    +------------+
+    """
+    return abs(col) * -1
 
 
 def pi() -> Column:
@@ -3772,6 +3823,53 @@ def datepart(field: "ColumnOrName", source: "ColumnOrName") -> Column:
     [Row(year=2015, month=4, week=15, day=8, minute=8, second=Decimal('15.000000'))]
     """
     return date_part(field, source)
+
+
+def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
+    """
+    Returns the number of days from `start` to `end`.
+
+    .. versionadded:: 3.5.0
+
+    Parameters
+    ----------
+    end : :class:`~pyspark.sql.Column` or column name
+        to date column to work on.
+    start : :class:`~pyspark.sql.Column` or column name
+        from date column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        difference in days between two dates.
+
+    See Also
+    --------
+    :meth:`pyspark.sql.functions.dateadd`
+    :meth:`pyspark.sql.functions.date_add`
+    :meth:`pyspark.sql.functions.date_sub`
+    :meth:`pyspark.sql.functions.datediff`
+    :meth:`pyspark.sql.functions.timestamp_diff`
+
+    Examples
+    --------
+    >>> import pyspark.sql.functions as sf
+    >>> df = spark.createDataFrame([('2015-04-08','2015-05-10')], ['d1', 'd2'])
+    >>> df.select('*', sf.date_diff(sf.col('d1').cast('DATE'), sf.col('d2').cast('DATE'))).show()
+    +----------+----------+-----------------+
+    |        d1|        d2|date_diff(d1, d2)|
+    +----------+----------+-----------------+
+    |2015-04-08|2015-05-10|              -32|
+    +----------+----------+-----------------+
+
+    >>> df.select('*', sf.date_diff(sf.col('d1').cast('DATE'), sf.col('d2').cast('DATE'))).show()
+    +----------+----------+-----------------+
+    |        d1|        d2|date_diff(d2, d1)|
+    +----------+----------+-----------------+
+    |2015-04-08|2015-05-10|               32|
+    +----------+----------+-----------------+
+    """
+    return _invoke_function_over_columns("date_diff", lit("day"), end, start)
 
 
 def year(col: "ColumnOrName") -> Column:
@@ -5684,6 +5782,31 @@ def to_timestamp_ntz(
     """
     return _to_date_or_timestamp(timestamp, _types.TimestampNTZType(), format)
 
+
+def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = None) -> Column:
+    """
+    Parses the `col` with the `format` to a timestamp. The function always
+    returns null on an invalid input with/without ANSI SQL mode enabled. The result data type is
+    consistent with the value of configuration `spark.sql.timestampType`.
+    .. versionadded:: 3.5.0
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        column values to convert.
+    format: str, optional
+        format to use to convert timestamp values.
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
+    >>> df.select(try_to_timestamp(df.t).alias('dt')).collect()
+    [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
+    >>> df.select(try_to_timestamp(df.t, lit('yyyy-MM-dd HH:mm:ss')).alias('dt')).collect()
+    [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
+    """
+    if format is None:
+        format = lit(['%Y-%m-%d', '%Y-%m-%d %H:%M:%S'])
+
+    return _invoke_function_over_columns("try_strptime", col, format)
 
 def substr(
     str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None
