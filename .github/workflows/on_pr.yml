@@ -41,6 +41,7 @@ jobs:
 
   packaging_test:
     name: Build a minimal set of packages and run all tests on them
+    needs: ensure_submodule_sanity
     # Skip packaging tests for draft PRs
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     uses: ./.github/workflows/packaging.yml
@@ -51,7 +52,9 @@ jobs:
 
   coverage_test:
     name: Run coverage tests
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    needs: ensure_submodule_sanity
+    # Only run coverage test for draft PRs
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
     uses: ./.github/workflows/coverage.yml
     with:
       duckdb_git_ref: ${{ github.base_ref }}
