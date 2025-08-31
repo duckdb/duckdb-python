@@ -38,7 +38,7 @@ maintainers = [{name = "DuckDB Foundation"}]
 [project.urls]
 Documentation = "https://duckdb.org/docs/stable/clients/python/overview"
 Source = "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg"
-Issues = "https://github.com/duckdb/duckdb/issues"
+Issues = "https://github.com/duckdb/duckdb-python/issues"
 Changelog = "https://github.com/duckdb/duckdb/releases"
 
 [project.optional-dependencies]
