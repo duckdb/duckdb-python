@@ -52,9 +52,9 @@ jobs:
           http_status=$( curl -s -o /dev/null -w "%{http_code}" https://${pypi_hostname}/pypi/duckdb/${pkg_version}/json )
           if [ "$http_status" == "200" ]; then
             echo "::warning::DuckDB ${pkg_version} is already present on ${pypi_hostname}, will not release"
-            echo "can_upload=true" >> $GITHUB_GITHUB_OUTPUT
+            echo "can_upload=true" >> $GITHUB_OUTPUT
           else
-            echo "can_upload=false" >> $GITHUB_GITHUB_OUTPUT
+            echo "can_upload=false" >> $GITHUB_OUTPUT
           fi
           
 
