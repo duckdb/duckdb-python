@@ -1,0 +1,94 @@
+name: Sdist packaging
+on:
+  workflow_call:
+    inputs:
+      testsuite:
+        type: string
+        description: Testsuite to run (none, fast, all)
+        required: true
+        default: all
+      git-ref:
+        type: string
+        description: Git ref of the DuckDB python package
+        required: false
+      duckdb-git-ref:
+        type: string
+        description: Git ref of DuckDB
+        required: false
+      set-version:
+        description: Force version (vX.Y.Z-((rc|post)N))
+        required: false
+        type: string
+    outputs:
+      package-version:
+        description: The version of the DuckDB Python package
+        value: ${{ jobs.build_sdist.outputs.pkg_version }}
+      duckdb-version:
+        description: The version of DuckDB that was packaged
+        value: ${{ jobs.build_sdist.outputs.duckdb_version }}
+
+jobs:
+  build_sdist:
+    name: Build sdist
+    runs-on: ubuntu-24.04
+    outputs:
+      pkg_version: ${{ steps.versioning.outputs.pkg_version }}
+      duckdb_version: ${{ steps.versioning.outputs.duckdb_version }}
+    steps:
+
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git-ref }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Checkout DuckDB
+        shell: bash
+        run: |
+          cd external/duckdb
+          git fetch origin
+          git checkout ${{ inputs.duckdb-git-ref }}
+
+      - name: Set OVERRIDE_GIT_DESCRIBE
+        if: ${{ inputs.set-version != '' }}
+        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
+
+      - name: Install Astral UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.14"
+          python-version: 3.11
+
+      - name: Build sdist
+        run: uv build --sdist
+
+      - name: Install sdist
+        run: |
+          cd ${{ runner.temp }}
+          uv venv
+          uv pip install ${{ github.workspace }}/dist/duckdb-*.tar.gz
+
+      - name: Test sdist
+        if: ${{ inputs.testsuite != 'none' }}
+        run: |
+          # install the test requirements
+          uv export --only-group test --no-emit-project --output-file ${{ runner.temp }}/pylock.toml --quiet
+          cd ${{ runner.temp }}
+          uv pip install -r pylock.toml
+          # run tests
+          tests_root="${{ github.workspace }}/tests"
+          tests_dir="${tests_root}${{ inputs.testsuite == 'fast' && '/fast' || '/' }}"
+          uv run --verbose pytest $tests_dir --verbose --ignore=${tests_root}/stubs
+
+      - id: versioning
+        run: |
+          cd ${{ runner.temp }}
+          echo "pkg_version=$( .venv/bin/python -c 'import duckdb; print(duckdb.__version__)' )" >> $GITHUB_OUTPUT
+          echo "duckdb_version=$( .venv/bin/python -c 'import duckdb; print(duckdb.duckdb_version)' )" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          compression-level: 0

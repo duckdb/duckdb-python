@@ -28,9 +28,41 @@ defaults:
     shell: bash
 
 jobs:
-  build_and_test:
+  build_sdist:
+    name: Build an sdist and determine versions
+    uses: ./.github/workflows/packaging_sdist.yml
+    with:
+      testsuite: all
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      set-version: ${{ inputs.stable-version }}
+
+  check_pypi:
+    name: Check whether this version was already released
+    needs: build_sdist
+    outputs:
+      can_upload: ${{ steps.index_check.outputs.can_upload }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: index_check
+        run: |
+          # Check PyPI whether the release we're building is already present
+          pypi_hostname="${{ inputs.pypi-index == 'test' && 'test.' || '' }}pypi.org"
+          pkg_version=${{ needs.build_sdist.outputs.package-version }}
+          http_status=$( curl -s -o /dev/null -w "%{http_code}" https://${pypi_hostname}/pypi/duckdb/${pkg_version}/json )
+          if [ "$http_status" == "200" ]; then
+            echo "::warning::DuckDB ${pkg_version} is already present on ${pypi_hostname}, will not release"
+            echo "can_upload=true" >> $GITHUB_GITHUB_OUTPUT
+          else
+            echo "can_upload=false" >> $GITHUB_GITHUB_OUTPUT
+          fi
+          
+
+  build_wheels:
     name: Build and test releases
-    uses:  ./.github/workflows/packaging.yml
+    needs: check_pypi
+    if: ${{ needs.check_pypi.outputs.can_upload }}
+    uses: ./.github/workflows/packaging_wheels.yml
     with:
       minimal: false
       testsuite: all
@@ -41,8 +73,10 @@ jobs:
   upload_s3:
     name: Upload Artifacts to S3
     runs-on: ubuntu-latest
-    needs: [build_and_test]
+    needs: [build_sdist, build_wheels]
     if: ${{ github.repository_owner == 'duckdb' && ( inputs.pypi-index == 'prod' || inputs.store-s3 ) }}
+    outputs:
+      s3-upload-url: ${{ steps.input.outputs.s3_upload_url }}
     steps:
       - name: Fetch artifacts
         uses: actions/download-artifact@v4
@@ -56,11 +90,8 @@ jobs:
         run: |
           sha=${{ github.sha }}
           dsha=${{ inputs.duckdb-sha }}
-          version=$(basename artifacts/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
+          version=${{ needs.build_sdist.outputs.package-version }}
           url="s3://duckdb-staging/python/${version}/${sha:0:10}-duckdb-${dsha:0:10}/"
-          echo "short_sha=${sha:0:10}" >> $GITHUB_OUTPUT
-          echo "short_dsha=${dsha:0:10}" >> $GITHUB_OUTPUT
-          echo "version=${version}" >> $GITHUB_OUTPUT
           echo "s3_upload_url=${url}" >> $GITHUB_OUTPUT
 
       - name: Authenticate with AWS
@@ -74,18 +105,10 @@ jobs:
         run: |
           aws s3 cp artifacts ${{ steps.input.outputs.s3_upload_url }} --recursive
 
-      - name: S3 Upload Summary
-        run : |
-          echo "## S3 Upload Summary" >> $GITHUB_STEP_SUMMARY
-          echo "* Version: ${{ steps.input.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "* SHA: ${{ steps.input.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "* DuckDB SHA: ${{ steps.input.outputs.short_dsha }}" >> $GITHUB_STEP_SUMMARY
-          echo "* S3 URL: ${{ steps.input.outputs.s3_upload_url }}" >> $GITHUB_STEP_SUMMARY
-
   determine_environment:
     name: Determine the Github Actions environment to use
     runs-on: ubuntu-latest
-    needs: build_and_test
+    needs: [build_sdist, build_wheels]
     outputs:
       env_name: ${{ steps.set-env.outputs.env_name }}
     steps:
@@ -105,7 +128,7 @@ jobs:
               fi
               ;;
             *)
-              echo "Error: invalid combination of inputs.pypi-index='${{ inputs.pypi-index }}' and inputs.stable-version='${{ inputs.stable-version }}'" >&2
+              echo "::error::invalid combination of inputs.pypi-index='${{ inputs.pypi-index }}' and inputs.stable-version='${{ inputs.stable-version }}'"
               exit 1
               ;;
           esac
@@ -139,17 +162,9 @@ jobs:
           packages-dir: packages
           verbose: 'true'
 
-      - name: PyPI Upload Summary
-        run : |
-          version=$(basename packages/*.tar.gz | sed 's/duckdb-\(.*\).tar.gz/\1/g')
-          echo "## PyPI Upload Summary" >> $GITHUB_STEP_SUMMARY
-          echo "* Version: ${version}" >> $GITHUB_STEP_SUMMARY
-          echo "* PyPI Host: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
-          echo "* CI Environment: ${{ needs.determine_environment.outputs.env_name }}" >> $GITHUB_STEP_SUMMARY
-
   cleanup_nightlies:
     name: Remove Nightlies from PyPI
-    needs: [determine_environment, publish_pypi]
+    needs: [ determine_environment, publish_pypi ]
     if: ${{ inputs.stable-version == '' }}
     uses: ./.github/workflows/cleanup_pypi.yml
     with:
@@ -158,3 +173,23 @@ jobs:
       # reusable workflows and secrets are not great: https://github.com/actions/runner/issues/3206
       PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
       PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
+
+  summary:
+    name: Release summary
+    runs-on: ubuntu-latest
+    needs: [build_sdist, check_pypi, upload_s3, determine_environment]
+    if: true
+    steps:
+      - run: |
+          sha=${{ github.sha }}
+          dsha=${{ inputs.duckdb-sha }}
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "* Package Version: ${{ needs.build_sdist.outputs.package-version }} (${sha:0:10})" >> $GITHUB_STEP_SUMMARY
+          echo "* DuckDB Version: ${{ needs.build_sdist.outputs.duckdb-version }} (${dsha:0:10})" >> $GITHUB_STEP_SUMMARY
+          echo "* PyPI: ${{ vars.PYPI_HOST }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.check_pypi.outputs.can_upload }}" == "false" ]; then
+            echo "  * Package already exists on this PyPI, nothing was uploaded" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          echo "* CI Environment: ${{ needs.determine_environment.outputs.env_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "* S3 URL: ${{ needs.upload_s3.outputs.s3_upload_url }}" >> $GITHUB_STEP_SUMMARY
