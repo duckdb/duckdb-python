@@ -86,7 +86,7 @@ def forced_version_from_env():
 
     if override_value:
         print(f"[versioning] Found {OVERRIDE_GIT_DESCRIBE_ENV_VAR}={override_value}")
-        pep440_version = git_describe_output_to_pep_440(override_value)
+        pep440_version = _git_describe_output_to_pep_440(override_value)
         os.environ[SCM_PRETEND_ENV_VAR] = pep440_version
         print(f"[versioning] Injected {SCM_PRETEND_ENV_VAR}={pep440_version}")
     elif SCM_PRETEND_ENV_VAR in os.environ:
@@ -99,7 +99,7 @@ def forced_version_from_env():
     return pep440_version
 
 
-def git_describe_output_to_pep_440(override_value: str) -> str:
+def _git_describe_output_to_pep_440(override_value: str) -> str:
     """Process the git describe output."""
     describe_pattern = re.compile(
         r"""
