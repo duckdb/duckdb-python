@@ -62,6 +62,7 @@ jobs:
           uv sync --only-group pypi --no-install-project
           uv run --no-sync python -u -m duckdb_packaging.pypi_cleanup ${{ inputs.dry-run && '--dry' || '' }} \
             ${{ inputs.environment == 'pypi-prod-nightly' && '--prod' || '--test' }} \
+            --verbose \
             --username "${{ vars.PYPI_CLEANUP_USERNAME }}" \
             --max-nightlies ${{ vars.PYPI_MAX_NIGHTLIES }} 2>&1 | tee cleanup_output
 

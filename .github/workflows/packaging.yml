@@ -63,127 +63,20 @@ defaults:
 
 jobs:
   build_sdist:
-    name: Build sdist
-    runs-on: ubuntu-24.04
-    steps:
-
-      - name: Checkout DuckDB Python
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git-ref }}
-          fetch-depth: 0
-          submodules: true
-
-      - name: Checkout DuckDB
-        shell: bash
-        run: |
-          cd external/duckdb
-          git fetch origin
-          git checkout ${{ inputs.duckdb-git-ref }}
-
-      - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.set-version != '' }}
-        run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
-
-      - name: Install Astral UV
-        uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.7.14"
-          python-version: 3.11
-
-      - name: Build sdist
-        run: uv build --sdist
-
-      - name: Install sdist
-        run: |
-          cd ${{ runner.temp }}
-          uv venv
-          uv pip install ${{ github.workspace }}/dist/duckdb-*.tar.gz
-
-      - name: Test sdist
-        if: ${{ inputs.testsuite != 'none' }}
-        run: |
-          # install the test requirements
-          uv export --only-group test --no-emit-project --output-file ${{ runner.temp }}/pylock.toml --quiet
-          cd ${{ runner.temp }}
-          uv pip install -r pylock.toml
-          # run tests
-          tests_root="${{ github.workspace }}/tests"
-          tests_dir="${tests_root}${{ inputs.testsuite == 'fast' && '/fast' || '/' }}"
-          uv run --verbose pytest $tests_dir --verbose --ignore=${tests_root}/stubs
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: sdist
-          path: dist/*.tar.gz
-          compression-level: 0
+    name: Build an sdist and determine versions
+    uses: ./.github/workflows/packaging_sdist.yml
+    with:
+      testsuite: all
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      set-version: ${{ inputs.stable-version }}
 
   build_wheels:
-    name: 'Wheel: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
-    strategy:
-      fail-fast: false
-      matrix:
-        python: [ cp39, cp310, cp311, cp312, cp313 ]
-        platform:
-          - { os: windows-2025,     arch: amd64,      cibw_system: win }
-          - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
-          - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
-          - { os: macos-15,         arch: arm64,      cibw_system: macosx }
-          - { os: macos-15,         arch: universal2, cibw_system: macosx }
-          - { os: macos-13,         arch: x86_64,     cibw_system: macosx }
-        minimal:
-          - ${{ inputs.minimal }}
-        exclude:
-          - { minimal: true, python: cp310 }
-          - { minimal: true, python: cp311 }
-          - { minimal: true, python: cp312 }
-          - { minimal: true, platform: { arch: universal2 } }
-    runs-on: ${{ matrix.platform.os }}
-    env:
-      CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
-      CIBW_TEST_SOURCES: tests
-      CIBW_BEFORE_TEST: >
-        uv export --only-group test --no-emit-project --output-file pylock.toml --directory {project} &&
-        uv pip install -r pylock.toml
-      CIBW_TEST_COMMAND: >
-        uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
-
-    steps:
-      - name: Checkout DuckDB Python
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.git-ref }}
-          fetch-depth: 0
-          submodules: true
-
-      - name: Checkout DuckDB
-        shell: bash
-        run: |
-          cd external/duckdb
-          git fetch origin
-          git checkout ${{ inputs.duckdb-git-ref }}
-
-      # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
-      - name: Set OVERRIDE_GIT_DESCRIBE
-        if: ${{ inputs.set-version != '' }}
-        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
-
-      # Install Astral UV, which will be used as build-frontend for cibuildwheel
-      - uses: astral-sh/setup-uv@v6
-        with:
-          version: "0.7.14"
-          enable-cache: false
-          cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-
-      - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
-        uses: pypa/cibuildwheel@v3.0
-        env:
-          CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
-          CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheel-${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-          path: wheelhouse/*.whl
-          compression-level: 0
+    name: Build and test releases
+    uses: ./.github/workflows/packaging_wheels.yml
+    with:
+      minimal: false
+      testsuite: all
+      git-ref: ${{ github.ref }}
+      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      set-version: ${{ inputs.stable-version }}
