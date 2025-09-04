@@ -27,10 +27,10 @@ def _main_branch_versioning():
 def version_scheme(version: Any) -> str:
     """
     setuptools_scm version scheme that matches DuckDB's original behavior.
-    
+
     Args:
         version: setuptools_scm version object
-        
+
     Returns:
         PEP440 compliant version string
     """
@@ -38,11 +38,11 @@ def version_scheme(version: Any) -> str:
     print(f"[version_scheme] version.tag: {version.tag}")
     print(f"[version_scheme] version.distance: {version.distance}")
     print(f"[version_scheme] version.dirty: {version.dirty}")
-    
+
     # Handle case where tag is None
     if version.tag is None:
         raise ValueError("Need a valid version. Did you set a fallback_version in pyproject.toml?")
-    
+
     try:
         return _bump_version(str(version.tag), version.distance, version.dirty)
     except Exception as e:
