@@ -7,8 +7,8 @@
 </div>
 <br />
 <p align="center">
-  <a href="https://discord.gg/tcvwpjfnZx"><img src="https://shields.io/discord/909674491309850675" alt="discord" /></a>
-  <a href="https://pypi.org/project/duckdb/"><img src="https://img.shields.io/pypi/v/duckdb.svg" alt="PyPi Latest Release"/></a>
+  <a href="https://discord.gg/tcvwpjfnZx"><img src="https://shields.io/discord/909674491309850675" alt="Discord" /></a>
+  <a href="https://pypi.org/project/duckdb/"><img src="https://img.shields.io/pypi/v/duckdb.svg" alt="PyPI Latest Release"/></a>
 </p>
 <br />
 <p align="center">
@@ -30,7 +30,7 @@
 
 ## Installation
 
-Install the latest release of DuckDB directly from [PyPi](https://pypi.org/project/duckdb/):
+Install the latest release of DuckDB directly from [PyPI](https://pypi.org/project/duckdb/):
 
 ```bash
 pip install duckdb
@@ -169,11 +169,11 @@ uvx gcovr \
 ### Typechecking and linting
 
 - We're not running any mypy typechecking tests at the moment
-- We're not running any ruff / linting / formatting at the moment
+- We're not running any Ruff / linting / formatting at the moment
 
 ### Cibuildwheel
 
-You can run cibuildwheel locally for linux. E.g. limited to Python 3.9:
+You can run cibuildwheel locally for Linux. E.g. limited to Python 3.9:
 ```bash
 CIBW_BUILD='cp39-*' uvx cibuildwheel --platform linux .
 ```
@@ -186,7 +186,7 @@ CIBW_BUILD='cp39-*' uvx cibuildwheel --platform linux .
 ### Tooling
 
 This codebase is developed with the following tools:
-- [Astral UV](https://docs.astral.sh/uv/) - for dependency management across all platforms we provide wheels for,
+- [Astral uv](https://docs.astral.sh/uv/) - for dependency management across all platforms we provide wheels for,
   and for Python environment management. It will be hard to work on this codebase without having UV installed.
 - [Scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/index.html) - the build backend for
   building the extension. On the background, scikit-build-core uses cmake and ninja for compilation.
