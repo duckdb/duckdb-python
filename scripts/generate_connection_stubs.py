@@ -69,7 +69,7 @@ def generate():
         definition += f" -> {method['return']}: ..."
         return definition
 
-    # We have "duplicate" methods, which are overloaded
+    # We have "duplicate" methods, which are overloaded.
     # We keep note of them to add the @overload decorator.
     overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m['name'], list)}
 
