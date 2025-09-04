@@ -7,4 +7,4 @@ on:
 jobs:
   submodule_sanity_guard:
     name: Make sure submodule is in a sane state
-    uses: .github/workflows/submodule_sanity.yml
+    uses: ./.github/workflows/submodule_sanity.yml

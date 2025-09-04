@@ -21,7 +21,7 @@ concurrency:
 jobs:
   submodule_sanity_guard:
     name: Make sure submodule is in a sane state
-    uses: .github/workflows/submodule_sanity.yml
+    uses: ./.github/workflows/submodule_sanity.yml
 
   packaging_test:
     name: Build a minimal set of packages and run all tests on them
