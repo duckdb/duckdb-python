@@ -86,9 +86,7 @@ def generate():
         definition += f" -> {method['return']}: ..."
         return definition
 
-    # We have "duplicate" methods, which are overloaded
-    # maybe we should add @overload to these instead, but this is easier
-    # We keep note of them to add the @overload decorator.
+    # We have "duplicate" methods, which are overloaded.
     overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m['name'], list)}
 
     body = []
@@ -104,7 +102,6 @@ def generate():
         method['kwargs'].append({'name': 'connection', 'type': 'DuckDBPyConnection', 'default': '...'})
 
         for name in names:
-            body.append(create_definition(name, method, name in overloaded_methods))
 
     # ---- End of generation code ----
 
