@@ -65,11 +65,11 @@ jobs:
 
       - name: Checkout DuckDB
         shell: bash
-        if: ${{ inputs.duckdb-python-sha }}
+        if: ${{ inputs.duckdb-sha }}
         run: |
           cd external/duckdb
           git fetch origin
-          git checkout ${{ inputs.duckdb-python-sha }}
+          git checkout ${{ inputs.duckdb-sha }}
 
       # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
       - name: Set OVERRIDE_GIT_DESCRIBE
