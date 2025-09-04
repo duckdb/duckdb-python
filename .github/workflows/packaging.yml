@@ -16,15 +16,14 @@ on:
           - none
           - fast
           - all
-      git-ref:
+      duckdb-python-sha:
         type: string
-        description: Git ref of the DuckDB python package
+        description: The commit to build against (defaults to latest commit of current ref)
         required: false
-      duckdb-git-ref:
+      duckdb-sha:
         type: string
-        description: Git ref of DuckDB
-        required: true
-        default: refs/heads/main
+        description: Override the DuckDB submodule commit or ref to build against
+        required: false
       set-version:
         type: string
         description: Force version (vX.Y.Z-((rc|post)N))
@@ -40,13 +39,13 @@ on:
         description: Testsuite to run (none, fast, all)
         required: true
         default: all
-      git-ref:
+      duckdb-python-sha:
         type: string
-        description: Git ref of the DuckDB python package
+        description: The commit or ref to build against (defaults to latest commit of current ref)
         required: false
-      duckdb-git-ref:
+      duckdb-sha:
         type: string
-        description: Git ref of DuckDB
+        description: Override the DuckDB submodule commit or ref to build against
         required: false
       set-version:
         description: Force version (vX.Y.Z-((rc|post)N))
@@ -67,8 +66,8 @@ jobs:
     uses: ./.github/workflows/packaging_sdist.yml
     with:
       testsuite: all
-      git-ref: ${{ github.ref }}
-      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
+      duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.stable-version }}
 
   build_wheels:
@@ -77,6 +76,6 @@ jobs:
     with:
       minimal: false
       testsuite: all
-      git-ref: ${{ github.ref }}
-      duckdb-git-ref: ${{ inputs.duckdb-sha }}
+      duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
+      duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.stable-version }}
