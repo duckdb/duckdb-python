@@ -188,7 +188,7 @@ jobs:
     name: Release summary
     runs-on: ubuntu-latest
     needs: [build_sdist, workflow_state, build_wheels, upload_s3, publish_pypi, cleanup_nightlies]
-    if: true
+    if: always()
     steps:
       - run: |
           sha=${{ github.sha }}
