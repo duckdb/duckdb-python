@@ -11,13 +11,13 @@ on:
         description: Testsuite to run (none, fast, all)
         required: true
         default: all
-      git-ref:
+      duckdb-python-sha:
         type: string
-        description: Git ref of the DuckDB python package
+        description: The commit or ref to build against (defaults to latest commit of current ref)
         required: false
-      duckdb-git-ref:
+      duckdb-sha:
         type: string
-        description: Git ref of DuckDB
+        description: Override the DuckDB submodule commit or ref to build against
         required: false
       set-version:
         description: Force version (vX.Y.Z-((rc|post)N))
@@ -59,16 +59,17 @@ jobs:
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git-ref }}
+          ref: ${{ inputs.duckdb-python-sha }}
           fetch-depth: 0
           submodules: true
 
       - name: Checkout DuckDB
         shell: bash
+        if: ${{ inputs.duckdb-python-sha }}
         run: |
           cd external/duckdb
           git fetch origin
-          git checkout ${{ inputs.duckdb-git-ref }}
+          git checkout ${{ inputs.duckdb-python-sha }}
 
       # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
       - name: Set OVERRIDE_GIT_DESCRIBE

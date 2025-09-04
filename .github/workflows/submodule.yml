@@ -1,0 +1,42 @@
+name: Check DuckDB submodule sanity
+on:
+  workflow_call:
+  workflow_dispatch:
+jobs:
+  submodule_sanity:
+    name: Make sure submodule is in a sane state
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify submodule origin
+        shell: bash
+        run: |
+          set -eux
+          git submodule update --init
+          cd external/duckdb
+          remote_count=$(git remote | wc -l)
+          if [[ $remote_count -gt 1 ]]; then
+            echo "::error::Multiple remotes found - only origin allowed"
+            git remote -v
+          fi
+          origin_url=$(git remote get-url origin)
+          if [[ "$origin_url" != "https://github.com/duckdb/duckdb"* ]]; then
+            echo "::error::Submodule origin has been tampered with: $origin_url"
+            exit 1
+          fi
+
+      - name: Disallow changes to .gitmodules in PRs and pushes
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+        shell: bash
+        run: |
+          set -eux
+          before=${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
+          after=${{ github.event_name == 'push' && github.event.after || github.head_ref }}
+          if git diff --name-only $before...$after | grep -q "^\.gitmodules$"; then
+            echo "::error::.gitmodules may not be modified. If you see a reason to update, please discuss with the maintainers."
+            exit 1
+          fi
