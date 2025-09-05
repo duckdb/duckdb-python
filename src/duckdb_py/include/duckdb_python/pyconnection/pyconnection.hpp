@@ -171,10 +171,14 @@ public:
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_table_functions;
 
-	static std::unordered_map<std::string, std::pair<vector<LogicalType>, vector<string>>> &GetTVFSchemaRegistry() {
-		static std::unordered_map<std::string, std::pair<vector<LogicalType>, vector<string>>> registry;
-		return registry;
-	}
+	// Per-connection TVF storage instead of global registry
+	struct TVFInfo {
+		py::function callable;
+		vector<LogicalType> return_types;
+		vector<string> return_names;
+		string return_type_str;
+	};
+	case_insensitive_map_t<TVFInfo> table_function_callables;
 
 	case_insensitive_set_t registered_objects;
 
@@ -243,6 +247,8 @@ public:
 	                                                     const py::object &parameters = py::none(),
 	                                                     const py::object &schema = py::none(),
 	                                                     const string &return_type = "strings");
+
+	shared_ptr<DuckDBPyConnection> UnregisterTableFunction(const string &name);
 
 	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 

@@ -433,6 +433,40 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterTableFunction(const s
 	return shared_from_this();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterTableFunction(const string &name) {
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
+
+	if (context.transaction.HasActiveTransaction()) {
+		context.CancelTransaction();
+	}
+	
+	// TODO: Remove from DuckDB's function registry
+	// For now, just remove from our registries
+	
+	// Remove from our registry
+	auto it = registered_table_functions.find(name);
+	if (it != registered_table_functions.end()) {
+		registered_table_functions.erase(it);
+	}
+	
+	// Remove from per-connection callables
+	auto callable_it = table_function_callables.find(name);
+	if (callable_it != table_function_callables.end()) {
+		table_function_callables.erase(callable_it);
+	}
+	
+	// Remove from global TVF connection registry (declared in python_tvf.cpp)
+	extern case_insensitive_map_t<weak_ptr<DuckDBPyConnection>>& GetTVFConnectionRegistry();
+	auto& global_registry = GetTVFConnectionRegistry();
+	auto global_it = global_registry.find(name);
+	if (global_it != global_registry.end()) {
+		global_registry.erase(global_it);
+	}
+
+	return shared_from_this();
+}
+
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	auto connection_module =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
@@ -444,7 +478,10 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	connection_module.def("create_table_function", &DuckDBPyConnection::RegisterTableFunction,
 	                      "Register a table valued function via Callable", py::arg("name"), py::arg("callable"),
 	                      py::arg("parameters") = py::none(), py::arg("schema") = py::none(),
-	                      py::arg("return_type") = "strings");
+	                      py::arg("return_type") = "records");
+
+	connection_module.def("unregister_table_function", &DuckDBPyConnection::UnregisterTableFunction,
+	                      "Unregister a table valued function", py::arg("name"));
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,

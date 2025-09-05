@@ -21,17 +21,28 @@
 
 namespace duckdb {
 
+// Global registry for TVF connection lookup
+case_insensitive_map_t<weak_ptr<DuckDBPyConnection>> &GetTVFConnectionRegistry() {
+	static case_insensitive_map_t<weak_ptr<DuckDBPyConnection>> registry;
+	return registry;
+}
+
 // Forward declarations for table function return types
 enum class PyTVFReturnType {
-	STRINGS,       // Current behavior: convert all results to strings (default)
-	ARROW_TABLE,   // Arrow tables with proper schema and types
-	ARROW_BATCHES, // Arrow record batches (future)
-	STRUCTURED     // Python structures with schema inference (future)
+	RECORDS,     // Python tuples/lists converted to DuckDB records with proper types
+	ARROW_TABLE, // Arrow tables with proper schema and types
+	ARROW_BATCH  // Arrow record batches
 };
 
 struct PyTVFGlobalState : public GlobalTableFunctionState {
 	vector<vector<Value>> rows;
 	idx_t idx = 0;
+
+	// For Arrow support
+	unique_ptr<ArrowArrayWrapper> arrow_array;
+	unique_ptr<ArrowSchemaWrapper> arrow_schema;
+	idx_t arrow_batch_idx = 0;
+	PyTVFReturnType return_type;
 };
 
 // Helper function to convert DuckDB Values to Python objects
@@ -91,13 +102,6 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
                                                                           const py::object &parameters,
                                                                           const py::object &schema,
                                                                           const std::string &return_type_str) {
-	// Store callable for executor lookup and register in __main__ for lookup
-	// table_function_callables[name] = callable;
-
-	// Also register in __main__ module for easy lookup by name
-	py::object main = py::module_::import("__main__");
-	main.attr(name.c_str()) = callable;
-
 	// Parse schema immediately
 	vector<LogicalType> types;
 	vector<string> names;
@@ -115,14 +119,13 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 		names.push_back("result");
 	}
 
-	// Parse return type
-	PyTVFReturnType return_type = PyTVFReturnType::STRINGS;
-	if (return_type_str == "arrow_table" || return_type_str == "arrow") {
-		return_type = PyTVFReturnType::ARROW_TABLE;
-	}
-
-	// Store schema in a global registry for bind function lookup
-	GetTVFSchemaRegistry()[name] = std::make_pair(types, names);
+	// Store callable and info in per-connection storage
+	TVFInfo tvf_info;
+	tvf_info.callable = callable;
+	tvf_info.return_types = types;
+	tvf_info.return_names = names;
+	tvf_info.return_type_str = return_type_str;
+	table_function_callables[name] = std::move(tvf_info);
 
 	// Create connection weak pointer for bind data
 	weak_ptr<DuckDBPyConnection> weak_conn = shared_from_this();
@@ -133,6 +136,8 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 	    name, function_args,
 	    /* main execution function */ [](ClientContext &, TableFunctionInput &input, DataChunk &output) {
 		    auto &gs = input.global_state->Cast<PyTVFGlobalState>();
+
+		    // Handle record-based data (Arrow support to be added later)
 		    if (gs.idx >= gs.rows.size()) {
 			    output.SetCardinality(0);
 			    return;
@@ -154,24 +159,50 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 	tf.varargs = LogicalType::ANY;
 	tf.named_parameters["args"] = LogicalType::ANY;
 
-	// Set bind function using the working pattern
+	// Store connection in global registry for lookup by function name
+	GetTVFConnectionRegistry()[name] = weak_conn;
+
 	tf.bind = +[](ClientContext &context, TableFunctionBindInput &in, vector<LogicalType> &return_types,
 	              vector<string> &return_names) -> unique_ptr<FunctionData> {
-		// Look up schema from global registry
-		auto &registry = GetTVFSchemaRegistry();
-		auto it = registry.find(in.table_function.name);
-		if (it != registry.end()) {
-			return_types = it->second.first;
-			return_names = it->second.second;
-		} else {
-			// Fallback to default single VARCHAR column
-			return_types = {LogicalType::VARCHAR};
-			return_names = {"result"};
+		// Get connection from global registry
+		auto &connection_registry = GetTVFConnectionRegistry();
+		auto conn_it = connection_registry.find(in.table_function.name);
+		if (conn_it == connection_registry.end()) {
+			throw InvalidInputException("Connection not found for table function '%s'", in.table_function.name);
+		}
+		auto conn = conn_it->second.lock();
+		if (!conn) {
+			throw InvalidInputException("Connection no longer available for table function '%s'",
+			                            in.table_function.name);
 		}
 
-		// Create bind data with proper field names
+		auto it = conn->table_function_callables.find(in.table_function.name);
+		if (it == conn->table_function_callables.end()) {
+			throw InvalidInputException("Table function '%s' not found", in.table_function.name);
+		}
+
+		const auto &tvf_info = it->second;
+		return_types = tvf_info.return_types;
+		return_names = tvf_info.return_names;
+
+		// Parse return type with error handling
+		PyTVFReturnType ret_type = PyTVFReturnType::RECORDS;
+		if (tvf_info.return_type_str == "records") {
+			// Returns a list of iterables
+			ret_type = PyTVFReturnType::RECORDS;
+		} else if (tvf_info.return_type_str == "arrow_table" || tvf_info.return_type_str == "arrow") {
+			ret_type = PyTVFReturnType::ARROW_TABLE;
+		} else if (tvf_info.return_type_str == "arrow_batch") {
+			ret_type = PyTVFReturnType::ARROW_BATCH;
+		} else {
+			throw InvalidInputException("Unknown return type '%s' for table function '%s'. Valid types are: 'records', "
+			                            "'strings', 'arrow_table', 'arrow_batch'",
+			                            tvf_info.return_type_str, in.table_function.name);
+		}
+
+		// Create bind data
 		auto bd = make_uniq<PyTVFBindData>(in.table_function.name, in.inputs, in.named_parameters, return_types,
-		                                   return_names, PyTVFReturnType::STRINGS, weak_ptr<DuckDBPyConnection> {});
+		                                   return_names, ret_type, conn_it->second);
 
 		return unique_ptr<FunctionData>(static_cast<FunctionData *>(bd.release()));
 	};
@@ -179,15 +210,22 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 	tf.init_global = +[](ClientContext &context, TableFunctionInitInput &in) -> unique_ptr<GlobalTableFunctionState> {
 		auto &bd = in.bind_data->Cast<PyTVFBindData>();
 		auto gs = make_uniq<PyTVFGlobalState>();
+		gs->return_type = bd.return_type;
 
 		py::gil_scoped_acquire gil;
 
-		// Look up callable from __main__ by name (like working code)
-		py::object main = py::module_::import("__main__");
-		if (!py::hasattr(main, bd.func_name.c_str())) {
-			throw InvalidInputException("Table function '%s' not found in __main__", bd.func_name);
+		// Get connection and look up callable
+		auto conn = bd.connection.lock();
+		if (!conn) {
+			throw InvalidInputException("Connection no longer available for table function '%s'", bd.func_name);
 		}
-		py::object fn = main.attr(bd.func_name.c_str());
+
+		auto it = conn->table_function_callables.find(bd.func_name);
+		if (it == conn->table_function_callables.end()) {
+			throw InvalidInputException("Table function '%s' not found", bd.func_name);
+		}
+
+		const py::function &fn = it->second.callable;
 
 		// Build arguments with improved type conversion
 		py::tuple args(bd.args.size());
@@ -228,7 +266,7 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 		py::object result = fn(*args, **kwargs);
 
 		// Process result based on return type
-		if (bd.return_type == PyTVFReturnType::STRINGS) {
+		if (bd.return_type == PyTVFReturnType::RECORDS) {
 			if (py::isinstance<py::list>(result)) {
 				for (auto item : result.cast<py::list>()) {
 					if (py::isinstance<py::tuple>(item)) {
@@ -239,8 +277,11 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							    bd.func_name, static_cast<int>(tup.size()), static_cast<int>(bd.return_types.size()));
 						}
 						vector<Value> row;
-						for (auto elem : tup) {
-							row.push_back(Value(py::str(elem)));
+						for (idx_t i = 0; i < tup.size(); i++) {
+							// Convert Python value to DuckDB Value with proper type
+							auto py_val = tup[i];
+							Value duck_val = TransformPythonValue(py_val, bd.return_types[i]);
+							row.push_back(duck_val);
 						}
 						gs->rows.push_back(std::move(row));
 					} else {
@@ -249,10 +290,15 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							    "Table function '%s' returned a single value but schema expects %d columns",
 							    bd.func_name, static_cast<int>(bd.return_types.size()));
 						}
-						gs->rows.push_back({Value(py::str(item))});
+						Value duck_val = TransformPythonValue(item, bd.return_types[0]);
+						gs->rows.push_back({duck_val});
 					}
 				}
 			}
+		} else if (bd.return_type == PyTVFReturnType::ARROW_TABLE || bd.return_type == PyTVFReturnType::ARROW_BATCH) {
+			// Handle Arrow objects - for now, convert to regular rows
+			// TODO: Implement proper Arrow support
+			throw InvalidInputException("Arrow return types not yet implemented for table function '%s'", bd.func_name);
 		}
 
 		return unique_ptr<GlobalTableFunctionState>(static_cast<GlobalTableFunctionState *>(gs.release()));
