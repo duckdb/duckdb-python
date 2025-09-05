@@ -29,7 +29,7 @@ from scikit_build_core.build import (
 )
 
 from duckdb_packaging._versioning import create_git_tag, pep440_to_git_tag, get_git_describe, strip_post_from_version
-from duckdb_packaging.setuptools_scm_version import forced_version_from_env
+from duckdb_packaging.setuptools_scm_version import forced_version_from_env, MAIN_BRANCH_VERSIONING
 
 
 _DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
@@ -41,7 +41,7 @@ _FORCED_PEP440_VERSION = forced_version_from_env()
 
 def _log(msg: str, is_error: bool=False) -> None:
     """Log a message with build backend prefix.
-    
+
     Args:
         msg: The message to log.
         is_error: If True, log to stderr; otherwise log to stdout.
@@ -51,7 +51,7 @@ def _log(msg: str, is_error: bool=False) -> None:
 
 def _in_git_repository() -> bool:
     """Check if the current directory is inside a git repository.
-    
+
     Returns:
         True if .git directory exists, False otherwise.
     """
@@ -129,7 +129,7 @@ def _skbuild_config_add(
         key: str, value: Union[List, str], config_settings: Dict[str, Union[List[str],str]], fail_if_exists: bool=False
 ):
     """Add or modify a configuration setting for scikit-build-core.
-    
+
     This function handles adding values to scikit-build-core configuration settings,
     supporting both string and list types with appropriate merging behavior.
 
@@ -145,7 +145,7 @@ def _skbuild_config_add(
 
     Behavior Rules:
         - String value + list setting: value is appended to the list
-        - String value + string setting: existing value is overridden  
+        - String value + string setting: existing value is overridden
         - List value + list setting: existing list is extended
         - List value + string setting: raises RuntimeError
 
@@ -180,18 +180,18 @@ def _skbuild_config_add(
 
 def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[List[str],str]]] = None) -> str:
     """Build a source distribution using the DuckDB submodule.
-    
+
     This function extracts the DuckDB version from either the git submodule and saves it
     to a version file before building the sdist with scikit-build-core. If _FORCED_PEP440_VERSION
     was set then we first create a tag on the submodule.
-    
+
     Args:
         sdist_directory: Directory where the sdist will be created.
         config_settings: Optional build configuration settings.
-        
+
     Returns:
         The filename of the created sdist.
-        
+
     Raises:
         RuntimeError: If not in a git repository or DuckDB submodule issues.
     """
@@ -201,7 +201,7 @@ def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[
     if _FORCED_PEP440_VERSION is not None:
         duckdb_version = pep440_to_git_tag(strip_post_from_version(_FORCED_PEP440_VERSION))
     else:
-        duckdb_version = get_git_describe(repo_path=submodule_path)
+        duckdb_version = get_git_describe(repo_path=submodule_path, since_minor=MAIN_BRANCH_VERSIONING)
     _write_duckdb_long_version(duckdb_version)
     return skbuild_build_sdist(sdist_directory, config_settings=config_settings)
 
@@ -212,19 +212,19 @@ def build_wheel(
         metadata_directory: Optional[str] = None,
 ) -> str:
     """Build a wheel from either git submodule or extracted sdist sources.
-    
+
     This function builds a wheel using scikit-build-core, handling two scenarios:
     1. In a git repository: builds directly from the DuckDB submodule
     2. In an sdist: reads the saved DuckDB version and passes it to CMake
-    
+
     Args:
         wheel_directory: Directory where the wheel will be created.
         config_settings: Optional build configuration settings.
         metadata_directory: Optional directory for metadata preparation.
-        
+
     Returns:
         The filename of the created wheel.
-        
+
     Raises:
         RuntimeError: If not in a git repository or sdist environment.
     """
