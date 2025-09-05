@@ -95,7 +95,8 @@ def _pl_tree_to_sql(tree: dict) -> str:
         )
     if node_type == "Column":
         # A reference to a column name
-        return subtree
+        # Wrap in quotes to handle special characters
+        return f'"{subtree}"'
 
     if node_type in ("Literal", "Dyn"):
         # Recursively process dynamic or literal values
@@ -196,7 +197,7 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         duck_predicate = None
         relation_final = relation
         if with_columns is not None:
-            cols = ",".join(with_columns)
+            cols = ",".join(f'"{col}"' for col in with_columns)
             relation_final = relation_final.project(cols)
         if n_rows is not None:
             relation_final = relation_final.limit(n_rows)
@@ -213,7 +214,6 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         while True:
             try:
                 record_batch = results.read_next_batch()
-                df = pl.from_arrow(record_batch)
                 if predicate is not None and duck_predicate is None:
                     # We have a predicate, but did not manage to push it down, we fallback here
                     yield pl.from_arrow(record_batch).filter(predicate)
