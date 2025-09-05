@@ -28,6 +28,8 @@ add_library(python_src OBJECT
         python_import_cache.cpp
         python_replacement_scan.cpp
         python_udf.cpp
+        python_tvf.cpp
+
 )
 
 target_link_libraries(python_src PRIVATE _duckdb_dependencies)

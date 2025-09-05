@@ -403,6 +403,36 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	return shared_from_this();
 }
 
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterTableFunction(const string &name,
+                                                                         const py::function &function,
+                                                                         const py::object &parameters,
+                                                                         const py::object &schema,
+                                                                         const string &return_type) {
+
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
+
+	if (context.transaction.HasActiveTransaction()) {
+		context.CancelTransaction();
+	}
+	if (registered_table_functions.find(name) != registered_table_functions.end()) {
+		throw InvalidInputException("A table function by the name of '%s' already exists, "
+		                            "please unregister it first",
+		                            name);
+	}
+
+	auto table_function = CreateTableFunctionFromCallable(name, function, parameters, schema, return_type);
+	CreateTableFunctionInfo info(table_function);
+
+	context.RegisterFunction(info);
+
+	auto dependency = make_uniq<ExternalDependency>();
+	dependency->AddDependency("function", PythonDependencyItem::Create(function));
+	registered_table_functions[name] = std::move(dependency);
+
+	return shared_from_this();
+}
+
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	auto connection_module =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
@@ -410,6 +440,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
+
+	connection_module.def("create_table_function", &DuckDBPyConnection::RegisterTableFunction,
+	                      "Register a table valued function via Callable", py::arg("name"), py::arg("callable"),
+	                      py::arg("parameters") = py::none(), py::arg("schema") = py::none(),
+	                      py::arg("return_type") = "strings");
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,

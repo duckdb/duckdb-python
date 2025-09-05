@@ -169,6 +169,13 @@ public:
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
+	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_table_functions;
+
+	static std::unordered_map<std::string, std::pair<vector<LogicalType>, vector<string>>> &GetTVFSchemaRegistry() {
+		static std::unordered_map<std::string, std::pair<vector<LogicalType>, vector<string>>> registry;
+		return registry;
+	}
+
 	case_insensitive_set_t registered_objects;
 
 public:
@@ -231,6 +238,11 @@ public:
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
 	                  bool side_effects = false);
+
+	shared_ptr<DuckDBPyConnection> RegisterTableFunction(const string &name, const py::function &function,
+	                                                     const py::object &parameters = py::none(),
+	                                                     const py::object &schema = py::none(),
+	                                                     const string &return_type = "strings");
 
 	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 
@@ -355,6 +367,11 @@ private:
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
 	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
 	                               bool side_effects);
+
+	duckdb::TableFunction CreateTableFunctionFromCallable(const std::string &name, const py::function &callable,
+	                                                      const py::object &parameters, const py::object &schema,
+	                                                      const std::string &return_type);
+
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
