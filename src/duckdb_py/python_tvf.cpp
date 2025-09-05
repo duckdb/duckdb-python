@@ -39,7 +39,7 @@ struct PyTVFGlobalState : public GlobalTableFunctionState {
 	idx_t idx = 0;
 
 	// For Arrow support
-	unique_ptr<ArrowArrayWrapper> arrow_array;
+	unique_ptr<ArrowArrayStreamWrapper> arrow_stream;
 	unique_ptr<ArrowSchemaWrapper> arrow_schema;
 	idx_t arrow_batch_idx = 0;
 	PyTVFReturnType return_type;
@@ -296,9 +296,60 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 				}
 			}
 		} else if (bd.return_type == PyTVFReturnType::ARROW_TABLE || bd.return_type == PyTVFReturnType::ARROW_BATCH) {
-			// Handle Arrow objects - for now, convert to regular rows
-			// TODO: Implement proper Arrow support
-			throw InvalidInputException("Arrow return types not yet implemented for table function '%s'", bd.func_name);
+			// Create Arrow stream factory from the Python result
+			auto factory = make_uniq<PythonTableArrowArrayStreamFactory>(result.ptr(), context.GetClientProperties(),
+			                                                             DBConfig::GetConfig(context));
+
+			// Build fake TableFunction input for Arrow scan
+			vector<Value> children;
+			children.push_back(Value::POINTER(CastPointerToValue(factory.get())));
+			children.push_back(Value::POINTER(CastPointerToValue(PythonTableArrowArrayStreamFactory::Produce)));
+			children.push_back(Value::POINTER(CastPointerToValue(PythonTableArrowArrayStreamFactory::GetSchema)));
+
+			TableFunctionRef empty_ref;
+			duckdb::TableFunction dummy_tf;
+			dummy_tf.name = "PyTVFArrowWrapper";
+
+			named_parameter_map_t named_params;
+			vector<LogicalType> input_types;
+			vector<string> input_names;
+
+			TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
+			                                  dummy_tf, empty_ref);
+
+			vector<LogicalType> return_types;
+			vector<string> return_names;
+			auto bind_data = ArrowTableFunction::ArrowScanBind(context, bind_input, return_types, return_names);
+
+			// Prepare scan state
+			vector<column_t> column_ids;
+			for (idx_t i = 0; i < return_types.size(); i++) {
+				column_ids.push_back(i);
+			}
+			vector<idx_t> projection_ids;
+			TableFunctionInitInput init_input(bind_data.get(), column_ids, projection_ids, nullptr);
+			auto global_state = ArrowTableFunction::ArrowScanInitGlobal(context, init_input);
+			auto local_state = ArrowTableFunction::ArrowScanInitLocalInternal(context, init_input, global_state.get());
+
+			// Scan and copy rows into gs->rows
+			DataChunk chunk;
+			chunk.Initialize(context, return_types, STANDARD_VECTOR_SIZE);
+			while (true) {
+				chunk.Reset();
+				TableFunctionInput tf_input(bind_data.get(), local_state.get(), global_state.get());
+				ArrowTableFunction::ArrowScanFunction(context, tf_input, chunk);
+				if (chunk.size() == 0) {
+					break;
+				}
+
+				for (idx_t r = 0; r < chunk.size(); r++) {
+					vector<Value> row;
+					for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+						row.push_back(chunk.GetValue(c, r));
+					}
+					gs->rows.push_back(std::move(row));
+				}
+			}
 		}
 
 		return unique_ptr<GlobalTableFunctionState>(static_cast<GlobalTableFunctionState *>(gs.release()));
