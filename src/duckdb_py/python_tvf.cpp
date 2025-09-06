@@ -1,25 +1,16 @@
-#include "duckdb/main/query_result.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
-#include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
-#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
-#include "duckdb/common/arrow/arrow_appender.hpp"
 #include <thread>
 #include <chrono>
-#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb_python/numpy/numpy_scan.hpp"
-#include "duckdb_python/arrow/arrow_export_utils.hpp"
-#include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb_python/python_objects.hpp"
 
 namespace duckdb {
 
@@ -54,39 +45,10 @@ struct PyTVFGlobalState : public GlobalTableFunctionState {
 	PyTVFReturnType return_type;
 };
 
-// Helper function to convert DuckDB Values to Python objects
-static py::object ValueToPy(const Value &v) {
-	if (v.IsNull())
-		return py::none();
-	switch (v.type().id()) {
-	case LogicalTypeId::BOOLEAN:
-		return py::bool_(v.GetValue<bool>());
-	case LogicalTypeId::TINYINT:
-		return py::int_(v.GetValue<int8_t>());
-	case LogicalTypeId::SMALLINT:
-		return py::int_(v.GetValue<int16_t>());
-	case LogicalTypeId::INTEGER:
-		return py::int_(v.GetValue<int32_t>());
-	case LogicalTypeId::BIGINT:
-		return py::int_(v.GetValue<int64_t>());
-	case LogicalTypeId::UINTEGER:
-		return py::int_(v.GetValue<uint32_t>());
-	case LogicalTypeId::UBIGINT:
-		return py::int_(v.GetValue<uint64_t>());
-	case LogicalTypeId::DOUBLE:
-		return py::float_(v.GetValue<double>());
-	case LogicalTypeId::FLOAT:
-		return py::float_(v.GetValue<float>());
-	case LogicalTypeId::VARCHAR:
-		return py::str(v.GetValue<string>());
-	case LogicalTypeId::DECIMAL:
-		return py::str(v.ToString());
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::DATE:
-	case LogicalTypeId::TIME:
-	default:
-		return py::str(v.ToString());
-	}
+// Helper function to convert DuckDB Values to Python objects using standard conversion
+static py::object ValueToPy(const Value &v, ClientContext &context) {
+	// Use PythonObject::FromValue which is the standard reverse conversion
+	return PythonObject::FromValue(v, v.type(), context.GetClientProperties());
 }
 
 struct PyTVFBindData : public TableFunctionData {
@@ -382,7 +344,7 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 					args[i] = py::str(val.ToString());
 				}
 			} else {
-				args[i] = ValueToPy(val);
+				args[i] = ValueToPy(val, context);
 			}
 		}
 
@@ -399,7 +361,7 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 					kwargs[py::str(kv.first)] = py::str(val.ToString());
 				}
 			} else {
-				kwargs[py::str(kv.first)] = ValueToPy(val);
+				kwargs[py::str(kv.first)] = ValueToPy(val, context);
 			}
 		}
 
@@ -407,8 +369,40 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 		py::object result = fn(*args, **kwargs);
 
 		// Debug: Log result type
-		std::string result_type_name = py::str(result.get_type()).cast<std::string>();
+		std::string result_type_name = py::str(py::type::handle_of(result)).cast<std::string>();
 		printf("TVF DEBUG [%s]: Result type is %s\n", bd.func_name.c_str(), result_type_name.c_str());
+
+		// Validate result type early
+		if (result.is_none()) {
+			throw InvalidInputException("Table function '%s' returned None, expected iterable of records", 
+			                            bd.func_name);
+		}
+		
+		// Check for obviously unsupported types
+		if (result_type_name.find("DataFrame") != std::string::npos) {
+			throw InvalidInputException("Table function '%s' returned pandas DataFrame, which is not supported in records mode. "
+			                            "Use arrow mode or convert to list of tuples", bd.func_name);
+		}
+		
+		if (result_type_name.find("numpy.ndarray") != std::string::npos) {
+			throw InvalidInputException("Table function '%s' returned numpy array, which is not supported in records mode. "
+			                            "Convert to list of tuples or use arrow mode", bd.func_name);
+		}
+		
+		// Check for scalar types that are clearly not iterable
+		if (py::isinstance<py::int_>(result) || py::isinstance<py::float_>(result) || 
+		    py::isinstance<py::bool_>(result)) {
+			throw InvalidInputException("Table function '%s' returned scalar value (%s), expected iterable of records", 
+			                            bd.func_name, result_type_name.c_str());
+		}
+		
+		// Try to verify it's actually iterable before processing
+		try {
+			py::iter(result);  // This will throw if not iterable
+		} catch (const py::error_already_set &) {
+			throw InvalidInputException("Table function '%s' returned non-iterable type (%s), expected iterable of records", 
+			                            bd.func_name, result_type_name.c_str());
+		}
 
 		// Process result based on return type
 		if (bd.return_type == PyTVFReturnType::RECORDS) {
