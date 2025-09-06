@@ -40,17 +40,13 @@ struct PyTVFGlobalState : public GlobalTableFunctionState {
 	vector<vector<Value>> rows;
 	idx_t idx = 0;
 
-	// For large datasets - batch processing  
+	// For large datasets - batch processing
 	vector<vector<vector<Value>>> batches;
 	idx_t current_batch_idx = 0;
 	idx_t current_row_in_batch = 0;
 	bool is_batched = false;
-	
-	// For generator/iterator support - streaming processing
-	py::object py_generator_object;  // Keep the generator alive
-	py::iterator py_iterator;
-	bool has_iterator = false;
-	bool iterator_exhausted = false;
+
+	// Generator support disabled to focus on root cause analysis
 
 	// For Arrow support
 	unique_ptr<ArrowArrayStreamWrapper> arrow_stream;
@@ -151,77 +147,35 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 	    /* main execution function */ [](ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 		    auto &gs = input.global_state->Cast<PyTVFGlobalState>();
 
-		    // Handle generator/iterator streaming
-		    if (gs.has_iterator) {
-		        if (gs.iterator_exhausted) {
-		            output.SetCardinality(0);
-		            return;
-		        }
-		        
-		        // Process generator items one chunk at a time
-		        idx_t items_processed = 0;
-		        const idx_t max_items = STANDARD_VECTOR_SIZE;
-		        
-		        // Get bind data to access schema info
-		        auto &bind_data = input.bind_data->Cast<PyTVFBindData>();
-		        
-		        while (items_processed < max_items) {
-		            try {
-		                // GIL release every 50 items for notebook responsiveness  
-		                if (items_processed > 0 && items_processed % 50 == 0) {
-		                    py::gil_scoped_release release;
-		                }
-		                
-		                py::handle item = *gs.py_iterator;
-		                ++gs.py_iterator;
-		                
-		                // Process the item (similar to existing tuple processing logic)
-		                vector<Value> row_values;
-		                if (py::isinstance<py::tuple>(item)) {
-		                    auto tup = item.cast<py::tuple>();
-		                    for (idx_t col_idx = 0; col_idx < tup.size() && col_idx < bind_data.return_types.size(); col_idx++) {
-		                        Value duck_val = TransformPythonValue(tup[col_idx], bind_data.return_types[col_idx]);
-		                        row_values.push_back(duck_val);
-		                    }
-		                } else {
-		                    // Single value case
-		                    Value duck_val = TransformPythonValue(item, bind_data.return_types[0]);
-		                    row_values.push_back(duck_val);
-		                }
-		                
-		                // Set values in output chunk
-		                for (idx_t col_idx = 0; col_idx < row_values.size() && col_idx < output.ColumnCount(); col_idx++) {
-		                    output.SetValue(col_idx, items_processed, row_values[col_idx]);
-		                }
-		                
-		                items_processed++;
-		                
-		            } catch (py::stop_iteration &) {
-		                gs.iterator_exhausted = true;
-		                break;
-		            } catch (...) {
-		                gs.iterator_exhausted = true;
-		                break;
-		            }
-		        }
-		        
-		        output.SetCardinality(items_processed);
-		        return;
+		    // Only debug every 20 scan operations to prevent output flooding
+		    static thread_local idx_t scan_count = 0;
+		    scan_count++;
+		    bool should_debug = (scan_count % 20 == 1) || (scan_count <= 5);
+
+		    if (should_debug) {
+			    printf("TVF SCAN DEBUG [%zu]: batch %zu/%zu, row %zu\n", scan_count, gs.current_batch_idx,
+			           gs.batches.size(), gs.current_row_in_batch);
 		    }
 
 		    if (gs.is_batched) {
 			    // Batched dataset path - for large datasets
 			    if (gs.current_batch_idx >= gs.batches.size()) {
+				    if (should_debug)
+					    printf("TVF SCAN DEBUG [%zu]: End of batches reached\n", scan_count);
 				    output.SetCardinality(0);
 				    return;
 			    }
 
 			    auto &current_batch = gs.batches[gs.current_batch_idx];
+
 			    if (gs.current_row_in_batch >= current_batch.size()) {
+				    if (should_debug)
+					    printf("TVF SCAN DEBUG [%zu]: Moving to next batch\n", scan_count);
 				    // Move to next batch
 				    gs.current_batch_idx++;
 				    gs.current_row_in_batch = 0;
 				    if (gs.current_batch_idx >= gs.batches.size()) {
+					    printf("TVF SCAN DEBUG [%zu]: Completed all batches\n", scan_count);
 					    output.SetCardinality(0);
 					    return;
 				    }
@@ -231,6 +185,11 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 			    // Emit from current batch
 			    auto to_emit = MinValue<idx_t>(STANDARD_VECTOR_SIZE, current_batch.size() - gs.current_row_in_batch);
 			    output.SetCardinality(to_emit);
+
+			    if (to_emit == 0) {
+				    printf("TVF SCAN DEBUG [%zu]: WARNING - to_emit is 0! This will cause infinite loop!\n",
+				           scan_count);
+			    }
 
 			    for (idx_t i = 0; i < to_emit; i++) {
 				    for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
@@ -373,22 +332,23 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 		// Call Python function
 		py::object result = fn(*args, **kwargs);
 
+		// Debug: Log result type
+		std::string result_type_name = py::str(result.get_type()).cast<std::string>();
+		printf("TVF DEBUG [%s]: Result type is %s\n", bd.func_name.c_str(), result_type_name.c_str());
+
 		// Process result based on return type
 		if (bd.return_type == PyTVFReturnType::RECORDS) {
-			// Check if result is a generator/iterator first
-			if (py::hasattr(result, "__iter__") && !py::isinstance<py::list>(result) && !py::isinstance<py::str>(result)) {
-				// Handle generator/iterator - store both generator and iterator for lazy processing
-				gs->py_generator_object = result;  // Keep generator alive
-				gs->py_iterator = py::iter(result);
-				gs->has_iterator = true;
-				gs->iterator_exhausted = false;
-				// No processing here - will be done lazily in the main execution function
-			} else if (py::isinstance<py::list>(result)) {
+			printf("TVF DEBUG [%s]: Processing records mode\n", bd.func_name.c_str());
+			// Handle both lists and generators/iterables
+			if (py::isinstance<py::list>(result)) {
+				printf("TVF DEBUG [%s]: Processing Python list\n", bd.func_name.c_str());
 				auto py_list = result.cast<py::list>();
-				
-				// For small lists (< 50k items), process immediately for performance
+				printf("TVF DEBUG [%s]: List size is %zu\n", bd.func_name.c_str(), py_list.size());
+
+				// For small lists (< 5k items), process immediately for performance
 				// For large lists, process in batches to avoid memory issues
 				if (py_list.size() < 5000) {
+					printf("TVF DEBUG [%s]: Using immediate processing for small list\n", bd.func_name.c_str());
 					// Small dataset - process immediately (existing behavior)
 					for (auto item : py_list) {
 						if (py::isinstance<py::tuple>(item)) {
@@ -396,7 +356,8 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							if (tup.size() != bd.return_types.size()) {
 								throw InvalidInputException(
 								    "Table function '%s' returned tuple of size %d but schema expects %d columns",
-								    bd.func_name, static_cast<int>(tup.size()), static_cast<int>(bd.return_types.size()));
+								    bd.func_name, static_cast<int>(tup.size()),
+								    static_cast<int>(bd.return_types.size()));
 							}
 							vector<Value> row;
 							for (idx_t i = 0; i < tup.size(); i++) {
@@ -416,27 +377,30 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							gs->rows.push_back({duck_val});
 						}
 					}
+					printf("TVF DEBUG [%s]: Processed %zu rows in immediate mode\n", bd.func_name.c_str(),
+					       gs->rows.size());
 				} else {
+					printf("TVF DEBUG [%s]: Using batch processing for large list\n", bd.func_name.c_str());
 					// Large dataset - process in batches to manage memory
 					gs->is_batched = true;
 					gs->current_batch_idx = 0;
 					gs->current_row_in_batch = 0;
-					
+
 					// Process data in chunks smaller than STANDARD_VECTOR_SIZE for notebooks
 					// Release GIL extremely frequently to prevent asyncio notebook freezing
 					const idx_t batch_size = STANDARD_VECTOR_SIZE / 2; // Smaller batches for notebooks
-					const idx_t batches_per_gil_release = 1; // Release GIL every batch for notebooks
+					const idx_t batches_per_gil_release = 1;           // Release GIL every batch for notebooks
 					idx_t batch_count = 0;
-					
+
 					for (idx_t start_idx = 0; start_idx < py_list.size(); start_idx += batch_size) {
 						idx_t end_idx = MinValue<idx_t>(start_idx + batch_size, py_list.size());
 						vector<vector<Value>> batch;
-						
+
 						// Release GIL before processing each batch
 						{
 							py::gil_scoped_release release;
 						}
-						
+
 						for (idx_t i = start_idx; i < end_idx; i++) {
 							// Extremely aggressive GIL release for notebook environments
 							// Release GIL every 50 items within a batch for asyncio compatibility
@@ -462,7 +426,8 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 								if (tup.size() != bd.return_types.size()) {
 									throw InvalidInputException(
 									    "Table function '%s' returned tuple of size %d but schema expects %d columns",
-									    bd.func_name, static_cast<int>(tup.size()), static_cast<int>(bd.return_types.size()));
+									    bd.func_name, static_cast<int>(tup.size()),
+									    static_cast<int>(bd.return_types.size()));
 								}
 								vector<Value> row;
 								for (idx_t j = 0; j < tup.size(); j++) {
@@ -482,7 +447,7 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							}
 						}
 						gs->batches.push_back(std::move(batch));
-						
+
 						// Release GIL after each batch for notebook responsiveness
 						// Also yield to asyncio event loop for VS Code notebooks
 						{
@@ -490,7 +455,7 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							// Yield control to allow asyncio event loop processing
 							std::this_thread::sleep_for(std::chrono::microseconds(1));
 						}
-						
+
 						batch_count++;
 						// Periodically release and reacquire GIL to prevent notebook freezing
 						if (batch_count % batches_per_gil_release == 0) {
@@ -499,6 +464,82 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 							// GIL will be reacquired when release goes out of scope
 						}
 					}
+					printf("TVF DEBUG [%s]: Finished batch processing, created %zu batches\n", bd.func_name.c_str(),
+					       gs->batches.size());
+				}
+			} else {
+				printf("TVF DEBUG [%s]: Processing non-list iterable (generator)\n", bd.func_name.c_str());
+				// Handle generators and other iterables
+				try {
+					// Convert to iterator using Python's iter() function
+					py::iterator it = py::iter(result);
+					printf("TVF DEBUG [%s]: Successfully created iterator from result\n", bd.func_name.c_str());
+					idx_t count = 0;
+					const idx_t batch_size = STANDARD_VECTOR_SIZE;
+
+					// Process generator in batches with GIL releases
+					vector<vector<Value>> current_batch;
+					current_batch.reserve(batch_size);
+					printf("TVF DEBUG [%s]: Starting generator iteration with batch size %zu\n", bd.func_name.c_str(),
+					       batch_size);
+
+					for (auto item : it) {
+						if (py::isinstance<py::tuple>(item)) {
+							auto tup = item.cast<py::tuple>();
+							if (tup.size() != bd.return_types.size()) {
+								throw InvalidInputException(
+								    "Table function '%s' returned tuple of size %d but schema expects %d columns",
+								    bd.func_name, static_cast<int>(tup.size()),
+								    static_cast<int>(bd.return_types.size()));
+							}
+							vector<Value> row;
+							for (idx_t i = 0; i < tup.size(); i++) {
+								auto py_val = tup[i];
+								Value duck_val = TransformPythonValue(py_val, bd.return_types[i]);
+								row.push_back(duck_val);
+							}
+							current_batch.push_back(std::move(row));
+						} else {
+							if (bd.return_types.size() != 1) {
+								throw InvalidInputException(
+								    "Table function '%s' returned a single value but schema expects %d columns",
+								    bd.func_name, static_cast<int>(bd.return_types.size()));
+							}
+							Value duck_val = TransformPythonValue(item, bd.return_types[0]);
+							current_batch.push_back({duck_val});
+						}
+
+						count++;
+
+						// Process in batches and release GIL frequently for notebook compatibility
+						if (current_batch.size() >= batch_size) {
+							// Move batch to main storage
+							for (auto &row : current_batch) {
+								gs->rows.push_back(std::move(row));
+							}
+							current_batch.clear();
+							current_batch.reserve(batch_size);
+
+							// Release GIL to allow notebook event loops
+							if (count % (batch_size * 5) == 0) {
+								py::gil_scoped_release release;
+								std::this_thread::sleep_for(std::chrono::microseconds(10));
+							}
+						}
+					}
+
+					// Handle remaining items in final batch
+					for (auto &row : current_batch) {
+						gs->rows.push_back(std::move(row));
+					}
+
+					printf("TVF DEBUG [%s]: Generator processing completed, total rows: %zu\n", bd.func_name.c_str(),
+					       gs->rows.size());
+
+				} catch (const py::error_already_set &e) {
+					printf("TVF DEBUG [%s]: Generator processing failed: %s\n", bd.func_name.c_str(), e.what());
+					throw InvalidInputException("Table function '%s' returned non-iterable result: %s", bd.func_name,
+					                            e.what());
 				}
 			}
 		} else if (bd.return_type == PyTVFReturnType::ARROW_TABLE || bd.return_type == PyTVFReturnType::ARROW_BATCH) {
