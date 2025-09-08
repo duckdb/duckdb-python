@@ -85,13 +85,10 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	.def("record_batch",
 			 [](pybind11::object &self, idx_t rows_per_batch)
 			 {
-				 auto warnings = pybind11::module::import("warnings");
-				 auto builtins = pybind11::module::import("builtins");
-				 warnings.attr("warn")(
-					 "record_batch() is deprecated, use fetch_record_batch() instead.",
-					  builtins.attr("DeprecationWarning"));
-
-				 return self.attr("fetch_record_batch")(rows_per_batch);
+			 	PyErr_WarnEx(PyExc_DeprecationWarning,
+			 		"record_batch() is deprecated, use fetch_record_batch() instead.",
+			 		0);
+			 	return self.attr("fetch_record_batch")(rows_per_batch);
 			 }, py::arg("rows_per_batch") = 1000000);
 }
 
