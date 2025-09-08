@@ -4,7 +4,7 @@ on:
     branches:
       - main
       - v*.*-*
-    types: [opened, reopened, ready_for_review, converted_to_draft]
+    types: [opened, edited, reopened, ready_for_review, converted_to_draft]
     paths-ignore:
       - '**.md'
       - 'LICENSE'
