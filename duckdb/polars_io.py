@@ -58,6 +58,18 @@ def _pl_operation_to_sql(op: str) -> str:
         raise NotImplementedError(op)
 
 
+def _escape_sql_identifier(identifier: str) -> str:
+    """
+    Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
+
+    Example:
+        >>> _escape_sql_identifier('column"name')
+        '"column""name"'
+    """
+    escaped = identifier.replace('"', '""')
+    return f'"{escaped}"'
+
+
 def _pl_tree_to_sql(tree: dict) -> str:
     """
     Recursively convert a Polars expression tree (as JSON) to a SQL string.
@@ -96,7 +108,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
     if node_type == "Column":
         # A reference to a column name
         # Wrap in quotes to handle special characters
-        return f'"{subtree}"'
+        return _escape_sql_identifier(subtree)
 
     if node_type in ("Literal", "Dyn"):
         # Recursively process dynamic or literal values
@@ -197,7 +209,7 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         duck_predicate = None
         relation_final = relation
         if with_columns is not None:
-            cols = ",".join(f'"{col}"' for col in with_columns)
+            cols = ",".join(map(_escape_sql_identifier, with_columns))
             relation_final = relation_final.project(cols)
         if n_rows is not None:
             relation_final = relation_final.limit(n_rows)

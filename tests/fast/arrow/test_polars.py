@@ -154,6 +154,13 @@ class TestPolars(object):
         result = lf.select(pl.all()).filter(pl.col("x.y") == 1).collect()
         assert result.to_dicts() == [{"x.y": 1}]
 
+        df_quote = pl.DataFrame({'"xy"': [1, 2]})
+        lf = duckdb_cursor.sql("from df_quote").pl(lazy=True)
+        result = lf.select(pl.all()).collect()
+        assert result.to_dicts() == [{'"xy"': 1}, {'"xy"': 2}]
+        result = lf.select(pl.all()).filter(pl.col('"xy"') == 1).collect()
+        assert result.to_dicts() == [{'"xy"': 1}]
+
     @pytest.mark.parametrize(
         'data_type',
         [
