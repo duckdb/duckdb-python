@@ -79,9 +79,20 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs,
 	      py::arg("requested_schema") = py::none());
 	m.def("fetch_record_batch", &DuckDBPyRelation::ToRecordBatch,
-	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
-	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
+	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("rows_per_batch") = 1000000)
+	.def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("rows_per_batch") = 1000000)
+	.def("record_batch",
+			 [](pybind11::object &self, idx_t rows_per_batch)
+			 {
+				 auto warnings = pybind11::module::import("warnings");
+				 auto builtins = pybind11::module::import("builtins");
+				 warnings.attr("warn")(
+					 "record_batch() is deprecated, use fetch_record_batch() instead.",
+					  builtins.attr("DeprecationWarning"));
+
+				 return self.attr("fetch_record_batch")(rows_per_batch);
+			 }, py::arg("rows_per_batch") = 1000000);
 }
 
 static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
