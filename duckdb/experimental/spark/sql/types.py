@@ -113,7 +113,7 @@ class DataType:
 # This singleton pattern does not work with pickle, you will get
 # another object after pickle and unpickle
 class DataTypeSingleton(type):
-    """Metaclass for DataType"""
+    """Metaclass for DataType."""
 
     _instances: ClassVar[dict[type["DataTypeSingleton"], "DataTypeSingleton"]] = {}
 
@@ -855,7 +855,7 @@ class StructType(DataType):
         return self
 
     def __iter__(self) -> Iterator[StructField]:
-        """Iterate the fields"""
+        """Iterate the fields."""
         return iter(self.fields)
 
     def __len__(self) -> int:
@@ -1147,7 +1147,7 @@ class Row(tuple):
             return tuple.__new__(cls, args)
 
     def asDict(self, recursive: bool = False) -> dict[str, Any]:
-        """Return as a dict
+        """Return as a dict.
 
         Parameters
         ----------
@@ -1200,7 +1200,7 @@ class Row(tuple):
 
     # let object acts like class
     def __call__(self, *args: Any) -> "Row":
-        """Create new Row object"""
+        """Create new Row object."""
         if len(args) > len(self):
             raise ValueError(
                 "Can not create Row with fields %s, expected %d values but got %s" % (self, len(self), args)

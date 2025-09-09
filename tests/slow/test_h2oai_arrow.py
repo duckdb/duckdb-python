@@ -197,7 +197,7 @@ class TestH2OAIArrow:
 
 @fixture(scope="module")
 def arrow_dataset_register():
-    """Single fixture to download files and register them on the given connection"""
+    """Single fixture to download files and register them on the given connection."""
     session = requests.Session()
     retries = urllib3_util.Retry(
         allowed_methods={"GET"},  # only retry on GETs (all we do)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for pypi_cleanup.py
+"""Unit tests for pypi_cleanup.py.
 
 Run with: python -m pytest test_pypi_cleanup.py -v
 """

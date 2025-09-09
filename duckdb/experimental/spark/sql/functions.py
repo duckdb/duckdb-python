@@ -164,7 +164,7 @@ def _to_column_expr(col: ColumnOrName) -> Expression:
 
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
-    r"""Replace all substrings of the specified string value that match regexp with rep.
+    """Replace all substrings of the specified string value that match regexp with rep.
 
     .. versionadded:: 1.5.0
 
@@ -1487,7 +1487,7 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
 
 
 def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
-    """.. versionadded:: 1.3.0
+    """.. versionadded:: 1.3.0.
 
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
@@ -2059,7 +2059,7 @@ def cbrt(col: "ColumnOrName") -> Column:
 
 def char(col: "ColumnOrName") -> Column:
     """Returns the ASCII character having the binary equivalent to `col`. If col is larger than 256 the
-    result is equivalent to char(col % 256)
+    result is equivalent to char(col % 256).
 
     .. versionadded:: 3.5.0
 
@@ -2373,7 +2373,7 @@ def rand(seed: Optional[int] = None) -> Column:
 
 
 def regexp(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    r"""Returns true if `str` matches the Java regex `regexp`, or false otherwise.
+    """Returns true if `str` matches the Java regex `regexp`, or false otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -2425,7 +2425,7 @@ def regexp(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    r"""Returns a count of the number of times that the Java regex pattern `regexp` is matched
+    """Returns a count of the number of times that the Java regex pattern `regexp` is matched
     in the string `str`.
 
     .. versionadded:: 3.5.0
@@ -2456,7 +2456,7 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
-    r"""Extract a specific group matched by the Java regex `regexp`, from the specified string column.
+    """Extract a specific group matched by the Java regex `regexp`, from the specified string column.
     If the regex did not match, or the specified group did not match, an empty string is returned.
 
     .. versionadded:: 1.5.0
@@ -2496,7 +2496,7 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
 
 
 def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optional[Union[int, Column]] = None) -> Column:
-    r"""Extract all strings in the `str` that match the Java regex `regexp`
+    """Extract all strings in the `str` that match the Java regex `regexp`
     and corresponding to the regex group index.
 
     .. versionadded:: 3.5.0
@@ -2535,7 +2535,7 @@ def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optiona
 
 
 def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    r"""Returns true if `str` matches the Java regex `regexp`, or false otherwise.
+    """Returns true if `str` matches the Java regex `regexp`, or false otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -2587,7 +2587,7 @@ def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    r"""Returns the substring that matches the Java regex `regexp` within the string `str`.
+    """Returns the substring that matches the Java regex `regexp` within the string `str`.
     If the regular expression is not found, the result is null.
 
     .. versionadded:: 3.5.0
@@ -3996,7 +3996,7 @@ def month(col: "ColumnOrName") -> Column:
 
 def dayofweek(col: "ColumnOrName") -> Column:
     """Extract the day of the week of a given date/timestamp as integer.
-    Ranges from 1 for a Sunday through to 7 for a Saturday
+    Ranges from 1 for a Sunday through to 7 for a Saturday.
 
     .. versionadded:: 2.3.0
 
@@ -4187,7 +4187,7 @@ def second(col: "ColumnOrName") -> Column:
 def weekofyear(col: "ColumnOrName") -> Column:
     """Extract the week number of a given date as integer.
     A week is considered to start on a Monday and week 1 is the first week with more than 3 days,
-    as defined by ISO 8601
+    as defined by ISO 8601.
 
     .. versionadded:: 1.5.0
 
@@ -4609,7 +4609,7 @@ def atan(col: "ColumnOrName") -> Column:
 
 
 def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
-    """.. versionadded:: 1.4.0
+    """.. versionadded:: 1.4.0.
 
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
@@ -5577,7 +5577,7 @@ def var_samp(col: "ColumnOrName") -> Column:
 
 
 def variance(col: "ColumnOrName") -> Column:
-    """Aggregate function: alias for var_samp
+    """Aggregate function: alias for var_samp.
 
     .. versionadded:: 1.6.0
 
@@ -6242,7 +6242,7 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
 
 
 def expr(str: str) -> Column:
-    """Parses the expression string into the column that it represents
+    """Parses the expression string into the column that it represents.
 
     .. versionadded:: 1.5.0
 

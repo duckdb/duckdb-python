@@ -1,5 +1,5 @@
 def vectorized(func):
-    """Decorate a function with annotated function parameters, so DuckDB can infer that the function should be provided with pyarrow arrays and should expect pyarrow array(s) as output"""
+    """Decorate a function with annotated function parameters, so DuckDB can infer that the function should be provided with pyarrow arrays and should expect pyarrow array(s) as output."""
     import types
     from inspect import signature
 

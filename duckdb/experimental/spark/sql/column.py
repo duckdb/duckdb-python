@@ -29,7 +29,7 @@ def _unary_op(
     name: str,
     doc: str = "unary operator",
 ) -> Callable[["Column"], "Column"]:
-    """Create a method for given unary operator"""
+    """Create a method for given unary operator."""
 
     def _(self: "Column") -> "Column":
         # Call the function identified by 'name' on the internal Expression object
@@ -44,7 +44,7 @@ def _bin_op(
     name: str,
     doc: str = "binary operator",
 ) -> Callable[["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"]:
-    """Create a method for given binary operator"""
+    """Create a method for given binary operator."""
 
     def _(
         self: "Column",
@@ -62,7 +62,7 @@ def _bin_func(
     name: str,
     doc: str = "binary function",
 ) -> Callable[["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"]:
-    """Create a function expression for the given binary function"""
+    """Create a function expression for the given binary function."""
 
     def _(
         self: "Column",
@@ -245,14 +245,14 @@ class Column:
         self,
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
-        """Binary function"""
+        """Binary function."""
         return Column(self.expr == (_get_expr(other)))
 
     def __ne__(  # type: ignore[override]
         self,
         other: object,
     ) -> "Column":
-        """Binary function"""
+        """Binary function."""
         return Column(self.expr != (_get_expr(other)))
 
     __lt__ = _bin_op("__lt__")

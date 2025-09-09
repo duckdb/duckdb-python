@@ -6,7 +6,7 @@ import duckdb
 
 
 def _parse_json_func(error_prefix: str):
-    """Helper to check that the error message is indeed parsable json"""
+    """Helper to check that the error message is indeed parsable json."""
 
     def parse_func(exception):
         msg = exception.args[0]

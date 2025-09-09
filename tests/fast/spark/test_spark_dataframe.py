@@ -339,7 +339,7 @@ class TestDataFrame:
         assert "OtherInfo" in updatedDF.columns
 
     def test_array_and_map_type(self, spark):
-        """Array & Map"""
+        """Array & Map."""
         arrayStructureSchema = StructType(
             [
                 StructField(

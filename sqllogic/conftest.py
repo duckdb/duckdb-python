@@ -271,7 +271,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
 
 
 def pytest_runtest_setup(item: pytest.Item):
-    """Show the test index after the test name"""
+    """Show the test index after the test name."""
 
     def get_from_tuple_list(tuples, key):
         for t in tuples:
