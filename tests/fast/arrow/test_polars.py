@@ -131,6 +131,36 @@ class TestPolars(object):
         ]
         assert lazy_df.filter(pl.col("b") < 32).select('a').collect().to_dicts() == [{'a': 'Mark'}, {'a': 'Thijs'}]
 
+    def test_polars_column_with_tricky_name(self, duckdb_cursor):
+        # Test that a polars DataFrame with a column name that is non standard still works
+        df_colon = pl.DataFrame({"x:y": [1, 2]})
+        lf = duckdb_cursor.sql("from df_colon").pl(lazy=True)
+        result = lf.select(pl.all()).collect()
+        assert result.to_dicts() == [{"x:y": 1}, {"x:y": 2}]
+        result = lf.select(pl.all()).filter(pl.col("x:y") == 1).collect()
+        assert result.to_dicts() == [{"x:y": 1}]
+
+        df_space = pl.DataFrame({"x y": [1, 2]})
+        lf = duckdb_cursor.sql("from df_space").pl(lazy=True)
+        result = lf.select(pl.all()).collect()
+        assert result.to_dicts() == [{"x y": 1}, {"x y": 2}]
+        result = lf.select(pl.all()).filter(pl.col("x y") == 1).collect()
+        assert result.to_dicts() == [{"x y": 1}]
+
+        df_dot = pl.DataFrame({"x.y": [1, 2]})
+        lf = duckdb_cursor.sql("from df_dot").pl(lazy=True)
+        result = lf.select(pl.all()).collect()
+        assert result.to_dicts() == [{"x.y": 1}, {"x.y": 2}]
+        result = lf.select(pl.all()).filter(pl.col("x.y") == 1).collect()
+        assert result.to_dicts() == [{"x.y": 1}]
+
+        df_quote = pl.DataFrame({'"xy"': [1, 2]})
+        lf = duckdb_cursor.sql("from df_quote").pl(lazy=True)
+        result = lf.select(pl.all()).collect()
+        assert result.to_dicts() == [{'"xy"': 1}, {'"xy"': 2}]
+        result = lf.select(pl.all()).filter(pl.col('"xy"') == 1).collect()
+        assert result.to_dicts() == [{'"xy"': 1}]
+
     @pytest.mark.parametrize(
         'data_type',
         [

@@ -66,8 +66,12 @@ def generate():
             result.append(argument)
         return result
 
-    def create_definition(name, method) -> str:
-        definition = f"def {name}("
+    def create_definition(name, method, overloaded: bool) -> str:
+        if overloaded:
+            definition: str = "@overload\n"
+        else:
+            definition: str = ""
+        definition += f"def {name}("
         arguments = []
         if name in SPECIAL_METHOD_NAMES:
             arguments.append('df: pandas.DataFrame')
@@ -82,9 +86,9 @@ def generate():
         definition += f" -> {method['return']}: ..."
         return definition
 
-    # We have "duplicate" methods, which are overloaded
-    # maybe we should add @overload to these instead, but this is easier
-    written_methods = set()
+    # We have "duplicate" methods, which are overloaded.
+    # We keep note of them to add the @overload decorator.
+    overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m['name'], list)}
 
     body = []
     for method in methods:
@@ -99,10 +103,7 @@ def generate():
         method['kwargs'].append({'name': 'connection', 'type': 'DuckDBPyConnection', 'default': '...'})
 
         for name in names:
-            if name in written_methods:
-                continue
-            body.append(create_definition(name, method))
-            written_methods.add(name)
+            body.append(create_definition(name, method, name in overloaded_methods))
 
     # ---- End of generation code ----
 
