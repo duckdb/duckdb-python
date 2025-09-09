@@ -331,7 +331,7 @@ select = [
     "F", # pyflakes
     "FBT001", # flake8-boolean-trap
     "I", # isort
-    "ICN", # flake8-import-conventions
+    #"ICN", # flake8-import-conventions
     "INT", # flake8-gettext
     "PERF", # perflint
     "PIE", # flake8-pie
@@ -342,7 +342,7 @@ select = [
     "SIM", # flake8-simplify
     "TCH", # flake8-type-checking
     "TD", # flake8-todos
-    "TID", # flake8-tidy-imports
+    #"TID", # flake8-tidy-imports
     "TRY", # tryceratops
     "UP", # pyupgrade
     "W", # pycodestyle
