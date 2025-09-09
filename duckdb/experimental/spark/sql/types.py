@@ -736,7 +736,7 @@ class StructField(DataType):
 
 
 class StructType(DataType):
-    """Struct type, consisting of a list of :class:`StructField`.
+    r"""Struct type, consisting of a list of :class:`StructField`.
 
     This is the data type representing a :class:`Row`.
 
@@ -798,7 +798,7 @@ class StructType(DataType):
         nullable: bool = True,
         metadata: Optional[dict[str, Any]] = None,
     ) -> "StructType":
-        """Construct a :class:`StructType` by adding new elements to it, to define the schema.
+        r"""Construct a :class:`StructType` by adding new elements to it, to define the schema.
         The method accepts either:
 
             a) A single parameter which is a :class:`StructField` object.

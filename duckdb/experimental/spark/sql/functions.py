@@ -108,7 +108,7 @@ def struct(*cols: Column) -> Column:
 
 
 def array(*cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["ColumnOrName", ...]]]) -> Column:
-    """Creates a new array column.
+    r"""Creates a new array column.
 
     .. versionadded:: 1.4.0
 
@@ -164,7 +164,7 @@ def _to_column_expr(col: ColumnOrName) -> Expression:
 
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
-    """Replace all substrings of the specified string value that match regexp with rep.
+    r"""Replace all substrings of the specified string value that match regexp with rep.
 
     .. versionadded:: 1.5.0
 
@@ -713,7 +713,7 @@ def asin(col: "ColumnOrName") -> Column:
 
 
 def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None) -> Column:
-    """Returns true if str matches `pattern` with `escape`,
+    r"""Returns true if str matches `pattern` with `escape`,
     null if any arguments are null, false otherwise.
     The default escape character is the '\'.
 
@@ -750,7 +750,7 @@ def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Col
 
 
 def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None) -> Column:
-    """Returns true if str matches `pattern` with `escape` case-insensitively,
+    r"""Returns true if str matches `pattern` with `escape` case-insensitively,
     null if any arguments are null, false otherwise.
     The default escape character is the '\'.
 
@@ -2264,7 +2264,7 @@ def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) 
 
 
 def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
-    """Formats the arguments in printf-style and returns the result as a string column.
+    r"""Formats the arguments in printf-style and returns the result as a string column.
 
     .. versionadded:: 3.5.0
 
@@ -2373,7 +2373,7 @@ def rand(seed: Optional[int] = None) -> Column:
 
 
 def regexp(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    """Returns true if `str` matches the Java regex `regexp`, or false otherwise.
+    r"""Returns true if `str` matches the Java regex `regexp`, or false otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -2425,7 +2425,7 @@ def regexp(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    """Returns a count of the number of times that the Java regex pattern `regexp` is matched
+    r"""Returns a count of the number of times that the Java regex pattern `regexp` is matched
     in the string `str`.
 
     .. versionadded:: 3.5.0
@@ -2456,7 +2456,7 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
-    """Extract a specific group matched by the Java regex `regexp`, from the specified string column.
+    r"""Extract a specific group matched by the Java regex `regexp`, from the specified string column.
     If the regex did not match, or the specified group did not match, an empty string is returned.
 
     .. versionadded:: 1.5.0
@@ -2496,7 +2496,7 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
 
 
 def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optional[Union[int, Column]] = None) -> Column:
-    """Extract all strings in the `str` that match the Java regex `regexp`
+    r"""Extract all strings in the `str` that match the Java regex `regexp`
     and corresponding to the regex group index.
 
     .. versionadded:: 3.5.0
@@ -2535,7 +2535,7 @@ def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optiona
 
 
 def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    """Returns true if `str` matches the Java regex `regexp`, or false otherwise.
+    r"""Returns true if `str` matches the Java regex `regexp`, or false otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -2587,7 +2587,7 @@ def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
-    """Returns the substring that matches the Java regex `regexp` within the string `str`.
+    r"""Returns the substring that matches the Java regex `regexp` within the string `str`.
     If the regular expression is not found, the result is null.
 
     .. versionadded:: 3.5.0
@@ -4274,7 +4274,7 @@ def acos(col: "ColumnOrName") -> Column:
 
 
 def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
-    """Call a SQL function.
+    r"""Call a SQL function.
 
     .. versionadded:: 3.5.0
 
@@ -4851,7 +4851,7 @@ def initcap(col: "ColumnOrName") -> Column:
 
 
 def octet_length(col: "ColumnOrName") -> Column:
-    """Calculates the byte length for the specified string column.
+    r"""Calculates the byte length for the specified string column.
 
     .. versionadded:: 3.3.0
 
