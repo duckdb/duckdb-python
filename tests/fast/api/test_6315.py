@@ -9,15 +9,15 @@ class Test6315(object):
         rv.fetchall()
         desc = rv.description
         names = [x[0] for x in desc]
-        assert names == ['type', 'name', 'tbl_name', 'rootpage', 'sql']
+        assert names == ["type", "name", "tbl_name", "rootpage", "sql"]
 
         # description of relation
         rel = c.sql("select * from sqlite_master where type = 'table'")
         desc = rel.description
         names = [x[0] for x in desc]
-        assert names == ['type', 'name', 'tbl_name', 'rootpage', 'sql']
+        assert names == ["type", "name", "tbl_name", "rootpage", "sql"]
 
         rel.fetchall()
         desc = rel.description
         names = [x[0] for x in desc]
-        assert names == ['type', 'name', 'tbl_name', 'rootpage', 'sql']
+        assert names == ["type", "name", "tbl_name", "rootpage", "sql"]

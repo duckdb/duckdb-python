@@ -42,10 +42,10 @@ class DuckDBTypeTests(unittest.TestCase):
         self.con.close()
 
     def test_CheckString(self):
-        self.cur.execute("insert into test(s) values (?)", (u"Österreich",))
+        self.cur.execute("insert into test(s) values (?)", ("Österreich",))
         self.cur.execute("select s from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
+        self.assertEqual(row[0], "Österreich")
 
     def test_CheckSmallInt(self):
         self.cur.execute("insert into test(i) values (?)", (42,))
@@ -75,7 +75,7 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], val)
 
     def test_CheckDecimal(self):
-        val = '17.29'
+        val = "17.29"
         val = decimal.Decimal(val)
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
@@ -83,7 +83,7 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], self.cur.execute("select 17.29::DOUBLE").fetchone()[0])
 
     def test_CheckDecimalWithExponent(self):
-        val = '1E5'
+        val = "1E5"
         val = decimal.Decimal(val)
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
@@ -93,14 +93,14 @@ class DuckDBTypeTests(unittest.TestCase):
     def test_CheckNaN(self):
         import math
 
-        val = decimal.Decimal('nan')
+        val = decimal.Decimal("nan")
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
         self.assertEqual(math.isnan(row[0]), True)
 
     def test_CheckInf(self):
-        val = decimal.Decimal('inf')
+        val = decimal.Decimal("inf")
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
@@ -122,7 +122,7 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], sample)
 
     def test_CheckMemoryviewFromhexBlob(self):
-        sample = bytes.fromhex('00FF0F2E3D4C5B6A798800FF00')
+        sample = bytes.fromhex("00FF0F2E3D4C5B6A798800FF00")
         val = memoryview(sample)
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
@@ -137,9 +137,9 @@ class DuckDBTypeTests(unittest.TestCase):
         self.assertEqual(row[0], val)
 
     def test_CheckUnicodeExecute(self):
-        self.cur.execute(u"select 'Österreich'")
+        self.cur.execute("select 'Österreich'")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
+        self.assertEqual(row[0], "Österreich")
 
 
 class CommonTableExpressionTests(unittest.TestCase):
@@ -206,7 +206,7 @@ class DateTimeTests(unittest.TestCase):
         self.assertEqual(ts, ts2)
 
     def test_CheckSqlTimestamp(self):
-        now = datetime.datetime.now(datetime.UTC) if hasattr(datetime, 'UTC') else datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC) if hasattr(datetime, "UTC") else datetime.datetime.utcnow()
         self.cur.execute("insert into test(ts) values (current_timestamp)")
         self.cur.execute("select ts from test")
         ts = self.cur.fetchone()[0]

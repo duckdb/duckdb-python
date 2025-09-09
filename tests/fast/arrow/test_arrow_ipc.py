@@ -1,14 +1,14 @@
 import pytest
 import duckdb
 
-pa = pytest.importorskip('pyarrow')
+pa = pytest.importorskip("pyarrow")
 
-ipc = pytest.importorskip('pyarrow.ipc')
+ipc = pytest.importorskip("pyarrow.ipc")
 
 
 def get_record_batch():
-    data = [pa.array([1, 2, 3, 4]), pa.array(['foo', 'bar', 'baz', None]), pa.array([True, None, False, True])]
-    return pa.record_batch(data, names=['f0', 'f1', 'f2'])
+    data = [pa.array([1, 2, 3, 4]), pa.array(["foo", "bar", "baz", None]), pa.array([True, None, False, True])]
+    return pa.record_batch(data, names=["f0", "f1", "f2"])
 
 
 class TestArrowIPCExtension(object):

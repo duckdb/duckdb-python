@@ -91,11 +91,11 @@ class TestDataFrameSort(object):
         df = df.sort(desc("name"))
         res = df.collect()
         assert res == [
-            Row(age=3, name='Dave'),
-            Row(age=56, name='Carol'),
-            Row(age=1, name='Ben'),
-            Row(age=3, name='Anna'),
-            Row(age=20, name='Alice'),
+            Row(age=3, name="Dave"),
+            Row(age=56, name="Carol"),
+            Row(age=1, name="Ben"),
+            Row(age=3, name="Anna"),
+            Row(age=20, name="Alice"),
         ]
 
     def test_sort_with_asc(self, spark):
@@ -103,9 +103,9 @@ class TestDataFrameSort(object):
         df = df.sort(asc("name"))
         res = df.collect()
         assert res == [
-            Row(age=20, name='Alice'),
-            Row(age=3, name='Anna'),
-            Row(age=1, name='Ben'),
-            Row(age=56, name='Carol'),
-            Row(age=3, name='Dave'),
+            Row(age=20, name="Alice"),
+            Row(age=3, name="Anna"),
+            Row(age=1, name="Ben"),
+            Row(age=56, name="Carol"),
+            Row(age=3, name="Dave"),
         ]

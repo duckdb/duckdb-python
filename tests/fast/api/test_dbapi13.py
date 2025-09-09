@@ -14,9 +14,9 @@ class TestNumpyTime(object):
         res = duckdb_cursor.execute("SELECT TIME '13:06:40' as test_time").fetchnumpy()
         arr = numpy.array([datetime.time(13, 6, 40)], dtype="object")
         arr = numpy.ma.masked_array(arr)
-        numpy.testing.assert_array_equal(res['test_time'], arr)
+        numpy.testing.assert_array_equal(res["test_time"], arr)
 
     def test_fetchdf_time(self, duckdb_cursor):
         res = duckdb_cursor.execute("SELECT TIME '13:06:40' as test_time").fetchdf()
         ser = pandas.Series(numpy.array([datetime.time(13, 6, 40)], dtype="object"), name="test_time")
-        pandas.testing.assert_series_equal(res['test_time'], ser)
+        pandas.testing.assert_series_equal(res["test_time"], ser)

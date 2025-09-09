@@ -13,7 +13,7 @@ END_MARKER = "# END OF CONNECTION WRAPPER"
 
 def generate():
     # Read the DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, 'r') as source_file:
+    with open(DUCKDB_STUBS_FILE, "r") as source_file:
         source_code = source_file.readlines()
 
     start_index = -1
@@ -38,10 +38,10 @@ def generate():
     methods = []
 
     # Read the JSON file
-    with open(JSON_PATH, 'r') as json_file:
+    with open(JSON_PATH, "r") as json_file:
         connection_methods = json.load(json_file)
 
-    with open(WRAPPER_JSON_PATH, 'r') as json_file:
+    with open(WRAPPER_JSON_PATH, "r") as json_file:
         wrapper_methods = json.load(json_file)
 
     methods.extend(connection_methods)
@@ -49,19 +49,19 @@ def generate():
 
     # On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
     # that's not possible on 'duckdb' so it becomes a function call with no arguments (i.e duckdb.description())
-    READONLY_PROPERTY_NAMES = ['description', 'rowcount']
+    READONLY_PROPERTY_NAMES = ["description", "rowcount"]
 
     # These methods are not directly DuckDBPyConnection methods,
     # they first call 'from_df' and then call a method on the created DuckDBPyRelation
-    SPECIAL_METHOD_NAMES = [x['name'] for x in wrapper_methods if x['name'] not in READONLY_PROPERTY_NAMES]
+    SPECIAL_METHOD_NAMES = [x["name"] for x in wrapper_methods if x["name"] not in READONLY_PROPERTY_NAMES]
 
     def create_arguments(arguments) -> list:
         result = []
         for arg in arguments:
             argument = f"{arg['name']}: {arg['type']}"
             # Add the default argument if present
-            if 'default' in arg:
-                default = arg['default']
+            if "default" in arg:
+                default = arg["default"]
                 argument += f" = {default}"
             result.append(argument)
         return result
@@ -74,49 +74,49 @@ def generate():
         definition += f"def {name}("
         arguments = []
         if name in SPECIAL_METHOD_NAMES:
-            arguments.append('df: pandas.DataFrame')
-        if 'args' in method:
-            arguments.extend(create_arguments(method['args']))
-        if 'kwargs' in method:
-            if not any(x.startswith('*') for x in arguments):
+            arguments.append("df: pandas.DataFrame")
+        if "args" in method:
+            arguments.extend(create_arguments(method["args"]))
+        if "kwargs" in method:
+            if not any(x.startswith("*") for x in arguments):
                 arguments.append("*")
-            arguments.extend(create_arguments(method['kwargs']))
-        definition += ', '.join(arguments)
+            arguments.extend(create_arguments(method["kwargs"]))
+        definition += ", ".join(arguments)
         definition += ")"
         definition += f" -> {method['return']}: ..."
         return definition
 
     # We have "duplicate" methods, which are overloaded.
     # We keep note of them to add the @overload decorator.
-    overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m['name'], list)}
+    overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m["name"], list)}
 
     body = []
     for method in methods:
-        if isinstance(method['name'], list):
-            names = method['name']
+        if isinstance(method["name"], list):
+            names = method["name"]
         else:
-            names = [method['name']]
+            names = [method["name"]]
 
         # Artificially add 'connection' keyword argument
-        if 'kwargs' not in method:
-            method['kwargs'] = []
-        method['kwargs'].append({'name': 'connection', 'type': 'DuckDBPyConnection', 'default': '...'})
+        if "kwargs" not in method:
+            method["kwargs"] = []
+        method["kwargs"].append({"name": "connection", "type": "DuckDBPyConnection", "default": "..."})
 
         for name in names:
             body.append(create_definition(name, method, name in overloaded_methods))
 
     # ---- End of generation code ----
 
-    with_newlines = [x + '\n' for x in body]
+    with_newlines = [x + "\n" for x in body]
     # Recreate the file content by concatenating all the pieces together
 
     new_content = start_section + with_newlines + end_section
 
     # Write out the modified DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, 'w') as source_file:
+    with open(DUCKDB_STUBS_FILE, "w") as source_file:
         source_file.write("".join(new_content))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise ValueError("Please use 'generate_connection_code.py' instead of running the individual script(s)")
     # generate()

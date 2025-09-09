@@ -22,4 +22,4 @@ class TestArrowLargeString(object):
 
         rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
-        assert res == [('foo',), ('baaaar',), ('b',)]
+        assert res == [("foo",), ("baaaar",), ("b",)]

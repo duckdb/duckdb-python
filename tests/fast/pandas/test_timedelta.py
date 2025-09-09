@@ -11,7 +11,7 @@ class TestTimedelta(object):
             "SELECT '2290-01-01 23:59:00'::TIMESTAMP - '2000-01-01 23:59:00'::TIMESTAMP AS '0'"
         ).df()
         data = [datetime.timedelta(microseconds=9151574400000000)]
-        df_in = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+        df_in = pd.DataFrame({0: pd.Series(data=data, dtype="object")})
         df_out = duckdb.query_df(df_in, "df", "select * from df", connection=duckdb_cursor).df()
         pd.testing.assert_frame_equal(df_out, duckdb_interval)
 
@@ -20,7 +20,7 @@ class TestTimedelta(object):
             "SELECT '2290-08-30 23:53:40'::TIMESTAMP - '2000-02-01 01:56:00'::TIMESTAMP AS '0'"
         ).df()
         data = [datetime.timedelta(microseconds=9169797460000000)]
-        df_in = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+        df_in = pd.DataFrame({0: pd.Series(data=data, dtype="object")})
         df_out = duckdb.query_df(df_in, "df", "select * from df", connection=duckdb_cursor).df()
         pd.testing.assert_frame_equal(df_out, duckdb_interval)
 
@@ -29,24 +29,24 @@ class TestTimedelta(object):
             "SELECT '2000-01-01 23:59:00'::TIMESTAMP - '2290-01-01 23:59:00'::TIMESTAMP AS '0'"
         ).df()
         data = [datetime.timedelta(microseconds=-9151574400000000)]
-        df_in = pd.DataFrame({0: pd.Series(data=data, dtype='object')})
+        df_in = pd.DataFrame({0: pd.Series(data=data, dtype="object")})
         df_out = duckdb.query_df(df_in, "df", "select * from df", connection=duckdb_cursor).df()
         pd.testing.assert_frame_equal(df_out, duckdb_interval)
 
-    @pytest.mark.parametrize('days', [1, 9999])
-    @pytest.mark.parametrize('seconds', [0, 60])
+    @pytest.mark.parametrize("days", [1, 9999])
+    @pytest.mark.parametrize("seconds", [0, 60])
     @pytest.mark.parametrize(
-        'microseconds',
+        "microseconds",
         [
             0,
             232493,
             999_999,
         ],
     )
-    @pytest.mark.parametrize('milliseconds', [0, 999])
-    @pytest.mark.parametrize('minutes', [0, 60])
-    @pytest.mark.parametrize('hours', [0, 24])
-    @pytest.mark.parametrize('weeks', [0, 51])
+    @pytest.mark.parametrize("milliseconds", [0, 999])
+    @pytest.mark.parametrize("minutes", [0, 60])
+    @pytest.mark.parametrize("hours", [0, 24])
+    @pytest.mark.parametrize("weeks", [0, 51])
     @pytest.mark.skipif(platform.system() == "Emscripten", reason="Bind parameters are broken when running on Pyodide")
     def test_timedelta_coverage(self, duckdb_cursor, days, seconds, microseconds, milliseconds, minutes, hours, weeks):
         def create_duck_interval(days, seconds, microseconds, milliseconds, minutes, hours, weeks) -> str:

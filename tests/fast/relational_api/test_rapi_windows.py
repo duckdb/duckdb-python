@@ -429,14 +429,14 @@ class TestRAPIWindows:
             .fetchall()
         )
         expected = [
-            (1, '0010000000000'),
-            (1, '0010000000000'),
-            (1, '0011000000000'),
-            (2, '0000000000001'),
-            (2, '0000000000011'),
-            (3, '0000001000000'),
-            (3, '1000001000000'),
-            (3, '1000001000000'),
+            (1, "0010000000000"),
+            (1, "0010000000000"),
+            (1, "0011000000000"),
+            (2, "0000000000001"),
+            (2, "0000000000011"),
+            (3, "0000001000000"),
+            (3, "1000001000000"),
+            (3, "1000001000000"),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -619,7 +619,7 @@ class TestRAPIWindows:
             .execute()
             .fetchall()
         )
-        expected = [(1, 'e'), (1, 'e/h'), (1, 'e/h/l'), (2, 'o'), (2, 'o/l'), (3, 'wor'), (3, 'wor/,'), (3, 'wor/,/ld')]
+        expected = [(1, "e"), (1, "e/h"), (1, "e/h/l"), (2, "o"), (2, "o/l"), (3, "wor"), (3, "wor/,"), (3, "wor/,/ld")]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 

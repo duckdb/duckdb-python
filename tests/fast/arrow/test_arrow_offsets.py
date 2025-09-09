@@ -62,7 +62,7 @@ def decimal_value(value, precision, scale):
     val = str(value)
     actual_width = precision - scale
     if len(val) > actual_width:
-        return decimal.Decimal('9' * actual_width)
+        return decimal.Decimal("9" * actual_width)
     return decimal.Decimal(val)
 
 
@@ -76,7 +76,7 @@ def expected_result(col1_null, col2_null, expected):
 
 
 null_test_parameters = lambda: mark.parametrize(
-    ['col1_null', 'col2_null'], [(False, True), (True, False), (True, True), (False, False)]
+    ["col1_null", "col2_null"], [(False, True), (True, False), (True, True), (False, False)]
 )
 
 
@@ -100,10 +100,10 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        assert res == expected_result(col1_null, col2_null, '131072')
+        assert res == expected_result(col1_null, col2_null, "131072")
 
     @null_test_parameters()
     def test_struct_of_bools(self, duckdb_cursor, col1_null, col2_null):
@@ -126,7 +126,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, True)
@@ -158,7 +158,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -167,8 +167,8 @@ class TestArrowOffsets(object):
     def test_struct_of_enum(self, duckdb_cursor, col1_null, col2_null):
         enum_type = pa.dictionary(pa.int64(), pa.utf8())
 
-        tuples = ['red' for i in range(MAGIC_ARRAY_SIZE)]
-        tuples[-1] = 'green'
+        tuples = ["red" for i in range(MAGIC_ARRAY_SIZE)]
+        tuples[-1] = "green"
         if col1_null:
             tuples[-1] = None
 
@@ -177,7 +177,7 @@ class TestArrowOffsets(object):
             struct_tuples[-1] = None
 
         arrow_table = pa.Table.from_pydict(
-            {'col1': pa.array(tuples, enum_type), 'col2': pa.array(struct_tuples, pa.struct({"a": enum_type}))},
+            {"col1": pa.array(tuples, enum_type), "col2": pa.array(struct_tuples, pa.struct({"a": enum_type}))},
             schema=pa.schema([("col1", enum_type), ("col2", pa.struct({"a": enum_type}))]),
         )
         res = duckdb_cursor.sql(
@@ -185,10 +185,10 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        assert res == expected_result(col1_null, col2_null, 'green')
+        assert res == expected_result(col1_null, col2_null, "green")
 
     @null_test_parameters()
     def test_struct_of_blobs(self, duckdb_cursor, col1_null, col2_null):
@@ -209,24 +209,24 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        assert res == expected_result(col1_null, col2_null, b'131072')
+        assert res == expected_result(col1_null, col2_null, b"131072")
 
     @null_test_parameters()
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
-            (pa_time32(), 'ms', datetime.time(0, 2, 11, 72000)),
-            (pa_time32(), 's', datetime.time(23, 59, 59)),
-            (pa_time64(), 'ns', datetime.time(0, 0, 0, 131)),
-            (pa_time64(), 'us', datetime.time(0, 0, 0, 131072)),
+            (pa_time32(), "ms", datetime.time(0, 2, 11, 72000)),
+            (pa_time32(), "s", datetime.time(23, 59, 59)),
+            (pa_time64(), "ns", datetime.time(0, 0, 0, 131)),
+            (pa_time64(), "us", datetime.time(0, 0, 0, 131072)),
         ],
     )
     def test_struct_of_time(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
         size = MAGIC_ARRAY_SIZE
-        if unit == 's':
+        if unit == "s":
             # FIXME: We limit the size because we don't support time values > 24 hours
             size = 86400  # The amount of seconds in a day
 
@@ -247,7 +247,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {size-1}
+            FROM arrow_table offset {size - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -282,7 +282,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {size-1}
+            FROM arrow_table offset {size - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -291,10 +291,10 @@ class TestArrowOffsets(object):
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
-            (pa_duration(), 'ms', datetime.timedelta(seconds=131, microseconds=72000)),
-            (pa_duration(), 's', datetime.timedelta(days=1, seconds=44672)),
-            (pa_duration(), 'ns', datetime.timedelta(microseconds=131)),
-            (pa_duration(), 'us', datetime.timedelta(microseconds=131072)),
+            (pa_duration(), "ms", datetime.timedelta(seconds=131, microseconds=72000)),
+            (pa_duration(), "s", datetime.timedelta(days=1, seconds=44672)),
+            (pa_duration(), "ns", datetime.timedelta(microseconds=131)),
+            (pa_duration(), "us", datetime.timedelta(microseconds=131072)),
         ],
     )
     def test_struct_of_duration(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
@@ -317,7 +317,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {size-1}
+            FROM arrow_table offset {size - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -326,10 +326,10 @@ class TestArrowOffsets(object):
     @pytest.mark.parametrize(
         ["constructor", "unit", "expected"],
         [
-            (pa_timestamp(), 'ms', datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=pytz.utc)),
-            (pa_timestamp(), 's', datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=pytz.utc)),
-            (pa_timestamp(), 'ns', datetime.datetime(1970, 1, 1, 0, 0, 0, 131, tzinfo=pytz.utc)),
-            (pa_timestamp(), 'us', datetime.datetime(1970, 1, 1, 0, 0, 0, 131072, tzinfo=pytz.utc)),
+            (pa_timestamp(), "ms", datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=pytz.utc)),
+            (pa_timestamp(), "s", datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=pytz.utc)),
+            (pa_timestamp(), "ns", datetime.datetime(1970, 1, 1, 0, 0, 0, 131, tzinfo=pytz.utc)),
+            (pa_timestamp(), "us", datetime.datetime(1970, 1, 1, 0, 0, 0, 131072, tzinfo=pytz.utc)),
         ],
     )
     def test_struct_of_timestamp_tz(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
@@ -346,7 +346,7 @@ class TestArrowOffsets(object):
         arrow_table = pa.Table.from_pydict(
             {"col1": col1, "col2": col2},
             schema=pa.schema(
-                [("col1", constructor(unit, 'UTC')), ("col2", pa.struct({"a": constructor(unit, 'UTC')}))]
+                [("col1", constructor(unit, "UTC")), ("col2", pa.struct({"a": constructor(unit, "UTC")}))]
             ),
         )
 
@@ -355,7 +355,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {size-1}
+            FROM arrow_table offset {size - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -379,23 +379,23 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        assert res == expected_result(col1_null, col2_null, b'131072')
+        assert res == expected_result(col1_null, col2_null, b"131072")
 
     @null_test_parameters()
     @pytest.mark.parametrize(
         ["precision_scale", "expected"],
         [
-            ((38, 37), decimal.Decimal('9.0000000000000000000000000000000000000')),
-            ((38, 24), decimal.Decimal('131072.000000000000000000000000')),
-            ((18, 14), decimal.Decimal('9999.00000000000000')),
-            ((18, 5), decimal.Decimal('131072.00000')),
-            ((9, 7), decimal.Decimal('99.0000000')),
-            ((9, 3), decimal.Decimal('131072.000')),
-            ((4, 2), decimal.Decimal('99.00')),
-            ((4, 0), decimal.Decimal('9999')),
+            ((38, 37), decimal.Decimal("9.0000000000000000000000000000000000000")),
+            ((38, 24), decimal.Decimal("131072.000000000000000000000000")),
+            ((18, 14), decimal.Decimal("9999.00000000000000")),
+            ((18, 5), decimal.Decimal("131072.00000")),
+            ((9, 7), decimal.Decimal("99.0000000")),
+            ((9, 3), decimal.Decimal("131072.000")),
+            ((4, 2), decimal.Decimal("99.00")),
+            ((4, 0), decimal.Decimal("9999")),
         ],
     )
     def test_struct_of_decimal(self, duckdb_cursor, precision_scale, expected, col1_null, col2_null):
@@ -420,7 +420,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
         assert res == expected_result(col1_null, col2_null, expected)
@@ -443,16 +443,16 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        res1 = None if col1_null else '131072'
+        res1 = None if col1_null else "131072"
         if col2_null:
             res2 = None
         elif col1_null:
             res2 = [None, None, None]
         else:
-            res2 = ['131072', '131072', '131072']
+            res2 = ["131072", "131072", "131072"]
         assert res == [(res1, res2)]
 
     @null_test_parameters()
@@ -473,16 +473,16 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        res1 = None if col1_null else '131072'
+        res1 = None if col1_null else "131072"
         if col2_null:
             res2 = None
         elif col1_null:
             res2 = (None, None, None)
         else:
-            res2 = ('131072', '131072', '131072')
+            res2 = ("131072", "131072", "131072")
         assert res == [(res1, res2)]
 
     @null_test_parameters()
@@ -504,16 +504,16 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        res1 = None if col1_null else b'131072'
+        res1 = None if col1_null else b"131072"
         if col2_null:
             res2 = None
         elif col1_null:
             res2 = (None, None, None)
         else:
-            res2 = (b'131072', b'131073', b'131074')
+            res2 = (b"131072", b"131073", b"131074")
         assert res == [(res1, res2)]
 
     @null_test_parameters()
@@ -535,16 +535,16 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
-        res1 = None if col1_null else b'131072'
+        res1 = None if col1_null else b"131072"
         if col2_null:
             res2 = None
         elif col1_null:
             res2 = [None, None, None]
         else:
-            res2 = [b'131072', b'131073', b'131074']
+            res2 = [b"131072", b"131073", b"131074"]
         assert res == [(res1, res2)]
 
     @null_test_parameters()
@@ -566,7 +566,7 @@ class TestArrowOffsets(object):
             SELECT
                 col1,
                 col2.a
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
         res1 = None if col1_null else 131072
@@ -578,7 +578,7 @@ class TestArrowOffsets(object):
             res2 = [[131072, 131072, 131072], [], None, [131072]]
         assert res == [(res1, res2)]
 
-    @pytest.mark.parametrize('col1_null', [True, False])
+    @pytest.mark.parametrize("col1_null", [True, False])
     def test_list_of_struct(self, duckdb_cursor, col1_null):
         # One single tuple containing a very big list
         tuples = [{"a": i} for i in range(0, MAGIC_ARRAY_SIZE)]
@@ -599,19 +599,19 @@ class TestArrowOffsets(object):
         res = res[0][0]
         for i, x in enumerate(res[:-1]):
             assert x.__class__ == dict
-            assert x['a'] == i
+            assert x["a"] == i
         if col1_null:
             assert res[-1] == None
         else:
-            assert res[-1]['a'] == len(res) - 1
+            assert res[-1]["a"] == len(res) - 1
 
-    @pytest.mark.parametrize(['outer_null', 'inner_null'], [(True, False), (False, True)])
+    @pytest.mark.parametrize(["outer_null", "inner_null"], [(True, False), (False, True)])
     def test_list_of_list_of_struct(self, duckdb_cursor, outer_null, inner_null):
         tuples = [[[{"a": str(i), "b": None, "c": [i]}]] for i in range(MAGIC_ARRAY_SIZE)]
         if outer_null:
             tuples[-1] = None
         else:
-            inner = [[{"a": 'aaaaaaaaaaaaaaa', "b": 'test', "c": [1, 2, 3]}] for _ in range(MAGIC_ARRAY_SIZE)]
+            inner = [[{"a": "aaaaaaaaaaaaaaa", "b": "test", "c": [1, 2, 3]}] for _ in range(MAGIC_ARRAY_SIZE)]
             if inner_null:
                 inner[-1] = None
             tuples[-1] = inner
@@ -635,7 +635,7 @@ class TestArrowOffsets(object):
             f"""
             SELECT
                 col1
-            FROM arrow_table OFFSET {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table OFFSET {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchall()
         if outer_null:
@@ -646,7 +646,7 @@ class TestArrowOffsets(object):
             else:
                 assert res[-1][-1][-1] == 131072
 
-    @pytest.mark.parametrize('col1_null', [True, False])
+    @pytest.mark.parametrize("col1_null", [True, False])
     def test_struct_of_list(self, duckdb_cursor, col1_null):
         # All elements are of size 1
         tuples = [{"a": [str(i)]} for i in range(MAGIC_ARRAY_SIZE)]
@@ -664,13 +664,13 @@ class TestArrowOffsets(object):
             f"""
             SELECT
                 col1
-            FROM arrow_table offset {MAGIC_ARRAY_SIZE-1}
+            FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
         ).fetchone()
         if col1_null:
             assert res[0] == None
         else:
-            assert res[0]['a'][-1] == '131072'
+            assert res[0]["a"][-1] == "131072"
 
     def test_bools_with_offset(self, duckdb_cursor):
         bools = [False, False, False, False, True, False, False, False, False, False]

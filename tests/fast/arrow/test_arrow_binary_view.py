@@ -8,7 +8,7 @@ class TestArrowBinaryView(object):
     def test_arrow_binary_view(self, duckdb_cursor):
         con = duckdb.connect()
         tab = pa.table({"x": pa.array([b"abc", b"thisisaverybigbinaryyaymorethanfifteen", None], pa.binary_view())})
-        assert con.execute("FROM tab").fetchall() == [(b'abc',), (b'thisisaverybigbinaryyaymorethanfifteen',), (None,)]
+        assert con.execute("FROM tab").fetchall() == [(b"abc",), (b"thisisaverybigbinaryyaymorethanfifteen",), (None,)]
         # By default we won't export a view
         assert not con.execute("FROM tab").fetch_arrow_table().equals(tab)
         # We do the binary view from 1.4 onwards
@@ -16,5 +16,5 @@ class TestArrowBinaryView(object):
         assert con.execute("FROM tab").fetch_arrow_table().equals(tab)
 
         assert con.execute("FROM tab where x = 'thisisaverybigbinaryyaymorethanfifteen'").fetchall() == [
-            (b'thisisaverybigbinaryyaymorethanfifteen',)
+            (b"thisisaverybigbinaryyaymorethanfifteen",)
         ]

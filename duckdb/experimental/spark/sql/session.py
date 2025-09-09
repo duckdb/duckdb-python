@@ -16,10 +16,7 @@ from .udf import UDFRegistration
 from .streaming import DataStreamReader
 import duckdb
 
-from ..errors import (
-    PySparkTypeError,
-    PySparkValueError
-)
+from ..errors import PySparkTypeError, PySparkValueError
 
 from ..errors.error_classes import *
 
@@ -53,11 +50,12 @@ class SparkSession:
     def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
         try:
             import pandas
+
             has_pandas = True
         except ImportError:
             has_pandas = False
         if has_pandas and isinstance(data, pandas.DataFrame):
-            unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
+            unique_name = f"pyspark_pandas_df_{uuid.uuid1()}"
             self.conn.register(unique_name, data)
             return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
@@ -73,9 +71,9 @@ class SparkSession:
                     error_class="LENGTH_SHOULD_BE_THE_SAME",
                     message_parameters={
                         "arg1": f"data{i}",
-                        "arg2": f"data{i+1}",
+                        "arg2": f"data{i + 1}",
                         "arg1_length": str(expected_length),
-                        "arg2_length": str(actual_length)
+                        "arg2_length": str(actual_length),
                     },
                 )
 
@@ -86,13 +84,13 @@ class SparkSession:
         def construct_query(tuples) -> str:
             def construct_values_list(row, start_param_idx):
                 parameter_count = len(row)
-                parameters = [f'${x+start_param_idx}' for x in range(parameter_count)]
-                parameters = '(' + ', '.join(parameters) + ')'
+                parameters = [f"${x + start_param_idx}" for x in range(parameter_count)]
+                parameters = "(" + ", ".join(parameters) + ")"
                 return parameters
 
             row_size = len(tuples[0])
             values_list = [construct_values_list(x, 1 + (i * row_size)) for i, x in enumerate(tuples)]
-            values_list = ', '.join(values_list)
+            values_list = ", ".join(values_list)
 
             query = f"""
                 select * from (values {values_list})
@@ -175,7 +173,7 @@ class SparkSession:
         if is_empty:
             rel = df.relation
             # Add impossible where clause
-            rel = rel.filter('1=0')
+            rel = rel.filter("1=0")
             df = DataFrame(rel, self)
 
         # Cast to types
@@ -203,7 +201,7 @@ class SparkSession:
             end = start
             start = 0
 
-        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]),self)
+        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]), self)
 
     def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
         if kwargs:
@@ -255,7 +253,7 @@ class SparkSession:
 
     @property
     def version(self) -> str:
-        return '1.0.0'
+        return "1.0.0"
 
     class Builder:
         def __init__(self) -> None:

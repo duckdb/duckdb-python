@@ -40,16 +40,16 @@ INIT_PY_START = "# START OF CONNECTION WRAPPER"
 INIT_PY_END = "# END OF CONNECTION WRAPPER"
 
 # Read the JSON file
-with open(WRAPPER_JSON_PATH, 'r') as json_file:
+with open(WRAPPER_JSON_PATH, "r") as json_file:
     wrapper_methods = json.load(json_file)
 
 # On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
 # that's not possible on 'duckdb' so it becomes a function call with no arguments (i.e duckdb.description())
-READONLY_PROPERTY_NAMES = ['description', 'rowcount']
+READONLY_PROPERTY_NAMES = ["description", "rowcount"]
 
 # These methods are not directly DuckDBPyConnection methods,
 # they first call 'FromDF' and then call a method on the created DuckDBPyRelation
-SPECIAL_METHOD_NAMES = [x['name'] for x in wrapper_methods if x['name'] not in READONLY_PROPERTY_NAMES]
+SPECIAL_METHOD_NAMES = [x["name"] for x in wrapper_methods if x["name"] not in READONLY_PROPERTY_NAMES]
 
 RETRIEVE_CONN_FROM_DICT = """auto connection_arg = kwargs.contains("conn") ? kwargs["conn"] : py::none();
     auto conn = py::cast<shared_ptr<DuckDBPyConnection>>(connection_arg);
@@ -57,18 +57,18 @@ RETRIEVE_CONN_FROM_DICT = """auto connection_arg = kwargs.contains("conn") ? kwa
 
 
 def is_py_args(method):
-    if 'args' not in method:
+    if "args" not in method:
         return False
-    args = method['args']
+    args = method["args"]
     if len(args) == 0:
         return False
-    if args[0]['name'] != '*args':
+    if args[0]["name"] != "*args":
         return False
     return True
 
 
 def is_py_kwargs(method):
-    return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
+    return "kwargs_as_dict" in method and method["kwargs_as_dict"] == True
 
 
 def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[str]]:
@@ -94,33 +94,33 @@ def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[s
 
 def generate():
     # Read the DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE, 'r') as source_file:
+    with open(DUCKDB_PYTHON_SOURCE, "r") as source_file:
         source_code = source_file.readlines()
     start_section, end_section = remove_section(source_code, START_MARKER, END_MARKER)
 
     # Read the DUCKDB_INIT_FILE file
-    with open(DUCKDB_INIT_FILE, 'r') as source_file:
+    with open(DUCKDB_INIT_FILE, "r") as source_file:
         source_code = source_file.readlines()
     py_start, py_end = remove_section(source_code, INIT_PY_START, INIT_PY_END)
 
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH, 'r') as json_file:
+    with open(JSON_PATH, "r") as json_file:
         connection_methods = json.load(json_file)
 
     # Collect the definitions from the pyconnection.hpp header
 
-    cpp_connection_defs = get_methods('DuckDBPyConnection')
-    cpp_relation_defs = get_methods('DuckDBPyRelation')
+    cpp_connection_defs = get_methods("DuckDBPyConnection")
+    cpp_relation_defs = get_methods("DuckDBPyRelation")
 
     DEFAULT_ARGUMENT_MAP = {
-        'True': 'true',
-        'False': 'false',
-        'None': 'py::none()',
-        'PythonUDFType.NATIVE': 'PythonUDFType::NATIVE',
-        'PythonExceptionHandling.DEFAULT': 'PythonExceptionHandling::FORWARD_ERROR',
-        'FunctionNullHandling.DEFAULT': 'FunctionNullHandling::DEFAULT_NULL_HANDLING',
+        "True": "true",
+        "False": "false",
+        "None": "py::none()",
+        "PythonUDFType.NATIVE": "PythonUDFType::NATIVE",
+        "PythonExceptionHandling.DEFAULT": "PythonExceptionHandling::FORWARD_ERROR",
+        "FunctionNullHandling.DEFAULT": "FunctionNullHandling::DEFAULT_NULL_HANDLING",
     }
 
     def map_default(val):
@@ -131,16 +131,16 @@ def generate():
     def create_arguments(arguments) -> list:
         result = []
         for arg in arguments:
-            if arg['name'] == '*args':
+            if arg["name"] == "*args":
                 # py::args() should not have a corresponding py::arg(<name>)
                 continue
-            argument = f"py::arg(\"{arg['name']}\")"
-            if 'allow_none' in arg:
-                value = str(arg['allow_none']).lower()
+            argument = f'py::arg("{arg["name"]}")'
+            if "allow_none" in arg:
+                value = str(arg["allow_none"]).lower()
                 argument += f".none({value})"
             # Add the default argument if present
-            if 'default' in arg:
-                default = map_default(arg['default'])
+            if "default" in arg:
+                default = map_default(arg["default"])
                 argument += f" = {default}"
             result.append(argument)
         return result
@@ -148,11 +148,11 @@ def generate():
     def get_lambda_definition(name, method, definition: ConnectionMethod) -> str:
         param_definitions = []
         if name in SPECIAL_METHOD_NAMES:
-            param_definitions.append('const PandasDataFrame &df')
+            param_definitions.append("const PandasDataFrame &df")
         param_definitions.extend([x.proto for x in definition.params])
 
         if not is_py_kwargs(method):
-            param_definitions.append('shared_ptr<DuckDBPyConnection> conn = nullptr')
+            param_definitions.append("shared_ptr<DuckDBPyConnection> conn = nullptr")
         param_definitions = ", ".join(param_definitions)
 
         param_names = [x.name for x in definition.params]
@@ -160,73 +160,73 @@ def generate():
 
         function_name = definition.name
         if name in SPECIAL_METHOD_NAMES:
-            function_name = 'FromDF(df)->' + function_name
+            function_name = "FromDF(df)->" + function_name
 
         format_dict = {
-            'param_definitions': param_definitions,
-            'opt_retrieval': '',
-            'opt_return': '' if definition.is_void else 'return ',
-            'function_name': function_name,
-            'parameter_names': param_names,
+            "param_definitions": param_definitions,
+            "opt_retrieval": "",
+            "opt_return": "" if definition.is_void else "return ",
+            "function_name": function_name,
+            "parameter_names": param_names,
         }
         if is_py_kwargs(method):
-            format_dict['opt_retrieval'] += RETRIEVE_CONN_FROM_DICT
+            format_dict["opt_retrieval"] += RETRIEVE_CONN_FROM_DICT
 
         return LAMBDA_FORMAT.format_map(format_dict)
 
     def create_definition(name, method, lambda_def) -> str:
-        definition = f"m.def(\"{name}\""
+        definition = f'm.def("{name}"'
         definition += ", "
         definition += lambda_def
         definition += ", "
-        definition += f"\"{method['docs']}\""
-        if 'args' in method and not is_py_args(method):
+        definition += f'"{method["docs"]}"'
+        if "args" in method and not is_py_args(method):
             definition += ", "
-            arguments = create_arguments(method['args'])
-            definition += ', '.join(arguments)
-        if 'kwargs' in method:
+            arguments = create_arguments(method["args"])
+            definition += ", ".join(arguments)
+        if "kwargs" in method:
             definition += ", "
             if is_py_kwargs(method):
                 definition += "py::kw_only()"
             else:
                 definition += "py::kw_only(), "
-                arguments = create_arguments(method['kwargs'])
-                definition += ', '.join(arguments)
+                arguments = create_arguments(method["kwargs"])
+                definition += ", ".join(arguments)
         definition += ");"
         return definition
 
     body = []
     all_names = []
     for method in connection_methods:
-        if isinstance(method['name'], list):
-            names = method['name']
+        if isinstance(method["name"], list):
+            names = method["name"]
         else:
-            names = [method['name']]
-        if 'kwargs' not in method:
-            method['kwargs'] = []
-        method['kwargs'].append({'name': 'connection', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
+            names = [method["name"]]
+        if "kwargs" not in method:
+            method["kwargs"] = []
+        method["kwargs"].append({"name": "connection", "type": "Optional[DuckDBPyConnection]", "default": "None"})
         for name in names:
-            function_name = method['function']
+            function_name = method["function"]
             cpp_definition = cpp_connection_defs[function_name]
             lambda_def = get_lambda_definition(name, method, cpp_definition)
             body.append(create_definition(name, method, lambda_def))
             all_names.append(name)
 
     for method in wrapper_methods:
-        if isinstance(method['name'], list):
-            names = method['name']
+        if isinstance(method["name"], list):
+            names = method["name"]
         else:
-            names = [method['name']]
-        if 'kwargs' not in method:
-            method['kwargs'] = []
-        method['kwargs'].append({'name': 'connection', 'type': 'Optional[DuckDBPyConnection]', 'default': 'None'})
+            names = [method["name"]]
+        if "kwargs" not in method:
+            method["kwargs"] = []
+        method["kwargs"].append({"name": "connection", "type": "Optional[DuckDBPyConnection]", "default": "None"})
         for name in names:
-            function_name = method['function']
+            function_name = method["function"]
             if name in SPECIAL_METHOD_NAMES:
                 cpp_definition = cpp_relation_defs[function_name]
-                if 'args' not in method:
-                    method['args'] = []
-                method['args'].insert(0, {'name': 'df', 'type': 'DataFrame'})
+                if "args" not in method:
+                    method["args"] = []
+                method["args"].insert(0, {"name": "df", "type": "DataFrame"})
             else:
                 cpp_definition = cpp_connection_defs[function_name]
             lambda_def = get_lambda_definition(name, method, cpp_definition)
@@ -235,24 +235,24 @@ def generate():
 
     # ---- End of generation code ----
 
-    with_newlines = ['\t' + x + '\n' for x in body]
+    with_newlines = ["\t" + x + "\n" for x in body]
     # Recreate the file content by concatenating all the pieces together
     new_content = start_section + with_newlines + end_section
     # Write out the modified DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE, 'w') as source_file:
+    with open(DUCKDB_PYTHON_SOURCE, "w") as source_file:
         source_file.write("".join(new_content))
 
-    item_list = '\n'.join([f'\t{name},' for name in all_names])
-    str_item_list = '\n'.join([f"\t'{name}'," for name in all_names])
-    imports = PY_INIT_FORMAT.format(item_list=item_list, str_item_list=str_item_list).split('\n')
-    imports = [x + '\n' for x in imports]
+    item_list = "\n".join([f"\t{name}," for name in all_names])
+    str_item_list = "\n".join([f"\t'{name}'," for name in all_names])
+    imports = PY_INIT_FORMAT.format(item_list=item_list, str_item_list=str_item_list).split("\n")
+    imports = [x + "\n" for x in imports]
 
     init_py_content = py_start + imports + py_end
     # Write out the modified DUCKDB_INIT_FILE file
-    with open(DUCKDB_INIT_FILE, 'w') as source_file:
+    with open(DUCKDB_INIT_FILE, "w") as source_file:
         source_file.write("".join(init_py_content))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # raise ValueError("Please use 'generate_connection_code.py' instead of running the individual script(s)")
     generate()

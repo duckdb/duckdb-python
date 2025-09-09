@@ -99,7 +99,7 @@ class Column:
         self.expr = expr
 
     # arithmetic operators
-    def __neg__(self) -> 'Column':
+    def __neg__(self) -> "Column":
         return Column(-self.expr)
 
     # `and`, `or`, `not` cannot be overloaded in Python,
@@ -161,8 +161,8 @@ class Column:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
-        >>> df.select(df.l[slice(1, 3)], df.d['key']).show()
+        >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
+        >>> df.select(df.l[slice(1, 3)], df.d["key"]).show()
         +------------------+------+
         |substring(l, 1, 3)|d[key]|
         +------------------+------+
@@ -196,7 +196,7 @@ class Column:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
+        >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
         >>> df.select(df.d.key).show()
         +------+
         |d[key]|
@@ -347,7 +347,6 @@ class Column:
     nulls_first = _unary_op("nulls_first")
     nulls_last = _unary_op("nulls_last")
 
-
     def asc_nulls_first(self) -> "Column":
         return self.asc().nulls_first()
 
@@ -365,4 +364,3 @@ class Column:
 
     def isNotNull(self) -> "Column":
         return Column(self.expr.isnotnull())
-

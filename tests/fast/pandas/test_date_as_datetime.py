@@ -5,9 +5,9 @@ import pytest
 
 
 def run_checks(df):
-    assert type(df['d'][0]) is datetime.date
-    assert df['d'][0] == datetime.date(1992, 7, 30)
-    assert pd.isnull(df['d'][1])
+    assert type(df["d"][0]) is datetime.date
+    assert df["d"][0] == datetime.date(1992, 7, 30)
+    assert pd.isnull(df["d"][1])
 
 
 def test_date_as_datetime():
@@ -22,7 +22,7 @@ def test_date_as_datetime():
     run_checks(con.execute("Select * from t").fetch_df(date_as_object=True))
 
     # Relation Methods
-    rel = con.table('t')
+    rel = con.table("t")
     run_checks(rel.df(date_as_object=True))
     run_checks(rel.to_df(date_as_object=True))
 

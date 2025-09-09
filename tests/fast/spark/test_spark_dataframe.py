@@ -36,9 +36,9 @@ class TestDataFrame(object):
         df = spark.createDataFrame(address, ["id", "address", "state"])
         res = df.collect()
         assert res == [
-            Row(id=1, address='14851 Jeffrey Rd', state='DE'),
-            Row(id=2, address='43421 Margarita St', state='NY'),
-            Row(id=3, address='13111 Siemon Ave', state='CA'),
+            Row(id=1, address="14851 Jeffrey Rd", state="DE"),
+            Row(id=2, address="43421 Margarita St", state="NY"),
+            Row(id=3, address="13111 Siemon Ave", state="CA"),
         ]
 
         # Tuples of different sizes
@@ -93,9 +93,9 @@ class TestDataFrame(object):
         df = spark.createDataFrame(address, [])
         res = df.collect()
         assert res == [
-            Row(col0=1, col1='14851 Jeffrey Rd', col2='DE'),
-            Row(col0=2, col1='43421 Margarita St', col2='NY'),
-            Row(col0=3, col1='13111 Siemon Ave', col2='DE'),
+            Row(col0=1, col1="14851 Jeffrey Rd", col2="DE"),
+            Row(col0=2, col1="43421 Margarita St", col2="NY"),
+            Row(col0=3, col1="13111 Siemon Ave", col2="DE"),
         ]
 
         # Too many column names
@@ -107,17 +107,17 @@ class TestDataFrame(object):
         # Column names is not a list (but is iterable)
         if not USE_ACTUAL_SPARK:
             # These things do not work in Spark or throw different errors
-            df = spark.createDataFrame(address, {'a': 5, 'b': 6, 'c': 42})
+            df = spark.createDataFrame(address, {"a": 5, "b": 6, "c": 42})
             res = df.collect()
             assert res == [
-                Row(a=1, b='14851 Jeffrey Rd', c='DE'),
-                Row(a=2, b='43421 Margarita St', c='NY'),
-                Row(a=3, b='13111 Siemon Ave', c='DE'),
+                Row(a=1, b="14851 Jeffrey Rd", c="DE"),
+                Row(a=2, b="43421 Margarita St", c="NY"),
+                Row(a=3, b="13111 Siemon Ave", c="DE"),
             ]
 
             # Column names is not a list (string, becomes a single column name)
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                df = spark.createDataFrame(address, 'a')
+                df = spark.createDataFrame(address, "a")
 
             with pytest.raises(TypeError, match="must be an iterable, not int"):
                 df = spark.createDataFrame(address, 5)
@@ -126,7 +126,7 @@ class TestDataFrame(object):
         # Create DataFrame
         df = spark.createDataFrame([("Scala", 25000), ("Spark", 35000), ("PHP", 21000)])
         res = df.collect()
-        assert res == [Row(col0='Scala', col1=25000), Row(col0='Spark', col1=35000), Row(col0='PHP', col1=21000)]
+        assert res == [Row(col0="Scala", col1=25000), Row(col0="Spark", col1=35000), Row(col0="PHP", col1=21000)]
 
     @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="We can't create tables with our Spark test setup")
     def test_writing_to_table(self, spark):
@@ -136,18 +136,18 @@ class TestDataFrame(object):
             create table sample_table("_1" bool, "_2" integer)
         """
         )
-        spark.sql('insert into sample_table VALUES (True, 42)')
+        spark.sql("insert into sample_table VALUES (True, 42)")
         spark.table("sample_table").write.saveAsTable("sample_hive_table")
         df3 = spark.sql("SELECT _1,_2 FROM sample_hive_table")
         res = df3.collect()
         assert res == [Row(_1=True, _2=42)]
         schema = df3.schema
-        assert schema == StructType([StructField('_1', BooleanType(), True), StructField('_2', IntegerType(), True)])
+        assert schema == StructType([StructField("_1", BooleanType(), True), StructField("_2", IntegerType(), True)])
 
     def test_dataframe_collect(self, spark):
-        df = spark.createDataFrame([(42,), (21,)]).toDF('a')
+        df = spark.createDataFrame([(42,), (21,)]).toDF("a")
         res = df.collect()
-        assert str(res) == '[Row(a=42), Row(a=21)]'
+        assert str(res) == "[Row(a=42), Row(a=21)]"
 
     def test_dataframe_from_rows(self, spark):
         columns = ["language", "users_count"]
@@ -157,17 +157,17 @@ class TestDataFrame(object):
         df = spark.createDataFrame(rowData, columns)
         res = df.collect()
         assert res == [
-            Row(language='Java', users_count='20000'),
-            Row(language='Python', users_count='100000'),
-            Row(language='Scala', users_count='3000'),
+            Row(language="Java", users_count="20000"),
+            Row(language="Python", users_count="100000"),
+            Row(language="Scala", users_count="3000"),
         ]
 
     def test_empty_df(self, spark):
         schema = StructType(
             [
-                StructField('firstname', StringType(), True),
-                StructField('middlename', StringType(), True),
-                StructField('lastname', StringType(), True),
+                StructField("firstname", StringType(), True),
+                StructField("middlename", StringType(), True),
+                StructField("lastname", StringType(), True),
             ]
         )
         df = spark.createDataFrame([], schema=schema)
@@ -178,18 +178,18 @@ class TestDataFrame(object):
     def test_df_from_pandas(self, spark):
         import pandas as pd
 
-        df = spark.createDataFrame(pd.DataFrame({'a': [42, 21], 'b': [True, False]}))
+        df = spark.createDataFrame(pd.DataFrame({"a": [42, 21], "b": [True, False]}))
         res = df.collect()
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_from_struct_type(self, spark):
-        schema = StructType([StructField('a', LongType()), StructField('b', BooleanType())])
+        schema = StructType([StructField("a", LongType()), StructField("b", BooleanType())])
         df = spark.createDataFrame([(42, True), (21, False)], schema)
         res = df.collect()
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_from_name_list(self, spark):
-        df = spark.createDataFrame([(42, True), (21, False)], ['a', 'b'])
+        df = spark.createDataFrame([(42, True), (21, False)], ["a", "b"])
         res = df.collect()
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
@@ -218,11 +218,11 @@ class TestDataFrame(object):
         df = spark.createDataFrame(data=data2, schema=schema)
         res = df.collect()
         assert res == [
-            Row(firstname='James', middlename='', lastname='Smith', id='36636', gender='M', salary=3000),
-            Row(firstname='Michael', middlename='Rose', lastname='', id='40288', gender='M', salary=4000),
-            Row(firstname='Robert', middlename='', lastname='Williams', id='42114', gender='M', salary=4000),
-            Row(firstname='Maria', middlename='Anne', lastname='Jones', id='39192', gender='F', salary=4000),
-            Row(firstname='Jen', middlename='Mary', lastname='Brown', id='', gender='F', salary=-1),
+            Row(firstname="James", middlename="", lastname="Smith", id="36636", gender="M", salary=3000),
+            Row(firstname="Michael", middlename="Rose", lastname="", id="40288", gender="M", salary=4000),
+            Row(firstname="Robert", middlename="", lastname="Williams", id="42114", gender="M", salary=4000),
+            Row(firstname="Maria", middlename="Anne", lastname="Jones", id="39192", gender="F", salary=4000),
+            Row(firstname="Jen", middlename="Mary", lastname="Brown", id="", gender="F", salary=-1),
         ]
 
     def test_df_nested_struct(self, spark):
@@ -236,18 +236,18 @@ class TestDataFrame(object):
         structureSchema = StructType(
             [
                 StructField(
-                    'name',
+                    "name",
                     StructType(
                         [
-                            StructField('firstname', StringType(), True),
-                            StructField('middlename', StringType(), True),
-                            StructField('lastname', StringType(), True),
+                            StructField("firstname", StringType(), True),
+                            StructField("middlename", StringType(), True),
+                            StructField("lastname", StringType(), True),
                         ]
                     ),
                 ),
-                StructField('id', StringType(), True),
-                StructField('gender', StringType(), True),
-                StructField('salary', IntegerType(), True),
+                StructField("id", StringType(), True),
+                StructField("gender", StringType(), True),
+                StructField("salary", IntegerType(), True),
             ]
         )
 
@@ -255,24 +255,24 @@ class TestDataFrame(object):
         res = df2.collect()
         expected_res = [
             Row(
-                name={'firstname': 'James', 'middlename': '', 'lastname': 'Smith'}, id='36636', gender='M', salary=3100
+                name={"firstname": "James", "middlename": "", "lastname": "Smith"}, id="36636", gender="M", salary=3100
             ),
             Row(
-                name={'firstname': 'Michael', 'middlename': 'Rose', 'lastname': ''}, id='40288', gender='M', salary=4300
+                name={"firstname": "Michael", "middlename": "Rose", "lastname": ""}, id="40288", gender="M", salary=4300
             ),
             Row(
-                name={'firstname': 'Robert', 'middlename': '', 'lastname': 'Williams'},
-                id='42114',
-                gender='M',
+                name={"firstname": "Robert", "middlename": "", "lastname": "Williams"},
+                id="42114",
+                gender="M",
                 salary=1400,
             ),
             Row(
-                name={'firstname': 'Maria', 'middlename': 'Anne', 'lastname': 'Jones'},
-                id='39192',
-                gender='F',
+                name={"firstname": "Maria", "middlename": "Anne", "lastname": "Jones"},
+                id="39192",
+                gender="F",
                 salary=5500,
             ),
-            Row(name={'firstname': 'Jen', 'middlename': 'Mary', 'lastname': 'Brown'}, id='', gender='F', salary=-1),
+            Row(name={"firstname": "Jen", "middlename": "Mary", "lastname": "Brown"}, id="", gender="F", salary=-1),
         ]
         if USE_ACTUAL_SPARK:
             expected_res = [Row(name=Row(**r.name), id=r.id, gender=r.gender, salary=r.salary) for r in expected_res]
@@ -281,19 +281,19 @@ class TestDataFrame(object):
         assert schema == StructType(
             [
                 StructField(
-                    'name',
+                    "name",
                     StructType(
                         [
-                            StructField('firstname', StringType(), True),
-                            StructField('middlename', StringType(), True),
-                            StructField('lastname', StringType(), True),
+                            StructField("firstname", StringType(), True),
+                            StructField("middlename", StringType(), True),
+                            StructField("lastname", StringType(), True),
                         ]
                     ),
                     True,
                 ),
-                StructField('id', StringType(), True),
-                StructField('gender', StringType(), True),
-                StructField('salary', IntegerType(), True),
+                StructField("id", StringType(), True),
+                StructField("gender", StringType(), True),
+                StructField("salary", IntegerType(), True),
             ]
         )
 
@@ -310,18 +310,18 @@ class TestDataFrame(object):
         structureSchema = StructType(
             [
                 StructField(
-                    'name',
+                    "name",
                     StructType(
                         [
-                            StructField('firstname', StringType(), True),
-                            StructField('middlename', StringType(), True),
-                            StructField('lastname', StringType(), True),
+                            StructField("firstname", StringType(), True),
+                            StructField("middlename", StringType(), True),
+                            StructField("lastname", StringType(), True),
                         ]
                     ),
                 ),
-                StructField('id', StringType(), True),
-                StructField('gender', StringType(), True),
-                StructField('salary', IntegerType(), True),
+                StructField("id", StringType(), True),
+                StructField("gender", StringType(), True),
+                StructField("salary", IntegerType(), True),
             ]
         )
 
@@ -339,7 +339,7 @@ class TestDataFrame(object):
             ),
         ).drop("id", "gender", "salary")
 
-        assert 'OtherInfo' in updatedDF.columns
+        assert "OtherInfo" in updatedDF.columns
 
     def test_array_and_map_type(self, spark):
         """Array & Map"""
@@ -347,17 +347,17 @@ class TestDataFrame(object):
         arrayStructureSchema = StructType(
             [
                 StructField(
-                    'name',
+                    "name",
                     StructType(
                         [
-                            StructField('firstname', StringType(), True),
-                            StructField('middlename', StringType(), True),
-                            StructField('lastname', StringType(), True),
+                            StructField("firstname", StringType(), True),
+                            StructField("middlename", StringType(), True),
+                            StructField("lastname", StringType(), True),
                         ]
                     ),
                 ),
-                StructField('hobbies', ArrayType(StringType()), True),
-                StructField('properties', MapType(StringType(), StringType()), True),
+                StructField("hobbies", ArrayType(StringType()), True),
+                StructField("properties", MapType(StringType(), StringType()), True),
             ]
         )
 

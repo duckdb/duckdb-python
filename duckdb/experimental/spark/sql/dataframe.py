@@ -170,7 +170,7 @@ class DataFrame:
         Examples
         --------
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
-        >>> df.withColumns({'age2': df.age + 2, 'age3': df.age + 3}).show()
+        >>> df.withColumns({"age2": df.age + 2, "age3": df.age + 3}).show()
         +---+-----+----+----+
         |age| name|age2|age3|
         +---+-----+----+----+
@@ -248,8 +248,8 @@ class DataFrame:
         Examples
         --------
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
-        >>> df = df.withColumns({'age2': df.age + 2, 'age3': df.age + 3})
-        >>> df.withColumnsRenamed({'age2': 'age4', 'age3': 'age5'}).show()
+        >>> df = df.withColumns({"age2": df.age + 2, "age3": df.age + 3})
+        >>> df.withColumnsRenamed({"age2": "age4", "age3": "age5"}).show()
         +---+-----+----+----+
         |age| name|age4|age5|
         +---+-----+----+----+
@@ -265,9 +265,7 @@ class DataFrame:
 
         unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
         if unknown_columns:
-            raise ValueError(
-                f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
-            )
+            raise ValueError(f"DataFrame does not contain column(s): {', '.join(unknown_columns)}")
 
         # Compute this only once
         old_column_names = list(colsMap.keys())
@@ -289,11 +287,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-
-
-    def transform(
-        self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
-    ) -> "DataFrame":
+    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":
         """Returns a new :class:`DataFrame`. Concise syntax for chaining custom transformations.
 
         .. versionadded:: 3.0.0
@@ -325,10 +319,8 @@ class DataFrame:
         >>> df = spark.createDataFrame([(1, 1.0), (2, 2.0)], ["int", "float"])
         >>> def cast_all_to_int(input_df):
         ...     return input_df.select([col(col_name).cast("int") for col_name in input_df.columns])
-        ...
         >>> def sort_columns_asc(input_df):
         ...     return input_df.select(*sorted(input_df.columns))
-        ...
         >>> df.transform(cast_all_to_int).transform(sort_columns_asc).show()
         +-----+---+
         |float|int|
@@ -338,8 +330,9 @@ class DataFrame:
         +-----+---+
 
         >>> def add_n(input_df, n):
-        ...     return input_df.select([(col(col_name) + n).alias(col_name)
-        ...                             for col_name in input_df.columns])
+        ...     return input_df.select(
+        ...         [(col(col_name) + n).alias(col_name) for col_name in input_df.columns]
+        ...     )
         >>> df.transform(add_n, 1).transform(add_n, n=10).show()
         +---+-----+
         |int|float|
@@ -350,14 +343,11 @@ class DataFrame:
         """
         result = func(self, *args, **kwargs)
         assert isinstance(result, DataFrame), (
-            "Func returned an instance of type [%s], "
-            "should have been DataFrame." % type(result)
+            "Func returned an instance of type [%s], should have been DataFrame." % type(result)
         )
         return result
 
-    def sort(
-        self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any
-    ) -> "DataFrame":
+    def sort(self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
@@ -380,8 +370,7 @@ class DataFrame:
         Examples
         --------
         >>> from pyspark.sql.functions import desc, asc
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
 
         Sort the DataFrame in ascending order.
 
@@ -419,8 +408,9 @@ class DataFrame:
 
         Specify multiple columns
 
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice"), (2, "Bob"), (5, "Bob")], schema=["age", "name"]
+        ... )
         >>> df.orderBy(desc("age"), "name").show()
         +---+-----+
         |age| name|
@@ -516,8 +506,7 @@ class DataFrame:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
 
         Filter by :class:`Column` instances.
 
@@ -568,13 +557,9 @@ class DataFrame:
         if len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, list):
-            projections = [
-                x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols
-            ]
+            projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
         else:
-            projections = [
-                cols.expr if isinstance(cols, Column) else ColumnExpression(cols)
-            ]
+            projections = [cols.expr if isinstance(cols, Column) else ColumnExpression(cols)]
         rel = self.relation.select(*projections)
         return DataFrame(rel, self.session)
 
@@ -636,22 +621,24 @@ class DataFrame:
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
         >>> df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")])
         >>> df3 = spark.createDataFrame([Row(age=2, name="Alice"), Row(age=5, name="Bob")])
-        >>> df4 = spark.createDataFrame([
-        ...     Row(age=10, height=80, name="Alice"),
-        ...     Row(age=5, height=None, name="Bob"),
-        ...     Row(age=None, height=None, name="Tom"),
-        ...     Row(age=None, height=None, name=None),
-        ... ])
+        >>> df4 = spark.createDataFrame(
+        ...     [
+        ...         Row(age=10, height=80, name="Alice"),
+        ...         Row(age=5, height=None, name="Bob"),
+        ...         Row(age=None, height=None, name="Tom"),
+        ...         Row(age=None, height=None, name=None),
+        ...     ]
+        ... )
 
         Inner join on columns (default)
 
-        >>> df.join(df2, 'name').select(df.name, df2.height).show()
+        >>> df.join(df2, "name").select(df.name, df2.height).show()
         +----+------+
         |name|height|
         +----+------+
         | Bob|    85|
         +----+------+
-        >>> df.join(df4, ['name', 'age']).select(df.name, df.age).show()
+        >>> df.join(df4, ["name", "age"]).select(df.name, df.age).show()
         +----+---+
         |name|age|
         +----+---+
@@ -660,8 +647,9 @@ class DataFrame:
 
         Outer join for both DataFrames on the 'name' column.
 
-        >>> df.join(df2, df.name == df2.name, 'outer').select(
-        ...     df.name, df2.height).sort(desc("name")).show()
+        >>> df.join(df2, df.name == df2.name, "outer").select(df.name, df2.height).sort(
+        ...     desc("name")
+        ... ).show()
         +-----+------+
         | name|height|
         +-----+------+
@@ -669,7 +657,7 @@ class DataFrame:
         |Alice|  NULL|
         | NULL|    80|
         +-----+------+
-        >>> df.join(df2, 'name', 'outer').select('name', 'height').sort(desc("name")).show()
+        >>> df.join(df2, "name", "outer").select("name", "height").sort(desc("name")).show()
         +-----+------+
         | name|height|
         +-----+------+
@@ -680,11 +668,9 @@ class DataFrame:
 
         Outer join for both DataFrams with multiple columns.
 
-        >>> df.join(
-        ...     df3,
-        ...     [df.name == df3.name, df.age == df3.age],
-        ...     'outer'
-        ... ).select(df.name, df3.age).show()
+        >>> df.join(df3, [df.name == df3.name, df.age == df3.age], "outer").select(
+        ...     df.name, df3.age
+        ... ).show()
         +-----+---+
         | name|age|
         +-----+---+
@@ -701,11 +687,8 @@ class DataFrame:
             on = [_to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
-            assert isinstance(
-                on[0], Expression
-            ), "on should be Column or list of Column"
+            assert isinstance(on[0], Expression), "on should be Column or list of Column"
             on = reduce(lambda x, y: x.__and__(y), cast(list[Expression], on))
-
 
         if on is None and how is None:
             result = self.relation.join(other.relation)
@@ -765,10 +748,8 @@ class DataFrame:
         Examples
         --------
         >>> from pyspark.sql import Row
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
-        >>> df2 = spark.createDataFrame(
-        ...     [Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")])
         >>> df.crossJoin(df2.select("height")).select("age", "name", "height").show()
         +---+-----+------+
         |age| name|height|
@@ -799,13 +780,13 @@ class DataFrame:
         Examples
         --------
         >>> from pyspark.sql.functions import col, desc
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
         >>> df_as1 = df.alias("df_as1")
         >>> df_as2 = df.alias("df_as2")
-        >>> joined_df = df_as1.join(df_as2, col("df_as1.name") == col("df_as2.name"), 'inner')
-        >>> joined_df.select(
-        ...     "df_as1.name", "df_as2.name", "df_as2.age").sort(desc("df_as1.name")).show()
+        >>> joined_df = df_as1.join(df_as2, col("df_as1.name") == col("df_as2.name"), "inner")
+        >>> joined_df.select("df_as1.name", "df_as2.name", "df_as2.age").sort(
+        ...     desc("df_as1.name")
+        ... ).show()
         +-----+-----+---+
         | name| name|age|
         +-----+-----+---+
@@ -853,8 +834,7 @@ class DataFrame:
 
         Examples
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
         >>> df.limit(1).show()
         +---+----+
         |age|name|
@@ -889,25 +869,21 @@ class DataFrame:
         return self._schema
 
     @overload
-    def __getitem__(self, item: Union[int, str]) -> Column:
-        ...
+    def __getitem__(self, item: Union[int, str]) -> Column: ...
 
     @overload
-    def __getitem__(self, item: Union[Column, list, tuple]) -> "DataFrame":
-        ...
+    def __getitem__(self, item: Union[Column, list, tuple]) -> "DataFrame": ...
 
-    def __getitem__(
-        self, item: Union[int, str, Column, list, tuple]
-    ) -> Union[Column, "DataFrame"]:
+    def __getitem__(self, item: Union[int, str, Column, list, tuple]) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
         Examples
         --------
-        >>> df.select(df['age']).collect()
+        >>> df.select(df["age"]).collect()
         [Row(age=2), Row(age=5)]
-        >>> df[ ["name", "age"]].collect()
+        >>> df[["name", "age"]].collect()
         [Row(name='Alice', age=2), Row(name='Bob', age=5)]
-        >>> df[ df.age > 3 ].collect()
+        >>> df[df.age > 3].collect()
         [Row(age=5, name='Bob')]
         >>> df[df[0] > 3].collect()
         [Row(age=5, name='Bob')]
@@ -932,18 +908,14 @@ class DataFrame:
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError(
-                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
-            )
+            raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
         return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
-    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
-        ...
+    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData": ...
 
     @overload
-    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData":
-        ...
+    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData": ...
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
         """Groups the :class:`DataFrame` using the specified columns,
@@ -966,8 +938,9 @@ class DataFrame:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (2, "Bob"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice"), (2, "Bob"), (2, "Bob"), (5, "Bob")], schema=["age", "name"]
+        ... )
 
         Empty grouping columns triggers a global aggregation.
 
@@ -1073,9 +1046,7 @@ class DataFrame:
 
     unionAll = union
 
-    def unionByName(
-        self, other: "DataFrame", allowMissingColumns: bool = False
-    ) -> "DataFrame":
+    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing union of rows in this and another
         :class:`DataFrame`.
 
@@ -1244,7 +1215,8 @@ class DataFrame:
         Examples
         --------
         >>> df1 = spark.createDataFrame(
-        ...         [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b",  3), ("c", 4)], ["C1", "C2"])
+        ...     [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b", 3), ("c", 4)], ["C1", "C2"]
+        ... )
         >>> df2 = spark.createDataFrame([("a", 1), ("b", 3)], ["C1", "C2"])
         >>> df1.exceptAll(df2).show()
         +---+---+
@@ -1284,11 +1256,13 @@ class DataFrame:
         Examples
         --------
         >>> from pyspark.sql import Row
-        >>> df = spark.createDataFrame([
-        ...     Row(name='Alice', age=5, height=80),
-        ...     Row(name='Alice', age=5, height=80),
-        ...     Row(name='Alice', age=10, height=80)
-        ... ])
+        >>> df = spark.createDataFrame(
+        ...     [
+        ...         Row(name="Alice", age=5, height=80),
+        ...         Row(name="Alice", age=5, height=80),
+        ...         Row(name="Alice", age=10, height=80),
+        ...     ]
+        ... )
 
         Deduplicate the same rows.
 
@@ -1302,7 +1276,7 @@ class DataFrame:
 
         Deduplicate values on 'name' and 'height' columns.
 
-        >>> df.dropDuplicates(['name', 'height']).show()
+        >>> df.dropDuplicates(["name", "height"]).show()
         +-----+---+------+
         | name|age|height|
         +-----+---+------+
@@ -1311,7 +1285,7 @@ class DataFrame:
         """
         if subset:
             rn_col = f"tmp_col_{uuid.uuid1().hex}"
-            subset_str = ', '.join([f'"{c}"' for c in subset])
+            subset_str = ", ".join([f'"{c}"' for c in subset])
             window_spec = f"OVER(PARTITION BY {subset_str}) AS {rn_col}"
             df = DataFrame(self.relation.row_number(window_spec, "*"), self.session)
             return df.filter(f"{rn_col} = 1").drop(rn_col)
@@ -1319,7 +1293,6 @@ class DataFrame:
         return self.distinct()
 
     drop_duplicates = dropDuplicates
-
 
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
@@ -1331,8 +1304,7 @@ class DataFrame:
 
         Examples
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (23, "Alice")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (23, "Alice")], ["age", "name"])
 
         Return the number of distinct rows in the :class:`DataFrame`
 
@@ -1352,8 +1324,7 @@ class DataFrame:
 
         Examples
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
 
         Return the number of rows in the :class:`DataFrame`.
 
@@ -1369,8 +1340,7 @@ class DataFrame:
         assert types_count == len(existing_columns)
 
         cast_expressions = [
-            f"{existing}::{target_type} as {existing}"
-            for existing, target_type in zip(existing_columns, types)
+            f"{existing}::{target_type} as {existing}" for existing, target_type in zip(existing_columns, types)
         ]
         cast_expressions = ", ".join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
@@ -1380,14 +1350,10 @@ class DataFrame:
         existing_columns = self.relation.columns
         column_count = len(cols)
         if column_count != len(existing_columns):
-            raise PySparkValueError(
-                message="Provided column names and number of columns in the DataFrame don't match"
-            )
+            raise PySparkValueError(message="Provided column names and number of columns in the DataFrame don't match")
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
-        projections = [
-            existing.alias(new) for existing, new in zip(existing_columns, cols)
-        ]
+        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 

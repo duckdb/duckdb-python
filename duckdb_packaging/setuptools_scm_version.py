@@ -21,8 +21,9 @@ OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
 
 
 def _main_branch_versioning():
-    from_env = os.getenv('MAIN_BRANCH_VERSIONING')
+    from_env = os.getenv("MAIN_BRANCH_VERSIONING")
     return from_env == "1" if from_env is not None else MAIN_BRANCH_VERSIONING
+
 
 def version_scheme(version: Any) -> str:
     """
@@ -65,13 +66,13 @@ def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
     # Otherwise we're at a distance and / or dirty, and need to bump
     if post != 0:
         # We're developing on top of a post-release
-        return f"{format_version(major, minor, patch, post=post+1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, post=post + 1)}.dev{distance}"
     elif rc != 0:
         # We're developing on top of an rc
-        return f"{format_version(major, minor, patch, rc=rc+1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{distance}"
     elif _main_branch_versioning():
-        return f"{format_version(major, minor+1, 0)}.dev{distance}"
-    return f"{format_version(major, minor, patch+1)}.dev{distance}"
+        return f"{format_version(major, minor + 1, 0)}.dev{distance}"
+    return f"{format_version(major, minor, patch + 1)}.dev{distance}"
 
 
 def forced_version_from_env():
@@ -117,9 +118,9 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
     version, distance, commit_hash = match.groups()
 
     # Convert version format to PEP440 format (v1.3.1-post1 -> 1.3.1.post1)
-    if '-post' in version:
+    if "-post" in version:
         version = version.replace("-post", ".post")
-    elif '-rc' in version:
+    elif "-rc" in version:
         version = version.replace("-rc", "rc")
 
     # Bump version and format according to PEP440

@@ -10,10 +10,10 @@ def compare_results(con, query, expected):
     expected = pd.DataFrame.from_dict(expected)
 
     unsorted_res = con.query(query).df()
-    print(unsorted_res, unsorted_res['a'][0].__class__)
+    print(unsorted_res, unsorted_res["a"][0].__class__)
     df_duck = con.query("select * from unsorted_res order by all").df()
-    print(df_duck, df_duck['a'][0].__class__)
-    print(expected, expected['a'][0].__class__)
+    print(df_duck, df_duck["a"][0].__class__)
+    print(expected, expected["a"][0].__class__)
     pd.testing.assert_frame_equal(df_duck, expected)
 
 
@@ -147,7 +147,7 @@ def list_test_cases():
 
 
 class TestFetchNested(object):
-    @pytest.mark.parametrize('query, expected', list_test_cases())
+    @pytest.mark.parametrize("query, expected", list_test_cases())
     def test_fetch_df_list(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 

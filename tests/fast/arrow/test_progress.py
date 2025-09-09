@@ -8,7 +8,7 @@ import sys
 
 class TestProgressBarArrow(object):
     def test_progress_arrow(self):
-        if os.name == 'nt':
+        if os.name == "nt":
             return
         np = pytest.importorskip("numpy")
         pyarrow = pytest.importorskip("pyarrow")
@@ -18,9 +18,9 @@ class TestProgressBarArrow(object):
         duckdb_conn.execute("PRAGMA progress_bar_time=1")
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
-        tbl = pyarrow.Table.from_arrays([data], ['a'])
+        tbl = pyarrow.Table.from_arrays([data], ["a"])
         rel = duckdb_conn.from_arrow(tbl)
-        result = rel.aggregate('sum(a)')
+        result = rel.aggregate("sum(a)")
         assert result.execute().fetchone()[0] == 49999995000000
         # Multiple Threads
         duckdb_conn.execute("PRAGMA threads=4")
@@ -28,9 +28,9 @@ class TestProgressBarArrow(object):
         assert result.execute().fetchone()[0] == 49999995000000
 
         # More than one batch
-        tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data], ['a']).to_batches(100))
+        tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data], ["a"]).to_batches(100))
         rel = duckdb_conn.from_arrow(tbl)
-        result = rel.aggregate('sum(a)')
+        result = rel.aggregate("sum(a)")
         assert result.execute().fetchone()[0] == 49999995000000
 
         # Single Thread
@@ -40,7 +40,7 @@ class TestProgressBarArrow(object):
         assert py_res == 49999995000000
 
     def test_progress_arrow_empty(self):
-        if os.name == 'nt':
+        if os.name == "nt":
             return
         np = pytest.importorskip("numpy")
         pyarrow = pytest.importorskip("pyarrow")
@@ -50,7 +50,7 @@ class TestProgressBarArrow(object):
         duckdb_conn.execute("PRAGMA progress_bar_time=1")
         duckdb_conn.execute("PRAGMA disable_print_progress_bar")
 
-        tbl = pyarrow.Table.from_arrays([data], ['a'])
+        tbl = pyarrow.Table.from_arrays([data], ["a"])
         rel = duckdb_conn.from_arrow(tbl)
-        result = rel.aggregate('sum(a)')
+        result = rel.aggregate("sum(a)")
         assert result.execute().fetchone()[0] == None

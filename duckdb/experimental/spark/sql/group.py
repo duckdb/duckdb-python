@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 __all__ = ["GroupedData", "Grouping"]
 
+
 def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
     expressions = ",".join(list(cols))
     group_by = str(self._grouping) if self._grouping else ""
@@ -41,6 +42,7 @@ def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
         projected_columns=projections,  # projections
     )
     return DataFrame(jdf, self.session)
+
 
 def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     def _api(self: "GroupedData", *cols: str) -> DataFrame:
@@ -56,8 +58,8 @@ class Grouping:
     def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:
         self._type = ""
         self._cols = [_to_column_expr(x) for x in cols]
-        if 'special' in kwargs:
-            special = kwargs['special']
+        if "special" in kwargs:
+            special = kwargs["special"]
             accepted_special = ["cube", "rollup"]
             assert special in accepted_special
             self._type = special
@@ -69,7 +71,7 @@ class Grouping:
     def __str__(self) -> str:
         columns = self.get_columns()
         if self._type:
-            return self._type + '(' + columns + ')'
+            return self._type + "(" + columns + ")"
         return columns
 
 
@@ -94,7 +96,8 @@ class GroupedData:
         Examples
         --------
         >>> df = spark.createDataFrame(
-        ...      [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"])
+        ...     [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"]
+        ... )
         >>> df.show()
         +---+-----+
         |age| name|
@@ -115,7 +118,7 @@ class GroupedData:
         |  Bob|    2|
         +-----+-----+
         """
-        return _api_internal(self, "count").withColumnRenamed('count_star()', 'count')
+        return _api_internal(self, "count").withColumnRenamed("count_star()", "count")
 
     @df_varargs_api
     def mean(self, *cols: str) -> DataFrame:
@@ -141,9 +144,10 @@ class GroupedData:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -156,7 +160,7 @@ class GroupedData:
 
         Group-by name, and calculate the mean of the age in each group.
 
-        >>> df.groupBy("name").avg('age').sort("name").show()
+        >>> df.groupBy("name").avg("age").sort("name").show()
         +-----+--------+
         | name|avg(age)|
         +-----+--------+
@@ -166,7 +170,7 @@ class GroupedData:
 
         Calculate the mean of the age and height in all data.
 
-        >>> df.groupBy().avg('age', 'height').show()
+        >>> df.groupBy().avg("age", "height").show()
         +--------+-----------+
         |avg(age)|avg(height)|
         +--------+-----------+
@@ -186,9 +190,10 @@ class GroupedData:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -230,9 +235,10 @@ class GroupedData:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -274,9 +280,10 @@ class GroupedData:
 
         Examples
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -308,12 +315,10 @@ class GroupedData:
         """
 
     @overload
-    def agg(self, *exprs: Column) -> DataFrame:
-        ...
+    def agg(self, *exprs: Column) -> DataFrame: ...
 
     @overload
-    def agg(self, __exprs: dict[str, str]) -> DataFrame:
-        ...
+    def agg(self, __exprs: dict[str, str]) -> DataFrame: ...
 
     def agg(self, *exprs: Union[Column, dict[str, str]]) -> DataFrame:
         """Compute aggregates and returns the result as a :class:`DataFrame`.
@@ -357,7 +362,8 @@ class GroupedData:
         >>> from pyspark.sql import functions as F
         >>> from pyspark.sql.functions import pandas_udf, PandasUDFType
         >>> df = spark.createDataFrame(
-        ...      [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"])
+        ...     [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"]
+        ... )
         >>> df.show()
         +---+-----+
         |age| name|
@@ -393,10 +399,9 @@ class GroupedData:
 
         Same as above but uses pandas UDF.
 
-        >>> @pandas_udf('int', PandasUDFType.GROUPED_AGG)  # doctest: +SKIP
+        >>> @pandas_udf("int", PandasUDFType.GROUPED_AGG)  # doctest: +SKIP
         ... def min_udf(v):
         ...     return v.min()
-        ...
         >>> df.groupBy(df.name).agg(min_udf(df.age)).sort("name").show()  # doctest: +SKIP
         +-----+------------+
         | name|min_udf(age)|

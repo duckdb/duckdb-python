@@ -10,7 +10,7 @@ from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
 SQLLOGIC_TEST_PARAMETER = "test_script_path"
-DUCKDB_ROOT_DIR = (pathlib.Path(__file__).parent.parent / 'external' / 'duckdb').resolve()
+DUCKDB_ROOT_DIR = (pathlib.Path(__file__).parent.parent / "external" / "duckdb").resolve()
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -65,8 +65,8 @@ def pytest_keyboard_interrupt(excinfo: pytest.ExceptionInfo):
     # Ensure all tests are properly cleaned up on keyboard interrupt
     from .test_sqllogic import test_sqllogic
 
-    if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
-        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
+    if hasattr(test_sqllogic, "executor") and test_sqllogic.executor:
+        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, "connection"):
             test_sqllogic.executor.database.connection.interrupt()
         test_sqllogic.executor.cleanup()
         test_sqllogic.executor = None

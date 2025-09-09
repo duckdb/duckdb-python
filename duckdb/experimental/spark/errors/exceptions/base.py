@@ -2,6 +2,7 @@ from typing import Dict, Optional, cast
 
 from ..utils import ErrorClassesReader
 
+
 class PySparkException(Exception):
     """
     Base Exception for handling errors generated from PySpark.
@@ -78,6 +79,7 @@ class PySparkException(Exception):
             return f"[{self.getErrorClass()}] {self.message}"
         else:
             return self.message
+
 
 class AnalysisException(PySparkException):
     """

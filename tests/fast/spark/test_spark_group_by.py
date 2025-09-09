@@ -175,7 +175,7 @@ class TestDataFrameGroupBy(object):
         )
 
         res = df.groupBy("name").count().columns
-        assert res == ['name', 'count']
+        assert res == ["name", "count"]
 
     def test_group_by_first_and_last(self, spark):
         df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
@@ -188,7 +188,7 @@ class TestDataFrameGroupBy(object):
             .collect()
         )
 
-        assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
+        assert res == [Row(name="Alice", first_age=None, last_age=2), Row(name="Bob", first_age=5, last_age=5)]
 
     def test_standard_deviations(self, spark):
         df = spark.createDataFrame(
@@ -265,7 +265,7 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupBy("course").agg(median("earnings").alias("m")).collect()
 
-        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', m=22000), Row(course='dotNET', m=10000)]
+        assert sorted(res, key=lambda x: x.course) == [Row(course="Java", m=22000), Row(course="dotNET", m=10000)]
 
     def test_group_by_mode(self, spark):
         df = spark.createDataFrame(
@@ -282,11 +282,11 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupby("course").agg(mode("year").alias("mode")).collect()
 
-        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', mode=2012), Row(course='dotNET', mode=2012)]
+        assert sorted(res, key=lambda x: x.course) == [Row(course="Java", mode=2012), Row(course="dotNET", mode=2012)]
 
     def test_group_by_product(self, spark):
-        df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
-        res = df.groupBy('mod3').agg(product('x').alias('product')).orderBy("mod3").collect()
+        df = spark.range(1, 10).toDF("x").withColumn("mod3", col("x") % 3)
+        res = df.groupBy("mod3").agg(product("x").alias("product")).orderBy("mod3").collect()
         assert res == [Row(mod3=0, product=162), Row(mod3=1, product=28), Row(mod3=2, product=80)]
 
     def test_group_by_skewness(self, spark):

@@ -9,8 +9,8 @@ import textwrap
 
 class TestSparkReadCSV(object):
     def test_read_csv(self, spark, tmp_path):
-        file_path = tmp_path / 'basic.csv'
-        with open(file_path, 'w+') as f:
+        file_path = tmp_path / "basic.csv"
+        with open(file_path, "w+") as f:
             f.write(
                 textwrap.dedent(
                     """

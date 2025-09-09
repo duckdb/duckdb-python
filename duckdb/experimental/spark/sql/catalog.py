@@ -37,19 +37,19 @@ class Catalog:
         self._session = session
 
     def listDatabases(self) -> list[Database]:
-        res = self._session.conn.sql('select database_name from duckdb_databases()').fetchall()
+        res = self._session.conn.sql("select database_name from duckdb_databases()").fetchall()
 
         def transform_to_database(x) -> Database:
-            return Database(name=x[0], description=None, locationUri='')
+            return Database(name=x[0], description=None, locationUri="")
 
         databases = [transform_to_database(x) for x in res]
         return databases
 
     def listTables(self) -> list[Table]:
-        res = self._session.conn.sql('select table_name, database_name, sql, temporary from duckdb_tables()').fetchall()
+        res = self._session.conn.sql("select table_name, database_name, sql, temporary from duckdb_tables()").fetchall()
 
         def transform_to_table(x) -> Table:
-            return Table(name=x[0], database=x[1], description=x[2], tableType='', isTemporary=x[3])
+            return Table(name=x[0], database=x[1], description=x[2], tableType="", isTemporary=x[3])
 
         tables = [transform_to_table(x) for x in res]
         return tables

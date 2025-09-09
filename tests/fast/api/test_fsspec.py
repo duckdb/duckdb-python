@@ -49,7 +49,7 @@ class TestReadParquet(object):
                 self._data = {"a": parquet_data, "b": parquet_data}
 
         fsspec.register_implementation("deadlock", TestFileSystem, clobber=True)
-        fs = fsspec.filesystem('deadlock')
+        fs = fsspec.filesystem("deadlock")
         duckdb_cursor.register_filesystem(fs)
 
         result = duckdb_cursor.read_parquet(file_globs=["deadlock://a", "deadlock://b"], union_by_name=True)

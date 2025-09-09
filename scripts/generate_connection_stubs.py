@@ -12,7 +12,7 @@ END_MARKER = "    # END OF CONNECTION METHODS"
 
 def generate():
     # Read the DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, 'r') as source_file:
+    with open(DUCKDB_STUBS_FILE, "r") as source_file:
         source_code = source_file.readlines()
 
     start_index = -1
@@ -35,7 +35,7 @@ def generate():
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH, 'r') as json_file:
+    with open(JSON_PATH, "r") as json_file:
         connection_methods = json.load(json_file)
 
     body = []
@@ -45,8 +45,8 @@ def generate():
         for arg in arguments:
             argument = f"{arg['name']}: {arg['type']}"
             # Add the default argument if present
-            if 'default' in arg:
-                default = arg['default']
+            if "default" in arg:
+                default = arg["default"]
                 argument += f" = {default}"
             result.append(argument)
         return result
@@ -57,13 +57,13 @@ def generate():
         else:
             definition: str = ""
         definition += f"def {name}("
-        arguments = ['self']
-        if 'args' in method:
-            arguments.extend(create_arguments(method['args']))
-        if 'kwargs' in method:
-            if not any(x.startswith('*') for x in arguments):
+        arguments = ["self"]
+        if "args" in method:
+            arguments.extend(create_arguments(method["args"]))
+        if "kwargs" in method:
+            if not any(x.startswith("*") for x in arguments):
                 arguments.append("*")
-            arguments.extend(create_arguments(method['kwargs']))
+            arguments.extend(create_arguments(method["kwargs"]))
         definition += ", ".join(arguments)
         definition += ")"
         definition += f" -> {method['return']}: ..."
@@ -71,28 +71,28 @@ def generate():
 
     # We have "duplicate" methods, which are overloaded.
     # We keep note of them to add the @overload decorator.
-    overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m['name'], list)}
+    overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m["name"], list)}
 
     for method in connection_methods:
-        if isinstance(method['name'], list):
-            names = method['name']
+        if isinstance(method["name"], list):
+            names = method["name"]
         else:
-            names = [method['name']]
+            names = [method["name"]]
         for name in names:
             body.append(create_definition(name, method, name in overloaded_methods))
 
     # ---- End of generation code ----
 
-    with_newlines = ['    ' + x + '\n' for x in body]
+    with_newlines = ["    " + x + "\n" for x in body]
     # Recreate the file content by concatenating all the pieces together
 
     new_content = start_section + with_newlines + end_section
 
     # Write out the modified DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, 'w') as source_file:
+    with open(DUCKDB_STUBS_FILE, "w") as source_file:
         source_file.write("".join(new_content))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise ValueError("Please use 'generate_connection_code.py' instead of running the individual script(s)")
     # generate()

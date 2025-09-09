@@ -269,7 +269,7 @@ class TestRAPIAggregations(object):
 
     def test_string_agg(self, table):
         result = table.string_agg("s", sep="/").execute().fetchall()
-        expected = [('h/e/l/l/o/,/wor/ld',)]
+        expected = [("h/e/l/l/o/,/wor/ld",)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
         result = (
@@ -278,7 +278,7 @@ class TestRAPIAggregations(object):
             .execute()
             .fetchall()
         )
-        expected = [(1, 'h/e/l'), (2, 'l/o'), (3, ',/wor/ld')]
+        expected = [(1, "h/e/l"), (2, "l/o"), (3, ",/wor/ld")]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 

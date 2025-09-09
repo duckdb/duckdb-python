@@ -301,7 +301,7 @@ class TestSparkFunctionsNumeric(object):
         # Have to use a groupby to test this as agg is not yet implemented without
         df = spark.createDataFrame(zip(a, b, ["group1"] * N), ["a", "b", "g"])
 
-        res = df.groupBy("g").agg(sf.corr("a", "b").alias('c')).collect()
+        res = df.groupBy("g").agg(sf.corr("a", "b").alias("c")).collect()
         assert pytest.approx(res[0].c) == 1
 
     def test_cot(self, spark):
@@ -330,7 +330,7 @@ class TestSparkFunctionsNumeric(object):
 
     def test_random(self, spark):
         df = spark.range(0, 2, 1)
-        res = df.withColumn('rand', sf.rand()).collect()
+        res = df.withColumn("rand", sf.rand()).collect()
 
         assert isinstance(res[0].rand, float)
         assert res[0].rand >= 0 and res[0].rand < 1

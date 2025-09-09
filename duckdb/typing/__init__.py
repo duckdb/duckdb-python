@@ -26,7 +26,7 @@ from _duckdb.typing import (
     USMALLINT,
     UTINYINT,
     UUID,
-    VARCHAR
+    VARCHAR,
 )
 
 __all__ = [
@@ -57,5 +57,5 @@ __all__ = [
     "USMALLINT",
     "UTINYINT",
     "UUID",
-    "VARCHAR"
+    "VARCHAR",
 ]

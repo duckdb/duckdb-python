@@ -34,7 +34,7 @@ class TestArrowBufferSize(object):
             return x
 
         con = duckdb.connect()
-        con.create_function('just_return', just_return, [VARCHAR], VARCHAR, type='arrow')
+        con.create_function("just_return", just_return, [VARCHAR], VARCHAR, type="arrow")
 
         res = con.query("select just_return('bla')").fetch_arrow_table()
 

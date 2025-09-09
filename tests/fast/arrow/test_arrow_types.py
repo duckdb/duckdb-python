@@ -17,7 +17,7 @@ class TestArrowTypes(object):
         inputs = [pa.array([None, None, None], type=pa.null())]
         arrow_table = pa.Table.from_arrays(inputs, schema=schema)
 
-        assert rel['data'] == arrow_table['data']
+        assert rel["data"] == arrow_table["data"]
 
     def test_invalid_struct(self, duckdb_cursor):
         empty_struct_type = pa.struct([])
@@ -27,7 +27,7 @@ class TestArrowTypes(object):
         arrow_table = pa.Table.from_arrays([empty_array], schema=pa.schema([("data", empty_struct_type)]))
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='Attempted to convert a STRUCT with no fields to DuckDB which is not supported',
+            match="Attempted to convert a STRUCT with no fields to DuckDB which is not supported",
         ):
             duckdb_cursor.sql("select * from arrow_table").fetchall()
 
@@ -39,9 +39,9 @@ class TestArrowTypes(object):
         arrow_table = pa.Table.from_arrays([sparse_union_array], schema=pa.schema([("data", sparse_union_array.type)]))
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='Attempted to convert a UNION with no fields to DuckDB which is not supported',
+            match="Attempted to convert a UNION with no fields to DuckDB which is not supported",
         ):
-            duckdb_cursor.register('invalid_union', arrow_table)
+            duckdb_cursor.register("invalid_union", arrow_table)
 
             res = duckdb_cursor.sql("select * from invalid_union").fetchall()
             print(res)

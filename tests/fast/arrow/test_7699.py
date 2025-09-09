@@ -22,4 +22,4 @@ class Test7699(object):
 
         rel = duckdb_cursor.sql("select * from df1234")
         res = rel.fetchall()
-        assert res == [('K',), ('L',), ('K',), ('L',), ('M',)]
+        assert res == [("K",), ("L",), ("K",), ("L",), ("M",)]

@@ -1,6 +1,7 @@
 """
 Tests for duckdb_pytooling versioning functionality.
 """
+
 import os
 import unittest
 
@@ -109,26 +110,26 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
         assert _bump_version("1.2.3", 0, False) == "1.2.3"
         assert _bump_version("1.2.3.post1", 0, False) == "1.2.3.post1"
 
-    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
+    @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_with_distance(self):
         """Test bump_version with distance from tag."""
         assert _bump_version("1.2.3", 5, False) == "1.3.0.dev5"
-        
+
         # Post-release development
         assert _bump_version("1.2.3.post1", 3, False) == "1.2.3.post2.dev3"
 
-    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '0'})
+    @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "0"})
     def test_bump_version_release_branch(self):
         """Test bump_version on bugfix branch."""
         assert _bump_version("1.2.3", 5, False) == "1.2.4.dev5"
 
-    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
+    @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_dirty(self):
         """Test bump_version with dirty working directory."""
         assert _bump_version("1.2.3", 0, True) == "1.3.0.dev0"
         assert _bump_version("1.2.3.post1", 0, True) == "1.2.3.post2.dev0"
 
-    @patch.dict('os.environ', {'MAIN_BRANCH_VERSIONING': '1'})
+    @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_version_scheme_function(self):
         """Test the version_scheme function that setuptools_scm calls."""
         # Mock setuptools_scm version object
@@ -136,7 +137,7 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
         mock_version.tag = "1.2.3"
         mock_version.distance = 5
         mock_version.dirty = False
-        
+
         result = version_scheme(mock_version)
         assert result == "1.3.0.dev5"
 
@@ -149,48 +150,45 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
 class TestGitOperations(unittest.TestCase):
     """Test git-related operations (mocked)."""
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_get_current_version_success(self, mock_run):
         """Test successful current version retrieval."""
         mock_run.return_value.stdout = "v1.2.3\n"
         mock_run.return_value.check = True
-        
+
         result = get_current_version()
         assert result == "1.2.3"
         mock_run.assert_called_once_with(
-            ["git", "describe", "--tags", "--abbrev=0"],
-            capture_output=True,
-            text=True,
-            check=True
+            ["git", "describe", "--tags", "--abbrev=0"], capture_output=True, text=True, check=True
         )
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_get_current_version_with_post_release(self, mock_run):
         """Test current version retrieval with post-release tag."""
         mock_run.return_value.stdout = "v1.2.3-post1\n"
         mock_run.return_value.check = True
-        
+
         result = get_current_version()
         assert result == "1.2.3.post1"
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_get_current_version_no_tags(self, mock_run):
         """Test current version retrieval when no tags exist."""
         mock_run.side_effect = subprocess.CalledProcessError(1, "git")
-        
+
         result = get_current_version()
         assert result is None
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_get_git_describe_success(self, mock_run):
         """Test successful git describe."""
         mock_run.return_value.stdout = "v1.2.3-5-g1234567\n"
         mock_run.return_value.check = True
-        
+
         result = get_git_describe()
         assert result == "v1.2.3-5-g1234567"
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_get_git_describe_no_tags(self, mock_run):
         """Test git describe when no tags exist."""
         mock_run.side_effect = subprocess.CalledProcessError(1, "git")
@@ -202,21 +200,21 @@ class TestGitOperations(unittest.TestCase):
 class TestEnvironmentVariableHandling(unittest.TestCase):
     """Test environment variable handling in setuptools_scm integration."""
 
-    @patch.dict('os.environ', {'OVERRIDE_GIT_DESCRIBE': 'v1.2.3-5-g1234567'})
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-5-g1234567"})
     def test_override_git_describe_basic(self):
         """Test OVERRIDE_GIT_DESCRIBE with basic format."""
         forced_version_from_env()
         # Check that the environment variable was processed
-        assert 'SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB' in os.environ
+        assert "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB" in os.environ
 
-    @patch.dict('os.environ', {'OVERRIDE_GIT_DESCRIBE': 'v1.2.3-post1-3-g1234567'})
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-post1-3-g1234567"})
     def test_override_git_describe_post_release(self):
         """Test OVERRIDE_GIT_DESCRIBE with post-release format."""
         forced_version_from_env()
         # Check that post-release was converted correctly
-        assert 'SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB' in os.environ
+        assert "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB" in os.environ
 
-    @patch.dict('os.environ', {'OVERRIDE_GIT_DESCRIBE': 'invalid-format'})
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "invalid-format"})
     def test_override_git_describe_invalid(self):
         """Test OVERRIDE_GIT_DESCRIBE with invalid format."""
         with pytest.raises(ValueError, match="Invalid git describe override"):

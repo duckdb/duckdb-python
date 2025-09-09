@@ -12,6 +12,7 @@ This module wraps the scikit-build-core build backend because:
 
 Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 """
+
 import sys
 import os
 import subprocess
@@ -39,7 +40,7 @@ _SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
 _FORCED_PEP440_VERSION = forced_version_from_env()
 
 
-def _log(msg: str, is_error: bool=False) -> None:
+def _log(msg: str, is_error: bool = False) -> None:
     """Log a message with build backend prefix.
 
     Args:
@@ -84,9 +85,9 @@ def _duckdb_submodule_path() -> Path:
                     cur_module_reponame = None
                     cur_module_path = None
             elif line.strip().startswith("path"):
-                cur_module_path = line.split('=')[-1].strip()
+                cur_module_path = line.split("=")[-1].strip()
             elif line.strip().startswith("url"):
-                basename = os.path.basename(line.split('=')[-1].strip())
+                basename = os.path.basename(line.split("=")[-1].strip())
                 cur_module_reponame = basename[:-4] if basename.endswith(".git") else basename
         if cur_module_reponame is not None and cur_module_path is not None:
             modules[cur_module_reponame] = cur_module_path
@@ -115,7 +116,7 @@ def _version_file_path() -> Path:
     return package_dir / _DUCKDB_VERSION_FILENAME
 
 
-def _write_duckdb_long_version(long_version: str)-> None:
+def _write_duckdb_long_version(long_version: str) -> None:
     """Write the given version string to a file in the same directory as this module."""
     _version_file_path().write_text(long_version, encoding="utf-8")
 
@@ -126,7 +127,7 @@ def _read_duckdb_long_version() -> str:
 
 
 def _skbuild_config_add(
-        key: str, value: Union[list, str], config_settings: dict[str, Union[list[str],str]], fail_if_exists: bool=False
+    key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]], fail_if_exists: bool = False
 ):
     """Add or modify a configuration setting for scikit-build-core.
 
@@ -178,7 +179,7 @@ def _skbuild_config_add(
         )
 
 
-def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str],str]]] = None) -> str:
+def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str], str]]] = None) -> str:
     """Build a source distribution using the DuckDB submodule.
 
     This function extracts the DuckDB version from either the git submodule and saves it
@@ -207,9 +208,9 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[
 
 
 def build_wheel(
-        wheel_directory: str,
-        config_settings: Optional[dict[str, Union[list[str],str]]] = None,
-        metadata_directory: Optional[str] = None,
+    wheel_directory: str,
+    config_settings: Optional[dict[str, Union[list[str], str]]] = None,
+    metadata_directory: Optional[str] = None,
 ) -> str:
     """Build a wheel from either git submodule or extracted sdist sources.
 
@@ -245,7 +246,6 @@ def build_wheel(
         _log(f"{_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE} set to {duckdb_version}")
     else:
         _log("No explicit DuckDB submodule version provided. Letting CMake figure it out.")
-
 
     return skbuild_build_wheel(wheel_directory, config_settings=config_settings, metadata_directory=metadata_directory)
 

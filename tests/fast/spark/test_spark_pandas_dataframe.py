@@ -23,9 +23,9 @@ from pandas.testing import assert_frame_equal
 
 @pytest.fixture
 def pandasDF(spark):
-    data = [['Scott', 50], ['Jeff', 45], ['Thomas', 54], ['Ann', 34]]
+    data = [["Scott", 50], ["Jeff", 45], ["Thomas", 54], ["Ann", 34]]
     # Create the pandas DataFrame
-    df = pd.DataFrame(data, columns=['Name', 'Age'])
+    df = pd.DataFrame(data, columns=["Name", "Age"])
     yield df
 
 
@@ -35,10 +35,10 @@ class TestPandasDataFrame(object):
         res = sparkDF.collect()
         sparkDF.show()
         expected = [
-            Row(Name='Scott', Age=50),
-            Row(Name='Jeff', Age=45),
-            Row(Name='Thomas', Age=54),
-            Row(Name='Ann', Age=34),
+            Row(Name="Scott", Age=50),
+            Row(Name="Jeff", Age=45),
+            Row(Name="Thomas", Age=54),
+            Row(Name="Ann", Age=34),
         ]
         assert res == expected
 

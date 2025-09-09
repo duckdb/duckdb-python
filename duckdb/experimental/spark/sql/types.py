@@ -632,11 +632,9 @@ class MapType(DataType):
 
     Examples
     --------
-    >>> (MapType(StringType(), IntegerType())
-    ...        == MapType(StringType(), IntegerType(), True))
+    >>> (MapType(StringType(), IntegerType()) == MapType(StringType(), IntegerType(), True))
     True
-    >>> (MapType(StringType(), IntegerType(), False)
-    ...        == MapType(StringType(), FloatType()))
+    >>> (MapType(StringType(), IntegerType(), False) == MapType(StringType(), FloatType()))
     False
     """
 
@@ -697,11 +695,9 @@ class StructField(DataType):
 
     Examples
     --------
-    >>> (StructField("f1", StringType(), True)
-    ...      == StructField("f1", StringType(), True))
+    >>> (StructField("f1", StringType(), True) == StructField("f1", StringType(), True))
     True
-    >>> (StructField("f1", StringType(), True)
-    ...      == StructField("f2", StringType(), True))
+    >>> (StructField("f1", StringType(), True) == StructField("f2", StringType(), True))
     False
     """
 
@@ -743,7 +739,7 @@ class StructField(DataType):
         return self.dataType.fromInternal(obj)
 
     def typeName(self) -> str:  # type: ignore[override]
-        raise TypeError("StructField does not have typeName. " "Use typeName on its type explicitly instead.")
+        raise TypeError("StructField does not have typeName. Use typeName on its type explicitly instead.")
 
 
 class StructType(DataType):
@@ -767,8 +763,9 @@ class StructType(DataType):
     >>> struct1 == struct2
     True
     >>> struct1 = StructType([StructField("f1", StringType(), True)])
-    >>> struct2 = StructType([StructField("f1", StringType(), True),
-    ...     StructField("f2", IntegerType(), False)])
+    >>> struct2 = StructType(
+    ...     [StructField("f1", StringType(), True), StructField("f2", IntegerType(), False)]
+    ... )
     >>> struct1 == struct2
     False
     """
@@ -796,12 +793,10 @@ class StructType(DataType):
         data_type: Union[str, DataType],
         nullable: bool = True,
         metadata: Optional[dict[str, Any]] = None,
-    ) -> "StructType":
-        ...
+    ) -> "StructType": ...
 
     @overload
-    def add(self, field: StructField) -> "StructType":
-        ...
+    def add(self, field: StructField) -> "StructType": ...
 
     def add(
         self,
@@ -1091,7 +1086,6 @@ def _create_row(fields: Union["Row", list[str]], values: Union[tuple[Any, ...], 
 
 
 class Row(tuple):
-
     """
     A row in :class:`DataFrame`.
     The fields in it can be accessed:
@@ -1115,13 +1109,13 @@ class Row(tuple):
     >>> row = Row(name="Alice", age=11)
     >>> row
     Row(name='Alice', age=11)
-    >>> row['name'], row['age']
+    >>> row["name"], row["age"]
     ('Alice', 11)
     >>> row.name, row.age
     ('Alice', 11)
-    >>> 'name' in row
+    >>> "name" in row
     True
-    >>> 'wrong_key' in row
+    >>> "wrong_key" in row
     False
 
     Row also can be used to create another Row like class, then it
@@ -1130,9 +1124,9 @@ class Row(tuple):
     >>> Person = Row("name", "age")
     >>> Person
     <Row('name', 'age')>
-    >>> 'name' in Person
+    >>> "name" in Person
     True
-    >>> 'wrong_key' in Person
+    >>> "wrong_key" in Person
     False
     >>> Person("Alice", 11)
     Row(name='Alice', age=11)
@@ -1147,16 +1141,14 @@ class Row(tuple):
     """
 
     @overload
-    def __new__(cls, *args: str) -> "Row":
-        ...
+    def __new__(cls, *args: str) -> "Row": ...
 
     @overload
-    def __new__(cls, **kwargs: Any) -> "Row":
-        ...
+    def __new__(cls, **kwargs: Any) -> "Row": ...
 
     def __new__(cls, *args: Optional[str], **kwargs: Optional[Any]) -> "Row":
         if args and kwargs:
-            raise ValueError("Can not use both args " "and kwargs to create Row")
+            raise ValueError("Can not use both args and kwargs to create Row")
         if kwargs:
             # create row objects
             row = tuple.__new__(cls, list(kwargs.values()))
@@ -1185,12 +1177,12 @@ class Row(tuple):
 
         Examples
         --------
-        >>> Row(name="Alice", age=11).asDict() == {'name': 'Alice', 'age': 11}
+        >>> Row(name="Alice", age=11).asDict() == {"name": "Alice", "age": 11}
         True
-        >>> row = Row(key=1, value=Row(name='a', age=2))
-        >>> row.asDict() == {'key': 1, 'value': Row(name='a', age=2)}
+        >>> row = Row(key=1, value=Row(name="a", age=2))
+        >>> row.asDict() == {"key": 1, "value": Row(name="a", age=2)}
         True
-        >>> row.asDict(True) == {'key': 1, 'value': {'name': 'a', 'age': 2}}
+        >>> row.asDict(True) == {"key": 1, "value": {"name": "a", "age": 2}}
         True
         """
         if not hasattr(self, "__fields__"):
@@ -1223,7 +1215,7 @@ class Row(tuple):
         """create new Row object"""
         if len(args) > len(self):
             raise ValueError(
-                "Can not create Row with fields %s, expected %d values " "but got %s" % (self, len(self), args)
+                "Can not create Row with fields %s, expected %d values but got %s" % (self, len(self), args)
             )
         return _create_row(self, args)
 

@@ -8,9 +8,9 @@ import time
 class TestPartitionedPandasScan(object):
     def test_parallel_pandas(self, duckdb_cursor):
         con = duckdb.connect()
-        df = pd.DataFrame({'i': numpy.arange(10000000)})
+        df = pd.DataFrame({"i": numpy.arange(10000000)})
 
-        con.register('df', df)
+        con.register("df", df)
 
         seq_results = con.execute("SELECT SUM(i) FROM df").fetchall()
 

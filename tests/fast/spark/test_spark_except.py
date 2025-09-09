@@ -19,7 +19,6 @@ def df2(spark):
 
 class TestDataFrameIntersect:
     def test_exceptAll(self, spark, df, df2):
-
         df3 = df.exceptAll(df2).sort(*df.columns)
         res = df3.collect()
 

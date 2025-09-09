@@ -5,7 +5,6 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 class TestSparkUDF(object):
     def test_udf_register(self, spark):
-
         def to_upper_fn(s: str) -> str:
             return s.upper()
 

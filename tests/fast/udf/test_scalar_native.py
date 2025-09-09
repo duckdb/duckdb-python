@@ -11,8 +11,8 @@ class TestNativeUDF(object):
         def passthrough(x):
             return x
 
-        duckdb.create_function('default_conn_passthrough', passthrough, [BIGINT], BIGINT)
-        res = duckdb.sql('select default_conn_passthrough(5)').fetchall()
+        duckdb.create_function("default_conn_passthrough", passthrough, [BIGINT], BIGINT)
+        res = duckdb.sql("select default_conn_passthrough(5)").fetchall()
         assert res == [(5,)]
 
     def test_basic_use(self):
@@ -22,15 +22,15 @@ class TestNativeUDF(object):
             return x + 1
 
         con = duckdb.connect()
-        con.create_function('plus_one', plus_one, [BIGINT], BIGINT)
-        assert [(6,)] == con.sql('select plus_one(5)').fetchall()
+        con.create_function("plus_one", plus_one, [BIGINT], BIGINT)
+        assert [(6,)] == con.sql("select plus_one(5)").fetchall()
 
-        range_table = con.table_function('range', [5000])
-        res = con.sql('select plus_one(i) from range_table tbl(i)').fetchall()
+        range_table = con.table_function("range", [5000])
+        res = con.sql("select plus_one(i) from range_table tbl(i)").fetchall()
         assert len(res) == 5000
 
         vector_size = duckdb.__standard_vector_size__
-        res = con.sql(f'select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})')
+        res = con.sql(f"select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})")
         assert len(res) == (vector_size * 11)
 
     def test_passthrough(self):
@@ -38,10 +38,10 @@ class TestNativeUDF(object):
             return x
 
         con = duckdb.connect()
-        con.create_function('passthrough', passthrough, [BIGINT], BIGINT)
+        con.create_function("passthrough", passthrough, [BIGINT], BIGINT)
         assert (
-            con.sql('select passthrough(i) from range(5000) tbl(i)').fetchall()
-            == con.sql('select * from range(5000)').fetchall()
+            con.sql("select passthrough(i) from range(5000) tbl(i)").fetchall()
+            == con.sql("select * from range(5000)").fetchall()
         )
 
     def test_execute(self):
@@ -49,8 +49,8 @@ class TestNativeUDF(object):
             return x % 2
 
         con = duckdb.connect()
-        con.create_function('modulo_op', func, [BIGINT], TINYINT)
-        res = con.execute('select modulo_op(?)', [5]).fetchall()
+        con.create_function("modulo_op", func, [BIGINT], TINYINT)
+        res = con.execute("select modulo_op(?)", [5]).fetchall()
         assert res == [(1,)]
 
     def test_cast_output(self):
@@ -58,7 +58,7 @@ class TestNativeUDF(object):
             return x
 
         con = duckdb.connect()
-        con.create_function('casts_from_string', takes_string, [VARCHAR], BIGINT)
+        con.create_function("casts_from_string", takes_string, [VARCHAR], BIGINT)
 
         res = con.sql("select casts_from_string('42')").fetchall()
         assert res == [(42,)]
@@ -71,13 +71,13 @@ class TestNativeUDF(object):
             return a + b
 
         con = duckdb.connect()
-        con.create_function('py_concatenate', concatenate, None, VARCHAR)
+        con.create_function("py_concatenate", concatenate, None, VARCHAR)
         res = con.sql(
             """
             select py_concatenate('5','3');
         """
         ).fetchall()
-        assert res[0][0] == '53'
+        assert res[0][0] == "53"
 
     def test_detected_return_type(self):
         def add_nums(*args) -> int:
@@ -87,7 +87,7 @@ class TestNativeUDF(object):
             return sum
 
         con = duckdb.connect()
-        con.create_function('add_nums', add_nums)
+        con.create_function("add_nums", add_nums)
         res = con.sql(
             """
             select add_nums(5,3,2,1);
@@ -101,20 +101,20 @@ class TestNativeUDF(object):
             return amount
 
         con = duckdb.connect()
-        con.create_function('varargs', variable_args, None, BIGINT)
+        con.create_function("varargs", variable_args, None, BIGINT)
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
 
     def test_return_incorrectly_typed_object(self):
         def returns_duckdb() -> int:
-            return 'duckdb'
+            return "duckdb"
 
         con = duckdb.connect()
-        con.create_function('fastest_database_in_the_west', returns_duckdb)
+        con.create_function("fastest_database_in_the_west", returns_duckdb)
         with pytest.raises(
             duckdb.InvalidInputException, match="Failed to cast value: Could not convert string 'duckdb' to INT64"
         ):
-            res = con.sql('select fastest_database_in_the_west()').fetchall()
+            res = con.sql("select fastest_database_in_the_west()").fetchall()
 
     def test_nulls(self):
         def five_if_null(x):
@@ -123,12 +123,12 @@ class TestNativeUDF(object):
             return x
 
         con = duckdb.connect()
-        con.create_function('null_test', five_if_null, [BIGINT], BIGINT, null_handling="SPECIAL")
-        res = con.sql('select null_test(NULL)').fetchall()
+        con.create_function("null_test", five_if_null, [BIGINT], BIGINT, null_handling="SPECIAL")
+        res = con.sql("select null_test(NULL)").fetchall()
         assert res == [(5,)]
 
     @pytest.mark.parametrize(
-        'pair',
+        "pair",
         [
             (TINYINT, -129),
             (TINYINT, 128),
@@ -159,26 +159,26 @@ class TestNativeUDF(object):
             return overflowing_value
 
         con = duckdb.connect()
-        con.create_function('return_overflow', return_overflow, None, duckdb_type)
+        con.create_function("return_overflow", return_overflow, None, duckdb_type)
         with pytest.raises(duckdb.InvalidInputException):
-            rel = con.sql('select return_overflow()')
+            rel = con.sql("select return_overflow()")
             res = rel.fetchall()
             print(duckdb_type)
             print(res)
 
     def test_structs(self):
         def add_extra_column(original):
-            original['a'] = 200
-            original['c'] = 0
+            original["a"] = 200
+            original["c"] = 0
             return original
 
         con = duckdb.connect()
-        range_table = con.table_function('range', [5000])
+        range_table = con.table_function("range", [5000])
         con.create_function(
             "append_field",
             add_extra_column,
-            [duckdb.struct_type({'a': BIGINT, 'b': BIGINT})],
-            duckdb.struct_type({'a': BIGINT, 'b': BIGINT, 'c': BIGINT}),
+            [duckdb.struct_type({"a": BIGINT, "b": BIGINT})],
+            duckdb.struct_type({"a": BIGINT, "b": BIGINT, "c": BIGINT}),
         )
 
         res = con.sql(
@@ -205,17 +205,17 @@ class TestNativeUDF(object):
             return result
 
         con.create_function(
-            'swap_keys',
+            "swap_keys",
             swap_keys,
-            [con.struct_type({'a': BIGINT, 'b': VARCHAR})],
-            con.struct_type({'a': VARCHAR, 'b': BIGINT}),
+            [con.struct_type({"a": BIGINT, "b": VARCHAR})],
+            con.struct_type({"a": VARCHAR, "b": BIGINT}),
         )
         res = con.sql(
             """
         select swap_keys({'a': 42, 'b': 'answer_to_life'})
         """
         ).fetchall()
-        assert res == [({'a': 'answer_to_life', 'b': 42},)]
+        assert res == [({"a": "answer_to_life", "b": 42},)]
 
     def test_struct_different_field_order(self, duckdb_cursor):
         def example():

@@ -14,14 +14,14 @@ class TestSparkSession(object):
         session = SparkSession.builder.getOrCreate()
 
     def test_spark_session(self):
-        session = SparkSession.builder.master("local[1]").appName('SparkByExamples.com').getOrCreate()
+        session = SparkSession.builder.master("local[1]").appName("SparkByExamples.com").getOrCreate()
 
     def test_new_session(self, spark: SparkSession):
         session = spark.newSession()
 
-    @pytest.mark.skip(reason='not tested yet')
+    @pytest.mark.skip(reason="not tested yet")
     def test_retrieve_same_session(self):
-        spark = SparkSession.builder.master('test').appName('test2').getOrCreate()
+        spark = SparkSession.builder.master("test").appName("test2").getOrCreate()
         spark2 = SparkSession.builder.getOrCreate()
         # Same connection should be returned
         assert spark == spark2
@@ -49,7 +49,7 @@ class TestSparkSession(object):
     @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="Different version numbers")
     def test_version(self, spark):
         version = spark.version
-        assert version == '1.0.0'
+        assert version == "1.0.0"
 
     def test_get_active_session(self, spark):
         active_session = spark.getActiveSession()
@@ -58,7 +58,7 @@ class TestSparkSession(object):
         reader = spark.read
 
     def test_write(self, spark):
-        df = spark.sql('select 42')
+        df = spark.sql("select 42")
         writer = df.write
 
     def test_read_stream(self, spark):
@@ -68,7 +68,7 @@ class TestSparkSession(object):
         context = spark.sparkContext
 
     def test_sql(self, spark):
-        df = spark.sql('select 42')
+        df = spark.sql("select 42")
 
     def test_stop_context(self, spark):
         context = spark.sparkContext
@@ -78,8 +78,8 @@ class TestSparkSession(object):
         USE_ACTUAL_SPARK, reason="Can't create table with the local PySpark setup in the CI/CD pipeline"
     )
     def test_table(self, spark):
-        spark.sql('create table tbl(a varchar(10))')
-        df = spark.table('tbl')
+        spark.sql("create table tbl(a varchar(10))")
+        df = spark.table("tbl")
 
     def test_range(self, spark):
         res_1 = spark.range(3).collect()

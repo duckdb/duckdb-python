@@ -11,11 +11,11 @@ from importlib import import_module
 
 try:
     # need to ignore warnings that might be thrown deep inside pandas's import tree (from dateutil in this case)
-    warnings.simplefilter(action='ignore', category=DeprecationWarning)
-    pandas = import_module('pandas')
+    warnings.simplefilter(action="ignore", category=DeprecationWarning)
+    pandas = import_module("pandas")
     warnings.resetwarnings()
 
-    pyarrow_dtype = getattr(pandas, 'ArrowDtype', None)
+    pyarrow_dtype = getattr(pandas, "ArrowDtype", None)
 except ImportError:
     pandas = None
     pyarrow_dtype = None
@@ -65,7 +65,7 @@ def pytest_collection_modifyitems(config, items):
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
-    connection = duckdb.connect('')
+    connection = duckdb.connect("")
     cursor = connection.cursor()
     return cursor
 
@@ -99,7 +99,7 @@ def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
 def pandas_2_or_higher():
     from packaging.version import Version
 
-    return Version(import_pandas().__version__) >= Version('2.0.0')
+    return Version(import_pandas().__version__) >= Version("2.0.0")
 
 
 def pandas_supports_arrow_backend():
@@ -124,7 +124,7 @@ def arrow_pandas_df(*args, **kwargs):
 
 class NumpyPandas:
     def __init__(self) -> None:
-        self.backend = 'numpy_nullable'
+        self.backend = "numpy_nullable"
         self.DataFrame = numpy_pandas_df
         self.pandas = import_pandas()
 
@@ -173,11 +173,11 @@ class ArrowPandas:
     def __init__(self) -> None:
         self.pandas = import_pandas()
         if pandas_2_or_higher() and pyarrow_dtypes_enabled:
-            self.backend = 'pyarrow'
+            self.backend = "pyarrow"
             self.DataFrame = arrow_pandas_df
         else:
             # For backwards compatible reasons, just mock regular pandas
-            self.backend = 'numpy_nullable'
+            self.backend = "numpy_nullable"
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
 
@@ -187,7 +187,7 @@ class ArrowPandas:
 
 @pytest.fixture(scope="function")
 def require():
-    def _require(extension_name, db_name=''):
+    def _require(extension_name, db_name=""):
         # Paths to search for extensions
 
         build = normpath(join(dirname(__file__), "../../../build/"))
@@ -199,11 +199,11 @@ def require():
         ]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions
-        if 'DUCKDB_PYTHON_TEST_EXTENSION_PATH' in os.environ:
-            env_extension_path = os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_PATH')
-            env_extension_path = env_extension_path.rstrip('/')
-            extension_search_patterns.append(env_extension_path + '/*/*.duckdb_extension')
-            extension_search_patterns.append(env_extension_path + '/*.duckdb_extension')
+        if "DUCKDB_PYTHON_TEST_EXTENSION_PATH" in os.environ:
+            env_extension_path = os.getenv("DUCKDB_PYTHON_TEST_EXTENSION_PATH")
+            env_extension_path = env_extension_path.rstrip("/")
+            extension_search_patterns.append(env_extension_path + "/*/*.duckdb_extension")
+            extension_search_patterns.append(env_extension_path + "/*.duckdb_extension")
 
         extension_paths_found = []
         for pattern in extension_search_patterns:
@@ -215,39 +215,39 @@ def require():
         for path in extension_paths_found:
             print(path)
             if path.endswith(extension_name + ".duckdb_extension"):
-                conn = duckdb.connect(db_name, config={'allow_unsigned_extensions': 'true'})
+                conn = duckdb.connect(db_name, config={"allow_unsigned_extensions": "true"})
                 conn.execute(f"LOAD '{path}'")
                 return conn
-        pytest.skip(f'could not load {extension_name}')
+        pytest.skip(f"could not load {extension_name}")
 
     return _require
 
 
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def spark():
     from spark_namespace import USE_ACTUAL_SPARK
 
-    if not hasattr(spark, 'session'):
+    if not hasattr(spark, "session"):
         # Cache the import
         from spark_namespace.sql import SparkSession as session
 
         spark.session = session
 
-    return spark.session.builder.appName('pyspark').getOrCreate()
+    return spark.session.builder.appName("pyspark").getOrCreate()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def duckdb_cursor():
-    connection = duckdb.connect('')
+    connection = duckdb.connect("")
     yield connection
     connection.close()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def integers(duckdb_cursor):
     cursor = duckdb_cursor
-    cursor.execute('CREATE TABLE integers (i integer)')
+    cursor.execute("CREATE TABLE integers (i integer)")
     cursor.execute(
         """
         INSERT INTO integers VALUES
@@ -268,10 +268,10 @@ def integers(duckdb_cursor):
     cursor.execute("drop table integers")
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def timestamps(duckdb_cursor):
     cursor = duckdb_cursor
-    cursor.execute('CREATE TABLE timestamps (t timestamp)')
+    cursor.execute("CREATE TABLE timestamps (t timestamp)")
     cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
     yield
     cursor.execute("drop table timestamps")

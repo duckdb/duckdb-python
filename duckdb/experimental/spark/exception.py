@@ -8,7 +8,7 @@ class ContributionsAcceptedError(NotImplementedError):
     def __init__(self, message=None) -> None:
         doc = self.__class__.__doc__
         if message:
-            doc = message + '\n' + doc
+            doc = message + "\n" + doc
         super().__init__(doc)
 
 

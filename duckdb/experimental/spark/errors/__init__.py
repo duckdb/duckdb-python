@@ -18,6 +18,7 @@
 """
 PySpark exceptions.
 """
+
 from .exceptions.base import (  # noqa: F401
     PySparkException,
     AnalysisException,

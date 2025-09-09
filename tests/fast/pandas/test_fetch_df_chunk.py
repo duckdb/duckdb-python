@@ -13,16 +13,16 @@ class TestType(object):
 
         # Fetch the first chunk
         cur_chunk = query.fetch_df_chunk()
-        assert cur_chunk['a'][0] == 0
+        assert cur_chunk["a"][0] == 0
         assert len(cur_chunk) == VECTOR_SIZE
 
         # Fetch the second chunk, can't be entirely filled
         cur_chunk = query.fetch_df_chunk()
-        assert cur_chunk['a'][0] == VECTOR_SIZE
+        assert cur_chunk["a"][0] == VECTOR_SIZE
         expected = size - VECTOR_SIZE
         assert len(cur_chunk) == expected
 
-    @pytest.mark.parametrize('size', [3000, 10000, 100000, VECTOR_SIZE - 1, VECTOR_SIZE + 1, VECTOR_SIZE])
+    @pytest.mark.parametrize("size", [3000, 10000, 100000, VECTOR_SIZE - 1, VECTOR_SIZE + 1, VECTOR_SIZE])
     def test_monahan(self, size):
         con = duckdb.connect()
         con.execute(f"CREATE table t as select range a from range({size});")
@@ -52,12 +52,12 @@ class TestType(object):
 
         # Return 2 vectors
         cur_chunk = query.fetch_df_chunk(2)
-        assert cur_chunk['a'][0] == 0
+        assert cur_chunk["a"][0] == 0
         assert len(cur_chunk) == VECTOR_SIZE * 2
 
         # Return Default 1 vector
         cur_chunk = query.fetch_df_chunk()
-        assert cur_chunk['a'][0] == VECTOR_SIZE * 2
+        assert cur_chunk["a"][0] == VECTOR_SIZE * 2
         assert len(cur_chunk) == VECTOR_SIZE
 
         # Return 0 vectors
@@ -69,7 +69,7 @@ class TestType(object):
 
         # Return more vectors than we have remaining
         cur_chunk = query.fetch_df_chunk(3)
-        assert cur_chunk['a'][0] == fetched
+        assert cur_chunk["a"][0] == fetched
         assert len(cur_chunk) == expected
 
         # These shouldn't throw errors (Just emmit empty chunks)
@@ -88,5 +88,5 @@ class TestType(object):
         query = con.execute("SELECT a FROM t")
 
         # Return -1 vector should not work
-        with pytest.raises(TypeError, match='incompatible function arguments'):
+        with pytest.raises(TypeError, match="incompatible function arguments"):
             cur_chunk = query.fetch_df_chunk(-1)

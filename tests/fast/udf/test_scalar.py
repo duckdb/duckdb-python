@@ -3,7 +3,7 @@ import os
 import pytest
 
 pd = pytest.importorskip("pandas")
-pa = pytest.importorskip('pyarrow', '18.0.0')
+pa = pytest.importorskip("pyarrow", "18.0.0")
 from typing import Union, Any
 import pyarrow.compute as pc
 import uuid
@@ -25,14 +25,14 @@ def make_annotated_function(type):
         test_base.__code__, test_base.__globals__, test_base.__name__, test_base.__defaults__, test_base.__closure__
     )
     # Add annotations for the return type and 'x'
-    test_function.__annotations__ = {'return': type, 'x': type}
+    test_function.__annotations__ = {"return": type, "x": type}
     return test_function
 
 
 class TestScalarUDF(object):
-    @pytest.mark.parametrize('function_type', ['native', 'arrow'])
+    @pytest.mark.parametrize("function_type", ["native", "arrow"])
     @pytest.mark.parametrize(
-        'test_type',
+        "test_type",
         [
             (TINYINT, -42),
             (SMALLINT, -512),
@@ -43,21 +43,21 @@ class TestScalarUDF(object):
             (UINTEGER, 4294967295),
             (UBIGINT, 18446744073709551615),
             (HUGEINT, 18446744073709551616),
-            (VARCHAR, 'long_string_test'),
-            (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
+            (VARCHAR, "long_string_test"),
+            (UUID, uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")),
             (FLOAT, 0.12246409803628922),
             (DOUBLE, 123142.12312416293784721232344),
             (DATE, datetime.date(2005, 3, 11)),
             (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
             (TIME, datetime.time(14, 1, 12)),
-            (BLOB, b'\xf6\x96\xb0\x85'),
+            (BLOB, b"\xf6\x96\xb0\x85"),
             (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
             (BOOLEAN, True),
             (
-                duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-                {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
+                duckdb.struct_type(["BIGINT[]", "VARCHAR[]"]),
+                {"v1": [1, 2, 3], "v2": ["a", "non-inlined string", "duckdb"]},
             ),
-            (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
+            (duckdb.list_type("VARCHAR"), ["the", "duck", "non-inlined string"]),
         ],
     )
     def test_type_coverage(self, test_type, function_type):
@@ -67,7 +67,7 @@ class TestScalarUDF(object):
         test_function = make_annotated_function(type)
 
         con = duckdb.connect()
-        con.create_function('test', test_function, type=function_type)
+        con.create_function("test", test_function, type=function_type)
         # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
@@ -114,46 +114,46 @@ class TestScalarUDF(object):
 
         # Using 'relation.project'
         con.execute(f"create table tbl as select ?::{str(type)} as x", [value])
-        table_rel = con.table('tbl')
-        res = table_rel.project('test(x)').fetchall()
+        table_rel = con.table("tbl")
+        res = table_rel.project("test(x)").fetchall()
         assert res[0][0] == value
 
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_map_coverage(self, udf_type):
         def no_op(x):
             return x
 
         con = duckdb.connect()
-        map_type = con.map_type('VARCHAR', 'BIGINT')
-        con.create_function('test_map', no_op, [map_type], map_type, type=udf_type)
+        map_type = con.map_type("VARCHAR", "BIGINT")
+        con.create_function("test_map", no_op, [map_type], map_type, type=udf_type)
         rel = con.sql("select test_map(map(['non-inlined string', 'test', 'duckdb'], [42, 1337, 123]))")
         res = rel.fetchall()
-        assert res == [({'non-inlined string': 42, 'test': 1337, 'duckdb': 123},)]
+        assert res == [({"non-inlined string": 42, "test": 1337, "duckdb": 123},)]
 
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_exceptions(self, udf_type):
         def raises_exception(x):
             raise AttributeError("error")
 
         con = duckdb.connect()
-        con.create_function('raises', raises_exception, [BIGINT], BIGINT, type=udf_type)
+        con.create_function("raises", raises_exception, [BIGINT], BIGINT, type=udf_type)
         with pytest.raises(
             duckdb.InvalidInputException,
-            match=' Python exception occurred while executing the UDF: AttributeError: error',
+            match=" Python exception occurred while executing the UDF: AttributeError: error",
         ):
-            res = con.sql('select raises(3)').fetchall()
+            res = con.sql("select raises(3)").fetchall()
 
-        con.remove_function('raises')
+        con.remove_function("raises")
         con.create_function(
-            'raises', raises_exception, [BIGINT], BIGINT, exception_handling='return_null', type=udf_type
+            "raises", raises_exception, [BIGINT], BIGINT, exception_handling="return_null", type=udf_type
         )
-        res = con.sql('select raises(3) from range(5)').fetchall()
+        res = con.sql("select raises(3) from range(5)").fetchall()
         assert res == [(None,), (None,), (None,), (None,), (None,)]
 
     def test_non_callable(self):
         con = duckdb.connect()
         with pytest.raises(TypeError):
-            con.create_function('func', 5, [BIGINT], BIGINT, type='arrow')
+            con.create_function("func", 5, [BIGINT], BIGINT, type="arrow")
 
         class MyCallable:
             def __init__(self) -> None:
@@ -163,22 +163,22 @@ class TestScalarUDF(object):
                 return x
 
         my_callable = MyCallable()
-        con.create_function('func', my_callable, [BIGINT], BIGINT, type='arrow')
-        res = con.sql('select func(5)').fetchall()
+        con.create_function("func", my_callable, [BIGINT], BIGINT, type="arrow")
+        res = con.sql("select func(5)").fetchall()
         assert res == [(5,)]
 
     # pyarrow does not support creating an array filled with pd.NA values
-    @pytest.mark.parametrize('udf_type', ['native'])
-    @pytest.mark.parametrize('duckdb_type', [FLOAT, DOUBLE])
+    @pytest.mark.parametrize("udf_type", ["native"])
+    @pytest.mark.parametrize("duckdb_type", [FLOAT, DOUBLE])
     def test_pd_nan(self, duckdb_type, udf_type):
         def return_pd_nan():
-            if udf_type == 'native':
+            if udf_type == "native":
                 return pd.NA
 
         con = duckdb.connect()
-        con.create_function('return_pd_nan', return_pd_nan, None, duckdb_type, null_handling='SPECIAL', type=udf_type)
+        con.create_function("return_pd_nan", return_pd_nan, None, duckdb_type, null_handling="SPECIAL", type=udf_type)
 
-        res = con.sql('select return_pd_nan()').fetchall()
+        res = con.sql("select return_pd_nan()").fetchall()
         assert res[0][0] == None
 
     def test_side_effects(self):
@@ -190,21 +190,21 @@ class TestScalarUDF(object):
         count.counter = 0
 
         con = duckdb.connect()
-        con.create_function('my_counter', count, side_effects=False)
-        res = con.sql('select my_counter() from range(10)').fetchall()
+        con.create_function("my_counter", count, side_effects=False)
+        res = con.sql("select my_counter() from range(10)").fetchall()
         assert res == [(0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,)]
 
         count.counter = 0
-        con.remove_function('my_counter')
-        con.create_function('my_counter', count, side_effects=True)
-        res = con.sql('select my_counter() from range(10)').fetchall()
+        con.remove_function("my_counter")
+        con.create_function("my_counter", count, side_effects=True)
+        res = con.sql("select my_counter() from range(10)").fetchall()
         assert res == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,)]
 
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
-    @pytest.mark.parametrize('duckdb_type', [FLOAT, DOUBLE])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
+    @pytest.mark.parametrize("duckdb_type", [FLOAT, DOUBLE])
     def test_np_nan(self, duckdb_type, udf_type):
         def return_np_nan():
-            if udf_type == 'native':
+            if udf_type == "native":
                 return np.nan
             else:
                 import pyarrow as pa
@@ -212,18 +212,18 @@ class TestScalarUDF(object):
                 return pa.chunked_array([[np.nan]], type=pa.float64())
 
         con = duckdb.connect()
-        con.create_function('return_np_nan', return_np_nan, None, duckdb_type, null_handling='SPECIAL', type=udf_type)
+        con.create_function("return_np_nan", return_np_nan, None, duckdb_type, null_handling="SPECIAL", type=udf_type)
 
-        res = con.sql('select return_np_nan()').fetchall()
+        res = con.sql("select return_np_nan()").fetchall()
         assert pd.isnull(res[0][0])
 
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
-    @pytest.mark.parametrize('duckdb_type', [FLOAT, DOUBLE])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
+    @pytest.mark.parametrize("duckdb_type", [FLOAT, DOUBLE])
     def test_math_nan(self, duckdb_type, udf_type):
         def return_math_nan():
             import cmath
 
-            if udf_type == 'native':
+            if udf_type == "native":
                 return cmath.nan
             else:
                 import pyarrow as pa
@@ -232,15 +232,15 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         con.create_function(
-            'return_math_nan', return_math_nan, None, duckdb_type, null_handling='SPECIAL', type=udf_type
+            "return_math_nan", return_math_nan, None, duckdb_type, null_handling="SPECIAL", type=udf_type
         )
 
-        res = con.sql('select return_math_nan()').fetchall()
+        res = con.sql("select return_math_nan()").fetchall()
         assert pd.isnull(res[0][0])
 
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     @pytest.mark.parametrize(
-        'data_type',
+        "data_type",
         [
             TINYINT,
             SMALLINT,
@@ -262,13 +262,13 @@ class TestScalarUDF(object):
             BLOB,
             INTERVAL,
             BOOLEAN,
-            duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-            duckdb.list_type('VARCHAR'),
+            duckdb.struct_type(["BIGINT[]", "VARCHAR[]"]),
+            duckdb.list_type("VARCHAR"),
         ],
     )
     def test_return_null(self, data_type, udf_type):
         def return_null():
-            if udf_type == 'native':
+            if udf_type == "native":
                 return None
             else:
                 import pyarrow as pa
@@ -276,8 +276,8 @@ class TestScalarUDF(object):
                 return pa.nulls(1)
 
         con = duckdb.connect()
-        con.create_function('return_null', return_null, None, data_type, null_handling='special', type=udf_type)
-        rel = con.sql('select return_null() as x')
+        con.create_function("return_null", return_null, None, data_type, null_handling="special", type=udf_type)
+        rel = con.sql("select return_null() as x")
         assert rel.types[0] == data_type
         assert rel.fetchall()[0][0] == None
 
@@ -286,13 +286,13 @@ class TestScalarUDF(object):
             return x
 
         con = duckdb.connect()
-        rel = con.sql('select 42')
+        rel = con.sql("select 42")
         # Using fetchone keeps the result open, with a transaction
         rel.fetchone()
 
-        con.create_function('func', func)
+        con.create_function("func", func)
 
         rel.fetchall()
 
-        res = con.sql('select func(5)').fetchall()
+        res = con.sql("select func(5)").fetchall()
         assert res == [(5,)]

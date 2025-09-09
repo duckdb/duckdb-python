@@ -40,4 +40,4 @@ class TestSparkFunctionsBase64(object):
             .select("decoded_value")
             .collect()
         )
-        assert res[0].decoded_value == b'quack'
+        assert res[0].decoded_value == b"quack"

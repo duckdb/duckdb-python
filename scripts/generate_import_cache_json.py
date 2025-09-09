@@ -4,12 +4,12 @@ script_dir = os.path.dirname(__file__)
 from typing import List, Dict, Union
 import json
 
-lines: list[str] = [file for file in open(f'{script_dir}/imports.py').read().split('\n') if file != '']
+lines: list[str] = [file for file in open(f"{script_dir}/imports.py").read().split("\n") if file != ""]
 
 
 class ImportCacheAttribute:
     def __init__(self, full_path: str) -> None:
-        parts = full_path.split('.')
+        parts = full_path.split(".")
         self.type = "attribute"
         self.name = parts[-1]
         self.full_path = full_path
@@ -42,7 +42,7 @@ class ImportCacheAttribute:
 
 class ImportCacheModule:
     def __init__(self, full_path) -> None:
-        parts = full_path.split('.')
+        parts = full_path.split(".")
         self.type = "module"
         self.name = parts[-1]
         self.full_path = full_path
@@ -82,27 +82,27 @@ class ImportCacheGenerator:
         self.modules: dict[str, ImportCacheModule] = {}
 
     def add_module(self, path: str):
-        assert path.startswith('import')
+        assert path.startswith("import")
         path = path[7:]
         module = ImportCacheModule(path)
         self.modules[module.full_path] = module
 
         # Add it to the parent module if present
-        parts = path.split('.')
+        parts = path.split(".")
         if len(parts) == 1:
             return
 
         # This works back from the furthest child module to the top level module
         child_module = module
         for i in range(1, len(parts)):
-            parent_path = '.'.join(parts[: len(parts) - i])
+            parent_path = ".".join(parts[: len(parts) - i])
             parent_module = self.add_or_get_module(parent_path)
             parent_module.add_item(child_module)
             child_module = parent_module
 
     def add_or_get_module(self, module_name: str) -> ImportCacheModule:
         if module_name not in self.modules:
-            self.add_module(f'import {module_name}')
+            self.add_module(f"import {module_name}")
         return self.get_module(module_name)
 
     def get_module(self, module_name: str) -> ImportCacheModule:
@@ -111,13 +111,13 @@ class ImportCacheGenerator:
         return self.modules[module_name]
 
     def get_item(self, item_name: str) -> Union[ImportCacheModule, ImportCacheAttribute]:
-        parts = item_name.split('.')
+        parts = item_name.split(".")
         if len(parts) == 1:
             return self.get_module(item_name)
 
         parent = self.get_module(parts[0])
         for i in range(1, len(parts)):
-            child_path = '.'.join(parts[: i + 1])
+            child_path = ".".join(parts[: i + 1])
             if parent.has_item(child_path):
                 parent = parent.get_item(child_path)
             else:
@@ -127,8 +127,8 @@ class ImportCacheGenerator:
         return parent
 
     def add_attribute(self, path: str):
-        assert not path.startswith('import')
-        parts = path.split('.')
+        assert not path.startswith("import")
+        parts = path.split(".")
         assert len(parts) >= 2
         self.get_item(path)
 
@@ -145,9 +145,9 @@ class ImportCacheGenerator:
 generator = ImportCacheGenerator()
 
 for line in lines:
-    if line.startswith('#'):
+    if line.startswith("#"):
         continue
-    if line.startswith('import'):
+    if line.startswith("import"):
         generator.add_module(line)
     else:
         generator.add_attribute(line)

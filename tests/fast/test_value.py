@@ -71,7 +71,7 @@ from duckdb.typing import (
 class TestValue(object):
     # This excludes timezone aware values, as those are a pain to test
     @pytest.mark.parametrize(
-        'item',
+        "item",
         [
             (BOOLEAN, BooleanValue(True), True),
             (UTINYINT, UnsignedBinaryValue(129), 129),
@@ -88,17 +88,17 @@ class TestValue(object):
             (DOUBLE, DoubleValue(0.23234234234), 0.23234234234),
             (
                 duckdb.decimal_type(12, 8),
-                DecimalValue(decimal.Decimal('1234.12345678'), 12, 8),
-                decimal.Decimal('1234.12345678'),
+                DecimalValue(decimal.Decimal("1234.12345678"), 12, 8),
+                decimal.Decimal("1234.12345678"),
             ),
-            (VARCHAR, StringValue('this is a long string'), 'this is a long string'),
+            (VARCHAR, StringValue("this is a long string"), "this is a long string"),
             (
                 UUID,
-                UUIDValue(uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
-                uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),
+                UUIDValue(uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")),
+                uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),
             ),
-            (BIT, BitValue(b'010101010101'), '010101010101'),
-            (BLOB, BlobValue(b'\x00\x00\x00a'), b'\x00\x00\x00a'),
+            (BIT, BitValue(b"010101010101"), "010101010101"),
+            (BLOB, BlobValue(b"\x00\x00\x00a"), b"\x00\x00\x00a"),
             (DATE, DateValue(datetime.date(2000, 5, 4)), datetime.date(2000, 5, 4)),
             (INTERVAL, IntervalValue(datetime.timedelta(days=5)), datetime.timedelta(days=5)),
             (
@@ -116,10 +116,10 @@ class TestValue(object):
         expected_value = item[2]
 
         con = duckdb.connect()
-        observed_type = con.execute('select typeof(a) from (select $1) tbl(a)', [value_object]).fetchall()[0][0]
+        observed_type = con.execute("select typeof(a) from (select $1) tbl(a)", [value_object]).fetchall()[0][0]
         assert observed_type == str(expected_type)
 
-        con.execute('select $1', [value_object])
+        con.execute("select $1", [value_object])
         result = con.fetchone()
         result = result[0]
         assert result == expected_value
@@ -129,10 +129,10 @@ class TestValue(object):
 
         con = duckdb.connect()
         with pytest.raises(duckdb.ConversionException, match="Can't losslessly convert"):
-            con.execute('select $1', [value]).fetchall()
+            con.execute("select $1", [value]).fetchall()
 
     @pytest.mark.parametrize(
-        'value',
+        "value",
         [
             TimestampSecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
             TimestampMilisecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
@@ -144,10 +144,10 @@ class TestValue(object):
         with pytest.raises(
             duckdb.NotImplementedException, match="Conversion from 'datetime' to type .* is not implemented yet"
         ):
-            con.execute('select $1', [value]).fetchall()
+            con.execute("select $1", [value]).fetchall()
 
     @pytest.mark.parametrize(
-        'target_type,test_value,expected_conversion_success',
+        "target_type,test_value,expected_conversion_success",
         [
             (TINYINT, 0, True),
             (TINYINT, 255, False),
@@ -187,7 +187,7 @@ class TestValue(object):
         value = Value(test_value, target_type)
         con = duckdb.connect()
 
-        work = lambda: con.execute('select typeof(a) from (select $1) tbl(a)', [value]).fetchall()
+        work = lambda: con.execute("select typeof(a) from (select $1) tbl(a)", [value]).fetchall()
 
         if expected_conversion_success:
             res = work()

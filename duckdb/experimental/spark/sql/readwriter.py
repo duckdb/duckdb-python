@@ -328,9 +328,9 @@ class DataFrameReader:
         >>> import tempfile
         >>> with tempfile.TemporaryDirectory() as d:
         ...     # Write a DataFrame into a JSON file
-        ...     spark.createDataFrame(
-        ...         [{"age": 100, "name": "Hyukjin Kwon"}]
-        ...     ).write.mode("overwrite").format("json").save(d)
+        ...     spark.createDataFrame([{"age": 100, "name": "Hyukjin Kwon"}]).write.mode(
+        ...         "overwrite"
+        ...     ).format("json").save(d)
         ...
         ...     # Read the JSON file as a DataFrame.
         ...     spark.read.json(d).show()
@@ -344,98 +344,62 @@ class DataFrameReader:
         if schema is not None:
             raise ContributionsAcceptedError("The 'schema' option is not supported")
         if primitivesAsString is not None:
-            raise ContributionsAcceptedError(
-                "The 'primitivesAsString' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'primitivesAsString' option is not supported")
         if prefersDecimal is not None:
-            raise ContributionsAcceptedError(
-                "The 'prefersDecimal' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'prefersDecimal' option is not supported")
         if allowComments is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowComments' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowComments' option is not supported")
         if allowUnquotedFieldNames is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowUnquotedFieldNames' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowUnquotedFieldNames' option is not supported")
         if allowSingleQuotes is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowSingleQuotes' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowSingleQuotes' option is not supported")
         if allowNumericLeadingZero is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowNumericLeadingZero' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowNumericLeadingZero' option is not supported")
         if allowBackslashEscapingAnyCharacter is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowBackslashEscapingAnyCharacter' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowBackslashEscapingAnyCharacter' option is not supported")
         if mode is not None:
             raise ContributionsAcceptedError("The 'mode' option is not supported")
         if columnNameOfCorruptRecord is not None:
-            raise ContributionsAcceptedError(
-                "The 'columnNameOfCorruptRecord' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'columnNameOfCorruptRecord' option is not supported")
         if dateFormat is not None:
             raise ContributionsAcceptedError("The 'dateFormat' option is not supported")
         if timestampFormat is not None:
-            raise ContributionsAcceptedError(
-                "The 'timestampFormat' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'timestampFormat' option is not supported")
         if multiLine is not None:
             raise ContributionsAcceptedError("The 'multiLine' option is not supported")
         if allowUnquotedControlChars is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowUnquotedControlChars' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowUnquotedControlChars' option is not supported")
         if lineSep is not None:
             raise ContributionsAcceptedError("The 'lineSep' option is not supported")
         if samplingRatio is not None:
-            raise ContributionsAcceptedError(
-                "The 'samplingRatio' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'samplingRatio' option is not supported")
         if dropFieldIfAllNull is not None:
-            raise ContributionsAcceptedError(
-                "The 'dropFieldIfAllNull' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'dropFieldIfAllNull' option is not supported")
         if encoding is not None:
             raise ContributionsAcceptedError("The 'encoding' option is not supported")
         if locale is not None:
             raise ContributionsAcceptedError("The 'locale' option is not supported")
         if pathGlobFilter is not None:
-            raise ContributionsAcceptedError(
-                "The 'pathGlobFilter' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'pathGlobFilter' option is not supported")
         if recursiveFileLookup is not None:
-            raise ContributionsAcceptedError(
-                "The 'recursiveFileLookup' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'recursiveFileLookup' option is not supported")
         if modifiedBefore is not None:
-            raise ContributionsAcceptedError(
-                "The 'modifiedBefore' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'modifiedBefore' option is not supported")
         if modifiedAfter is not None:
-            raise ContributionsAcceptedError(
-                "The 'modifiedAfter' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'modifiedAfter' option is not supported")
         if allowNonNumericNumbers is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowNonNumericNumbers' option is not supported"
-            )
+            raise ContributionsAcceptedError("The 'allowNonNumericNumbers' option is not supported")
 
         if isinstance(path, str):
             path = [path]
-        if  isinstance(path, list):
+        if isinstance(path, list):
             if len(path) == 1:
                 rel = self.session.conn.read_json(path[0])
                 from .dataframe import DataFrame
 
                 df = DataFrame(rel, self.session)
                 return df
-            raise PySparkNotImplementedError(
-                message="Only a single path is supported for now"
-            )
+            raise PySparkNotImplementedError(message="Only a single path is supported for now")
         else:
             raise PySparkTypeError(
                 error_class="NOT_STR_OR_LIST_OF_RDD",

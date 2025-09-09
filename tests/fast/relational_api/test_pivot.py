@@ -27,4 +27,4 @@ class TestPivot(object):
         export_dir = tempfile.mkdtemp()
         duckdb_cursor.query(f"EXPORT DATABASE '{export_dir}'")
         with open(os.path.join(export_dir, "schema.sql"), "r") as f:
-            assert 'CREATE TYPE' not in f.read()
+            assert "CREATE TYPE" not in f.read()

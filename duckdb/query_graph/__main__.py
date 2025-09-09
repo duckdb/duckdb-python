@@ -77,7 +77,6 @@ qgraph_css = """
 
 
 class NodeTiming:
-
     def __init__(self, phase: str, time: float) -> object:
         self.phase = phase
         self.time = time
@@ -94,7 +93,6 @@ class NodeTiming:
 
 
 class AllTimings:
-
     def __init__(self) -> None:
         self.phase_to_timings = {}
 
@@ -128,37 +126,38 @@ def open_utf8(fpath: str, flags: str) -> object:
 
 
 def get_child_timings(top_node: object, query_timings: object) -> str:
-    node_timing = NodeTiming(top_node['operator_type'], float(top_node['operator_timing']))
+    node_timing = NodeTiming(top_node["operator_type"], float(top_node["operator_timing"]))
     query_timings.add_node_timing(node_timing)
-    for child in top_node['children']:
+    for child in top_node["children"]:
         get_child_timings(child, query_timings)
 
 
 def get_pink_shade_hex(fraction: float):
     fraction = max(0, min(1, fraction))
-    
+
     # Define the RGB values for very light pink (almost white) and dark pink
     light_pink = (255, 250, 250)  # Very light pink
-    dark_pink = (255, 20, 147)    # Dark pink
-    
+    dark_pink = (255, 20, 147)  # Dark pink
+
     # Calculate the RGB values for the given fraction
     r = int(light_pink[0] + (dark_pink[0] - light_pink[0]) * fraction)
     g = int(light_pink[1] + (dark_pink[1] - light_pink[1]) * fraction)
     b = int(light_pink[2] + (dark_pink[2] - light_pink[2]) * fraction)
-    
+
     # Return as hexadecimal color code
     return f"#{r:02x}{g:02x}{b:02x}"
 
-def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:
-    node_style = f"background-color: {get_pink_shade_hex(float(result)/cpu_time)};"
 
-    body = f"<span class=\"tf-nc custom-tooltip\" style=\"{node_style}\">"
-    body += "<div class=\"node-body\">"
+def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:
+    node_style = f"background-color: {get_pink_shade_hex(float(result) / cpu_time)};"
+
+    body = f'<span class="tf-nc custom-tooltip" style="{node_style}">'
+    body += '<div class="node-body">'
     new_name = "BRIDGE" if (name == "INVALID") else name.replace("_", " ")
     formatted_num = f"{float(result):.4f}"
     body += f"<p><b>{new_name}</b> </p><p>time: {formatted_num} seconds</p>"
-    body += f"<span class=\"tooltip-text\"> {extra_info} </span>"
-    if (width > 0):
+    body += f'<span class="tooltip-text"> {extra_info} </span>'
+    if width > 0:
         body += f"<p>cardinality: {card}</p>"
         body += f"<p>estimate: {est}</p>"
         body += f"<p>width: {width} bytes</p>"
@@ -174,26 +173,31 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
 
     extra_info = ""
     estimate = 0
-    for key in json_graph['extra_info']:
-        value = json_graph['extra_info'][key]
-        if (key == "Estimated Cardinality"):
+    for key in json_graph["extra_info"]:
+        value = json_graph["extra_info"][key]
+        if key == "Estimated Cardinality":
             estimate = int(value)
         else:
             extra_info += f"{key}: {value} <br>"
     cardinality = json_graph["operator_cardinality"]
-    width = int(json_graph["result_set_size"]/max(1,cardinality))
+    width = int(json_graph["result_set_size"] / max(1, cardinality))
 
     # get rid of some typically long names
     extra_info = re.sub(r"__internal_\s*", "__", extra_info)
     extra_info = re.sub(r"compress_integral\s*", "compress", extra_info)
 
-    node_body = get_node_body(json_graph["operator_type"],
-                              json_graph["operator_timing"], 
-                              cpu_time, cardinality, estimate, width,
-                              re.sub(r",\s*", ", ", extra_info))
+    node_body = get_node_body(
+        json_graph["operator_type"],
+        json_graph["operator_timing"],
+        cpu_time,
+        cardinality,
+        estimate,
+        width,
+        re.sub(r",\s*", ", ", extra_info),
+    )
 
     children_html = ""
-    if len(json_graph['children']) >= 1:
+    if len(json_graph["children"]) >= 1:
         children_html += "<ul>"
         for child in json_graph["children"]:
             children_html += generate_tree_recursive(child, cpu_time)
@@ -205,7 +209,7 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
 def generate_timing_html(graph_json: object, query_timings: object) -> object:
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
-    total_time = float(json_graph.get('operator_timing') or json_graph.get('latency'))
+    total_time = float(json_graph.get("operator_timing") or json_graph.get("latency"))
     table_head = """
 	<table class=\"styled-table\"> 
 		<thead>
@@ -242,12 +246,12 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
 
 def generate_tree_html(graph_json: object) -> str:
     json_graph = json.loads(graph_json)
-    cpu_time = float(json_graph['cpu_time'])
-    tree_prefix = "<div class=\"tf-tree tf-gap-sm\"> \n <ul>"
+    cpu_time = float(json_graph["cpu_time"])
+    tree_prefix = '<div class="tf-tree tf-gap-sm"> \n <ul>'
     tree_suffix = "</ul> </div>"
     # first level of json is general overview
     # FIXME: make sure json output first level always has only 1 level
-    tree_body = generate_tree_recursive(json_graph['children'][0], cpu_time)
+    tree_body = generate_tree_recursive(json_graph["children"][0], cpu_time)
     return tree_prefix + tree_body + tree_suffix
 
 
@@ -256,39 +260,32 @@ def generate_ipython(json_input: str) -> str:
 
     html_output = generate_html(json_input, False)
 
-    return HTML(("\n"
-                 "	${CSS}\n"
-                 "	${LIBRARIES}\n"
-                 "	<div class=\"chart\" id=\"query-profile\"></div>\n"
-                 "	${CHART_SCRIPT}\n"
-                 "	").replace("${CSS}", html_output['css']).replace('${CHART_SCRIPT}',
-                                                                       html_output['chart_script']).replace(
-        '${LIBRARIES}', html_output['libraries']))
+    return HTML(
+        ('\n	${CSS}\n	${LIBRARIES}\n	<div class="chart" id="query-profile"></div>\n	${CHART_SCRIPT}\n	')
+        .replace("${CSS}", html_output["css"])
+        .replace("${CHART_SCRIPT}", html_output["chart_script"])
+        .replace("${LIBRARIES}", html_output["libraries"])
+    )
 
 
 def generate_style_html(graph_json: str, include_meta_info: bool) -> None:
-    treeflex_css = "<link rel=\"stylesheet\" href=\"https://unpkg.com/treeflex/dist/css/treeflex.css\">\n"
+    treeflex_css = '<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">\n'
     css = "<style>\n"
     css += qgraph_css + "\n"
     css += "</style>\n"
-    return {
-        'treeflex_css': treeflex_css,
-        'duckdb_css': css,
-        'libraries': '',
-        'chart_script': ''
-    }
+    return {"treeflex_css": treeflex_css, "duckdb_css": css, "libraries": "", "chart_script": ""}
 
 
 def gather_timing_information(json: str, query_timings: object) -> None:
     # add up all of the times
     # measure each time as a percentage of the total time.
     # then you can return a list of [phase, time, percentage]
-    get_child_timings(json['children'][0], query_timings)
+    get_child_timings(json["children"][0], query_timings)
 
 
 def translate_json_to_html(input_file: str, output_file: str) -> None:
     query_timings = AllTimings()
-    with open_utf8(input_file, 'r') as f:
+    with open_utf8(input_file, "r") as f:
         text = f.read()
 
     html_output = generate_style_html(text, True)
@@ -317,10 +314,10 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:
 </body>
 </html>
 """
-        html = html.replace("${TREEFLEX_CSS}", html_output['treeflex_css'])
-        html = html.replace("${DUCKDB_CSS}", html_output['duckdb_css'])
+        html = html.replace("${TREEFLEX_CSS}", html_output["treeflex_css"])
+        html = html.replace("${DUCKDB_CSS}", html_output["duckdb_css"])
         html = html.replace("${TIMING_TABLE}", timing_table)
-        html = html.replace('${TREE}', tree_output)
+        html = html.replace("${TREE}", tree_output)
         f.write(html)
 
 
@@ -329,11 +326,12 @@ def main() -> None:
         print("Please use python3")
         exit(1)
     parser = argparse.ArgumentParser(
-        prog='Query Graph Generator',
-        description='Given a json profile output, generate a html file showing the query graph and timings of operators')
-    parser.add_argument('profile_input', help='profile input in json')
-    parser.add_argument('--out', required=False, default=False)
-    parser.add_argument('--open', required=False, action='store_true', default=True)
+        prog="Query Graph Generator",
+        description="Given a json profile output, generate a html file showing the query graph and timings of operators",
+    )
+    parser.add_argument("profile_input", help="profile input in json")
+    parser.add_argument("--out", required=False, default=False)
+    parser.add_argument("--open", required=False, action="store_true", default=True)
     args = parser.parse_args()
 
     input = args.profile_input
@@ -356,8 +354,8 @@ def main() -> None:
     translate_json_to_html(input, output)
 
     if open_output:
-        webbrowser.open('file://' + os.path.abspath(output), new=2)
+        webbrowser.open("file://" + os.path.abspath(output), new=2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

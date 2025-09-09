@@ -34,15 +34,15 @@ class TestDataFrameDropDuplicates(object):
         res = distinctDF.collect()
         # James | Sales had a duplicate, has been removed
         expected = [
-            Row(employee_name='James', department='Sales', salary=3000),
-            Row(employee_name='Jeff', department='Marketing', salary=3000),
-            Row(employee_name='Jen', department='Finance', salary=3900),
-            Row(employee_name='Kumar', department='Marketing', salary=2000),
-            Row(employee_name='Maria', department='Finance', salary=3000),
-            Row(employee_name='Michael', department='Sales', salary=4600),
-            Row(employee_name='Robert', department='Sales', salary=4100),
-            Row(employee_name='Saif', department='Sales', salary=4100),
-            Row(employee_name='Scott', department='Finance', salary=3300),
+            Row(employee_name="James", department="Sales", salary=3000),
+            Row(employee_name="Jeff", department="Marketing", salary=3000),
+            Row(employee_name="Jen", department="Finance", salary=3900),
+            Row(employee_name="Kumar", department="Marketing", salary=2000),
+            Row(employee_name="Maria", department="Finance", salary=3000),
+            Row(employee_name="Michael", department="Sales", salary=4600),
+            Row(employee_name="Robert", department="Sales", salary=4100),
+            Row(employee_name="Saif", department="Sales", salary=4100),
+            Row(employee_name="Scott", department="Finance", salary=3300),
         ]
         assert res == expected
 
@@ -52,14 +52,14 @@ class TestDataFrameDropDuplicates(object):
         assert res2 == res
 
         expected_subset = [
-            Row(department='Finance', salary=3000),
-            Row(department='Finance', salary=3300),
-            Row(department='Finance', salary=3900),
-            Row(department='Marketing', salary=2000),
-            Row(department='Marketing', salary=3000),
-            Row(epartment='Sales', salary=3000),
-            Row(department='Sales', salary=4100),
-            Row(department='Sales', salary=4600),
+            Row(department="Finance", salary=3000),
+            Row(department="Finance", salary=3300),
+            Row(department="Finance", salary=3900),
+            Row(department="Marketing", salary=2000),
+            Row(department="Marketing", salary=3000),
+            Row(epartment="Sales", salary=3000),
+            Row(department="Sales", salary=4100),
+            Row(department="Sales", salary=4600),
         ]
 
         dropDisDF = getattr(df, method)(["department", "salary"]).sort("department", "salary")

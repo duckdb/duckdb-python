@@ -23,7 +23,7 @@ def test_multiple_writes():
     con1.close()
     con3 = duckdb.connect("test.db")
     tbls = get_tables(con3)
-    assert tbls == ['bar1', 'foo1']
+    assert tbls == ["bar1", "foo1"]
     del con1
     del con2
     del con3
@@ -41,9 +41,9 @@ def test_multiple_writes_memory():
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
     con3 = duckdb.connect(":memory:")
     tbls = get_tables(con1)
-    assert tbls == ['foo1']
+    assert tbls == ["foo1"]
     tbls = get_tables(con2)
-    assert tbls == ['bar1']
+    assert tbls == ["bar1"]
     tbls = get_tables(con3)
     assert tbls == []
     del con1
@@ -58,7 +58,7 @@ def test_multiple_writes_named_memory():
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
     con3 = duckdb.connect(":memory:1")
     tbls = get_tables(con3)
-    assert tbls == ['bar1', 'foo1']
+    assert tbls == ["bar1", "foo1"]
     del con1
     del con2
     del con3
@@ -76,7 +76,7 @@ def test_diff_config():
 
 
 def test_diff_config_extended():
-    con1 = duckdb.connect("test.db", config={'null_order': 'NULLS FIRST'})
+    con1 = duckdb.connect("test.db", config={"null_order": "NULLS FIRST"})
     with pytest.raises(
         duckdb.ConnectionException,
         match="Can't open a connection to same database file with a different configuration than existing connections",

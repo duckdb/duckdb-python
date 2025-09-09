@@ -6,7 +6,7 @@ import signal
 import sys
 from typing import Any, Generator, Optional
 
-sys.path.append(str(pathlib.Path(__file__).parent.parent / 'external' / 'duckdb' / 'scripts'))
+sys.path.append(str(pathlib.Path(__file__).parent.parent / "external" / "duckdb" / "scripts"))
 from sqllogictest import (
     SQLParserException,
     SQLLogicParser,
@@ -24,8 +24,8 @@ from sqllogictest.result import (
 
 def sigquit_handler(signum, frame):
     # Access the executor from the test_sqllogic function
-    if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
-        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
+    if hasattr(test_sqllogic, "executor") and test_sqllogic.executor:
+        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, "connection"):
             test_sqllogic.executor.database.connection.interrupt()
         test_sqllogic.executor.cleanup()
         test_sqllogic.executor = None
@@ -85,13 +85,13 @@ class SQLLogicTestExecutor(SQLLogicRunner):
             self.original_sqlite_test = self.test.is_sqlite_test()
 
             # Top level keywords
-            keywords = {'__TEST_DIR__': self.get_test_directory(), '__WORKING_DIRECTORY__': os.getcwd()}
+            keywords = {"__TEST_DIR__": self.get_test_directory(), "__WORKING_DIRECTORY__": os.getcwd()}
 
             def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
                 # Yield once to represent one iteration, do not touch the keywords
                 yield None
 
-            self.database = SQLLogicDatabase(':memory:', None)
+            self.database = SQLLogicDatabase(":memory:", None)
             pool = self.database.connect()
             context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
             pool.initialize_connection(context, pool.get_connection())
@@ -126,7 +126,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
 
     def cleanup(self):
         if self.database:
-            if hasattr(self.database, 'connection'):
+            if hasattr(self.database, "connection"):
                 self.database.connection.interrupt()
             self.database.reset()
             self.database = None
@@ -160,6 +160,6 @@ def test_sqllogic(test_script_path: pathlib.Path, pytestconfig: pytest.Config, t
         test_sqllogic.executor = None
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Pass all arguments including the script name to pytest
     sys.exit(pytest.main(sys.argv))

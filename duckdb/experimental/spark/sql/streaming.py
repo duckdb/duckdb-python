@@ -27,7 +27,7 @@ class DataStreamReader:
         path: Optional[str] = None,
         format: Optional[str] = None,
         schema: Union[StructType, str, None] = None,
-        **options: OptionalPrimitiveType
+        **options: OptionalPrimitiveType,
     ) -> "DataFrame":
         from duckdb.experimental.spark.sql.dataframe import DataFrame
 

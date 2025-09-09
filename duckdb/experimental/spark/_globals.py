@@ -56,7 +56,7 @@ class _NoValueType:
 
     __instance = None
 
-    def __new__(cls) -> '_NoValueType':
+    def __new__(cls) -> "_NoValueType":
         # ensure that only one instance exists
         if not cls.__instance:
             cls.__instance = super(_NoValueType, cls).__new__(cls)

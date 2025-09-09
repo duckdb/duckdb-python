@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import duckdb
 import pytest
 
-pyarrow = pytest.importorskip('pyarrow')
+pyarrow = pytest.importorskip("pyarrow")
 
 
 def f(cur, i, data):

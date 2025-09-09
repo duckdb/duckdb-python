@@ -22,4 +22,4 @@ def test_14344(duckdb_cursor):
 		USING (foo)
 	"""
     ).fetchall()
-    assert res == [('123',)]
+    assert res == [("123",)]

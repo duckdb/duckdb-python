@@ -7,8 +7,8 @@ class TestArrowFixedBinary(object):
     def test_arrow_fixed_binary(self, duckdb_cursor):
         ids = [
             None,
-            b'\x66\x4d\xf4\xae\xb1\x5c\xb0\x4a\xdd\x5d\x1d\x54',
-            b'\x66\x4d\xf4\xf0\xa3\xfc\xec\x5b\x26\x81\x4e\x1d',
+            b"\x66\x4d\xf4\xae\xb1\x5c\xb0\x4a\xdd\x5d\x1d\x54",
+            b"\x66\x4d\xf4\xf0\xa3\xfc\xec\x5b\x26\x81\x4e\x1d",
         ]
 
         id_array = pa.array(ids, type=pa.binary(12))
@@ -18,4 +18,4 @@ class TestArrowFixedBinary(object):
 			SELECT lower(hex(id)) as id FROM arrow_table
 		"""
         ).fetchall()
-        assert res == [(None,), ('664df4aeb15cb04add5d1d54',), ('664df4f0a3fcec5b26814e1d',)]
+        assert res == [(None,), ("664df4aeb15cb04add5d1d54",), ("664df4f0a3fcec5b26814e1d",)]

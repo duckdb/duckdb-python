@@ -16,97 +16,97 @@ except FileNotFoundError:
 
 # deal with leaf nodes?? Those are just PythonImportCacheItem
 def get_class_name(path: str) -> str:
-    parts: list[str] = path.replace('_', '').split('.')
+    parts: list[str] = path.replace("_", "").split(".")
     parts = [x.title() for x in parts]
-    return ''.join(parts) + 'CacheItem'
+    return "".join(parts) + "CacheItem"
 
 
 def get_filename(name: str) -> str:
-    return name.replace('_', '').lower() + '_module.hpp'
+    return name.replace("_", "").lower() + "_module.hpp"
 
 
 def get_variable_name(name: str) -> str:
-    if name in ['short', 'ushort']:
-        return name + '_'
+    if name in ["short", "ushort"]:
+        return name + "_"
     return name
 
 
 def collect_items_of_module(module: dict, collection: dict):
     global json_data
-    children = module['children']
-    collection[module['full_path']] = module
+    children = module["children"]
+    collection[module["full_path"]] = module
     for child in children:
         collect_items_of_module(json_data[child], collection)
 
 
 class CacheItem:
     def __init__(self, module: dict, items) -> None:
-        self.name = module['name']
+        self.name = module["name"]
         self.module = module
         self.items = items
-        self.class_name = get_class_name(module['full_path'])
+        self.class_name = get_class_name(module["full_path"])
 
     def get_full_module_path(self):
-        if self.module['type'] != 'module':
-            return ''
-        full_path = self.module['full_path']
+        if self.module["type"] != "module":
+            return ""
+        full_path = self.module["full_path"]
         return f"""
 public:
 \tstatic constexpr const char *Name = "{full_path}";
 """
 
     def get_optionally_required(self):
-        if 'required' not in self.module:
-            return ''
+        if "required" not in self.module:
+            return ""
         string = f"""
 protected:
 \tbool IsRequired() const override final {{
-\t\treturn {str(self.module['required']).lower()};
+\t\treturn {str(self.module["required"]).lower()};
 \t}}
 """
         return string
 
     def get_variables(self):
         variables = []
-        for key in self.module['children']:
+        for key in self.module["children"]:
             item = self.items[key]
-            name = item['name']
+            name = item["name"]
             var_name = get_variable_name(name)
-            if item['children'] == []:
-                class_name = 'PythonImportCacheItem'
+            if item["children"] == []:
+                class_name = "PythonImportCacheItem"
             else:
-                class_name = get_class_name(item['full_path'])
-            variables.append(f'\t{class_name} {var_name};')
-        return '\n'.join(variables)
+                class_name = get_class_name(item["full_path"])
+            variables.append(f"\t{class_name} {var_name};")
+        return "\n".join(variables)
 
     def get_initializer(self):
         variables = []
-        for key in self.module['children']:
+        for key in self.module["children"]:
             item = self.items[key]
-            name = item['name']
+            name = item["name"]
             var_name = get_variable_name(name)
-            if item['children'] == []:
+            if item["children"] == []:
                 initialization = f'{var_name}("{name}", this)'
                 variables.append(initialization)
             else:
-                if item['type'] == 'module':
-                    arguments = ''
+                if item["type"] == "module":
+                    arguments = ""
                 else:
-                    arguments = 'this'
-                initialization = f'{var_name}({arguments})'
+                    arguments = "this"
+                initialization = f"{var_name}({arguments})"
                 variables.append(initialization)
-        if self.module['type'] != 'module':
+        if self.module["type"] != "module":
             constructor_params = f'"{self.name}"'
-            constructor_params += ', parent'
+            constructor_params += ", parent"
         else:
-            full_path = self.module['full_path']
+            full_path = self.module["full_path"]
             constructor_params = f'"{full_path}"'
-        return f'PythonImportCacheItem({constructor_params}), ' + ', '.join(variables) + '{}'
+        return f"PythonImportCacheItem({constructor_params}), " + ", ".join(variables) + "{}"
 
     def get_constructor(self):
-        if self.module['type'] == 'module':
-            return f'{self.class_name}()'
-        return f'{self.class_name}(optional_ptr<PythonImportCacheItem> parent)'
+        if self.module["type"] == "module":
+            return f"{self.class_name}()"
+        return f"{self.class_name}(optional_ptr<PythonImportCacheItem> parent)"
 
     def to_string(self):
         return f"""
@@ -125,7 +125,7 @@ public:
 def collect_classes(items: dict) -> list:
     output: list = []
     for item in items.values():
-        if item['children'] == []:
+        if item["children"] == []:
             continue
         output.append(CacheItem(item, items))
     return output
@@ -134,7 +134,7 @@ def collect_classes(items: dict) -> list:
 class ModuleFile:
     def __init__(self, module: dict) -> None:
         self.module = module
-        self.file_name = get_filename(module['name'])
+        self.file_name = get_filename(module["name"])
         self.items = {}
         collect_items_of_module(module, self.items)
         self.classes = collect_classes(self.items)
@@ -144,7 +144,7 @@ class ModuleFile:
         classes = []
         for item in self.classes:
             classes.append(item.to_string())
-        return ''.join(classes)
+        return "".join(classes)
 
     def to_string(self):
         string = f"""
@@ -176,13 +176,13 @@ namespace duckdb {{
 
 files: list[ModuleFile] = []
 for name, value in json_data.items():
-    if value['full_path'] != value['name']:
+    if value["full_path"] != value["name"]:
         continue
     files.append(ModuleFile(value))
 
 for file in files:
     content = file.to_string()
-    path = f'src/duckdb_py/include/duckdb_python/import_cache/modules/{file.file_name}'
+    path = f"src/duckdb_py/include/duckdb_python/import_cache/modules/{file.file_name}"
     import_cache_path = os.path.join(script_dir, '..', path)
     with open(import_cache_path, "w") as f:
         f.write(content)
@@ -191,10 +191,10 @@ for file in files:
 def get_root_modules(files: list[ModuleFile]):
     modules = []
     for file in files:
-        name = file.module['name']
+        name = file.module["name"]
         class_name = get_class_name(name)
-        modules.append(f'\t{class_name} {name};')
-    return '\n'.join(modules)
+        modules.append(f"\t{class_name} {name};")
+    return "\n".join(modules)
 
 
 # Generate the python_import_cache.hpp file
@@ -237,9 +237,7 @@ private:
 
 """
 
-import_cache_path = os.path.join(
-    script_dir, '..', 'src/duckdb_py/include/duckdb_python/import_cache/python_import_cache.hpp'
-)
+import_cache_path = os.path.join(script_dir, "..", "src/duckdb_py/include/duckdb_python/import_cache/python_import_cache.hpp")
 with open(import_cache_path, "w") as f:
     f.write(import_cache_file)
 
@@ -248,13 +246,13 @@ def get_module_file_path_includes(files: list[ModuleFile]):
     includes = []
     for file in files:
         includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}"')
-    return '\n'.join(includes)
+    return "\n".join(includes)
 
 
 module_includes = get_module_file_path_includes(files)
 
 modules_header = os.path.join(
-    script_dir, '..', 'src/duckdb_py/include/duckdb_python/import_cache/python_import_cache_modules.hpp'
+    script_dir, "..", "src/duckdb_py/include/duckdb_python/import_cache/python_import_cache_modules.hpp"
 )
 with open(modules_header, "w") as f:
     f.write(module_includes)

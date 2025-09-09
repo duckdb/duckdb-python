@@ -3,7 +3,7 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 import pytest
 
-pa = pytest.importorskip('pyarrow')
+pa = pytest.importorskip("pyarrow")
 
 
 def test_5547():

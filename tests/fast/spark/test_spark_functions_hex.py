@@ -20,7 +20,7 @@ class TestSparkFunctionsHex(object):
 
     def test_hex_binary_col(self, spark):
         data = [
-            (b'quack',),
+            (b"quack",),
         ]
         res = (
             spark.createDataFrame(data, ["firstColumn"])
@@ -65,4 +65,4 @@ class TestSparkFunctionsHex(object):
             .select("unhex_value")
             .collect()
         )
-        assert res[0].unhex_value == b'quack'
+        assert res[0].unhex_value == b"quack"

@@ -14,7 +14,7 @@ class TestArrowDataset(object):
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -28,7 +28,7 @@ class TestArrowDataset(object):
         rel = duckdb_conn.from_arrow(userdata_parquet_dataset)
 
         assert (
-            rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)').execute().fetchone()[0] == 12
+            rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 12
         )
 
     def test_parallel_dataset_register(self, duckdb_cursor):
@@ -36,7 +36,7 @@ class TestArrowDataset(object):
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -61,7 +61,7 @@ class TestArrowDataset(object):
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -79,7 +79,7 @@ class TestArrowDataset(object):
 
         arrow_table = record_batch_reader.read_all()
         # reorder since order of rows isn't deterministic
-        df = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
+        df = userdata_parquet_dataset.to_table().to_pandas().sort_values("id").reset_index(drop=True)
         # turn it into an arrow table
         arrow_table_2 = pyarrow.Table.from_pandas(df)
         result_1 = duckdb_conn.execute("select * from arrow_table order by all").fetchall()
@@ -94,7 +94,7 @@ class TestArrowDataset(object):
         query = duckdb_conn.execute("SELECT b FROM dataset WHERE a < 5")
         record_batch_reader = query.fetch_record_batch(2048)
         arrow_table = record_batch_reader.read_all()
-        assert arrow_table.equals(CustomDataset.DATA[:5].select(['b']))
+        assert arrow_table.equals(CustomDataset.DATA[:5].select(["b"]))
 
 
 class CustomDataset(pyarrow.dataset.Dataset):

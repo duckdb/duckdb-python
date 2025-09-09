@@ -3,17 +3,17 @@ import os
 import math
 from pytest import mark, fixture, importorskip
 
-read_csv = importorskip('pyarrow.csv').read_csv
-requests = importorskip('requests')
-requests_adapters = importorskip('requests.adapters')
-urllib3_util = importorskip('urllib3.util')
-np = importorskip('numpy')
+read_csv = importorskip("pyarrow.csv").read_csv
+requests = importorskip("requests")
+requests_adapters = importorskip("requests.adapters")
+urllib3_util = importorskip("urllib3.util")
+np = importorskip("numpy")
 
 
 def group_by_q1(con):
     con.execute("CREATE TABLE ans AS SELECT id1, sum(v1) AS v1 FROM x GROUP BY id1")
     res = con.execute("SELECT COUNT(*), sum(v1)::varchar AS v1 FROM ans").fetchall()
-    assert res == [(96, '28498857')]
+    assert res == [(96, "28498857")]
     con.execute("DROP TABLE ans")
 
 
@@ -155,7 +155,7 @@ def join_by_q5(con):
 
 class TestH2OAIArrow(object):
     @mark.parametrize(
-        'function',
+        "function",
         [
             group_by_q1,
             group_by_q2,
@@ -169,15 +169,15 @@ class TestH2OAIArrow(object):
             group_by_q10,
         ],
     )
-    @mark.parametrize('threads', [1, 4])
-    @mark.usefixtures('group_by_data')
+    @mark.parametrize("threads", [1, 4])
+    @mark.usefixtures("group_by_data")
     def test_group_by(self, threads, function, group_by_data):
         group_by_data.execute(f"PRAGMA threads={threads}")
         function(group_by_data)
 
-    @mark.parametrize('threads', [1, 4])
+    @mark.parametrize("threads", [1, 4])
     @mark.parametrize(
-        'function',
+        "function",
         [
             join_by_q1,
             join_by_q2,
@@ -186,7 +186,7 @@ class TestH2OAIArrow(object):
             join_by_q5,
         ],
     )
-    @mark.usefixtures('large_data')
+    @mark.usefixtures("large_data")
     def test_join(self, threads, function, large_data):
         large_data.execute(f"PRAGMA threads={threads}")
 
@@ -198,7 +198,7 @@ def arrow_dataset_register():
     """Single fixture to download files and register them on the given connection"""
     session = requests.Session()
     retries = urllib3_util.Retry(
-        allowed_methods={'GET'},  # only retry on GETs (all we do)
+        allowed_methods={"GET"},  # only retry on GETs (all we do)
         total=None,  # disable to make the below take effect
         redirect=10,  # Don't follow more than 10 redirects in a row
         connect=3,  # try 3 times before giving up on connection errors
@@ -211,12 +211,12 @@ def arrow_dataset_register():
         raise_on_status=True,  # raise exception when status error retries are exhausted
         respect_retry_after_header=True,  # respect Retry-After headers
     )
-    session.mount('https://', requests_adapters.HTTPAdapter(max_retries=retries))
+    session.mount("https://", requests_adapters.HTTPAdapter(max_retries=retries))
     saved_filenames = set()
 
     def _register(url, filename, con, tablename):
         r = session.get(url)
-        with open(filename, 'wb') as f:
+        with open(filename, "wb") as f:
             f.write(r.content)
         con.register(tablename, read_csv(filename))
         saved_filenames.add(filename)
@@ -232,26 +232,26 @@ def arrow_dataset_register():
 def large_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz',
-        'J1_1e7_NA_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz",
+        "J1_1e7_NA_0_0.csv.gz",
         con,
         "x",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz',
-        'J1_1e7_1e1_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz",
+        "J1_1e7_1e1_0_0.csv.gz",
         con,
         "small",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz',
-        'J1_1e7_1e4_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz",
+        "J1_1e7_1e4_0_0.csv.gz",
         con,
         "medium",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz',
-        'J1_1e7_1e7_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz",
+        "J1_1e7_1e7_0_0.csv.gz",
         con,
         "big",
     )
@@ -263,8 +263,8 @@ def large_data(arrow_dataset_register):
 def group_by_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz',
-        'G1_1e7_1e2_5_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz",
+        "G1_1e7_1e2_5_0.csv.gz",
         con,
         "x",
     )
