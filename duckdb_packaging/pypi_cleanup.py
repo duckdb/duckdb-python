@@ -78,15 +78,12 @@ class PyPICleanupError(Exception):
     """Base exception for PyPI cleanup operations."""
 
 
-
 class AuthenticationError(PyPICleanupError):
     """Raised when authentication fails."""
 
 
-
 class ValidationError(PyPICleanupError):
     """Raised when input validation fails."""
-
 
 
 def setup_logging(verbose: bool = False) -> None:

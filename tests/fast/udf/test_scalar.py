@@ -1,4 +1,3 @@
-
 import pytest
 
 import duckdb
@@ -222,7 +221,6 @@ class TestScalarUDF:
     @pytest.mark.parametrize("duckdb_type", [FLOAT, DOUBLE])
     def test_math_nan(self, duckdb_type, udf_type):
         def return_math_nan():
-
             if udf_type == "native":
                 return cmath.nan
             else:

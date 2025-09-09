@@ -228,7 +228,6 @@ def require():
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
 @pytest.fixture(scope="function")
 def spark():
-
     if not hasattr(spark, "session"):
         # Cache the import
         from spark_namespace.sql import SparkSession as session

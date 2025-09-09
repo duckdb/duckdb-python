@@ -18,7 +18,6 @@ def make_annotated_function(type: str):
 
 
 def python_version_lower_than_3_10():
-
     if sys.version_info[0] < 3:
         return True
     if sys.version_info[1] < 10:

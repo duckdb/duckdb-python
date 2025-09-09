@@ -6,7 +6,6 @@ import duckdb
 
 class TestMultiStatement:
     def test_multi_statement(self, duckdb_cursor):
-
         con = duckdb.connect(":memory:")
 
         # test empty statement

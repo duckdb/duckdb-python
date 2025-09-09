@@ -1,4 +1,3 @@
-
 import pytest
 
 import duckdb
@@ -122,7 +121,6 @@ class TestPyArrowUDF:
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
     def test_arrow_side_effects(self, duckdb_cursor):
-
         def random_arrow(x):
             if not hasattr(random_arrow, "data"):
                 random_arrow.data = 0

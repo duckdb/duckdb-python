@@ -206,8 +206,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
 
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
-    """A polars IO plugin for DuckDB.
-    """
+    """A polars IO plugin for DuckDB."""
 
     def source_generator(
         with_columns: Optional[list[str]],

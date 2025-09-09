@@ -1,4 +1,3 @@
-
 import pytest
 from conftest import pandas_supports_arrow_backend
 

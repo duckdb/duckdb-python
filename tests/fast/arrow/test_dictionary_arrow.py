@@ -1,4 +1,3 @@
-
 import pytest
 
 pa = pytest.importorskip("pyarrow")

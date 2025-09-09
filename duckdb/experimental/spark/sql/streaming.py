@@ -30,7 +30,6 @@ class DataStreamReader:
         schema: Union[StructType, str, None] = None,
         **options: OptionalPrimitiveType,
     ) -> "DataFrame":
-
         raise NotImplementedError
 
 

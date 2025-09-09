@@ -15,8 +15,7 @@
 # limitations under the License.
 #
 
-"""PySpark exceptions.
-"""
+"""PySpark exceptions."""
 
 from .exceptions.base import (
     AnalysisException,

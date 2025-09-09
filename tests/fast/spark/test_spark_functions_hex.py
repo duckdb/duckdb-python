@@ -1,4 +1,3 @@
-
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")

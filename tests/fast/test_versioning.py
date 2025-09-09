@@ -1,5 +1,4 @@
-"""Tests for duckdb_pytooling versioning functionality.
-"""
+"""Tests for duckdb_pytooling versioning functionality."""
 
 import os
 import subprocess

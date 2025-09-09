@@ -4,8 +4,7 @@ from ..utils import ErrorClassesReader
 
 
 class PySparkException(Exception):
-    """Base Exception for handling errors generated from PySpark.
-    """
+    """Base Exception for handling errors generated from PySpark."""
 
     def __init__(
         self,
@@ -78,115 +77,92 @@ class PySparkException(Exception):
 
 
 class AnalysisException(PySparkException):
-    """Failed to analyze a SQL query plan.
-    """
+    """Failed to analyze a SQL query plan."""
 
 
 class SessionNotSameException(PySparkException):
-    """Performed the same operation on different SparkSession.
-    """
+    """Performed the same operation on different SparkSession."""
 
 
 class TempTableAlreadyExistsException(AnalysisException):
-    """Failed to create temp view since it is already exists.
-    """
+    """Failed to create temp view since it is already exists."""
 
 
 class ParseException(AnalysisException):
-    """Failed to parse a SQL command.
-    """
+    """Failed to parse a SQL command."""
 
 
 class IllegalArgumentException(PySparkException):
-    """Passed an illegal or inappropriate argument.
-    """
+    """Passed an illegal or inappropriate argument."""
 
 
 class ArithmeticException(PySparkException):
-    """Arithmetic exception thrown from Spark with an error class.
-    """
+    """Arithmetic exception thrown from Spark with an error class."""
 
 
 class UnsupportedOperationException(PySparkException):
-    """Unsupported operation exception thrown from Spark with an error class.
-    """
+    """Unsupported operation exception thrown from Spark with an error class."""
 
 
 class ArrayIndexOutOfBoundsException(PySparkException):
-    """Array index out of bounds exception thrown from Spark with an error class.
-    """
+    """Array index out of bounds exception thrown from Spark with an error class."""
 
 
 class DateTimeException(PySparkException):
-    """Datetime exception thrown from Spark with an error class.
-    """
+    """Datetime exception thrown from Spark with an error class."""
 
 
 class NumberFormatException(IllegalArgumentException):
-    """Number format exception thrown from Spark with an error class.
-    """
+    """Number format exception thrown from Spark with an error class."""
 
 
 class StreamingQueryException(PySparkException):
-    """Exception that stopped a :class:`StreamingQuery`.
-    """
+    """Exception that stopped a :class:`StreamingQuery`."""
 
 
 class QueryExecutionException(PySparkException):
-    """Failed to execute a query.
-    """
+    """Failed to execute a query."""
 
 
 class PythonException(PySparkException):
-    """Exceptions thrown from Python workers.
-    """
+    """Exceptions thrown from Python workers."""
 
 
 class SparkRuntimeException(PySparkException):
-    """Runtime exception thrown from Spark with an error class.
-    """
+    """Runtime exception thrown from Spark with an error class."""
 
 
 class SparkUpgradeException(PySparkException):
-    """Exception thrown because of Spark upgrade.
-    """
+    """Exception thrown because of Spark upgrade."""
 
 
 class UnknownException(PySparkException):
-    """None of the above exceptions.
-    """
+    """None of the above exceptions."""
 
 
 class PySparkValueError(PySparkException, ValueError):
-    """Wrapper class for ValueError to support error classes.
-    """
+    """Wrapper class for ValueError to support error classes."""
 
 
 class PySparkIndexError(PySparkException, IndexError):
-    """Wrapper class for IndexError to support error classes.
-    """
+    """Wrapper class for IndexError to support error classes."""
 
 
 class PySparkTypeError(PySparkException, TypeError):
-    """Wrapper class for TypeError to support error classes.
-    """
+    """Wrapper class for TypeError to support error classes."""
 
 
 class PySparkAttributeError(PySparkException, AttributeError):
-    """Wrapper class for AttributeError to support error classes.
-    """
+    """Wrapper class for AttributeError to support error classes."""
 
 
 class PySparkRuntimeError(PySparkException, RuntimeError):
-    """Wrapper class for RuntimeError to support error classes.
-    """
+    """Wrapper class for RuntimeError to support error classes."""
 
 
 class PySparkAssertionError(PySparkException, AssertionError):
-    """Wrapper class for AssertionError to support error classes.
-    """
+    """Wrapper class for AssertionError to support error classes."""
 
 
 class PySparkNotImplementedError(PySparkException, NotImplementedError):
-    """Wrapper class for NotImplementedError to support error classes.
-    """
+    """Wrapper class for NotImplementedError to support error classes."""

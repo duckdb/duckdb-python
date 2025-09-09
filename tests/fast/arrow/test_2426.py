@@ -1,8 +1,6 @@
-
 import duckdb
 
 try:
-
     can_run = True
 except:
     can_run = False

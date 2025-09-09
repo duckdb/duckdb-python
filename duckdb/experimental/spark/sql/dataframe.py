@@ -843,8 +843,7 @@ class DataFrame:
         return DataFrame(rel, self.session)
 
     def __contains__(self, item: str) -> bool:
-        """Check if the :class:`DataFrame` contains a column by the name of `item`
-        """
+        """Check if the :class:`DataFrame` contains a column by the name of `item`"""
         return item in self.relation
 
     @property

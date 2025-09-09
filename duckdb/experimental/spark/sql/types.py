@@ -102,13 +102,11 @@ class DataType:
         return False
 
     def toInternal(self, obj: Any) -> Any:
-        """Converts a Python object into an internal SQL object.
-        """
+        """Converts a Python object into an internal SQL object."""
         return obj
 
     def fromInternal(self, obj: Any) -> Any:
-        """Converts an internal SQL object into a native Python object.
-        """
+        """Converts an internal SQL object into a native Python object."""
         return obj
 
 
@@ -979,14 +977,12 @@ class UserDefinedType(DataType):
 
     @classmethod
     def sqlType(cls) -> DataType:
-        """Underlying SQL storage type for this UDT.
-        """
+        """Underlying SQL storage type for this UDT."""
         raise NotImplementedError("UDT must implement sqlType().")
 
     @classmethod
     def module(cls) -> str:
-        """The Python module of the UDT.
-        """
+        """The Python module of the UDT."""
         raise NotImplementedError("UDT must implement module().")
 
     @classmethod
@@ -1001,8 +997,7 @@ class UserDefinedType(DataType):
 
     @classmethod
     def _cachedSqlType(cls) -> DataType:
-        """Cache the sqlType() into class, because it's heavily used in `toInternal`.
-        """
+        """Cache the sqlType() into class, because it's heavily used in `toInternal`."""
         if not hasattr(cls, "_cached_sql_type"):
             cls._cached_sql_type = cls.sqlType()  # type: ignore[attr-defined]
         return cls._cached_sql_type  # type: ignore[attr-defined]
@@ -1017,13 +1012,11 @@ class UserDefinedType(DataType):
             return self.deserialize(v)
 
     def serialize(self, obj: Any) -> Any:
-        """Converts a user-type object into a SQL datum.
-        """
+        """Converts a user-type object into a SQL datum."""
         raise NotImplementedError("UDT must implement toInternal().")
 
     def deserialize(self, datum: Any) -> Any:
-        """Converts a SQL datum into a user-type object.
-        """
+        """Converts a SQL datum into a user-type object."""
         raise NotImplementedError("UDT must implement fromInternal().")
 
     def simpleString(self) -> str:

@@ -1,4 +1,3 @@
-
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 

@@ -117,7 +117,6 @@ class TestType:
         type = duckdb.union_type({"a": BIGINT, "b": VARCHAR, "c": TINYINT})
         assert str(type) == "UNION(a BIGINT, b VARCHAR, c TINYINT)"
 
-
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="requires >= python3.9")
     def test_implicit_convert_from_builtin_type(self):
         type = duckdb.list_type(list[str])

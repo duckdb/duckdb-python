@@ -21,15 +21,13 @@ from .error_classes import ERROR_CLASSES_MAP
 
 
 class ErrorClassesReader:
-    """A reader to load error information from error_classes.py.
-    """
+    """A reader to load error information from error_classes.py."""
 
     def __init__(self) -> None:
         self.error_info_map = ERROR_CLASSES_MAP
 
     def get_error_message(self, error_class: str, message_parameters: dict[str, str]) -> str:
-        """Returns the completed error message by applying message parameters to the message template.
-        """
+        """Returns the completed error message by applying message parameters to the message template."""
         message_template = self.get_message_template(error_class)
         # Verify message parameters.
         message_parameters_from_template = re.findall("<([a-zA-Z0-9_-]+)>", message_template)
