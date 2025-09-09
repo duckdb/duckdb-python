@@ -1,74 +1,68 @@
-import duckdb
+import datetime
+import decimal
+import uuid
+
+import pytest
 from pytest import raises
-from duckdb import NotImplementedException, InvalidInputException
+
+import duckdb
+from duckdb import InvalidInputException, NotImplementedException
+from duckdb.typing import (
+    BIGINT,
+    BIT,
+    BLOB,
+    BOOLEAN,
+    DATE,
+    DOUBLE,
+    FLOAT,
+    HUGEINT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    SQLNULL,
+    TIME,
+    TIMESTAMP,
+    TINYINT,
+    UBIGINT,
+    UHUGEINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
+    VARCHAR,
+)
 from duckdb.value.constant import (
-    Value,
-    NullValue,
-    BooleanValue,
-    UnsignedBinaryValue,
-    UnsignedShortValue,
-    UnsignedIntegerValue,
-    UnsignedLongValue,
     BinaryValue,
-    ShortValue,
-    IntegerValue,
-    LongValue,
-    HugeIntegerValue,
-    UnsignedHugeIntegerValue,
-    FloatValue,
-    DoubleValue,
-    DecimalValue,
-    StringValue,
-    UUIDValue,
     BitValue,
     BlobValue,
+    BooleanValue,
     DateValue,
+    DecimalValue,
+    DoubleValue,
+    FloatValue,
+    HugeIntegerValue,
+    IntegerValue,
     IntervalValue,
-    TimestampValue,
-    TimestampSecondValue,
+    LongValue,
+    NullValue,
+    ShortValue,
+    StringValue,
     TimestampMilisecondValue,
     TimestampNanosecondValue,
-    TimestampTimeZoneValue,
+    TimestampSecondValue,
+    TimestampValue,
     TimeValue,
-    TimeTimeZoneValue,
-)
-import uuid
-import datetime
-import pytest
-import decimal
-
-from duckdb.typing import (
-    SQLNULL,
-    BOOLEAN,
-    TINYINT,
-    UTINYINT,
-    SMALLINT,
-    USMALLINT,
-    INTEGER,
-    UINTEGER,
-    BIGINT,
-    UBIGINT,
-    HUGEINT,
-    UHUGEINT,
-    UUID,
-    FLOAT,
-    DOUBLE,
-    DATE,
-    TIMESTAMP,
-    TIMESTAMP_MS,
-    TIMESTAMP_NS,
-    TIMESTAMP_S,
-    TIME,
-    TIME_TZ,
-    TIMESTAMP_TZ,
-    VARCHAR,
-    BLOB,
-    BIT,
-    INTERVAL,
+    UnsignedBinaryValue,
+    UnsignedHugeIntegerValue,
+    UnsignedIntegerValue,
+    UnsignedLongValue,
+    UnsignedShortValue,
+    UUIDValue,
+    Value,
 )
 
 
-class TestValue(object):
+class TestValue:
     # This excludes timezone aware values, as those are a pain to test
     @pytest.mark.parametrize(
         "item",

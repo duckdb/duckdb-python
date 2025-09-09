@@ -1,18 +1,15 @@
-import duckdb
-import os
+
 import pytest
+
+import duckdb
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
-from typing import Union
-import pyarrow.compute as pc
-import uuid
-import datetime
 
 from duckdb.typing import *
 
 
-class TestPyArrowUDF(object):
+class TestPyArrowUDF:
     def test_basic_use(self):
         def plus_one(x):
             table = pa.lib.Table.from_arrays([x], names=["c0"])
@@ -24,7 +21,7 @@ class TestPyArrowUDF(object):
 
         con = duckdb.connect()
         con.create_function("plus_one", plus_one, [BIGINT], BIGINT, type="arrow")
-        assert [(6,)] == con.sql("select plus_one(5)").fetchall()
+        assert con.sql("select plus_one(5)").fetchall() == [(6,)]
 
         range_table = con.table_function("range", [5000])
         res = con.sql("select plus_one(i) from range_table tbl(i)").fetchall()
@@ -125,7 +122,6 @@ class TestPyArrowUDF(object):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
     def test_arrow_side_effects(self, duckdb_cursor):
-        import random as r
 
         def random_arrow(x):
             if not hasattr(random_arrow, "data"):

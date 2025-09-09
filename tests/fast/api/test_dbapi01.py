@@ -1,10 +1,11 @@
 # multiple result sets
 
 import numpy
+
 import duckdb
 
 
-class TestMultipleResultSets(object):
+class TestMultipleResultSets:
     def test_regular_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute("SELECT * FROM integers")
         duckdb_cursor.execute("SELECT * FROM integers")

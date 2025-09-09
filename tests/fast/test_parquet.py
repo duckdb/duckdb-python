@@ -1,8 +1,8 @@
-import duckdb
-import pytest
 import os
-import tempfile
-import pandas as pd
+
+import pytest
+
+import duckdb
 
 VARCHAR = duckdb.typing.VARCHAR
 BIGINT = duckdb.typing.BIGINT
@@ -17,7 +17,7 @@ def tmp_parquets(tmp_path_factory):
     return tmp_parquets
 
 
-class TestParquet(object):
+class TestParquet:
     def test_scan_binary(self, duckdb_cursor):
         conn = duckdb.connect()
         res = conn.execute("SELECT typeof(#1) FROM parquet_scan('" + filename + "') limit 1").fetchall()

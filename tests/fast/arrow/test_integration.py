@@ -1,14 +1,16 @@
-import duckdb
-import os
 import datetime
+import os
+
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 np = pytest.importorskip("numpy")
 
 
-class TestArrowIntegration(object):
+class TestArrowIntegration:
     def test_parquet_roundtrip(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
         cols = "id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments"
@@ -216,7 +218,7 @@ class TestArrowIntegration(object):
         duckdb_cursor.execute("CREATE TABLE test (a varchar)")
 
         # Test Small, Null and Very Big String
-        for i in range(0, 1000):
+        for i in range(1000):
             duckdb_cursor.execute(
                 "INSERT INTO  test VALUES ('Matt Damon'),(NULL), ('Jeffffreeeey Jeeeeef Baaaaaaazos'), ('X-Content-Type-Options')"
             )

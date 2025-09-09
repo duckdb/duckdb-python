@@ -1,15 +1,13 @@
-import duckdb
-import tempfile
 import os
 import tempfile
-import pandas._testing as tm
-import datetime
-import csv
+
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestToParquet(object):
+class TestToParquet:
     @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     def test_basic_to_parquet(self, pd):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
@@ -43,12 +41,12 @@ class TestToParquet(object):
         rel.to_parquet(temp_file_name, field_ids=dict(i=42, my_struct={"__duckdb_field_id": 43, "j": 44}))
         parquet_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
-        assert [("duckdb_schema", None), ("i", 42), ("my_struct", 43), ("j", 44)] == duckdb.sql(
+        assert duckdb.sql(
             f"""
             select name,field_id
             from parquet_schema('{temp_file_name}')
         """
-        ).execute().fetchall()
+        ).execute().fetchall() == [("duckdb_schema", None), ("i", 42), ("my_struct", 43), ("j", 44)]
 
     @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("row_group_size_bytes", [122880 * 1024, "2MB"])

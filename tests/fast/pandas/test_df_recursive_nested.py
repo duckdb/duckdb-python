@@ -1,9 +1,8 @@
-import duckdb
-import datetime
-import numpy as np
+
 import pytest
-import copy
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 from duckdb import Value
 
 NULL = None
@@ -23,7 +22,7 @@ def create_reference_query():
     return query
 
 
-class TestDFRecursiveNested(object):
+class TestDFRecursiveNested:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_of_structs(self, duckdb_cursor, pandas):
         data = [[{"a": 5}, NULL, {"a": NULL}], NULL, [{"a": 5}, NULL, {"a": NULL}]]

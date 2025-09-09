@@ -1,9 +1,7 @@
-import pytest
-import duckdb
 import pandas as pd
 
 
-class TestMultipleColumnsSameName(object):
+class TestMultipleColumnsSameName:
     def test_multiple_columns_with_same_name(self, duckdb_cursor):
         df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "d": [9, 10, 11, 12]})
         df = df.rename(columns={df.columns[1]: "a"})

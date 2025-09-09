@@ -1,14 +1,15 @@
 # simple DB API testcase
 
-import duckdb
-import numpy
-import pytest
-import re
 import os
-from conftest import NumpyPandas, ArrowPandas
+import re
+
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestDBConfig(object):
+class TestDBConfig:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_default_order(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({"a": [1, 2, 3]})
@@ -51,7 +52,7 @@ class TestDBConfig(object):
         if not repository:
             return
         con = duckdb.connect(config={"TimeZone": "UTC", "autoinstall_extension_repository": repository})
-        assert "UTC" == con.sql("select current_setting('TimeZone')").fetchone()[0]
+        assert con.sql("select current_setting('TimeZone')").fetchone()[0] == "UTC"
 
     def test_unrecognized_option(self, duckdb_cursor):
         success = True

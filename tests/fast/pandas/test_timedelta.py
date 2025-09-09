@@ -1,11 +1,13 @@
-import platform
-import pandas as pd
-import duckdb
 import datetime
+import platform
+
+import pandas as pd
 import pytest
 
+import duckdb
 
-class TestTimedelta(object):
+
+class TestTimedelta:
     def test_timedelta_positive(self, duckdb_cursor):
         duckdb_interval = duckdb_cursor.query(
             "SELECT '2290-01-01 23:59:00'::TIMESTAMP - '2000-01-01 23:59:00'::TIMESTAMP AS '0'"

@@ -1,10 +1,12 @@
-import pandas as pd
-import duckdb
-import numpy as np
 import datetime
 
+import numpy as np
+import pandas as pd
 
-class TestPandasStride(object):
+import duckdb
+
+
+class TestPandasStride:
     def test_stride(self, duckdb_cursor):
         expected_df = pd.DataFrame(np.arange(20).reshape(5, 4), columns=["a", "b", "c", "d"])
         con = duckdb.connect()

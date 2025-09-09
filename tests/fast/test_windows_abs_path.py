@@ -1,10 +1,10 @@
-import duckdb
-import pytest
 import os
 import shutil
 
+import duckdb
 
-class TestWindowsAbsPath(object):
+
+class TestWindowsAbsPath:
     def test_windows_path_accent(self):
         if os.name != "nt":
             return

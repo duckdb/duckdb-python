@@ -1,12 +1,13 @@
-import numpy as np
-import datetime
-import duckdb
-import pytest
 import warnings
 from contextlib import suppress
 
+import numpy as np
+import pytest
 
-class TestPandasObjectInteger(object):
+import duckdb
+
+
+class TestPandasObjectInteger:
     # Signed Masked Integer types
     def test_object_integer(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")

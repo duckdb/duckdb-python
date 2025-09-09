@@ -1,8 +1,9 @@
 import pytest
+
 import duckdb
 
 
-class TestExplain(object):
+class TestExplain:
     def test_explain_basic(self, duckdb_cursor):
         res = duckdb_cursor.sql("select 42").explain()
         assert isinstance(res, str)

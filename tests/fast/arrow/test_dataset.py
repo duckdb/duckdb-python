@@ -1,6 +1,8 @@
-import duckdb
 import os
+
 import pytest
+
+import duckdb
 
 pyarrow = pytest.importorskip("pyarrow")
 np = pytest.importorskip("numpy")
@@ -8,7 +10,7 @@ pyarrow.parquet = pytest.importorskip("pyarrow.parquet")
 pyarrow.dataset = pytest.importorskip("pyarrow.dataset")
 
 
-class TestArrowDataset(object):
+class TestArrowDataset:
     def test_parallel_dataset(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")

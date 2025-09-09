@@ -1,11 +1,11 @@
+
 import pytest
-import sys
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace.sql import functions as F
 
 
-class TestSparkFunctionsHex(object):
+class TestSparkFunctionsHex:
     def test_hex_string_col(self, spark):
         data = [
             ("quack",),
@@ -32,7 +32,7 @@ class TestSparkFunctionsHex(object):
 
     def test_hex_integer_col(self, spark):
         data = [
-            (int(42),),
+            (42,),
         ]
         res = (
             spark.createDataFrame(data, ["firstColumn"])

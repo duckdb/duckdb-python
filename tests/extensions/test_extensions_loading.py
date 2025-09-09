@@ -1,10 +1,10 @@
 import os
 import platform
 
-import duckdb
-from pytest import raises
 import pytest
+from pytest import raises
 
+import duckdb
 
 pytestmark = pytest.mark.skipif(
     platform.system() == "Emscripten",

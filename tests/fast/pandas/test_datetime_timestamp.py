@@ -1,14 +1,13 @@
-import duckdb
 import datetime
-import numpy as np
+
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 from packaging.version import Version
 
 pd = pytest.importorskip("pandas")
 
 
-class TestDateTimeTimeStamp(object):
+class TestDateTimeTimeStamp:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_timestamp_high(self, pandas, duckdb_cursor):
         duckdb_time = duckdb_cursor.sql("SELECT '2260-01-01 23:59:00'::TIMESTAMP AS '0'").df()

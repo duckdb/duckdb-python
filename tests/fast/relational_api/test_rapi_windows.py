@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +23,7 @@ def setup_and_teardown_of_table(duckdb_cursor):
     duckdb_cursor.execute("drop table win")
 
 
-@pytest.fixture()
+@pytest.fixture
 def table(duckdb_cursor):
     return duckdb_cursor.table("win")
 

@@ -2,13 +2,15 @@
 Therefore, we only test the new codes and exec paths.
 """
 
-import numpy as np
-import duckdb
 from datetime import timedelta
+
+import numpy as np
 import pytest
 
+import duckdb
 
-class TestScanNumpy(object):
+
+class TestScanNumpy:
     def test_scan_numpy(self, duckdb_cursor):
         z = np.array([1, 2, 3])
         res = duckdb_cursor.sql("select * from z").fetchall()

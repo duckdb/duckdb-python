@@ -1,8 +1,8 @@
 import os
 
 script_dir = os.path.dirname(__file__)
-from typing import List, Dict, Union
 import json
+from typing import Union
 
 lines: list[str] = [file for file in open(f"{script_dir}/imports.py").read().split("\n") if file != ""]
 
@@ -13,7 +13,7 @@ class ImportCacheAttribute:
         self.type = "attribute"
         self.name = parts[-1]
         self.full_path = full_path
-        self.children: dict[str, "ImportCacheAttribute"] = {}
+        self.children: dict[str, ImportCacheAttribute] = {}
 
     def has_item(self, item_name: str) -> bool:
         return item_name in self.children
@@ -46,7 +46,7 @@ class ImportCacheModule:
         self.type = "module"
         self.name = parts[-1]
         self.full_path = full_path
-        self.items: dict[str, Union[ImportCacheAttribute, "ImportCacheModule"]] = {}
+        self.items: dict[str, Union[ImportCacheAttribute, ImportCacheModule]] = {}
 
     def add_item(self, item: Union[ImportCacheAttribute, "ImportCacheModule"]):
         assert self.full_path != item.full_path
@@ -156,7 +156,7 @@ for line in lines:
 existing_json_data = {}
 json_cache_path = os.path.join(script_dir, "cache_data.json")
 try:
-    with open(json_cache_path, "r") as file:
+    with open(json_cache_path) as file:
         existing_json_data = json.load(file)
 except FileNotFoundError:
     pass

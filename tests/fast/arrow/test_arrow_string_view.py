@@ -1,6 +1,6 @@
-import duckdb
 import pytest
-from packaging import version
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
@@ -43,7 +43,7 @@ def RoundTripDuckDBInternal(query):
         assert res[i] == from_arrow_res[i]
 
 
-class TestArrowStringView(object):
+class TestArrowStringView:
     # Test Small Inlined String View
     def test_inlined_string_view(self):
         RoundTripStringView(

@@ -1,20 +1,20 @@
-import duckdb
 import os
+
+import duckdb
 
 try:
     import pyarrow
-    import pyarrow.parquet
-    import pyarrow.dataset
-    from pyarrow.dataset import Scanner
     import pyarrow.compute as pc
-    import numpy as np
+    import pyarrow.dataset
+    import pyarrow.parquet
+    from pyarrow.dataset import Scanner
 
     can_run = True
 except:
     can_run = False
 
 
-class TestArrowScanner(object):
+class TestArrowScanner:
     def test_parallel_scanner(self, duckdb_cursor):
         if not can_run:
             return

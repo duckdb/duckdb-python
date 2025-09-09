@@ -1,11 +1,12 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 from duckdb.typing import *
 
 
-class TestArrowBufferSize(object):
+class TestArrowBufferSize:
     def test_arrow_buffer_size(self):
         con = duckdb.connect()
 

@@ -1,25 +1,24 @@
-"""
-Tests for duckdb_pytooling versioning functionality.
+"""Tests for duckdb_pytooling versioning functionality.
 """
 
 import os
+import subprocess
 import unittest
+from unittest.mock import MagicMock, patch
 
 import pytest
-import subprocess
-from unittest.mock import patch, MagicMock
 
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging._versioning import (
-    parse_version,
     format_version,
-    git_tag_to_pep440,
-    pep440_to_git_tag,
     get_current_version,
     get_git_describe,
+    git_tag_to_pep440,
+    parse_version,
+    pep440_to_git_tag,
 )
-from duckdb_packaging.setuptools_scm_version import _bump_version, version_scheme, forced_version_from_env
+from duckdb_packaging.setuptools_scm_version import _bump_version, forced_version_from_env, version_scheme
 
 
 class TestVersionParsing(unittest.TestCase):

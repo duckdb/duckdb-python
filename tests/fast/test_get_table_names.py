@@ -1,8 +1,9 @@
-import duckdb
 import pytest
 
+import duckdb
 
-class TestGetTableNames(object):
+
+class TestGetTableNames:
     def test_table_success(self, duckdb_cursor):
         conn = duckdb.connect()
         table_names = conn.get_table_names("SELECT * FROM my_table1, my_table2, my_table3")

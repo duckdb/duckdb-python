@@ -1,8 +1,9 @@
 import pytest
+
 import duckdb
 
 
-class TestStreamingResult(object):
+class TestStreamingResult:
     def test_fetch_one(self, duckdb_cursor):
         # fetch one
         res = duckdb_cursor.sql("SELECT * FROM range(100000)")

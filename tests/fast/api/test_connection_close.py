@@ -1,9 +1,11 @@
 # cursor description
 
-import duckdb
-import tempfile
 import os
+import tempfile
+
 import pytest
+
+import duckdb
 
 
 def check_exception(f):
@@ -15,7 +17,7 @@ def check_exception(f):
     assert had_exception
 
 
-class TestConnectionClose(object):
+class TestConnectionClose:
     def test_connection_close(self, duckdb_cursor):
         fd, db = tempfile.mkstemp()
         os.close(fd)

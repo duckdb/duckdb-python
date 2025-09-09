@@ -1,5 +1,4 @@
-"""
-!!HERE BE DRAGONS!! Use this script with care!
+"""!!HERE BE DRAGONS!! Use this script with care!
 
 PyPI package cleanup tool. This script will:
 * Never remove a stable version (including a post release version)
@@ -17,8 +16,9 @@ import re
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Generator
 from html.parser import HTMLParser
-from typing import Optional, Set, Generator
+from typing import Optional
 from urllib.parse import urlparse
 
 import pyotp
@@ -77,19 +77,16 @@ This script will:
 class PyPICleanupError(Exception):
     """Base exception for PyPI cleanup operations."""
 
-    pass
 
 
 class AuthenticationError(PyPICleanupError):
     """Raised when authentication fails."""
 
-    pass
 
 
 class ValidationError(PyPICleanupError):
     """Raised when input validation fails."""
 
-    pass
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -236,7 +233,7 @@ class PyPICleanup:
             int: Exit code (0 for success, non-zero for failure)
         """
         if self._do_delete:
-            logging.warning(f"NOT A DRILL: WILL DELETE PACKAGES")
+            logging.warning("NOT A DRILL: WILL DELETE PACKAGES")
         else:
             logging.info("Running in DRY RUN mode, nothing will be deleted")
 
@@ -246,7 +243,7 @@ class PyPICleanup:
             with session_with_retries() as http_session:
                 return self._execute_cleanup(http_session)
         except PyPICleanupError as e:
-            logging.error(f"Cleanup failed: {e}")
+            logging.exception(f"Cleanup failed: {e}")
             return 1
         except Exception as e:
             logging.error(f"Unexpected error: {e}", exc_info=True)
@@ -254,7 +251,6 @@ class PyPICleanup:
 
     def _execute_cleanup(self, http_session: Session) -> int:
         """Execute the main cleanup logic."""
-
         # Get released versions
         versions = self._fetch_released_versions(http_session)
         if not versions:
@@ -418,7 +414,6 @@ class PyPICleanup:
 
     def _perform_login(self, http_session: Session) -> requests.Response:
         """Perform the initial login with username/password."""
-
         # Get login form and CSRF token
         csrf_token = self._get_csrf_token(http_session, "/account/login/")
 
@@ -487,7 +482,7 @@ class PyPICleanup:
                 logging.info(f"Successfully deleted {self._package} version {version}")
             except Exception as e:
                 # Continue with other versions rather than failing completely
-                logging.error(f"Failed to delete version {version}: {e}")
+                logging.exception(f"Failed to delete version {version}: {e}")
                 failed_deletions.append(version)
 
         if failed_deletions:
@@ -547,13 +542,13 @@ def main() -> int:
         return cleanup.run()
 
     except ValidationError as e:
-        logging.error(f"Configuration error: {e}")
+        logging.exception(f"Configuration error: {e}")
         return 2
     except KeyboardInterrupt:
         logging.info("Operation cancelled by user")
         return 130
     except Exception as e:
-        logging.error(f"Unexpected error: {e}", exc_info=args.verbose)
+        logging.exception(f"Unexpected error: {e}", exc_info=args.verbose)
         return 1
 
 

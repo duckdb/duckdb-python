@@ -1,8 +1,9 @@
-import duckdb
 import pytest
 
+import duckdb
 
-class TestDuckDBExecute(object):
+
+class TestDuckDBExecute:
     def test_execute_basic(self, duckdb_cursor):
         duckdb_cursor.execute("create table t as select 5")
         res = duckdb_cursor.table("t").fetchall()

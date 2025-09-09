@@ -1,8 +1,9 @@
-import duckdb
-import pytest
 import datetime
 
+import pytest
 from conftest import pandas_supports_arrow_backend
+
+import duckdb
 
 pd = pytest.importorskip("pandas", "2.0.0")
 import numpy as np
@@ -10,7 +11,7 @@ from pandas.api.types import is_integer_dtype
 
 
 @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
-class TestPandasArrow(object):
+class TestPandasArrow:
     def test_pandas_arrow(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
         df = pd.DataFrame({"a": pd.Series([5, 4, 3])}).convert_dtypes()

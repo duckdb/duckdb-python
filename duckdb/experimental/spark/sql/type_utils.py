@@ -1,38 +1,40 @@
+from typing import cast
+
 from duckdb.typing import DuckDBPyType
-from typing import List, Tuple, cast
+
 from .types import (
-    DataType,
-    StringType,
+    ArrayType,
     BinaryType,
     BitstringType,
-    UUIDType,
     BooleanType,
+    ByteType,
+    DataType,
     DateType,
-    TimestampType,
-    TimestampNTZType,
-    TimeType,
-    TimeNTZType,
-    TimestampNanosecondNTZType,
-    TimestampMilisecondNTZType,
-    TimestampSecondNTZType,
+    DayTimeIntervalType,
     DecimalType,
     DoubleType,
     FloatType,
-    ByteType,
-    UnsignedByteType,
-    ShortType,
-    UnsignedShortType,
-    IntegerType,
-    UnsignedIntegerType,
-    LongType,
-    UnsignedLongType,
     HugeIntegerType,
-    UnsignedHugeIntegerType,
-    DayTimeIntervalType,
-    ArrayType,
+    IntegerType,
+    LongType,
     MapType,
+    ShortType,
+    StringType,
     StructField,
     StructType,
+    TimeNTZType,
+    TimestampMilisecondNTZType,
+    TimestampNanosecondNTZType,
+    TimestampNTZType,
+    TimestampSecondNTZType,
+    TimestampType,
+    TimeType,
+    UnsignedByteType,
+    UnsignedHugeIntegerType,
+    UnsignedIntegerType,
+    UnsignedLongType,
+    UnsignedShortType,
+    UUIDType,
 )
 
 _sqltype_to_spark_class = {
@@ -93,8 +95,8 @@ def convert_type(dtype: DuckDBPyType) -> DataType:
         return convert_nested_type(dtype)
     if id == "decimal":
         children: list[tuple[str, DuckDBPyType]] = dtype.children
-        precision = cast(int, children[0][1])
-        scale = cast(int, children[1][1])
+        precision = cast("int", children[0][1])
+        scale = cast("int", children[1][1])
         return DecimalType(precision, scale)
     spark_type = _sqltype_to_spark_class[id]
     return spark_type()

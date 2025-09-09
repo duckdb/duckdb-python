@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 from duckdb import (
     ColumnExpression,
     ConstantExpression,
@@ -7,7 +8,7 @@ from duckdb import (
 )
 
 
-class TestSQLExpression(object):
+class TestSQLExpression:
     def test_sql_expression_basic(self, duckdb_cursor):
         # Test simple constant expressions
         expr = SQLExpression("42")

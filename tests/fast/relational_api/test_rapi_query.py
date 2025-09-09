@@ -1,10 +1,12 @@
-import duckdb
-import pytest
 import platform
 import sys
 
+import pytest
 
-@pytest.fixture()
+import duckdb
+
+
+@pytest.fixture
 def tbl_table():
     con = duckdb.default_connection()
     con.execute("drop table if exists tbl CASCADE")
@@ -13,7 +15,7 @@ def tbl_table():
     con.execute("drop table tbl CASCADE")
 
 
-@pytest.fixture()
+@pytest.fixture
 def scoped_default(duckdb_cursor):
     default = duckdb.connect(":default:")
     duckdb.set_default_connection(duckdb_cursor)
@@ -23,11 +25,11 @@ def scoped_default(duckdb_cursor):
     duckdb.set_default_connection(default)
 
 
-class TestRAPIQuery(object):
+class TestRAPIQuery:
     @pytest.mark.parametrize("steps", [1, 2, 3, 4])
     def test_query_chain(self, steps):
         con = duckdb.default_connection()
-        amount = int(1000000)
+        amount = 1000000
         rel = None
         for _ in range(steps):
             rel = con.query(f"select i from range({amount}::BIGINT) tbl(i)")

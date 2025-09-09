@@ -1,8 +1,9 @@
 import platform
-import duckdb
 from threading import Thread, current_thread
+
 import pytest
 
+import duckdb
 
 pytestmark = pytest.mark.xfail(
     condition=platform.system() == "Emscripten",
@@ -30,7 +31,7 @@ def insert_from_same_connection(duckdb_cursor):
     duckdb_cursor.execute("""INSERT INTO my_inserts VALUES (?)""", (thread_name,))
 
 
-class TestPythonMultithreading(object):
+class TestPythonMultithreading:
     def test_multiple_cursors(self, duckdb_cursor):
         duckdb_con = duckdb.connect()  # In Memory DuckDB
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")

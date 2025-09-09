@@ -2,12 +2,11 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+
 from spark_namespace.sql.types import Row
-import textwrap
-import duckdb
 
 
-class TestSparkReadJson(object):
+class TestSparkReadJson:
     def test_read_json(self, duckdb_cursor, spark, tmp_path):
         file_path = tmp_path / "basic.parquet"
         file_path = file_path.as_posix()

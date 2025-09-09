@@ -5,7 +5,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace import USE_ACTUAL_SPARK
 
 
-class TestSparkRuntimeConfig(object):
+class TestSparkRuntimeConfig:
     def test_spark_runtime_config(self, spark):
         # This fetches the internal runtime config from the session
         spark.conf

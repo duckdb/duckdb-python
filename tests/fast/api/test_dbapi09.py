@@ -1,11 +1,12 @@
 # date type
 
-import numpy
 import datetime
+
+import numpy
 import pandas
 
 
-class TestNumpyDate(object):
+class TestNumpyDate:
     def test_fetchall_date(self, duckdb_cursor):
         res = duckdb_cursor.execute("SELECT DATE '2020-01-10' as test_date").fetchall()
         assert res == [(datetime.date(2020, 1, 10),)]

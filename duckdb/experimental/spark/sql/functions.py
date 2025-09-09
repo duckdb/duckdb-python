@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Union, overload, Optional, List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union, overload
 
 from duckdb import (
     CaseExpression,
@@ -17,14 +17,13 @@ if TYPE_CHECKING:
 
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
+from . import types as _types
 from ._typing import ColumnOrName
 from .column import Column, _get_expr
-from . import types as _types
 
 
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
-    """
-    Invokes n-ary JVM function identified by name
+    """Invokes n-ary JVM function identified by name
     and wraps the result with :class:`~pyspark.sql.Column`.
     """
     cols = [_to_column_expr(expr) for expr in cols]
@@ -36,8 +35,7 @@ def col(column: str):
 
 
 def upper(col: "ColumnOrName") -> Column:
-    """
-    Converts a string expression to upper case.
+    """Converts a string expression to upper case.
 
     .. versionadded:: 1.5.0
 
@@ -49,12 +47,12 @@ def upper(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         upper case values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
     >>> df.select(upper("value")).show()
@@ -70,8 +68,7 @@ def upper(col: "ColumnOrName") -> Column:
 
 
 def ucase(str: "ColumnOrName") -> Column:
-    """
-    Returns `str` with all characters changed to uppercase.
+    """Returns `str` with all characters changed to uppercase.
 
     .. versionadded:: 3.5.0
 
@@ -80,7 +77,7 @@ def ucase(str: "ColumnOrName") -> Column:
     str : :class:`~pyspark.sql.Column` or str
         Input column or strings.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.ucase(sf.lit("Spark"))).show()
@@ -123,12 +120,12 @@ def array(*cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["Column
         column names or :class:`~pyspark.sql.Column`\\s that have
         the same data type.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a column of array type.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
     >>> df.select(array("age", "age").alias("arr")).collect()
@@ -170,7 +167,7 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
 
     .. versionadded:: 1.5.0
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("100-200",)], ["str"])
     >>> df.select(regexp_replace("str", r"(\d+)", "--").alias("d")).collect()
@@ -186,8 +183,7 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
 
 
 def slice(x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["ColumnOrName", int]) -> Column:
-    """
-    Collection function: returns an array containing all the elements in `x` from index `start`
+    """Collection function: returns an array containing all the elements in `x` from index `start`
     (array indices start at 1, or from the end if `start` is negative) with the specified `length`.
 
     .. versionadded:: 2.4.0
@@ -204,12 +200,12 @@ def slice(x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["C
     length : :class:`~pyspark.sql.Column` or str or int
         column name, column, or int containing the length of the slice
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a column of array type. Subset of array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ["x"])
     >>> df.select(slice(df.x, 2, 2).alias("sliced")).collect()
@@ -224,8 +220,7 @@ def slice(x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["C
 
 
 def asc(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the ascending order of the given column name.
+    """Returns a sort expression based on the ascending order of the given column name.
 
     .. versionadded:: 1.3.0
 
@@ -237,12 +232,12 @@ def asc(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the ascending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     Sort by the column 'id' in the descending order.
 
@@ -276,8 +271,7 @@ def asc(col: "ColumnOrName") -> Column:
 
 
 def asc_nulls_first(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the ascending order of the given
+    """Returns a sort expression based on the ascending order of the given
     column name, and null values return before non-null values.
 
     .. versionadded:: 2.4.0
@@ -290,12 +284,12 @@ def asc_nulls_first(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the ascending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     >>> df1 = spark.createDataFrame([(1, "Bob"), (0, None), (2, "Alice")], ["age", "name"])
     >>> df1.sort(asc_nulls_first(df1.name)).show()
@@ -312,8 +306,7 @@ def asc_nulls_first(col: "ColumnOrName") -> Column:
 
 
 def asc_nulls_last(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the ascending order of the given
+    """Returns a sort expression based on the ascending order of the given
     column name, and null values appear after non-null values.
 
     .. versionadded:: 2.4.0
@@ -326,12 +319,12 @@ def asc_nulls_last(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the ascending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     >>> df1 = spark.createDataFrame([(0, None), (1, "Bob"), (2, "Alice")], ["age", "name"])
     >>> df1.sort(asc_nulls_last(df1.name)).show()
@@ -348,8 +341,7 @@ def asc_nulls_last(col: "ColumnOrName") -> Column:
 
 
 def desc(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the descending order of the given column name.
+    """Returns a sort expression based on the descending order of the given column name.
 
     .. versionadded:: 1.3.0
 
@@ -361,12 +353,12 @@ def desc(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the descending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     Sort by the column 'id' in the descending order.
 
@@ -385,8 +377,7 @@ def desc(col: "ColumnOrName") -> Column:
 
 
 def desc_nulls_first(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the descending order of the given
+    """Returns a sort expression based on the descending order of the given
     column name, and null values appear before non-null values.
 
     .. versionadded:: 2.4.0
@@ -399,12 +390,12 @@ def desc_nulls_first(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the descending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     >>> df1 = spark.createDataFrame([(0, None), (1, "Bob"), (2, "Alice")], ["age", "name"])
     >>> df1.sort(desc_nulls_first(df1.name)).show()
@@ -421,8 +412,7 @@ def desc_nulls_first(col: "ColumnOrName") -> Column:
 
 
 def desc_nulls_last(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the descending order of the given
+    """Returns a sort expression based on the descending order of the given
     column name, and null values appear after non-null values.
 
     .. versionadded:: 2.4.0
@@ -435,12 +425,12 @@ def desc_nulls_last(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the descending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     >>> df1 = spark.createDataFrame([(0, None), (1, "Bob"), (2, "Alice")], ["age", "name"])
     >>> df1.sort(desc_nulls_last(df1.name)).show()
@@ -457,8 +447,7 @@ def desc_nulls_last(col: "ColumnOrName") -> Column:
 
 
 def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
-    """
-    Returns the leftmost `len`(`len` can be string type) characters from the string `str`,
+    """Returns the leftmost `len`(`len` can be string type) characters from the string `str`,
     if `len` is less or equal than 0 the result is an empty string.
 
     .. versionadded:: 3.5.0
@@ -470,7 +459,7 @@ def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     len : :class:`~pyspark.sql.Column` or str
         Input column or strings, the leftmost `len`.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -493,8 +482,7 @@ def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
 
 
 def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
-    """
-    Returns the rightmost `len`(`len` can be string type) characters from the string `str`,
+    """Returns the rightmost `len`(`len` can be string type) characters from the string `str`,
     if `len` is less or equal than 0 the result is an empty string.
 
     .. versionadded:: 3.5.0
@@ -506,7 +494,7 @@ def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     len : :class:`~pyspark.sql.Column` or str
         Input column or strings, the rightmost `len`.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -549,12 +537,12 @@ def levenshtein(left: "ColumnOrName", right: "ColumnOrName", threshold: Optional
         .. versionchanged: 3.5.0
             Added ``threshold`` argument.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         Levenshtein distance as integer value.
 
-    Examples
+    Examples:
     --------
     >>> df0 = spark.createDataFrame(
     ...     [
@@ -581,8 +569,7 @@ def levenshtein(left: "ColumnOrName", right: "ColumnOrName", threshold: Optional
 
 
 def lpad(col: "ColumnOrName", len: int, pad: str) -> Column:
-    """
-    Left-pad the string column to width `len` with `pad`.
+    """Left-pad the string column to width `len` with `pad`.
 
     .. versionadded:: 1.5.0
 
@@ -598,12 +585,12 @@ def lpad(col: "ColumnOrName", len: int, pad: str) -> Column:
     pad : str
         chars to prepend.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         left padded result.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("abcd",)],
@@ -618,8 +605,7 @@ def lpad(col: "ColumnOrName", len: int, pad: str) -> Column:
 
 
 def rpad(col: "ColumnOrName", len: int, pad: str) -> Column:
-    """
-    Right-pad the string column to width `len` with `pad`.
+    """Right-pad the string column to width `len` with `pad`.
 
     .. versionadded:: 1.5.0
 
@@ -635,12 +621,12 @@ def rpad(col: "ColumnOrName", len: int, pad: str) -> Column:
     pad : str
         chars to append.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         right padded result.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("abcd",)],
@@ -655,8 +641,7 @@ def rpad(col: "ColumnOrName", len: int, pad: str) -> Column:
 
 
 def ascii(col: "ColumnOrName") -> Column:
-    """
-    Computes the numeric value of the first character of the string column.
+    """Computes the numeric value of the first character of the string column.
 
     .. versionadded:: 1.5.0
 
@@ -668,12 +653,12 @@ def ascii(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         numeric value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
     >>> df.select(ascii("value")).show()
@@ -689,8 +674,7 @@ def ascii(col: "ColumnOrName") -> Column:
 
 
 def asin(col: "ColumnOrName") -> Column:
-    """
-    Computes inverse sine of the input column.
+    """Computes inverse sine of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -702,12 +686,12 @@ def asin(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         inverse sine of `col`, as if computed by `java.lang.Math.asin()`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(0,), (2,)])
     >>> df.select(asin(df.schema.fieldNames()[0])).show()
@@ -728,8 +712,7 @@ def asin(col: "ColumnOrName") -> Column:
 
 
 def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None) -> Column:
-    """
-    Returns true if str matches `pattern` with `escape`,
+    """Returns true if str matches `pattern` with `escape`,
     null if any arguments are null, false otherwise.
     The default escape character is the '\'.
 
@@ -746,7 +729,7 @@ def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Col
         If an escape character precedes a special symbol or another escape character, the
         following character is matched literally. It is invalid to escape any other character.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Spark", "_park")], ["a", "b"])
     >>> df.select(like(df.a, df.b).alias("r")).collect()
@@ -766,8 +749,7 @@ def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Col
 
 
 def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Column"] = None) -> Column:
-    """
-    Returns true if str matches `pattern` with `escape` case-insensitively,
+    """Returns true if str matches `pattern` with `escape` case-insensitively,
     null if any arguments are null, false otherwise.
     The default escape character is the '\'.
 
@@ -784,7 +766,7 @@ def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Co
         If an escape character precedes a special symbol or another escape character, the
         following character is matched literally. It is invalid to escape any other character.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Spark", "_park")], ["a", "b"])
     >>> df.select(ilike(df.a, df.b).alias("r")).collect()
@@ -804,8 +786,7 @@ def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Co
 
 
 def array_agg(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns a list of objects with duplicates.
+    """Aggregate function: returns a list of objects with duplicates.
 
     .. versionadded:: 3.5.0
 
@@ -814,12 +795,12 @@ def array_agg(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         list of objects with duplicates.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([[1], [1], [2]], ["c"])
     >>> df.agg(array_agg("c").alias("r")).collect()
@@ -829,15 +810,14 @@ def array_agg(col: "ColumnOrName") -> Column:
 
 
 def collect_list(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns a list of objects with duplicates.
+    """Aggregate function: returns a list of objects with duplicates.
 
     .. versionadded:: 1.6.0
 
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The function is non-deterministic because the order of collected results depends
     on the order of the rows which may be non-deterministic after a shuffle.
@@ -847,12 +827,12 @@ def collect_list(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         list of objects with duplicates.
 
-    Examples
+    Examples:
     --------
     >>> df2 = spark.createDataFrame([(2,), (5,), (5,)], ("age",))
     >>> df2.agg(collect_list("age")).collect()
@@ -862,8 +842,7 @@ def collect_list(col: "ColumnOrName") -> Column:
 
 
 def array_append(col: "ColumnOrName", value: Any) -> Column:
-    """
-    Collection function: returns an array of the elements in col1 along
+    """Collection function: returns an array of the elements in col1 along
     with the added element in col2 at the last of the array.
 
     .. versionadded:: 3.4.0
@@ -875,16 +854,16 @@ def array_append(col: "ColumnOrName", value: Any) -> Column:
     value :
         a literal value, or a :class:`~pyspark.sql.Column` expression.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of values from first array along with the element.
 
-    Notes
+    Notes:
     -----
     Supports Spark Connect.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql import Row
     >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2="c")])
@@ -897,8 +876,7 @@ def array_append(col: "ColumnOrName", value: Any) -> Column:
 
 
 def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Any) -> Column:
-    """
-    Collection function: adds an item into a given array at a specified array index.
+    """Collection function: adds an item into a given array at a specified array index.
     Array indices start at 1, or start from the end if index is negative.
     Index above array size appends the array, or prepends the array if index is negative,
     with 'null' elements.
@@ -915,16 +893,16 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: An
     value :
         a literal value, or a :class:`~pyspark.sql.Column` expression.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of values, including the new specified value
 
-    Notes
+    Notes:
     -----
     Supports Spark Connect.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [(["a", "b", "c"], 2, "d"), (["c", "b", "a"], -2, "d")], ["data", "pos", "val"]
@@ -991,8 +969,7 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: An
 
 
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
-    """
-    Collection function: returns null if the array is null, true if the array contains the
+    """Collection function: returns null if the array is null, true if the array contains the
     given value, and false otherwise.
 
     Parameters
@@ -1002,12 +979,12 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     value :
         value or column to check for in array
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a column of Boolean type.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(["a", "b", "c"],), ([],)], ["data"])
     >>> df.select(array_contains(df.data, "a")).collect()
@@ -1020,8 +997,7 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
 
 
 def array_distinct(col: "ColumnOrName") -> Column:
-    """
-    Collection function: removes duplicate values from the array.
+    """Collection function: removes duplicate values from the array.
 
     .. versionadded:: 2.4.0
 
@@ -1033,12 +1009,12 @@ def array_distinct(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of unique values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([1, 2, 3, 2],), ([4, 5, 5, 4],)], ["data"])
     >>> df.select(array_distinct(df.data)).collect()
@@ -1048,8 +1024,7 @@ def array_distinct(col: "ColumnOrName") -> Column:
 
 
 def array_intersect(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Collection function: returns an array of the elements in the intersection of col1 and col2,
+    """Collection function: returns an array of the elements in the intersection of col1 and col2,
     without duplicates.
 
     .. versionadded:: 2.4.0
@@ -1064,12 +1039,12 @@ def array_intersect(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col2 : :class:`~pyspark.sql.Column` or str
         name of column containing array
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of values in the intersection of two arrays.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql import Row
     >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
@@ -1080,8 +1055,7 @@ def array_intersect(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Collection function: returns an array of the elements in the union of col1 and col2,
+    """Collection function: returns an array of the elements in the union of col1 and col2,
     without duplicates.
 
     .. versionadded:: 2.4.0
@@ -1096,12 +1070,12 @@ def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col2 : :class:`~pyspark.sql.Column` or str
         name of column containing array
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of values in union of two arrays.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql import Row
     >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
@@ -1112,8 +1086,7 @@ def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def array_max(col: "ColumnOrName") -> Column:
-    """
-    Collection function: returns the maximum value of the array.
+    """Collection function: returns the maximum value of the array.
 
     .. versionadded:: 2.4.0
 
@@ -1125,12 +1098,12 @@ def array_max(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         maximum value of an array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ["data"])
     >>> df.select(array_max(df.data).alias("max")).collect()
@@ -1142,8 +1115,7 @@ def array_max(col: "ColumnOrName") -> Column:
 
 
 def array_min(col: "ColumnOrName") -> Column:
-    """
-    Collection function: returns the minimum value of the array.
+    """Collection function: returns the minimum value of the array.
 
     .. versionadded:: 2.4.0
 
@@ -1155,12 +1127,12 @@ def array_min(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         minimum value of array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 1, 3],), ([None, 10, -1],)], ["data"])
     >>> df.select(array_min(df.data).alias("min")).collect()
@@ -1172,8 +1144,7 @@ def array_min(col: "ColumnOrName") -> Column:
 
 
 def avg(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the average of the values in a group.
+    """Aggregate function: returns the average of the values in a group.
 
     .. versionadded:: 1.3.0
 
@@ -1185,12 +1156,12 @@ def avg(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(10)
     >>> df.select(avg(col("id"))).show()
@@ -1204,8 +1175,7 @@ def avg(col: "ColumnOrName") -> Column:
 
 
 def sum(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the sum of all values in the expression.
+    """Aggregate function: returns the sum of all values in the expression.
 
     .. versionadded:: 1.3.0
 
@@ -1217,12 +1187,12 @@ def sum(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(10)
     >>> df.select(sum(df["id"])).show()
@@ -1236,8 +1206,7 @@ def sum(col: "ColumnOrName") -> Column:
 
 
 def max(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the maximum value of the expression in a group.
+    """Aggregate function: returns the maximum value of the expression in a group.
 
     .. versionadded:: 1.3.0
 
@@ -1249,12 +1218,12 @@ def max(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(10)
     >>> df.select(max(col("id"))).show()
@@ -1268,8 +1237,7 @@ def max(col: "ColumnOrName") -> Column:
 
 
 def mean(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the average of the values in a group.
+    """Aggregate function: returns the average of the values in a group.
     An alias of :func:`avg`.
 
     .. versionadded:: 1.4.0
@@ -1282,12 +1250,12 @@ def mean(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(10)
     >>> df.select(mean(df.id)).show()
@@ -1301,8 +1269,7 @@ def mean(col: "ColumnOrName") -> Column:
 
 
 def median(col: "ColumnOrName") -> Column:
-    """
-    Returns the median of the values in a group.
+    """Returns the median of the values in a group.
 
     .. versionadded:: 3.4.0
 
@@ -1311,16 +1278,16 @@ def median(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the median of the values in a group.
 
-    Notes
+    Notes:
     -----
     Supports Spark Connect.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -1345,8 +1312,7 @@ def median(col: "ColumnOrName") -> Column:
 
 
 def mode(col: "ColumnOrName") -> Column:
-    """
-    Returns the most frequent value in a group.
+    """Returns the most frequent value in a group.
 
     .. versionadded:: 3.4.0
 
@@ -1355,16 +1321,16 @@ def mode(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the most frequent value in a group.
 
-    Notes
+    Notes:
     -----
     Supports Spark Connect.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -1389,8 +1355,7 @@ def mode(col: "ColumnOrName") -> Column:
 
 
 def min(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the minimum value of the expression in a group.
+    """Aggregate function: returns the minimum value of the expression in a group.
 
     .. versionadded:: 1.3.0
 
@@ -1402,12 +1367,12 @@ def min(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(10)
     >>> df.select(min(df.id)).show()
@@ -1432,12 +1397,12 @@ def any_value(col: "ColumnOrName") -> Column:
     ignorenulls : :class:`~pyspark.sql.Column` or bool
         if first value is null then look for first non-null value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         some value of `col` for a group of rows.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [(None, 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], ["c1", "c2"]
@@ -1451,8 +1416,7 @@ def any_value(col: "ColumnOrName") -> Column:
 
 
 def count(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the number of items in a group.
+    """Aggregate function: returns the number of items in a group.
 
     .. versionadded:: 1.3.0
 
@@ -1464,12 +1428,12 @@ def count(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column for computed results.
 
-    Examples
+    Examples:
     --------
     Count by all columns (start), and by a column that does not count ``None``.
 
@@ -1500,12 +1464,12 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
         maximum relative standard deviation allowed (default = 0.05).
         For rsd < 0.01, it is more efficient to use :func:`count_distinct`
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column of computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([1, 2, 2, 3], "INT")
     >>> df.agg(approx_count_distinct("value").alias("distinct_values")).show()
@@ -1521,8 +1485,7 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
 
 
 def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
-    """
-    .. versionadded:: 1.3.0
+    """.. versionadded:: 1.3.0
 
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
@@ -1546,8 +1509,7 @@ def transform(
     col: "ColumnOrName",
     f: Union[Callable[[Column], Column], Callable[[Column, Column], Column]],
 ) -> Column:
-    """
-    Returns an array of elements after applying a transformation to each element in the input array.
+    """Returns an array of elements after applying a transformation to each element in the input array.
 
     .. versionadded:: 3.1.0
 
@@ -1571,12 +1533,12 @@ def transform(
         Python ``UserDefinedFunctions`` are not supported
         (`SPARK-27052 <https://issues.apache.org/jira/browse/SPARK-27052>`__).
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a new array of transformed elements.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(1, [1, 2, 3, 4])], ("key", "values"))
     >>> df.select(transform("values", lambda x: x * 2).alias("doubled")).show()
@@ -1599,8 +1561,7 @@ def transform(
 
 
 def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
-    """
-    Concatenates multiple input string columns together into a single string column,
+    """Concatenates multiple input string columns together into a single string column,
     using the given separator.
 
     .. versionadded:: 1.5.0
@@ -1615,12 +1576,12 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     cols : :class:`~pyspark.sql.Column` or str
         list of columns to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         string of concatenated words.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("abcd", "123")], ["s", "d"])
     >>> df.select(concat_ws("-", df.s, df.d).alias("s")).collect()
@@ -1631,8 +1592,7 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
 
 
 def lower(col: "ColumnOrName") -> Column:
-    """
-    Converts a string expression to lower case.
+    """Converts a string expression to lower case.
 
     .. versionadded:: 1.5.0
 
@@ -1644,12 +1604,12 @@ def lower(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         lower case values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
     >>> df.select(lower("value")).show()
@@ -1665,8 +1625,7 @@ def lower(col: "ColumnOrName") -> Column:
 
 
 def lcase(str: "ColumnOrName") -> Column:
-    """
-    Returns `str` with all characters changed to lowercase.
+    """Returns `str` with all characters changed to lowercase.
 
     .. versionadded:: 3.5.0
 
@@ -1675,7 +1634,7 @@ def lcase(str: "ColumnOrName") -> Column:
     str : :class:`~pyspark.sql.Column` or str
         Input column or strings.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.lcase(sf.lit("Spark"))).show()
@@ -1689,8 +1648,7 @@ def lcase(str: "ColumnOrName") -> Column:
 
 
 def ceil(col: "ColumnOrName") -> Column:
-    """
-    Computes the ceiling of the given value.
+    """Computes the ceiling of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -1702,12 +1660,12 @@ def ceil(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(ceil(lit(-0.1))).show()
@@ -1725,8 +1683,7 @@ def ceiling(col: "ColumnOrName") -> Column:
 
 
 def floor(col: "ColumnOrName") -> Column:
-    """
-    Computes the floor of the given value.
+    """Computes the floor of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -1738,12 +1695,12 @@ def floor(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         column to find floor for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         nearest integer that is less than or equal to given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(floor(lit(2.5))).show()
@@ -1757,8 +1714,7 @@ def floor(col: "ColumnOrName") -> Column:
 
 
 def abs(col: "ColumnOrName") -> Column:
-    """
-    Computes the absolute value.
+    """Computes the absolute value.
 
     .. versionadded:: 1.3.0
 
@@ -1770,12 +1726,12 @@ def abs(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(abs(lit(-1))).show()
@@ -1801,12 +1757,12 @@ def isnan(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         True if value is NaN and False otherwise.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(1.0, float("nan")), (float("nan"), 2.0)], ("a", "b"))
     >>> df.select("a", "b", isnan("a").alias("r1"), isnan(df.b).alias("r2")).show()
@@ -1833,12 +1789,12 @@ def isnull(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         True if value is null and False otherwise.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(1, None), (None, 2)], ("a", "b"))
     >>> df.select("a", "b", isnull("a").alias("r1"), isnull(df.b).alias("r2")).show()
@@ -1853,8 +1809,7 @@ def isnull(col: "ColumnOrName") -> Column:
 
 
 def isnotnull(col: "ColumnOrName") -> Column:
-    """
-    Returns true if `col` is not null, or false otherwise.
+    """Returns true if `col` is not null, or false otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -1862,7 +1817,7 @@ def isnotnull(col: "ColumnOrName") -> Column:
     ----------
     col : :class:`~pyspark.sql.Column` or str
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
     >>> df.select(isnotnull(df.e).alias("r")).collect()
@@ -1872,15 +1827,15 @@ def isnotnull(col: "ColumnOrName") -> Column:
 
 
 def equal_null(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Returns same result as the EQUAL(=) operator for non-null operands,
+    """Returns same result as the EQUAL(=) operator for non-null operands,
     but returns true if both are null, false if one of the them is null.
     .. versionadded:: 3.5.0
     Parameters
     ----------
     col1 : :class:`~pyspark.sql.Column` or str
     col2 : :class:`~pyspark.sql.Column` or str
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -1908,8 +1863,7 @@ def equal_null(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def flatten(col: "ColumnOrName") -> Column:
-    """
-    Collection function: creates a single array from an array of arrays.
+    """Collection function: creates a single array from an array of arrays.
     If a structure of nested arrays is deeper than two levels,
     only one level of nesting is removed.
 
@@ -1923,12 +1877,12 @@ def flatten(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         flattened array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([[1, 2, 3], [4, 5], [6]],), ([None, [4, 5]],)], ["data"])
     >>> df.show(truncate=False)
@@ -1952,8 +1906,7 @@ def flatten(col: "ColumnOrName") -> Column:
 
 
 def array_compact(col: "ColumnOrName") -> Column:
-    """
-    Collection function: removes null values from the array.
+    """Collection function: removes null values from the array.
 
     .. versionadded:: 3.4.0
 
@@ -1962,16 +1915,16 @@ def array_compact(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array by excluding the null values.
 
-    Notes
+    Notes:
     -----
     Supports Spark Connect.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([1, None, 2, 3],), ([4, 5, None, 4],)], ["data"])
     >>> df.select(array_compact(df.data)).collect()
@@ -1983,8 +1936,7 @@ def array_compact(col: "ColumnOrName") -> Column:
 
 
 def array_remove(col: "ColumnOrName", element: Any) -> Column:
-    """
-    Collection function: Remove all elements that equal to element from the given array.
+    """Collection function: Remove all elements that equal to element from the given array.
 
     .. versionadded:: 2.4.0
 
@@ -1998,12 +1950,12 @@ def array_remove(col: "ColumnOrName", element: Any) -> Column:
     element :
         element to be removed from the array
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array excluding given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([1, 2, 3, 1, 1],), ([],)], ["data"])
     >>> df.select(array_remove(df.data, 1)).collect()
@@ -2015,8 +1967,7 @@ def array_remove(col: "ColumnOrName", element: Any) -> Column:
 
 
 def last_day(date: "ColumnOrName") -> Column:
-    """
-    Returns the last day of the month which the given date belongs to.
+    """Returns the last day of the month which the given date belongs to.
 
     .. versionadded:: 1.5.0
 
@@ -2028,12 +1979,12 @@ def last_day(date: "ColumnOrName") -> Column:
     date : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         last day of the month.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1997-02-10",)], ["d"])
     >>> df.select(last_day(df.d).alias("date")).collect()
@@ -2043,8 +1994,7 @@ def last_day(date: "ColumnOrName") -> Column:
 
 
 def sqrt(col: "ColumnOrName") -> Column:
-    """
-    Computes the square root of the specified float value.
+    """Computes the square root of the specified float value.
 
     .. versionadded:: 1.3.0
 
@@ -2056,12 +2006,12 @@ def sqrt(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(sqrt(lit(4))).show()
@@ -2075,8 +2025,7 @@ def sqrt(col: "ColumnOrName") -> Column:
 
 
 def cbrt(col: "ColumnOrName") -> Column:
-    """
-    Computes the cube-root of the given value.
+    """Computes the cube-root of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -2088,12 +2037,12 @@ def cbrt(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(cbrt(lit(27))).show()
@@ -2107,8 +2056,7 @@ def cbrt(col: "ColumnOrName") -> Column:
 
 
 def char(col: "ColumnOrName") -> Column:
-    """
-    Returns the ASCII character having the binary equivalent to `col`. If col is larger than 256 the
+    """Returns the ASCII character having the binary equivalent to `col`. If col is larger than 256 the
     result is equivalent to char(col % 256)
 
     .. versionadded:: 3.5.0
@@ -2118,7 +2066,7 @@ def char(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         Input column or strings.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.char(sf.lit(65))).show()
@@ -2148,12 +2096,12 @@ def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col1 : :class:`~pyspark.sql.Column` or str
         second column to calculate correlation.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         Pearson Correlation Coefficient of these two column values.
 
-    Examples
+    Examples:
     --------
     >>> a = range(20)
     >>> b = [2 * x for x in range(20)]
@@ -2165,8 +2113,7 @@ def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def cot(col: "ColumnOrName") -> Column:
-    """
-    Computes cotangent of the input column.
+    """Computes cotangent of the input column.
 
     .. versionadded:: 3.3.0
 
@@ -2178,12 +2125,12 @@ def cot(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         angle in radians.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         cotangent of the angle.
 
-    Examples
+    Examples:
     --------
     >>> import math
     >>> df = spark.range(1)
@@ -2198,7 +2145,7 @@ def e() -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.range(1).select(e()).show()
     +-----------------+
@@ -2211,18 +2158,19 @@ def e() -> Column:
 
 
 def negative(col: "ColumnOrName") -> Column:
-    """
-    Returns the negative value.
+    """Returns the negative value.
     .. versionadded:: 3.5.0
     Parameters
     ----------
     col : :class:`~pyspark.sql.Column` or str
         column to calculate negative value for.
-    Returns
+
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         negative value.
-    Examples
+
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(3).select(sf.negative("id")).show()
@@ -2242,7 +2190,7 @@ def pi() -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.range(1).select(pi()).show()
     +-----------------+
@@ -2255,8 +2203,7 @@ def pi() -> Column:
 
 
 def positive(col: "ColumnOrName") -> Column:
-    """
-    Returns the value.
+    """Returns the value.
 
     .. versionadded:: 3.5.0
 
@@ -2265,12 +2212,12 @@ def positive(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         input value column.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(-1,), (0,), (1,)], ["v"])
     >>> df.select(positive("v").alias("p")).show()
@@ -2286,8 +2233,7 @@ def positive(col: "ColumnOrName") -> Column:
 
 
 def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
-    """
-    Returns the value of the first argument raised to the power of the second argument.
+    """Returns the value of the first argument raised to the power of the second argument.
 
     .. versionadded:: 1.4.0
 
@@ -2301,12 +2247,12 @@ def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) 
     col2 : str, :class:`~pyspark.sql.Column` or float
         the exponent number.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the base rased to the power the argument.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(pow(lit(3), lit(2))).first()
@@ -2316,8 +2262,7 @@ def pow(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) 
 
 
 def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
-    """
-    Formats the arguments in printf-style and returns the result as a string column.
+    """Formats the arguments in printf-style and returns the result as a string column.
 
     .. versionadded:: 3.5.0
 
@@ -2328,7 +2273,7 @@ def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
     cols : :class:`~pyspark.sql.Column` or str
         column names or :class:`~pyspark.sql.Column`\\s to be used in formatting
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.createDataFrame(
@@ -2351,8 +2296,7 @@ def printf(format: "ColumnOrName", *cols: "ColumnOrName") -> Column:
 
 
 def product(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the product of the values in a group.
+    """Aggregate function: returns the product of the values in a group.
 
     .. versionadded:: 3.2.0
 
@@ -2364,12 +2308,12 @@ def product(col: "ColumnOrName") -> Column:
     col : str, :class:`Column`
         column containing values to be multiplied together
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1, 10).toDF("x").withColumn("mod3", col("x") % 3)
     >>> prods = df.groupBy("mod3").agg(product("x").alias("product"))
@@ -2394,7 +2338,7 @@ def rand(seed: Optional[int] = None) -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The function is non-deterministic in general case.
 
@@ -2403,12 +2347,12 @@ def rand(seed: Optional[int] = None) -> Column:
     seed : int (default: None)
         seed value for random generator.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         random values.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql import functions as sf
     >>> spark.range(0, 2, 1, 1).withColumn("rand", sf.rand(seed=42) * 3).show()
@@ -2437,12 +2381,12 @@ def regexp(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     regexp : :class:`~pyspark.sql.Column` or str
         regex pattern to apply.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         true if `str` matches a Java regex, or false otherwise.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"]).select(
@@ -2490,12 +2434,12 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     regexp : :class:`~pyspark.sql.Column` or str
         regex pattern to apply.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the number of times that a Java regex pattern is matched in the string.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
     >>> df.select(regexp_count("str", lit(r"\d+")).alias("d")).collect()
@@ -2526,12 +2470,12 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
     idx : int
         matched group id.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         matched value specified by `idx` group id.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("100-200",)], ["str"])
     >>> df.select(regexp_extract("str", r"(\d+)-(\d+)", 1).alias("d")).collect()
@@ -2563,12 +2507,12 @@ def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optiona
     idx : int
         matched group id.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         all strings in the `str` that match a Java regex and corresponding to the regex group index.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("100-200, 300-400", r"(\d+)-(\d+)")], ["str", "regexp"])
     >>> df.select(regexp_extract_all("str", lit(r"(\d+)-(\d+)")).alias("d")).collect()
@@ -2599,12 +2543,12 @@ def regexp_like(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     regexp : :class:`~pyspark.sql.Column` or str
         regex pattern to apply.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         true if `str` matches a Java regex, or false otherwise.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"]).select(
@@ -2652,12 +2596,12 @@ def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     regexp : :class:`~pyspark.sql.Column` or str
         regex pattern to apply.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the substring that matches a Java regex within the string `str`.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
     >>> df.select(regexp_substr("str", lit(r"\d+")).alias("d")).collect()
@@ -2677,8 +2621,7 @@ def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
 
 
 def repeat(col: "ColumnOrName", n: int) -> Column:
-    """
-    Repeats a string column n times, and returns it as a new string column.
+    """Repeats a string column n times, and returns it as a new string column.
 
     .. versionadded:: 1.5.0
 
@@ -2692,12 +2635,12 @@ def repeat(col: "ColumnOrName", n: int) -> Column:
     n : int
         number of times to repeat value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         string with repeated values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("ab",)],
@@ -2712,8 +2655,7 @@ def repeat(col: "ColumnOrName", n: int) -> Column:
 
 
 def sequence(start: "ColumnOrName", stop: "ColumnOrName", step: Optional["ColumnOrName"] = None) -> Column:
-    """
-    Generate a sequence of integers from `start` to `stop`, incrementing by `step`.
+    """Generate a sequence of integers from `start` to `stop`, incrementing by `step`.
     If `step` is not set, incrementing by 1 if `start` is less than or equal to `stop`,
     otherwise -1.
 
@@ -2731,12 +2673,12 @@ def sequence(start: "ColumnOrName", stop: "ColumnOrName", step: Optional["Column
     step : :class:`~pyspark.sql.Column` or str, optional
         value to add to current to get next element (default is 1)
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of sequence values
 
-    Examples
+    Examples:
     --------
     >>> df1 = spark.createDataFrame([(-2, 2)], ("C1", "C2"))
     >>> df1.select(sequence("C1", "C2").alias("r")).collect()
@@ -2752,8 +2694,7 @@ def sequence(start: "ColumnOrName", stop: "ColumnOrName", step: Optional["Column
 
 
 def sign(col: "ColumnOrName") -> Column:
-    """
-    Computes the signum of the given value.
+    """Computes the signum of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -2765,12 +2706,12 @@ def sign(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.sign(sf.lit(-5)), sf.sign(sf.lit(6))).show()
@@ -2784,8 +2725,7 @@ def sign(col: "ColumnOrName") -> Column:
 
 
 def signum(col: "ColumnOrName") -> Column:
-    """
-    Computes the signum of the given value.
+    """Computes the signum of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -2797,12 +2737,12 @@ def signum(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.signum(sf.lit(-5)), sf.signum(sf.lit(6))).show()
@@ -2816,8 +2756,7 @@ def signum(col: "ColumnOrName") -> Column:
 
 
 def sin(col: "ColumnOrName") -> Column:
-    """
-    Computes sine of the input column.
+    """Computes sine of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -2829,12 +2768,12 @@ def sin(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         sine of the angle, as if computed by `java.lang.Math.sin()`
 
-    Examples
+    Examples:
     --------
     >>> import math
     >>> df = spark.range(1)
@@ -2845,8 +2784,7 @@ def sin(col: "ColumnOrName") -> Column:
 
 
 def skewness(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the skewness of the values in a group.
+    """Aggregate function: returns the skewness of the values in a group.
 
     .. versionadded:: 1.6.0
 
@@ -2858,12 +2796,12 @@ def skewness(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         skewness of given column.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([[1], [1], [2]], ["c"])
     >>> df.select(skewness(df.c)).first()
@@ -2873,8 +2811,7 @@ def skewness(col: "ColumnOrName") -> Column:
 
 
 def encode(col: "ColumnOrName", charset: str) -> Column:
-    """
-    Computes the first argument into a binary from a string using the provided character set
+    """Computes the first argument into a binary from a string using the provided character set
     (one of 'US-ASCII', 'ISO-8859-1', 'UTF-8', 'UTF-16BE', 'UTF-16LE', 'UTF-16').
 
     .. versionadded:: 1.5.0
@@ -2889,12 +2826,12 @@ def encode(col: "ColumnOrName", charset: str) -> Column:
     charset : str
         charset to use to encode.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("abcd",)], ["c"])
     >>> df.select(encode("c", "UTF-8")).show()
@@ -2910,8 +2847,7 @@ def encode(col: "ColumnOrName", charset: str) -> Column:
 
 
 def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
-    """
-    Returns the index (1-based) of the given string (`str`) in the comma-delimited
+    """Returns the index (1-based) of the given string (`str`) in the comma-delimited
     list (`strArray`). Returns 0, if the string was not found or if the given string (`str`)
     contains a comma.
 
@@ -2924,7 +2860,7 @@ def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
     str_array : :class:`~pyspark.sql.Column` or str
         The comma-delimited list.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("ab", "abc,b,ab,c,def")], ["a", "b"])
     >>> df.select(find_in_set(df.a, df.b).alias("r")).collect()
@@ -2956,7 +2892,7 @@ def first(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The function is non-deterministic because its results depends on the order of the
     rows which may be non-deterministic after a shuffle.
@@ -2968,12 +2904,12 @@ def first(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
     ignorenulls : :class:`~pyspark.sql.Column` or str
         if first value is null then look for first non-null value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         first value of the group.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
     >>> df = df.orderBy(df.age)
@@ -3011,7 +2947,7 @@ def last(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The function is non-deterministic because its results depends on the order of the
     rows which may be non-deterministic after a shuffle.
@@ -3023,12 +2959,12 @@ def last(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
     ignorenulls : :class:`~pyspark.sql.Column` or str
         if last value is null then look for non-null value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         last value of the group.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
     >>> df = df.orderBy(df.age.desc())
@@ -3056,8 +2992,7 @@ def last(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
 
 
 def greatest(*cols: "ColumnOrName") -> Column:
-    """
-    Returns the greatest value of the list of column names, skipping null values.
+    """Returns the greatest value of the list of column names, skipping null values.
     This function takes at least 2 parameters. It will return null if all parameters are null.
 
     .. versionadded:: 1.5.0
@@ -3070,18 +3005,17 @@ def greatest(*cols: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         columns to check for gratest value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         gratest value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(1, 4, 3)], ["a", "b", "c"])
     >>> df.select(greatest(df.a, df.b, df.c).alias("greatest")).collect()
     [Row(greatest=4)]
     """
-
     if len(cols) < 2:
         raise ValueError("greatest should take at least 2 columns")
 
@@ -3090,8 +3024,7 @@ def greatest(*cols: "ColumnOrName") -> Column:
 
 
 def least(*cols: "ColumnOrName") -> Column:
-    """
-    Returns the least value of the list of column names, skipping null values.
+    """Returns the least value of the list of column names, skipping null values.
     This function takes at least 2 parameters. It will return null if all parameters are null.
 
     .. versionadded:: 1.5.0
@@ -3104,12 +3037,12 @@ def least(*cols: "ColumnOrName") -> Column:
     cols : :class:`~pyspark.sql.Column` or str
         column names or columns to be compared
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         least value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(1, 4, 3)], ["a", "b", "c"])
     >>> df.select(least(df.a, df.b, df.c).alias("least")).collect()
@@ -3123,8 +3056,7 @@ def least(*cols: "ColumnOrName") -> Column:
 
 
 def trim(col: "ColumnOrName") -> Column:
-    """
-    Trim the spaces from left end for the specified string value.
+    """Trim the spaces from left end for the specified string value.
 
     .. versionadded:: 1.5.0
 
@@ -3136,12 +3068,12 @@ def trim(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         left trimmed values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
     >>> df.select(ltrim("value").alias("r")).withColumn("length", length("r")).show()
@@ -3157,8 +3089,7 @@ def trim(col: "ColumnOrName") -> Column:
 
 
 def rtrim(col: "ColumnOrName") -> Column:
-    """
-    Trim the spaces from right end for the specified string value.
+    """Trim the spaces from right end for the specified string value.
 
     .. versionadded:: 1.5.0
 
@@ -3170,12 +3101,12 @@ def rtrim(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         right trimmed values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
     >>> df.select(rtrim("value").alias("r")).withColumn("length", length("r")).show()
@@ -3191,8 +3122,7 @@ def rtrim(col: "ColumnOrName") -> Column:
 
 
 def ltrim(col: "ColumnOrName") -> Column:
-    """
-    Trim the spaces from left end for the specified string value.
+    """Trim the spaces from left end for the specified string value.
 
     .. versionadded:: 1.5.0
 
@@ -3204,12 +3134,12 @@ def ltrim(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         left trimmed values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["   Spark", "Spark  ", " Spark"], "STRING")
     >>> df.select(ltrim("value").alias("r")).withColumn("length", length("r")).show()
@@ -3225,8 +3155,7 @@ def ltrim(col: "ColumnOrName") -> Column:
 
 
 def btrim(str: "ColumnOrName", trim: Optional["ColumnOrName"] = None) -> Column:
-    """
-    Remove the leading and trailing `trim` characters from `str`.
+    """Remove the leading and trailing `trim` characters from `str`.
 
     .. versionadded:: 3.5.0
 
@@ -3237,7 +3166,7 @@ def btrim(str: "ColumnOrName", trim: Optional["ColumnOrName"] = None) -> Column:
     trim : :class:`~pyspark.sql.Column` or str
         The trim string characters to trim, the default value is a single space
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3262,8 +3191,7 @@ def btrim(str: "ColumnOrName", trim: Optional["ColumnOrName"] = None) -> Column:
 
 
 def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
-    """
-    Returns a boolean. The value is True if str ends with suffix.
+    """Returns a boolean. The value is True if str ends with suffix.
     Returns NULL if either input expression is NULL. Otherwise, returns False.
     Both str or suffix must be of STRING or BINARY type.
 
@@ -3276,7 +3204,7 @@ def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
     suffix : :class:`~pyspark.sql.Column` or str
         A column of string, the suffix.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3315,8 +3243,7 @@ def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
 
 
 def startswith(str: "ColumnOrName", prefix: "ColumnOrName") -> Column:
-    """
-    Returns a boolean. The value is True if str starts with prefix.
+    """Returns a boolean. The value is True if str starts with prefix.
     Returns NULL if either input expression is NULL. Otherwise, returns False.
     Both str or prefix must be of STRING or BINARY type.
 
@@ -3329,7 +3256,7 @@ def startswith(str: "ColumnOrName", prefix: "ColumnOrName") -> Column:
     prefix : :class:`~pyspark.sql.Column` or str
         A column of string, the prefix.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3382,12 +3309,12 @@ def length(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         length of the value.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([("ABC ",)], ["a"]).select(length("a").alias("length")).collect()
     [Row(length=4)]
@@ -3404,11 +3331,13 @@ def coalesce(*cols: "ColumnOrName") -> Column:
     ----------
     cols : :class:`~pyspark.sql.Column` or str
         list of columns to work on.
-    Returns
+
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         value of the first column that is not null.
-    Examples
+
+    Examples:
     --------
     >>> cDf = spark.createDataFrame([(None, None), (1, None), (None, 2)], ("a", "b"))
     >>> cDf.show()
@@ -3436,20 +3365,19 @@ def coalesce(*cols: "ColumnOrName") -> Column:
     |NULL|   2|             0.0|
     +----+----+----------------+
     """
-
     cols = [_to_column_expr(expr) for expr in cols]
     return Column(CoalesceOperator(*cols))
 
 
 def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Returns `col2` if `col1` is null, or `col1` otherwise.
+    """Returns `col2` if `col1` is null, or `col1` otherwise.
     .. versionadded:: 3.5.0
     Parameters
     ----------
     col1 : :class:`~pyspark.sql.Column` or str
     col2 : :class:`~pyspark.sql.Column` or str
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3467,13 +3395,11 @@ def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df.select(nvl(df.a, df.b).alias("r")).collect()
     [Row(r=8), Row(r=1)]
     """
-
     return coalesce(col1, col2)
 
 
 def nvl2(col1: "ColumnOrName", col2: "ColumnOrName", col3: "ColumnOrName") -> Column:
-    """
-    Returns `col2` if `col1` is not null, or `col3` otherwise.
+    """Returns `col2` if `col1` is not null, or `col3` otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -3483,7 +3409,7 @@ def nvl2(col1: "ColumnOrName", col2: "ColumnOrName", col3: "ColumnOrName") -> Co
     col2 : :class:`~pyspark.sql.Column` or str
     col3 : :class:`~pyspark.sql.Column` or str
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3510,14 +3436,14 @@ def nvl2(col1: "ColumnOrName", col2: "ColumnOrName", col3: "ColumnOrName") -> Co
 
 
 def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Returns `col2` if `col1` is null, or `col1` otherwise.
+    """Returns `col2` if `col1` is null, or `col1` otherwise.
     .. versionadded:: 3.5.0
     Parameters
     ----------
     col1 : :class:`~pyspark.sql.Column` or str
     col2 : :class:`~pyspark.sql.Column` or str
-    Examples
+
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> df = spark.createDataFrame([(None,), (1,)], ["e"])
@@ -3533,8 +3459,7 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def nullif(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
-    """
-    Returns null if `col1` equals to `col2`, or `col1` otherwise.
+    """Returns null if `col1` equals to `col2`, or `col1` otherwise.
 
     .. versionadded:: 3.5.0
 
@@ -3543,7 +3468,7 @@ def nullif(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col1 : :class:`~pyspark.sql.Column` or str
     col2 : :class:`~pyspark.sql.Column` or str
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -3577,12 +3502,12 @@ def md5(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([("ABC",)], ["a"]).select(md5("a").alias("hash")).collect()
     [Row(hash='902fbdd2b1df0c4f70b4a5d23525e932')]
@@ -3608,12 +3533,12 @@ def sha2(col: "ColumnOrName", numBits: int) -> Column:
         the desired bit length of the result, which must have a
         value of 224, 256, 384, 512, or 0 (which is equivalent to 256).
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column for computed results.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
     >>> df.withColumn("sha2", sha2(df.name, 256)).show(truncate=False)
@@ -3624,7 +3549,6 @@ def sha2(col: "ColumnOrName", numBits: int) -> Column:
     |Bob  |cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961|
     +-----+----------------------------------------------------------------+
     """
-
     if numBits not in {224, 256, 384, 512, 0}:
         raise ValueError("numBits should be one of {224, 256, 384, 512, 0}")
 
@@ -3635,18 +3559,17 @@ def sha2(col: "ColumnOrName", numBits: int) -> Column:
 
 
 def curdate() -> Column:
-    """
-    Returns the current date at the start of query evaluation as a :class:`DateType` column.
+    """Returns the current date at the start of query evaluation as a :class:`DateType` column.
     All calls of current_date within the same query return the same value.
 
     .. versionadded:: 3.5.0
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         current date.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(1).select(sf.curdate()).show()  # doctest: +SKIP
@@ -3660,8 +3583,7 @@ def curdate() -> Column:
 
 
 def current_date() -> Column:
-    """
-    Returns the current date at the start of query evaluation as a :class:`DateType` column.
+    """Returns the current date at the start of query evaluation as a :class:`DateType` column.
     All calls of current_date within the same query return the same value.
 
     .. versionadded:: 1.5.0
@@ -3669,12 +3591,12 @@ def current_date() -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         current date.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(current_date()).show()  # doctest: +SKIP
@@ -3688,17 +3610,16 @@ def current_date() -> Column:
 
 
 def now() -> Column:
-    """
-    Returns the current timestamp at the start of query evaluation.
+    """Returns the current timestamp at the start of query evaluation.
 
     .. versionadded:: 3.5.0
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         current timestamp at the start of query evaluation.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(now()).show(truncate=False)  # doctest: +SKIP
@@ -3712,8 +3633,7 @@ def now() -> Column:
 
 
 def desc(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the descending order of the given column name.
+    """Returns a sort expression based on the descending order of the given column name.
 
     .. versionadded:: 1.3.0
 
@@ -3725,12 +3645,12 @@ def desc(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the descending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     Sort by the column 'id' in the descending order.
 
@@ -3749,8 +3669,7 @@ def desc(col: "ColumnOrName") -> Column:
 
 
 def asc(col: "ColumnOrName") -> Column:
-    """
-    Returns a sort expression based on the ascending order of the given column name.
+    """Returns a sort expression based on the ascending order of the given column name.
 
     .. versionadded:: 1.3.0
 
@@ -3762,12 +3681,12 @@ def asc(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to sort by in the ascending order.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the column specifying the order.
 
-    Examples
+    Examples:
     --------
     Sort by the column 'id' in the descending order.
 
@@ -3801,8 +3720,7 @@ def asc(col: "ColumnOrName") -> Column:
 
 
 def date_trunc(format: str, timestamp: "ColumnOrName") -> Column:
-    """
-    Returns timestamp truncated to the unit specified by the format.
+    """Returns timestamp truncated to the unit specified by the format.
 
     .. versionadded:: 2.3.0
 
@@ -3813,7 +3731,7 @@ def date_trunc(format: str, timestamp: "ColumnOrName") -> Column:
         'day', 'dd', 'hour', 'minute', 'second', 'week', 'quarter'
     timestamp : :class:`~pyspark.sql.Column` or str
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1997-02-28 05:02:11",)], ["t"])
     >>> df.select(date_trunc("year", df.t).alias("year")).collect()
@@ -3834,8 +3752,7 @@ def date_trunc(format: str, timestamp: "ColumnOrName") -> Column:
 
 
 def date_part(field: "ColumnOrName", source: "ColumnOrName") -> Column:
-    """
-    Extracts a part of the date/timestamp or interval source.
+    """Extracts a part of the date/timestamp or interval source.
 
     .. versionadded:: 3.5.0
 
@@ -3847,12 +3764,12 @@ def date_part(field: "ColumnOrName", source: "ColumnOrName") -> Column:
     source : :class:`~pyspark.sql.Column` or str
         a date/timestamp or interval column from where `field` should be extracted.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a part of the date/timestamp or interval source.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -3870,8 +3787,7 @@ def date_part(field: "ColumnOrName", source: "ColumnOrName") -> Column:
 
 
 def extract(field: "ColumnOrName", source: "ColumnOrName") -> Column:
-    """
-    Extracts a part of the date/timestamp or interval source.
+    """Extracts a part of the date/timestamp or interval source.
 
     .. versionadded:: 3.5.0
 
@@ -3882,12 +3798,12 @@ def extract(field: "ColumnOrName", source: "ColumnOrName") -> Column:
     source : :class:`~pyspark.sql.Column` or str
         a date/timestamp or interval column from where `field` should be extracted.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a part of the date/timestamp or interval source.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -3905,8 +3821,7 @@ def extract(field: "ColumnOrName", source: "ColumnOrName") -> Column:
 
 
 def datepart(field: "ColumnOrName", source: "ColumnOrName") -> Column:
-    """
-    Extracts a part of the date/timestamp or interval source.
+    """Extracts a part of the date/timestamp or interval source.
 
     .. versionadded:: 3.5.0
 
@@ -3918,12 +3833,12 @@ def datepart(field: "ColumnOrName", source: "ColumnOrName") -> Column:
     source : :class:`~pyspark.sql.Column` or str
         a date/timestamp or interval column from where `field` should be extracted.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a part of the date/timestamp or interval source.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -3941,8 +3856,7 @@ def datepart(field: "ColumnOrName", source: "ColumnOrName") -> Column:
 
 
 def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
-    """
-    Returns the number of days from `start` to `end`.
+    """Returns the number of days from `start` to `end`.
 
     .. versionadded:: 3.5.0
 
@@ -3953,12 +3867,12 @@ def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
     start : :class:`~pyspark.sql.Column` or column name
         from date column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         difference in days between two dates.
 
-    See Also
+    See Also:
     --------
     :meth:`pyspark.sql.functions.dateadd`
     :meth:`pyspark.sql.functions.date_add`
@@ -3966,7 +3880,7 @@ def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
     :meth:`pyspark.sql.functions.datediff`
     :meth:`pyspark.sql.functions.timestamp_diff`
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> df = spark.createDataFrame([("2015-04-08", "2015-05-10")], ["d1", "d2"])
@@ -3992,8 +3906,7 @@ def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
 
 
 def year(col: "ColumnOrName") -> Column:
-    """
-    Extract the year of a given date/timestamp as integer.
+    """Extract the year of a given date/timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4005,12 +3918,12 @@ def year(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         year part of the date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(year("dt").alias("year")).collect()
@@ -4020,8 +3933,7 @@ def year(col: "ColumnOrName") -> Column:
 
 
 def quarter(col: "ColumnOrName") -> Column:
-    """
-    Extract the quarter of a given date/timestamp as integer.
+    """Extract the quarter of a given date/timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4033,12 +3945,12 @@ def quarter(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         quarter of the date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(quarter("dt").alias("quarter")).collect()
@@ -4048,8 +3960,7 @@ def quarter(col: "ColumnOrName") -> Column:
 
 
 def month(col: "ColumnOrName") -> Column:
-    """
-    Extract the month of a given date/timestamp as integer.
+    """Extract the month of a given date/timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4061,12 +3972,12 @@ def month(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         month part of the date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(month("dt").alias("month")).collect()
@@ -4076,8 +3987,7 @@ def month(col: "ColumnOrName") -> Column:
 
 
 def dayofweek(col: "ColumnOrName") -> Column:
-    """
-    Extract the day of the week of a given date/timestamp as integer.
+    """Extract the day of the week of a given date/timestamp as integer.
     Ranges from 1 for a Sunday through to 7 for a Saturday
 
     .. versionadded:: 2.3.0
@@ -4090,12 +4000,12 @@ def dayofweek(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         day of the week for given date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(dayofweek("dt").alias("day")).collect()
@@ -4105,8 +4015,7 @@ def dayofweek(col: "ColumnOrName") -> Column:
 
 
 def day(col: "ColumnOrName") -> Column:
-    """
-    Extract the day of the month of a given date/timestamp as integer.
+    """Extract the day of the month of a given date/timestamp as integer.
 
     .. versionadded:: 3.5.0
 
@@ -4115,12 +4024,12 @@ def day(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         day of the month for given date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(day("dt").alias("day")).collect()
@@ -4130,8 +4039,7 @@ def day(col: "ColumnOrName") -> Column:
 
 
 def dayofmonth(col: "ColumnOrName") -> Column:
-    """
-    Extract the day of the month of a given date/timestamp as integer.
+    """Extract the day of the month of a given date/timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4143,12 +4051,12 @@ def dayofmonth(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         day of the month for given date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(dayofmonth("dt").alias("day")).collect()
@@ -4158,8 +4066,7 @@ def dayofmonth(col: "ColumnOrName") -> Column:
 
 
 def dayofyear(col: "ColumnOrName") -> Column:
-    """
-    Extract the day of the year of a given date/timestamp as integer.
+    """Extract the day of the year of a given date/timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4171,12 +4078,12 @@ def dayofyear(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         day of the year for given date/timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(dayofyear("dt").alias("day")).collect()
@@ -4186,8 +4093,7 @@ def dayofyear(col: "ColumnOrName") -> Column:
 
 
 def hour(col: "ColumnOrName") -> Column:
-    """
-    Extract the hours of a given timestamp as integer.
+    """Extract the hours of a given timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4199,12 +4105,12 @@ def hour(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         hour part of the timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -4215,8 +4121,7 @@ def hour(col: "ColumnOrName") -> Column:
 
 
 def minute(col: "ColumnOrName") -> Column:
-    """
-    Extract the minutes of a given timestamp as integer.
+    """Extract the minutes of a given timestamp as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4228,12 +4133,12 @@ def minute(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         minutes part of the timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -4244,8 +4149,7 @@ def minute(col: "ColumnOrName") -> Column:
 
 
 def second(col: "ColumnOrName") -> Column:
-    """
-    Extract the seconds of a given date as integer.
+    """Extract the seconds of a given date as integer.
 
     .. versionadded:: 1.5.0
 
@@ -4257,12 +4161,12 @@ def second(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         `seconds` part of the timestamp as integer.
 
-    Examples
+    Examples:
     --------
     >>> import datetime
     >>> df = spark.createDataFrame([(datetime.datetime(2015, 4, 8, 13, 8, 15),)], ["ts"])
@@ -4273,8 +4177,7 @@ def second(col: "ColumnOrName") -> Column:
 
 
 def weekofyear(col: "ColumnOrName") -> Column:
-    """
-    Extract the week number of a given date as integer.
+    """Extract the week number of a given date as integer.
     A week is considered to start on a Monday and week 1 is the first week with more than 3 days,
     as defined by ISO 8601
 
@@ -4288,12 +4191,12 @@ def weekofyear(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         `week` of the year for given date as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(weekofyear(df.dt).alias("week")).collect()
@@ -4303,8 +4206,7 @@ def weekofyear(col: "ColumnOrName") -> Column:
 
 
 def cos(col: "ColumnOrName") -> Column:
-    """
-    Computes cosine of the input column.
+    """Computes cosine of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -4316,12 +4218,12 @@ def cos(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         angle in radians
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         cosine of the angle, as if computed by `java.lang.Math.cos()`.
 
-    Examples
+    Examples:
     --------
     >>> import math
     >>> df = spark.range(1)
@@ -4332,8 +4234,7 @@ def cos(col: "ColumnOrName") -> Column:
 
 
 def acos(col: "ColumnOrName") -> Column:
-    """
-    Computes inverse cosine of the input column.
+    """Computes inverse cosine of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -4345,12 +4246,12 @@ def acos(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         inverse cosine of `col`, as if computed by `java.lang.Math.acos()`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1, 3)
     >>> df.select(acos(df.id)).show()
@@ -4365,8 +4266,7 @@ def acos(col: "ColumnOrName") -> Column:
 
 
 def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
-    """
-    Call a SQL function.
+    """Call a SQL function.
 
     .. versionadded:: 3.5.0
 
@@ -4377,12 +4277,12 @@ def call_function(funcName: str, *cols: "ColumnOrName") -> Column:
     cols : :class:`~pyspark.sql.Column` or str
         column names or :class:`~pyspark.sql.Column`\\s to be used in the function
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         result of executed function.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql.functions import call_udf, col
     >>> from pyspark.sql.types import IntegerType, StringType
@@ -4447,12 +4347,12 @@ def covar_pop(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col1 : :class:`~pyspark.sql.Column` or str
         second column to calculate covariance.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         covariance of these two column values.
 
-    Examples
+    Examples:
     --------
     >>> a = [1] * 10
     >>> b = [1] * 10
@@ -4479,12 +4379,12 @@ def covar_samp(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     col1 : :class:`~pyspark.sql.Column` or str
         second column to calculate covariance.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         sample covariance of these two column values.
 
-    Examples
+    Examples:
     --------
     >>> a = [1] * 10
     >>> b = [1] * 10
@@ -4496,8 +4396,7 @@ def covar_samp(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
 
 
 def exp(col: "ColumnOrName") -> Column:
-    """
-    Computes the exponential of the given value.
+    """Computes the exponential of the given value.
 
     .. versionadded:: 1.4.0
 
@@ -4509,12 +4408,12 @@ def exp(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         column to calculate exponential for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         exponential of the given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(exp(lit(0))).show()
@@ -4528,8 +4427,7 @@ def exp(col: "ColumnOrName") -> Column:
 
 
 def factorial(col: "ColumnOrName") -> Column:
-    """
-    Computes the factorial of the given value.
+    """Computes the factorial of the given value.
 
     .. versionadded:: 1.5.0
 
@@ -4541,12 +4439,12 @@ def factorial(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         a column to calculate factorial for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         factorial of given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(5,)], ["n"])
     >>> df.select(factorial(df.n).alias("f")).collect()
@@ -4568,12 +4466,12 @@ def log2(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         a column to calculate logariphm for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         logariphm of given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(4,)], ["a"])
     >>> df.select(log2("a").alias("log2")).show()
@@ -4596,12 +4494,12 @@ def ln(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         a column to calculate logariphm for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         natural logarithm of given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(4,)], ["a"])
     >>> df.select(ln("a")).show()
@@ -4615,8 +4513,7 @@ def ln(col: "ColumnOrName") -> Column:
 
 
 def degrees(col: "ColumnOrName") -> Column:
-    """
-    Converts an angle measured in radians to an approximately equivalent angle
+    """Converts an angle measured in radians to an approximately equivalent angle
     measured in degrees.
 
     .. versionadded:: 2.1.0
@@ -4629,12 +4526,12 @@ def degrees(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         angle in radians
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         angle in degrees, as if computed by `java.lang.Math.toDegrees()`
 
-    Examples
+    Examples:
     --------
     >>> import math
     >>> df = spark.range(1)
@@ -4645,8 +4542,7 @@ def degrees(col: "ColumnOrName") -> Column:
 
 
 def radians(col: "ColumnOrName") -> Column:
-    """
-    Converts an angle measured in degrees to an approximately equivalent angle
+    """Converts an angle measured in degrees to an approximately equivalent angle
     measured in radians.
 
     .. versionadded:: 2.1.0
@@ -4659,12 +4555,12 @@ def radians(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         angle in degrees
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         angle in radians, as if computed by `java.lang.Math.toRadians()`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(radians(lit(180))).first()
@@ -4674,8 +4570,7 @@ def radians(col: "ColumnOrName") -> Column:
 
 
 def atan(col: "ColumnOrName") -> Column:
-    """
-    Compute inverse tangent of the input column.
+    """Compute inverse tangent of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -4687,12 +4582,12 @@ def atan(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         inverse tangent of `col`, as if computed by `java.lang.Math.atan()`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(atan(df.id)).show()
@@ -4706,8 +4601,7 @@ def atan(col: "ColumnOrName") -> Column:
 
 
 def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]) -> Column:
-    """
-    .. versionadded:: 1.4.0
+    """.. versionadded:: 1.4.0
 
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
@@ -4719,7 +4613,7 @@ def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]
     col2 : str, :class:`~pyspark.sql.Column` or float
         coordinate on x-axis
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the `theta` component of the point
@@ -4728,7 +4622,7 @@ def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]
         (`x`, `y`) in Cartesian coordinates,
         as if computed by `java.lang.Math.atan2()`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(1)
     >>> df.select(atan2(lit(1), lit(2))).first()
@@ -4744,8 +4638,7 @@ def atan2(col1: Union["ColumnOrName", float], col2: Union["ColumnOrName", float]
 
 
 def tan(col: "ColumnOrName") -> Column:
-    """
-    Computes tangent of the input column.
+    """Computes tangent of the input column.
 
     .. versionadded:: 1.4.0
 
@@ -4757,12 +4650,12 @@ def tan(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         angle in radians
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         tangent of the given value, as if computed by `java.lang.Math.tan()`
 
-    Examples
+    Examples:
     --------
     >>> import math
     >>> df = spark.range(1)
@@ -4773,8 +4666,7 @@ def tan(col: "ColumnOrName") -> Column:
 
 
 def round(col: "ColumnOrName", scale: int = 0) -> Column:
-    """
-    Round the given value to `scale` decimal places using HALF_UP rounding mode if `scale` >= 0
+    """Round the given value to `scale` decimal places using HALF_UP rounding mode if `scale` >= 0
     or at integral part when `scale` < 0.
 
     .. versionadded:: 1.5.0
@@ -4789,12 +4681,12 @@ def round(col: "ColumnOrName", scale: int = 0) -> Column:
     scale : int optional default 0
         scale value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         rounded values.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([(2.5,)], ["a"]).select(round("a", 0).alias("r")).collect()
     [Row(r=3.0)]
@@ -4803,8 +4695,7 @@ def round(col: "ColumnOrName", scale: int = 0) -> Column:
 
 
 def bround(col: "ColumnOrName", scale: int = 0) -> Column:
-    """
-    Round the given value to `scale` decimal places using HALF_EVEN rounding mode if `scale` >= 0
+    """Round the given value to `scale` decimal places using HALF_EVEN rounding mode if `scale` >= 0
     or at integral part when `scale` < 0.
 
     .. versionadded:: 2.0.0
@@ -4819,12 +4710,12 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     scale : int optional default 0
         scale value.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         rounded values.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([(2.5,)], ["a"]).select(bround("a", 0).alias("r")).collect()
     [Row(r=2.0)]
@@ -4833,8 +4724,7 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
 
 
 def get(col: "ColumnOrName", index: Union["ColumnOrName", int]) -> Column:
-    """
-    Collection function: Returns element of array at given (0-based) index.
+    """Collection function: Returns element of array at given (0-based) index.
     If the index points outside of the array boundaries, then this function
     returns NULL.
 
@@ -4847,21 +4737,21 @@ def get(col: "ColumnOrName", index: Union["ColumnOrName", int]) -> Column:
     index : :class:`~pyspark.sql.Column` or str or int
         index to check for in array
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         value at given position.
 
-    Notes
+    Notes:
     -----
     The position is not 1 based, but 0 based index.
     Supports Spark Connect.
 
-    See Also
+    See Also:
     --------
     :meth:`element_at`
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(["a", "b", "c"], 1)], ["data", "index"])
     >>> df.select(get(df.data, 1)).show()
@@ -4919,12 +4809,12 @@ def initcap(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         string with all first letters are uppercase in each word.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([("ab cd",)], ["a"]).select(initcap("a").alias("v")).collect()
     [Row(v='Ab Cd')]
@@ -4953,8 +4843,7 @@ def initcap(col: "ColumnOrName") -> Column:
 
 
 def octet_length(col: "ColumnOrName") -> Column:
-    """
-    Calculates the byte length for the specified string column.
+    """Calculates the byte length for the specified string column.
 
     .. versionadded:: 3.3.0
 
@@ -4966,12 +4855,12 @@ def octet_length(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         Source column or strings
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         Byte length of the col
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql.functions import octet_length
     >>> spark.createDataFrame([('cat',), ( '\U0001f408',)], ['cat']) \\
@@ -4982,8 +4871,7 @@ def octet_length(col: "ColumnOrName") -> Column:
 
 
 def hex(col: "ColumnOrName") -> Column:
-    """
-    Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
+    """Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
 
     .. versionadded:: 1.5.0
 
@@ -4995,12 +4883,12 @@ def hex(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         hexadecimal representation of given value as string.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([("ABC", 3)], ["a", "b"]).select(hex("a"), hex("b")).collect()
     [Row(hex(a)='414243', hex(b)='3')]
@@ -5009,8 +4897,7 @@ def hex(col: "ColumnOrName") -> Column:
 
 
 def unhex(col: "ColumnOrName") -> Column:
-    """
-    Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number. column and returns it as a binary column.
+    """Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number. column and returns it as a binary column.
 
     .. versionadded:: 1.5.0
 
@@ -5022,12 +4909,12 @@ def unhex(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         string representation of given hexadecimal value.
 
-    Examples
+    Examples:
     --------
     >>> spark.createDataFrame([("414243",)], ["a"]).select(unhex("a")).collect()
     [Row(unhex(a)=bytearray(b'ABC'))]
@@ -5036,8 +4923,7 @@ def unhex(col: "ColumnOrName") -> Column:
 
 
 def base64(col: "ColumnOrName") -> Column:
-    """
-    Computes the BASE64 encoding of a binary column and returns it as a string column.
+    """Computes the BASE64 encoding of a binary column and returns it as a string column.
 
     .. versionadded:: 1.5.0
 
@@ -5049,12 +4935,12 @@ def base64(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         BASE64 encoding of string value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
     >>> df.select(base64("value")).show()
@@ -5072,8 +4958,7 @@ def base64(col: "ColumnOrName") -> Column:
 
 
 def unbase64(col: "ColumnOrName") -> Column:
-    """
-    Decodes a BASE64 encoded string column and returns it as a binary column.
+    """Decodes a BASE64 encoded string column and returns it as a binary column.
 
     .. versionadded:: 1.5.0
 
@@ -5085,12 +4970,12 @@ def unbase64(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         encoded string value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(["U3Bhcms=", "UHlTcGFyaw==", "UGFuZGFzIEFQSQ=="], "STRING")
     >>> df.select(unbase64("value")).show()
@@ -5106,8 +4991,7 @@ def unbase64(col: "ColumnOrName") -> Column:
 
 
 def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Column:
-    """
-    Returns the date that is `months` months after `start`. If `months` is a negative value
+    """Returns the date that is `months` months after `start`. If `months` is a negative value
     then these amount of months will be deducted from the `start`.
 
     .. versionadded:: 1.5.0
@@ -5123,12 +5007,12 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
         how many months after the given date to calculate.
         Accepts negative value as well to calculate backwards.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a date after/before given number of months.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08", 2)], ["dt", "add"])
     >>> df.select(add_months(df.dt, 1).alias("next_month")).collect()
@@ -5143,8 +5027,7 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
 
 
 def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[str] = None) -> Column:
-    """
-    Concatenates the elements of `column` using the `delimiter`. Null values are replaced with
+    """Concatenates the elements of `column` using the `delimiter`. Null values are replaced with
     `null_replacement` if set, otherwise they are ignored.
 
     .. versionadded:: 2.4.0
@@ -5161,12 +5044,12 @@ def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[s
     null_replacement : str, optional
         if set then null values will be replaced by this value
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a column of string type. Concatenated values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(["a", "b", "c"],), (["a", None],)], ["data"])
     >>> df.select(array_join(df.data, ",").alias("joined")).collect()
@@ -5190,8 +5073,7 @@ def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[s
 
 
 def array_position(col: "ColumnOrName", value: Any) -> Column:
-    """
-    Collection function: Locates the position of the first occurrence of the given value
+    """Collection function: Locates the position of the first occurrence of the given value
     in the given array. Returns null if either of the arguments are null.
 
     .. versionadded:: 2.4.0
@@ -5199,7 +5081,7 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The position is not zero based, but 1 based index. Returns 0 if the given
     value could not be found in the array.
@@ -5211,12 +5093,12 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:
     value : Any
         value to look for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         position of the value in the given array if found and 0 otherwise.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(["c", "b", "a"],), ([],)], ["data"])
     >>> df.select(array_position(df.data, "a")).collect()
@@ -5230,8 +5112,7 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:
 
 
 def array_prepend(col: "ColumnOrName", value: Any) -> Column:
-    """
-    Collection function: Returns an array containing element as
+    """Collection function: Returns an array containing element as
     well as all elements from array. The new element is positioned
     at the beginning of the array.
 
@@ -5244,12 +5125,12 @@ def array_prepend(col: "ColumnOrName", value: Any) -> Column:
     value :
         a literal value, or a :class:`~pyspark.sql.Column` expression.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array excluding given value.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 3, 4],), ([],)], ["data"])
     >>> df.select(array_prepend(df.data, 1)).collect()
@@ -5259,8 +5140,7 @@ def array_prepend(col: "ColumnOrName", value: Any) -> Column:
 
 
 def array_repeat(col: "ColumnOrName", count: Union["ColumnOrName", int]) -> Column:
-    """
-    Collection function: creates an array containing a column repeated count times.
+    """Collection function: creates an array containing a column repeated count times.
 
     .. versionadded:: 2.4.0
 
@@ -5274,12 +5154,12 @@ def array_repeat(col: "ColumnOrName", count: Union["ColumnOrName", int]) -> Colu
     count : :class:`~pyspark.sql.Column` or str or int
         column name, column, or int containing the number of times to repeat the first argument
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         an array of repeated elements.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("ab",)], ["data"])
     >>> df.select(array_repeat(df.data, 3).alias("r")).collect()
@@ -5291,8 +5171,7 @@ def array_repeat(col: "ColumnOrName", count: Union["ColumnOrName", int]) -> Colu
 
 
 def array_size(col: "ColumnOrName") -> Column:
-    """
-    Returns the total number of elements in the array. The function returns null for null input.
+    """Returns the total number of elements in the array. The function returns null for null input.
 
     .. versionadded:: 3.5.0
 
@@ -5301,12 +5180,12 @@ def array_size(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         total number of elements in the array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 1, 3],), (None,)], ["data"])
     >>> df.select(array_size(df.data).alias("r")).collect()
@@ -5316,8 +5195,7 @@ def array_size(col: "ColumnOrName") -> Column:
 
 
 def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Column], Column]] = None) -> Column:
-    """
-    Collection function: sorts the input array in ascending order. The elements of the input array
+    """Collection function: sorts the input array in ascending order. The elements of the input array
     must be orderable. Null elements will be placed at the end of the returned array.
 
     .. versionadded:: 2.4.0
@@ -5339,12 +5217,12 @@ def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Colum
         positive integer as the first element is less than, equal to, or greater than the second
         element. If the comparator function returns null, the function will fail and raise an error.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         sorted array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 1, None, 3],), ([1],), ([],)], ["data"])
     >>> df.select(array_sort(df.data).alias("r")).collect()
@@ -5369,8 +5247,7 @@ def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Colum
 
 
 def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
-    """
-    Collection function: sorts the input array in ascending or descending order according
+    """Collection function: sorts the input array in ascending or descending order according
     to the natural ordering of the array elements. Null elements will be placed at the beginning
     of the returned array in ascending order or at the end of the returned array in descending
     order.
@@ -5388,12 +5265,12 @@ def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
         whether to sort in ascending or descending order. If `asc` is True (default)
         then ascending and if False then descending.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         sorted array.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([([2, 1, None, 3],), ([1],), ([],)], ["data"])
     >>> df.select(sort_array(df.data).alias("r")).collect()
@@ -5411,8 +5288,7 @@ def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
 
 
 def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
-    """
-    Splits str around matches of the given pattern.
+    """Splits str around matches of the given pattern.
 
     .. versionadded:: 1.5.0
 
@@ -5438,12 +5314,12 @@ def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
         .. versionchanged:: 3.0
            `split` now takes an optional `limit` field. If not provided, default limit value is -1.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         array of separated strings.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("oneAtwoBthreeC",)],
@@ -5464,8 +5340,7 @@ def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
 
 
 def split_part(src: "ColumnOrName", delimiter: "ColumnOrName", partNum: "ColumnOrName") -> Column:
-    """
-    Splits `str` by delimiter and return requested part of the split (1-based).
+    """Splits `str` by delimiter and return requested part of the split (1-based).
     If any input is null, returns null. if `partNum` is out of range of split parts,
     returns empty string. If `partNum` is 0, throws an error. If `partNum` is negative,
     the parts are counted backward from the end of the string.
@@ -5482,7 +5357,7 @@ def split_part(src: "ColumnOrName", delimiter: "ColumnOrName", partNum: "ColumnO
     partNum : :class:`~pyspark.sql.Column` or str
         A column of string, requested part of the split (1-based).
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [
@@ -5510,8 +5385,7 @@ def split_part(src: "ColumnOrName", delimiter: "ColumnOrName", partNum: "ColumnO
 
 
 def stddev_samp(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the unbiased sample standard deviation of
+    """Aggregate function: returns the unbiased sample standard deviation of
     the expression in a group.
 
     .. versionadded:: 1.6.0
@@ -5524,12 +5398,12 @@ def stddev_samp(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         standard deviation of given column.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(6).select(sf.stddev_samp("id")).show()
@@ -5543,8 +5417,7 @@ def stddev_samp(col: "ColumnOrName") -> Column:
 
 
 def stddev(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: alias for stddev_samp.
+    """Aggregate function: alias for stddev_samp.
 
     .. versionadded:: 1.6.0
 
@@ -5556,12 +5429,12 @@ def stddev(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         standard deviation of given column.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(6).select(sf.stddev("id")).show()
@@ -5575,8 +5448,7 @@ def stddev(col: "ColumnOrName") -> Column:
 
 
 def std(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: alias for stddev_samp.
+    """Aggregate function: alias for stddev_samp.
 
     .. versionadded:: 3.5.0
 
@@ -5585,12 +5457,12 @@ def std(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         standard deviation of given column.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(6).select(sf.std("id")).show()
@@ -5604,8 +5476,7 @@ def std(col: "ColumnOrName") -> Column:
 
 
 def stddev_pop(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns population standard deviation of
+    """Aggregate function: returns population standard deviation of
     the expression in a group.
 
     .. versionadded:: 1.6.0
@@ -5618,12 +5489,12 @@ def stddev_pop(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         standard deviation of given column.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.range(6).select(sf.stddev_pop("id")).show()
@@ -5637,8 +5508,7 @@ def stddev_pop(col: "ColumnOrName") -> Column:
 
 
 def var_pop(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the population variance of the values in a group.
+    """Aggregate function: returns the population variance of the values in a group.
 
     .. versionadded:: 1.6.0
 
@@ -5650,12 +5520,12 @@ def var_pop(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         variance of given column.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(6)
     >>> df.select(var_pop(df.id)).first()
@@ -5665,8 +5535,7 @@ def var_pop(col: "ColumnOrName") -> Column:
 
 
 def var_samp(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: returns the unbiased sample variance of
+    """Aggregate function: returns the unbiased sample variance of
     the values in a group.
 
     .. versionadded:: 1.6.0
@@ -5679,12 +5548,12 @@ def var_samp(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         variance of given column.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(6)
     >>> df.select(var_samp(df.id)).show()
@@ -5698,8 +5567,7 @@ def var_samp(col: "ColumnOrName") -> Column:
 
 
 def variance(col: "ColumnOrName") -> Column:
-    """
-    Aggregate function: alias for var_samp
+    """Aggregate function: alias for var_samp
 
     .. versionadded:: 1.6.0
 
@@ -5711,12 +5579,12 @@ def variance(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target column to compute on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         variance of given column.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.range(6)
     >>> df.select(variance(df.id)).show()
@@ -5730,8 +5598,7 @@ def variance(col: "ColumnOrName") -> Column:
 
 
 def weekday(col: "ColumnOrName") -> Column:
-    """
-    Returns the day of the week for date/timestamp (0 = Monday, 1 = Tuesday, ..., 6 = Sunday).
+    """Returns the day of the week for date/timestamp (0 = Monday, 1 = Tuesday, ..., 6 = Sunday).
 
     .. versionadded:: 3.5.0
 
@@ -5740,12 +5607,12 @@ def weekday(col: "ColumnOrName") -> Column:
     col : :class:`~pyspark.sql.Column` or str
         target date/timestamp column to work on.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         the day of the week for date/timestamp (0 = Monday, 1 = Tuesday, ..., 6 = Sunday).
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(weekday("dt").alias("day")).show()
@@ -5759,8 +5626,7 @@ def weekday(col: "ColumnOrName") -> Column:
 
 
 def zeroifnull(col: "ColumnOrName") -> Column:
-    """
-    Returns zero if `col` is null, or `col` otherwise.
+    """Returns zero if `col` is null, or `col` otherwise.
 
     .. versionadded:: 4.0.0
 
@@ -5768,7 +5634,7 @@ def zeroifnull(col: "ColumnOrName") -> Column:
     ----------
     col : :class:`~pyspark.sql.Column` or str
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(None,), (1,)], ["a"])
     >>> df.select(zeroifnull(df.a).alias("result")).show()
@@ -5811,12 +5677,12 @@ def to_date(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     format: str, optional
         format to use to convert date values.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         date value as :class:`pyspark.sql.types.DateType` type.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
     >>> df.select(to_date(df.t).alias("date")).collect()
@@ -5849,12 +5715,12 @@ def to_timestamp(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     format: str, optional
         format to use to convert timestamp values.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         timestamp value as :class:`pyspark.sql.types.TimestampType` type.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
     >>> df.select(to_timestamp(df.t).alias("dt")).collect()
@@ -5871,8 +5737,7 @@ def to_timestamp_ltz(
     timestamp: "ColumnOrName",
     format: Optional["ColumnOrName"] = None,
 ) -> Column:
-    """
-    Parses the `timestamp` with the `format` to a timestamp without time zone.
+    """Parses the `timestamp` with the `format` to a timestamp without time zone.
     Returns null with invalid input.
 
     .. versionadded:: 3.5.0
@@ -5884,7 +5749,7 @@ def to_timestamp_ltz(
     format : :class:`~pyspark.sql.Column` or str, optional
         format to use to convert type `TimestampType` timestamp values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2016-12-31",)], ["e"])
     >>> df.select(to_timestamp_ltz(df.e, lit("yyyy-MM-dd")).alias("r")).collect()
@@ -5903,8 +5768,7 @@ def to_timestamp_ntz(
     timestamp: "ColumnOrName",
     format: Optional["ColumnOrName"] = None,
 ) -> Column:
-    """
-    Parses the `timestamp` with the `format` to a timestamp without time zone.
+    """Parses the `timestamp` with the `format` to a timestamp without time zone.
     Returns null with invalid input.
 
     .. versionadded:: 3.5.0
@@ -5916,7 +5780,7 @@ def to_timestamp_ntz(
     format : :class:`~pyspark.sql.Column` or str, optional
         format to use to convert type `TimestampNTZType` timestamp values.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([("2016-04-08",)], ["e"])
     >>> df.select(to_timestamp_ntz(df.e, lit("yyyy-MM-dd")).alias("r")).collect()
@@ -5932,8 +5796,7 @@ def to_timestamp_ntz(
 
 
 def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = None) -> Column:
-    """
-    Parses the `col` with the `format` to a timestamp. The function always
+    """Parses the `col` with the `format` to a timestamp. The function always
     returns null on an invalid input with/without ANSI SQL mode enabled. The result data type is
     consistent with the value of configuration `spark.sql.timestampType`.
     .. versionadded:: 3.5.0
@@ -5943,7 +5806,8 @@ def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = Non
         column values to convert.
     format: str, optional
         format to use to convert timestamp values.
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
     >>> df.select(try_to_timestamp(df.t).alias("dt")).collect()
@@ -5958,8 +5822,7 @@ def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = Non
 
 
 def substr(str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName"] = None) -> Column:
-    """
-    Returns the substring of `str` that starts at `pos` and is of length `len`,
+    """Returns the substring of `str` that starts at `pos` and is of length `len`,
     or the slice of byte array that starts at `pos` and is of length `len`.
 
     .. versionadded:: 3.5.0
@@ -5973,7 +5836,7 @@ def substr(str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName
     len : :class:`~pyspark.sql.Column` or str, optional
         A column of string, the substring of `str` is of length `len`.
 
-    Examples
+    Examples:
     --------
     >>> import pyspark.sql.functions as sf
     >>> spark.createDataFrame(
@@ -6026,7 +5889,7 @@ def unix_date(col: "ColumnOrName") -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
     >>> df = spark.createDataFrame([("1970-01-02",)], ["t"])
@@ -6042,7 +5905,7 @@ def unix_micros(col: "ColumnOrName") -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
     >>> df = spark.createDataFrame([("2015-07-22 10:00:00",)], ["t"])
@@ -6059,7 +5922,7 @@ def unix_millis(col: "ColumnOrName") -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
     >>> df = spark.createDataFrame([("2015-07-22 10:00:00",)], ["t"])
@@ -6076,7 +5939,7 @@ def unix_seconds(col: "ColumnOrName") -> Column:
 
     .. versionadded:: 3.5.0
 
-    Examples
+    Examples:
     --------
     >>> spark.conf.set("spark.sql.session.timeZone", "America/Los_Angeles")
     >>> df = spark.createDataFrame([("2015-07-22 10:00:00",)], ["t"])
@@ -6088,8 +5951,7 @@ def unix_seconds(col: "ColumnOrName") -> Column:
 
 
 def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
-    """
-    Collection function: returns true if the arrays contain any common non-null element; if not,
+    """Collection function: returns true if the arrays contain any common non-null element; if not,
     returns null if both the arrays are non-empty and any of them contains a null element; returns
     false otherwise.
 
@@ -6098,12 +5960,12 @@ def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         a column of Boolean type.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([(["a", "b"], ["b", "c"]), (["a"], ["b", "c"])], ["x", "y"])
     >>> df.select(arrays_overlap(df.x, df.y).alias("overlap")).collect()
@@ -6134,8 +5996,7 @@ def _list_contains_null(c: ColumnExpression) -> Expression:
 
 
 def arrays_zip(*cols: "ColumnOrName") -> Column:
-    """
-    Collection function: Returns a merged array of structs in which the N-th struct contains all
+    """Collection function: Returns a merged array of structs in which the N-th struct contains all
     N-th values of input arrays. If one of the arrays is shorter than others then
     resulting struct type value will be a `null` for missing elements.
 
@@ -6149,12 +6010,12 @@ def arrays_zip(*cols: "ColumnOrName") -> Column:
     cols : :class:`~pyspark.sql.Column` or str
         columns of arrays to be merged.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         merged array of entries.
 
-    Examples
+    Examples:
     --------
     >>> from pyspark.sql.functions import arrays_zip
     >>> df = spark.createDataFrame(
@@ -6179,14 +6040,14 @@ def arrays_zip(*cols: "ColumnOrName") -> Column:
 
 
 def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
-    """
-    Substring starts at `pos` and is of length `len` when str is String type or
+    """Substring starts at `pos` and is of length `len` when str is String type or
     returns the slice of byte array that starts at `pos` in byte and is of length `len`
     when str is Binary type.
     .. versionadded:: 1.5.0
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
-    Notes
+
+    Notes:
     -----
     The position is not zero based, but 1 based index.
     Parameters
@@ -6197,11 +6058,13 @@ def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
         starting position in str.
     len : int
         length of chars.
-    Returns
+
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         substring of given value.
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("abcd",)],
@@ -6221,8 +6084,7 @@ def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
 
 
 def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
-    """
-    Returns a boolean. The value is True if right is found inside left.
+    """Returns a boolean. The value is True if right is found inside left.
     Returns NULL if either input expression is NULL. Otherwise, returns False.
     Both left or right must be of STRING or BINARY type.
     .. versionadded:: 3.5.0
@@ -6232,7 +6094,8 @@ def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
         The input column or strings to check, may be NULL.
     right : :class:`~pyspark.sql.Column` or str
         The input column or strings to find, may be NULL.
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Spark SQL", "Spark")], ["a", "b"])
     >>> df.select(contains(df.a, df.b).alias("r")).collect()
@@ -6262,8 +6125,7 @@ def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
 
 
 def reverse(col: "ColumnOrName") -> Column:
-    """
-    Collection function: returns a reversed string or an array with reverse order of elements.
+    """Collection function: returns a reversed string or an array with reverse order of elements.
     .. versionadded:: 1.5.0
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
@@ -6271,11 +6133,13 @@ def reverse(col: "ColumnOrName") -> Column:
     ----------
     col : :class:`~pyspark.sql.Column` or str
         name of column or expression
-    Returns
+
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         array of elements in reverse order.
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame([("Spark SQL",)], ["data"])
     >>> df.select(reverse(df.data).alias("s")).collect()
@@ -6288,8 +6152,7 @@ def reverse(col: "ColumnOrName") -> Column:
 
 
 def concat(*cols: "ColumnOrName") -> Column:
-    """
-    Concatenates multiple input columns together into a single column.
+    """Concatenates multiple input columns together into a single column.
     The function works with strings, numeric, binary and compatible array columns.
     .. versionadded:: 1.5.0
     .. versionchanged:: 3.4.0
@@ -6298,14 +6161,17 @@ def concat(*cols: "ColumnOrName") -> Column:
     ----------
     cols : :class:`~pyspark.sql.Column` or str
         target column or columns to work on.
-    Returns
+
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         concatenated values. Type of the `Column` depends on input columns' type.
-    See Also
+
+    See Also:
     --------
     :meth:`pyspark.sql.functions.array_join` : to concatenate string columns with delimiter
-    Examples
+
+    Examples:
     --------
     >>> df = spark.createDataFrame([("abcd", "123")], ["s", "d"])
     >>> df = df.select(concat(df.s, df.d).alias("s"))
@@ -6326,8 +6192,7 @@ def concat(*cols: "ColumnOrName") -> Column:
 
 
 def instr(str: "ColumnOrName", substr: str) -> Column:
-    """
-    Locate the position of the first occurrence of substr column in the given string.
+    """Locate the position of the first occurrence of substr column in the given string.
     Returns null if either of the arguments are null.
 
     .. versionadded:: 1.5.0
@@ -6335,7 +6200,7 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     .. versionchanged:: 3.4.0
         Supports Spark Connect.
 
-    Notes
+    Notes:
     -----
     The position is not zero based, but 1 based index. Returns 0 if substr
     could not be found in str.
@@ -6347,12 +6212,12 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     substr : str
         substring to look for.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         location of the first occurrence of the substring as integer.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame(
     ...     [("abcd",)],
@@ -6379,12 +6244,12 @@ def expr(str: str) -> Column:
     str : str
         expression defined in string.
 
-    Returns
+    Returns:
     -------
     :class:`~pyspark.sql.Column`
         column representing the expression.
 
-    Examples
+    Examples:
     --------
     >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
     >>> df.select("name", expr("length(name)")).show()
@@ -6399,8 +6264,7 @@ def expr(str: str) -> Column:
 
 
 def broadcast(df: "DataFrame") -> "DataFrame":
-    """
-    The broadcast function in Spark is used to optimize joins by broadcasting a smaller
+    """The broadcast function in Spark is used to optimize joins by broadcasting a smaller
     dataset to all the worker nodes. However, DuckDB operates on a single-node architecture .
     As a result, the function simply returns the input DataFrame without applying any modifications
     or optimizations, since broadcasting is not applicable in the DuckDB context.

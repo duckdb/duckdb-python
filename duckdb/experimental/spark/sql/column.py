@@ -1,13 +1,12 @@
-from typing import Union, TYPE_CHECKING, Any, cast, Callable, Tuple
-from ..exception import ContributionsAcceptedError
+from typing import TYPE_CHECKING, Any, Callable, Union, cast
 
+from ..exception import ContributionsAcceptedError
 from .types import DataType
 
 if TYPE_CHECKING:
-    from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
+    from ._typing import DateTimeLiteral, DecimalLiteral, LiteralType
 
-from duckdb import ConstantExpression, ColumnExpression, FunctionExpression, Expression
-
+from duckdb import ColumnExpression, ConstantExpression, Expression, FunctionExpression
 from duckdb.typing import DuckDBPyType
 
 __all__ = ["Column"]
@@ -78,8 +77,7 @@ def _bin_func(
 
 
 class Column:
-    """
-    A column in a DataFrame.
+    """A column in a DataFrame.
 
     :class:`Column` instances can be created by::
 
@@ -139,8 +137,7 @@ class Column:
     __rpow__ = _bin_op("__rpow__")
 
     def __getitem__(self, k: Any) -> "Column":
-        """
-        An expression that gets an item at position ``ordinal`` out of a list,
+        """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
         .. versionadded:: 1.3.0
@@ -153,13 +150,13 @@ class Column:
         k
             a literal value, or a slice object without step.
 
-        Returns
+        Returns:
         -------
         :class:`Column`
             Column representing the item got by key out of a dict, or substrings sliced by
             the given slice object.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
         >>> df.select(df.l[slice(1, 3)], df.d["key"]).show()
@@ -180,8 +177,7 @@ class Column:
             return Column(ColumnExpression(expr_str))
 
     def __getattr__(self, item: Any) -> "Column":
-        """
-        An expression that gets an item at position ``ordinal`` out of a list,
+        """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
         Parameters
@@ -189,12 +185,12 @@ class Column:
         item
             a literal value.
 
-        Returns
+        Returns:
         -------
         :class:`Column`
             Column representing the item got by key out of a dict.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
         >>> df.select(df.d.key).show()
@@ -234,10 +230,10 @@ class Column:
     def isin(self, *cols: Any) -> "Column":
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
-            cols = cast(tuple, cols[0])
+            cols = cast("tuple", cols[0])
 
         cols = cast(
-            tuple,
+            "tuple",
             [_get_expr(c) for c in cols],
         )
         return Column(self.expr.isin(*cols))
@@ -247,14 +243,14 @@ class Column:
         self,
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
-        """binary function"""
+        """Binary function"""
         return Column(self.expr == (_get_expr(other)))
 
     def __ne__(  # type: ignore[override]
         self,
-        other: Any,
+        other: object,
     ) -> "Column":
-        """binary function"""
+        """Binary function"""
         return Column(self.expr != (_get_expr(other)))
 
     __lt__ = _bin_op("__lt__")

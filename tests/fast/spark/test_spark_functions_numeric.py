@@ -3,13 +3,14 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 import math
+
 import numpy as np
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as sf
 from spark_namespace.sql.types import Row
 
 
-class TestSparkFunctionsNumeric(object):
+class TestSparkFunctionsNumeric:
     def test_greatest(self, spark):
         data = [
             (1, 2),

@@ -1,8 +1,9 @@
 import pytest
+
 import duckdb
 
 
-class TestRelationToView(object):
+class TestRelationToView:
     def test_values_to_view(self, duckdb_cursor):
         rel = duckdb_cursor.values(["test", "this is a long string"])
         res = rel.fetchall()

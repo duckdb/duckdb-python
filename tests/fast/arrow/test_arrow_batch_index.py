@@ -1,12 +1,11 @@
-import duckdb
 import pytest
-import pandas as pd
+
 import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowBatchIndex(object):
+class TestArrowBatchIndex:
     def test_arrow_batch_index(self, duckdb_cursor):
         con = duckdb.connect()
         df = con.execute("SELECT * FROM range(10000000) t(i)").df()

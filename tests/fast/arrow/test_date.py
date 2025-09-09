@@ -1,18 +1,16 @@
+
+
 import duckdb
-import os
-import datetime
-import pytest
 
 try:
     import pyarrow as pa
-    import pandas as pd
 
     can_run = True
 except:
     can_run = False
 
 
-class TestArrowDate(object):
+class TestArrowDate:
     def test_date_types(self, duckdb_cursor):
         if not can_run:
             return

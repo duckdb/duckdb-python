@@ -1,8 +1,9 @@
-import pytest
-import duckdb
-import numpy as np
 import sys
-from conftest import NumpyPandas, ArrowPandas
+
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 def assert_create(internal_data, expected_result, data_type, pandas):
@@ -25,7 +26,7 @@ def assert_create_register(internal_data, expected_result, data_type, pandas):
     assert result == expected_result
 
 
-class TestCreateTableFromPandas(object):
+class TestCreateTableFromPandas:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_integer_create_table(self, duckdb_cursor, pandas):
         if sys.version_info.major < 3:

@@ -1,5 +1,6 @@
-import numpy as np
 import os
+
+import numpy as np
 import pytest
 
 try:
@@ -8,8 +9,7 @@ try:
     can_run = True
 except ImportError:
     can_run = False
-from conftest import NumpyPandas, ArrowPandas
-
+from conftest import ArrowPandas, NumpyPandas
 
 psutil = pytest.importorskip("psutil")
 
@@ -46,7 +46,7 @@ def pandas_replacement(pandas, duckdb_cursor):
     duckdb_cursor.query("select sum(x) from df").fetchall()
 
 
-class TestRelationDependencyMemoryLeak(object):
+class TestRelationDependencyMemoryLeak:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_from_arrow_leak(self, pandas, duckdb_cursor):
         if not can_run:

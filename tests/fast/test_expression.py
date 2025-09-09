@@ -1,19 +1,20 @@
-import platform
-import duckdb
-import pytest
-from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
-from duckdb import (
-    Expression,
-    ConstantExpression,
-    ColumnExpression,
-    LambdaExpression,
-    CoalesceOperator,
-    StarExpression,
-    FunctionExpression,
-    CaseExpression,
-)
-from duckdb.value.constant import Value, IntegerValue
 import datetime
+import platform
+
+import pytest
+
+import duckdb
+from duckdb import (
+    CaseExpression,
+    CoalesceOperator,
+    ColumnExpression,
+    ConstantExpression,
+    FunctionExpression,
+    LambdaExpression,
+    StarExpression,
+)
+from duckdb.typing import INTEGER, TIMESTAMP, VARCHAR
+from duckdb.value.constant import IntegerValue, Value
 
 pytestmark = pytest.mark.skipif(
     platform.system() == "Emscripten",
@@ -35,10 +36,10 @@ def filter_rel():
         ) tbl(a, b)
     """
     )
-    yield rel
+    return rel
 
 
-class TestExpression(object):
+class TestExpression:
     def test_constant_expression(self):
         con = duckdb.connect()
 
@@ -839,7 +840,7 @@ class TestExpression(object):
         expr = ~expr
         # AND operator
 
-        expr = expr & ("b" != ConstantExpression("b"))
+        expr = expr & (ConstantExpression("b") != "b")
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2

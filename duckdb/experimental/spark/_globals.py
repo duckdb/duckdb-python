@@ -15,8 +15,7 @@
 # limitations under the License.
 #
 
-"""
-Module defining global singleton classes.
+"""Module defining global singleton classes.
 
 This module raises a RuntimeError if an attempt to reload it is made. In that
 way the identities of the classes defined here are fixed and will remain so

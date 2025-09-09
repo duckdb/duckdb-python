@@ -1,9 +1,10 @@
-import duckdb
-import numpy
-import pytest
-from datetime import date, timedelta
 import re
-from conftest import NumpyPandas, ArrowPandas
+from datetime import date, timedelta
+
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 # column count differs from bind
@@ -14,7 +15,7 @@ def evil1(df):
         return df
 
 
-class TestMap(object):
+class TestMap:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_evil_map(self, duckdb_cursor, pandas):
         testrel = duckdb.values([1, 2])

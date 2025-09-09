@@ -1,13 +1,14 @@
-import duckdb
-import pytest
-import tempfile
-import os
 import gc
+import os
+import tempfile
+
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestPandasUnregister(object):
+class TestPandasUnregister:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_unregister1(self, duckdb_cursor, pandas):
         df = pandas.DataFrame([[1, 2, 3], [4, 5, 6]])

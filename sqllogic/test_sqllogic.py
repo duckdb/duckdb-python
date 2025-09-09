@@ -1,24 +1,25 @@
 import gc
 import os
 import pathlib
-import pytest
 import signal
 import sys
-from typing import Any, Generator, Optional
+from collections.abc import Generator
+from typing import Any, Optional
+
+import pytest
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent / "external" / "duckdb" / "scripts"))
 from sqllogictest import (
-    SQLParserException,
     SQLLogicParser,
     SQLLogicTest,
+    SQLParserException,
 )
-
 from sqllogictest.result import (
-    TestException,
-    SQLLogicRunner,
-    SQLLogicDatabase,
-    SQLLogicContext,
     ExecuteResult,
+    SQLLogicContext,
+    SQLLogicDatabase,
+    SQLLogicRunner,
+    TestException,
 )
 
 

@@ -1,14 +1,15 @@
-import duckdb
-import pytest
 import os
-import pandas as pd
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
 
 
-class TestArrowReplacementScan(object):
+class TestArrowReplacementScan:
     def test_arrow_table_replacement_scan(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
         userdata_parquet_table = pq.read_table(parquet_filename)

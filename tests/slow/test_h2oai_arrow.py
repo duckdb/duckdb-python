@@ -1,7 +1,9 @@
-import duckdb
-import os
 import math
-from pytest import mark, fixture, importorskip
+import os
+
+from pytest import fixture, importorskip, mark
+
+import duckdb
 
 read_csv = importorskip("pyarrow.csv").read_csv
 requests = importorskip("requests")
@@ -153,7 +155,7 @@ def join_by_q5(con):
     con.execute("DROP TABLE ans")
 
 
-class TestH2OAIArrow(object):
+class TestH2OAIArrow:
     @mark.parametrize(
         "function",
         [

@@ -1,19 +1,19 @@
 import logging
 import sys
-from pathlib import Path
-from shutil import copyfileobj
-from typing import Callable, List
 from os.path import exists
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
+from shutil import copyfileobj
+from typing import Callable
+
+from pytest import MonkeyPatch, fixture, importorskip, mark, raises
 
 import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
-from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 
 importorskip("fsspec", "2022.11.0")
-from fsspec import filesystem, AbstractFileSystem
-from fsspec.implementations.memory import MemoryFileSystem
+from fsspec import AbstractFileSystem, filesystem
 from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
+from fsspec.implementations.memory import MemoryFileSystem
 
 FILENAME = "integers.csv"
 
@@ -35,13 +35,13 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> list[str]:
     return error_occurred
 
 
-@fixture()
+@fixture
 def duckdb_cursor():
     with duckdb.connect() as conn:
         yield conn
 
 
-@fixture()
+@fixture
 def memory():
     fs = filesystem("memory", skip_instance_cache=True)
 

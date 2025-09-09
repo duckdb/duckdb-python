@@ -1,9 +1,10 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestLimitPandas(object):
+class TestLimitPandas:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_limit_df(self, duckdb_cursor, pandas):
         df_in = pandas.DataFrame(

@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 
 
 @pytest.fixture
@@ -17,10 +18,10 @@ def con():
 		) AS tbl(a, b, c))
 	"""
     )
-    yield conn
+    return conn
 
 
-class TestGroupings(object):
+class TestGroupings:
     def test_basic_grouping(self, con):
         rel = con.table("tbl").sum("a", "b")
         res = rel.fetchall()

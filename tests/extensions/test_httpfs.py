@@ -1,9 +1,11 @@
-import duckdb
-import os
-from pytest import raises, mark
-import pytest
-from conftest import NumpyPandas, ArrowPandas
 import datetime
+import os
+
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+from pytest import mark, raises
+
+import duckdb
 
 # We only run this test if this env var is set
 # FIXME: we can add a custom command line argument to pytest to provide an extension directory
@@ -14,7 +16,7 @@ pytestmark = mark.skipif(
 )
 
 
-class TestHTTPFS(object):
+class TestHTTPFS:
     def test_read_json_httpfs(self, require):
         connection = require("httpfs")
         try:
@@ -29,7 +31,7 @@ class TestHTTPFS(object):
     def test_s3fs(self, require):
         connection = require("httpfs")
 
-        rel = connection.read_csv(f"s3://duckdb-blobs/data/Star_Trek-Season_1.csv", header=True)
+        rel = connection.read_csv("s3://duckdb-blobs/data/Star_Trek-Season_1.csv", header=True)
         res = rel.fetchone()
         assert res == (1, 0, datetime.date(1965, 2, 28), 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 6, 0, 0, 0, 0)
 
@@ -42,9 +44,7 @@ class TestHTTPFS(object):
             )
         except RuntimeError as e:
             # Test will ignore result if it fails due to networking issues while running the test.
-            if str(e).startswith("HTTP HEAD error"):
-                return
-            elif str(e).startswith("Unable to connect"):
+            if str(e).startswith("HTTP HEAD error") or str(e).startswith("Unable to connect"):
                 return
             else:
                 raise e

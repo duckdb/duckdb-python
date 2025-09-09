@@ -1,7 +1,8 @@
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
 import duckdb
 import duckdb.typing
-import pytest
-from conftest import NumpyPandas, ArrowPandas
 
 pa = pytest.importorskip("pyarrow")
 
@@ -22,7 +23,7 @@ def tmp_database(tmp_path_factory):
 
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
-class TestDuckDBConnection(object):
+class TestDuckDBConnection:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_append(self, pandas):
         duckdb.execute("Create table integers (i integer)")
@@ -118,7 +119,7 @@ class TestDuckDBConnection(object):
         assert rowcount == -1
 
     def test_execute(self):
-        assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
+        assert duckdb.execute("select [4,2]").fetchall() == [([4, 2],)]
 
     def test_executemany(self):
         # executemany does not keep an open result set
@@ -231,7 +232,7 @@ class TestDuckDBConnection(object):
         assert len(chunk) == 3000
 
     def test_fetchall(self):
-        assert [([1, 2, 3],)] == duckdb.execute("select [1,2,3]").fetchall()
+        assert duckdb.execute("select [1,2,3]").fetchall() == [([1, 2, 3],)]
 
     def test_fetchdf(self):
         ref = [([1, 2, 3],)]
@@ -241,7 +242,7 @@ class TestDuckDBConnection(object):
         assert res == ref
 
     def test_fetchmany(self):
-        assert [(0,), (1,)] == duckdb.execute("select * from range(5)").fetchmany(2)
+        assert duckdb.execute("select * from range(5)").fetchmany(2) == [(0,), (1,)]
 
     def test_fetchnumpy(self):
         numpy = pytest.importorskip("numpy")
@@ -254,37 +255,37 @@ class TestDuckDBConnection(object):
         assert results["a"] == numpy.array([b"hello"], dtype=object)
 
     def test_fetchone(self):
-        assert (0,) == duckdb.execute("select * from range(5)").fetchone()
+        assert duckdb.execute("select * from range(5)").fetchone() == (0,)
 
     def test_from_arrow(self):
-        assert None != duckdb.from_arrow
+        assert duckdb.from_arrow != None
 
     def test_from_csv_auto(self):
-        assert None != duckdb.from_csv_auto
+        assert duckdb.from_csv_auto != None
 
     def test_from_df(self):
-        assert None != duckdb.from_df
+        assert duckdb.from_df != None
 
     def test_from_parquet(self):
-        assert None != duckdb.from_parquet
+        assert duckdb.from_parquet != None
 
     def test_from_query(self):
-        assert None != duckdb.from_query
+        assert duckdb.from_query != None
 
     def test_get_table_names(self):
-        assert None != duckdb.get_table_names
+        assert duckdb.get_table_names != None
 
     def test_install_extension(self):
-        assert None != duckdb.install_extension
+        assert duckdb.install_extension != None
 
     def test_load_extension(self):
-        assert None != duckdb.load_extension
+        assert duckdb.load_extension != None
 
     def test_query(self):
-        assert [(3,)] == duckdb.query("select 3").fetchall()
+        assert duckdb.query("select 3").fetchall() == [(3,)]
 
     def test_register(self):
-        assert None != duckdb.register
+        assert duckdb.register != None
 
     def test_register_relation(self):
         con = duckdb.connect()
@@ -334,27 +335,27 @@ class TestDuckDBConnection(object):
     def test_table(self):
         con = duckdb.connect()
         con.execute("create table tbl as select 1")
-        assert [(1,)] == con.table("tbl").fetchall()
+        assert con.table("tbl").fetchall() == [(1,)]
 
     def test_table_function(self):
-        assert None != duckdb.table_function
+        assert duckdb.table_function != None
 
     def test_unregister(self):
-        assert None != duckdb.unregister
+        assert duckdb.unregister != None
 
     def test_values(self):
-        assert None != duckdb.values
+        assert duckdb.values != None
 
     def test_view(self):
         duckdb.execute("create view vw as select range(5)")
-        assert [([0, 1, 2, 3, 4],)] == duckdb.view("vw").fetchall()
+        assert duckdb.view("vw").fetchall() == [([0, 1, 2, 3, 4],)]
         duckdb.execute("drop view vw")
 
     def test_close(self):
-        assert None != duckdb.close
+        assert duckdb.close != None
 
     def test_interrupt(self):
-        assert None != duckdb.interrupt
+        assert duckdb.interrupt != None
 
     def test_wrap_shadowing(self):
         pd = NumpyPandas()
@@ -393,7 +394,7 @@ class TestDuckDBConnection(object):
 
         # Find the cached config
         con2 = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})
-        con2.execute(f"SET GLOBAL pandas_analyze_sample=2")
+        con2.execute("SET GLOBAL pandas_analyze_sample=2")
 
         # This change is reflected in 'con' because the instance was cached
         res = con.sql("select current_setting('pandas_analyze_sample')").fetchone()

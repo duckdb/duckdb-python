@@ -1,4 +1,3 @@
-import duckdb
 import numpy as np
 import pytest
 
@@ -91,13 +90,13 @@ def generate_list(child_size) -> ListGenerationResult:
     return ListGenerationResult(list_arr, list_view_arr)
 
 
-class TestArrowListType(object):
+class TestArrowListType:
     def test_regular_list(self, duckdb_cursor):
         n = 5  # Amount of lists
         generated_size = 3  # Size of each list
         list_size = -1  # Argument passed to `pa._list()`
 
-        data = [np.random.random((generated_size)) for _ in range(n)]
+        data = [np.random.random(generated_size) for _ in range(n)]
         list_type = pa.list_(pa.float32(), list_size=list_size)
 
         create_and_register_arrow_table(
@@ -120,7 +119,7 @@ class TestArrowListType(object):
         generated_size = 3  # Size of each list
         list_size = 3  # Argument passed to `pa._list()`
 
-        data = [np.random.random((generated_size)) for _ in range(n)]
+        data = [np.random.random(generated_size) for _ in range(n)]
         list_type = pa.list_(pa.float32(), list_size=list_size)
 
         create_and_register_arrow_table(

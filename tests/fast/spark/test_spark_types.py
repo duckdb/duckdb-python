@@ -9,43 +9,42 @@ if USE_ACTUAL_SPARK:
         "Skipping these tests as they use test_all_types() which is specific to DuckDB", allow_module_level=True
     )
 
-from spark_namespace.sql.types import Row
 from spark_namespace.sql.types import (
-    StringType,
+    ArrayType,
     BinaryType,
     BitstringType,
-    UUIDType,
     BooleanType,
+    ByteType,
     DateType,
-    TimestampType,
-    TimestampNTZType,
-    TimeType,
-    TimeNTZType,
-    TimestampNanosecondNTZType,
-    TimestampMilisecondNTZType,
-    TimestampSecondNTZType,
+    DayTimeIntervalType,
     DecimalType,
     DoubleType,
     FloatType,
-    ByteType,
-    UnsignedByteType,
-    ShortType,
-    UnsignedShortType,
-    IntegerType,
-    UnsignedIntegerType,
-    LongType,
-    UnsignedLongType,
     HugeIntegerType,
-    UnsignedHugeIntegerType,
-    DayTimeIntervalType,
-    ArrayType,
+    IntegerType,
+    LongType,
     MapType,
+    ShortType,
+    StringType,
     StructField,
     StructType,
+    TimeNTZType,
+    TimestampMilisecondNTZType,
+    TimestampNanosecondNTZType,
+    TimestampNTZType,
+    TimestampSecondNTZType,
+    TimestampType,
+    TimeType,
+    UnsignedByteType,
+    UnsignedHugeIntegerType,
+    UnsignedIntegerType,
+    UnsignedLongType,
+    UnsignedShortType,
+    UUIDType,
 )
 
 
-class TestTypes(object):
+class TestTypes:
     def test_all_types_schema(self, spark):
         # Create DataFrame
         df = spark.sql(

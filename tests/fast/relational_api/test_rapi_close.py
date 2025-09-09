@@ -1,9 +1,10 @@
-import duckdb
 import pytest
+
+import duckdb
 
 
 # A closed connection should invalidate all relation's methods
-class TestRAPICloseConnRel(object):
+class TestRAPICloseConnRel:
     def test_close_conn_rel(self, duckdb_cursor):
         con = duckdb.connect()
         con.execute("CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER)")

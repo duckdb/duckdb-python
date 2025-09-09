@@ -1,5 +1,3 @@
-import duckdb
-import numpy
 
 
 def check_result(duckdb_cursor, value, type):
@@ -8,7 +6,7 @@ def check_result(duckdb_cursor, value, type):
     assert results[0][0] == value
 
 
-class TestNumeric(object):
+class TestNumeric:
     def test_numeric_results(self, duckdb_cursor):
         check_result(duckdb_cursor, 1, "TINYINT")
         check_result(duckdb_cursor, 1, "SMALLINT")

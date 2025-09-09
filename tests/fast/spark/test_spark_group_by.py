@@ -3,47 +3,35 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
 from spark_namespace.sql.functions import (
-    sum,
-    avg,
-    max,
-    min,
-    stddev_samp,
-    stddev,
-    std,
-    stddev_pop,
-    var_pop,
-    var_samp,
-    variance,
-    mean,
-    mode,
-    median,
-    product,
-    count,
-    skewness,
     any_value,
     approx_count_distinct,
+    avg,
+    col,
     covar_pop,
     covar_samp,
     first,
     last,
+    max,
+    median,
+    mode,
+    product,
+    skewness,
+    std,
+    stddev,
+    stddev_pop,
+    stddev_samp,
+    sum,
+    var_pop,
+    var_samp,
+    variance,
+)
+from spark_namespace.sql.types import (
+    Row,
 )
 
 
-class TestDataFrameGroupBy(object):
+class TestDataFrameGroupBy:
     def test_group_by(self, spark):
         simpleData = [
             ("James", "Sales", "NY", 90000, 34, 10000),

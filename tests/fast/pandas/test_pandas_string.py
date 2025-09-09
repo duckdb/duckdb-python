@@ -1,9 +1,10 @@
-import duckdb
-import pandas as pd
 import numpy
+import pandas as pd
+
+import duckdb
 
 
-class TestPandasString(object):
+class TestPandasString:
     def test_pandas_string(self, duckdb_cursor):
         strings = numpy.array(["foo", "bar", "baz"])
 
@@ -31,12 +32,12 @@ class TestPandasString(object):
         con = duckdb.connect()
         con.register("df", df)
         con.execute(
-            f"""
+            """
             CREATE TABLE t1 AS SELECT * FROM df
         """
         )
         assert con.execute(
-            f"""
+            """
             SELECT count(*) from t1
         """
         ).fetchall() == [(3000000,)]

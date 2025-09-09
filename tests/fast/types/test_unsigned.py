@@ -1,4 +1,4 @@
-class TestUnsigned(object):
+class TestUnsigned:
     def test_unsigned(self, duckdb_cursor):
         duckdb_cursor.execute("create table unsigned (a utinyint, b usmallint, c uinteger, d ubigint)")
         duckdb_cursor.execute("insert into unsigned values (1,1,1,1), (null,null,null,null)")

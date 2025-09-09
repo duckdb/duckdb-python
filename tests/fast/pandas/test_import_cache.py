@@ -1,6 +1,7 @@
-from conftest import NumpyPandas, ArrowPandas
-import duckdb
 import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])

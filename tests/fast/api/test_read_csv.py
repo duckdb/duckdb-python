@@ -1,11 +1,12 @@
-from multiprocessing.sharedctypes import Value
 import datetime
-import pytest
 import platform
-import duckdb
-from io import StringIO, BytesIO
-from duckdb import CSVLineTerminator
 import sys
+from io import BytesIO, StringIO
+
+import pytest
+
+import duckdb
+from duckdb import CSVLineTerminator
 
 
 def TestFile(name):
@@ -33,7 +34,7 @@ def create_temp_csv(tmp_path):
     return file1_path, file2_path
 
 
-class TestReadCSV(object):
+class TestReadCSV:
     def test_using_connection_wrapper(self):
         rel = duckdb.read_csv(TestFile("category.csv"))
         res = rel.fetchone()
@@ -361,7 +362,6 @@ class TestReadCSV(object):
         class CustomIO:
             def __init__(self) -> None:
                 self.loc = 0
-                pass
 
             def seek(self, loc):
                 self.loc = loc

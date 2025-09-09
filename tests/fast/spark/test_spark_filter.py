@@ -2,26 +2,20 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
 from spark_namespace.errors import PySparkTypeError
-import duckdb
-import re
+from spark_namespace.sql.functions import array_contains, col
+from spark_namespace.sql.types import (
+    ArrayType,
+    Row,
+    StringType,
+    StructField,
+    StructType,
+)
 
 
-class TestDataFrameFilter(object):
+class TestDataFrameFilter:
     def test_dataframe_filter(self, spark):
         data = [
             (("James", "", "Smith"), ["Java", "Scala", "C++"], "OH", "M"),

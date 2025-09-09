@@ -1,6 +1,7 @@
-import duckdb
+
 import pytest
-import os
+
+import duckdb
 
 pl = pytest.importorskip("polars")
 
@@ -14,7 +15,7 @@ def polars_supports_capsule():
 @pytest.mark.skipif(
     not polars_supports_capsule(), reason="Polars version does not support the Arrow PyCapsule interface"
 )
-class TestArrowPyCapsule(object):
+class TestArrowPyCapsule:
     def test_polars_pycapsule_scan(self, duckdb_cursor):
         class MyObject:
             def __init__(self, obj) -> None:

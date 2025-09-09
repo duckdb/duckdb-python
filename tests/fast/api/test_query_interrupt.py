@@ -1,10 +1,11 @@
-import duckdb
-import time
-import pytest
-
+import _thread as thread
 import platform
 import threading
-import _thread as thread
+import time
+
+import pytest
+
+import duckdb
 
 
 def send_keyboard_interrupt():
@@ -14,7 +15,7 @@ def send_keyboard_interrupt():
     thread.interrupt_main()
 
 
-class TestQueryInterruption(object):
+class TestQueryInterruption:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="Emscripten builds cannot use threads",

@@ -1,12 +1,14 @@
-import numpy as np
 import datetime
-import duckdb
+
+import numpy as np
 import pytest
+
+import duckdb
 
 pandas = pytest.importorskip("pandas")
 
 
-class TestPandasNaN(object):
+class TestPandasNaN:
     def test_pandas_nan(self, duckdb_cursor):
         # create a DataFrame with some basic values
         df = pandas.DataFrame([{"col1": "val1", "col2": 1.05}, {"col1": "val3", "col2": np.nan}])

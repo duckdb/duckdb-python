@@ -3,13 +3,13 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 import spark_namespace.errors
-from spark_namespace.sql.types import Row
-from spark_namespace.sql.functions import desc, asc
-from spark_namespace.errors import PySparkTypeError, PySparkValueError
 from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.errors import PySparkTypeError, PySparkValueError
+from spark_namespace.sql.functions import asc, desc
+from spark_namespace.sql.types import Row
 
 
-class TestDataFrameSort(object):
+class TestDataFrameSort:
     data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
 
     def test_sort_ascending(self, spark):

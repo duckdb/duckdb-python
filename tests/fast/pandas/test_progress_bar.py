@@ -1,11 +1,11 @@
-import duckdb
-import pandas as pd
+
 import numpy
-import datetime
-import time
+import pandas as pd
+
+import duckdb
 
 
-class TestProgressBarPandas(object):
+class TestProgressBarPandas:
     def test_progress_pandas_single(self, duckdb_cursor):
         con = duckdb.connect()
         df = pd.DataFrame({"i": numpy.arange(10000000)})

@@ -1,8 +1,9 @@
 import pytest
+
 import duckdb
 
 
-class Test3324(object):
+class Test3324:
     def test_3324(self, duckdb_cursor):
         create_output = duckdb_cursor.execute(
             """

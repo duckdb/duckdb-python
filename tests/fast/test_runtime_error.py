@@ -1,12 +1,13 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 closed = lambda: pytest.raises(duckdb.ConnectionException, match="Connection already closed")
 no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match="No open result set")
 
 
-class TestRuntimeError(object):
+class TestRuntimeError:
     def test_fetch_error(self):
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")

@@ -1,7 +1,7 @@
-import duckdb
-import numpy
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas
+
+import duckdb
 
 
 def check_result_list(res):
@@ -69,7 +69,7 @@ def check_create_table(category, pandas):
 
 
 # TODO: extend tests with ArrowPandas
-class TestCategory(object):
+class TestCategory:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint16(self, duckdb_cursor, pandas):
         category = []

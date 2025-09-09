@@ -1,13 +1,13 @@
-import duckdb
-import pytest
 import string
+
+import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 pl = pytest.importorskip("polars")
 
 
-class Test7699(object):
+class Test7699:
     def test_7699(self, duckdb_cursor):
         pl_tbl = pl.DataFrame(
             {

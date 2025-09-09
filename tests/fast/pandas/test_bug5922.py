@@ -1,9 +1,10 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestPandasAcceptFloat16(object):
+class TestPandasAcceptFloat16:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_accept_float16(self, duckdb_cursor, pandas):
         df = pandas.DataFrame({"col": [1, 2, 3]})

@@ -1,16 +1,16 @@
-import pytest
-import duckdb
-import io
 import datetime
+import io
+
+import pytest
 
 fsspec = pytest.importorskip("fsspec")
 
 
-class TestReadParquet(object):
+class TestReadParquet:
     def test_fsspec_deadlock(self, duckdb_cursor, tmp_path):
         # Create test parquet data
         file_path = tmp_path / "data.parquet"
-        duckdb_cursor.sql("COPY (FROM range(50_000)) TO '{}' (FORMAT parquet)".format(str(file_path)))
+        duckdb_cursor.sql(f"COPY (FROM range(50_000)) TO '{file_path!s}' (FORMAT parquet)")
         with open(file_path, "rb") as f:
             parquet_data = f.read()
 

@@ -1,9 +1,7 @@
-import duckdb
-import os
 import pytest
 
 
-class TestArrowProjectionPushdown(object):
+class TestArrowProjectionPushdown:
     def test_projection_pushdown_no_filter(self, duckdb_cursor):
         pa = pytest.importorskip("pyarrow")
         ds = pytest.importorskip("pyarrow.dataset")

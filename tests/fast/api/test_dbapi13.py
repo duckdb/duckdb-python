@@ -1,11 +1,12 @@
 # time type
 
-import numpy
 import datetime
+
+import numpy
 import pandas
 
 
-class TestNumpyTime(object):
+class TestNumpyTime:
     def test_fetchall_time(self, duckdb_cursor):
         res = duckdb_cursor.execute("SELECT TIME '13:06:40' as test_time").fetchall()
         assert res == [(datetime.time(13, 6, 40),)]

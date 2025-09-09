@@ -1,13 +1,15 @@
-import duckdb
 import datetime
-import numpy as np
-import platform
-import pytest
 import decimal
 import math
-from decimal import Decimal
+import platform
 import re
-from conftest import NumpyPandas, ArrowPandas
+from decimal import Decimal
+
+import numpy as np
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 standard_vector_size = duckdb.__standard_vector_size__
 
@@ -81,7 +83,7 @@ def check_struct_upgrade(expected_type: str, creation_method, pair: ObjectPair, 
     assert expected_type == rel.types[0]
 
 
-class TestResolveObjectColumns(object):
+class TestResolveObjectColumns:
     # TODO: add support for ArrowPandas
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_integers(self, pandas, duckdb_cursor):
@@ -674,7 +676,7 @@ class TestResolveObjectColumns(object):
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_multiple_chunks_aggregate(self, pandas, duckdb_cursor):
-        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample=4096")
+        duckdb_cursor.execute("SET GLOBAL pandas_analyze_sample=4096")
         duckdb_cursor.execute(
             "create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(4096) tbl(i);"
         )

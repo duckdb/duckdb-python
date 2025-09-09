@@ -1,10 +1,10 @@
-import duckdb
+from datetime import datetime
+
 import pandas
 import pytest
-
-from datetime import datetime
-from pytz import timezone
 from conftest import pandas_2_or_higher
+
+import duckdb
 
 
 @pytest.mark.parametrize("timezone", ["UTC", "CET", "Asia/Kathmandu"])

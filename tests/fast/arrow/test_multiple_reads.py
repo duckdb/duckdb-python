@@ -1,5 +1,6 @@
-import duckdb
 import os
+
+import duckdb
 
 try:
     import pyarrow
@@ -10,7 +11,7 @@ except:
     can_run = False
 
 
-class TestArrowReads(object):
+class TestArrowReads:
     def test_multiple_queries_same_relation(self, duckdb_cursor):
         if not can_run:
             return

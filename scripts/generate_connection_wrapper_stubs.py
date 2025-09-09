@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 os.chdir(os.path.dirname(__file__))
 
@@ -13,7 +13,7 @@ END_MARKER = "# END OF CONNECTION WRAPPER"
 
 def generate():
     # Read the DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, "r") as source_file:
+    with open(DUCKDB_STUBS_FILE) as source_file:
         source_code = source_file.readlines()
 
     start_index = -1
@@ -38,10 +38,10 @@ def generate():
     methods = []
 
     # Read the JSON file
-    with open(JSON_PATH, "r") as json_file:
+    with open(JSON_PATH) as json_file:
         connection_methods = json.load(json_file)
 
-    with open(WRAPPER_JSON_PATH, "r") as json_file:
+    with open(WRAPPER_JSON_PATH) as json_file:
         wrapper_methods = json.load(json_file)
 
     methods.extend(connection_methods)

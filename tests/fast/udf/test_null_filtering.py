@@ -1,15 +1,12 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow", "18.0.0")
-from typing import Union
-import pyarrow.compute as pc
-import uuid
 import datetime
-import numpy as np
-import cmath
-from typing import NamedTuple, Any, List
+import uuid
+from typing import Any, NamedTuple
 
 from duckdb.typing import *
 
@@ -152,7 +149,7 @@ def construct_parameters(tuples, dbtype):
     return parameters
 
 
-class TestUDFNullFiltering(object):
+class TestUDFNullFiltering:
     @pytest.mark.parametrize(
         "table_data",
         get_table_data(),

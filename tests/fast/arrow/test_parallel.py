@@ -1,17 +1,18 @@
-import duckdb
 import os
 
+import duckdb
+
 try:
+    import numpy as np
     import pyarrow
     import pyarrow.parquet
-    import numpy as np
 
     can_run = True
 except:
     can_run = False
 
 
-class TestArrowParallel(object):
+class TestArrowParallel:
     def test_parallel_run(self, duckdb_cursor):
         if not can_run:
             return

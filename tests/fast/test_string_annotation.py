@@ -1,7 +1,6 @@
-import duckdb
-import pytest
 import sys
-from typing import Union
+
+import pytest
 
 
 def make_annotated_function(type: str):
@@ -19,7 +18,6 @@ def make_annotated_function(type: str):
 
 
 def python_version_lower_than_3_10():
-    import sys
 
     if sys.version_info[0] < 3:
         return True
@@ -28,7 +26,7 @@ def python_version_lower_than_3_10():
     return False
 
 
-class TestStringAnnotation(object):
+class TestStringAnnotation:
     @pytest.mark.skipif(
         python_version_lower_than_3_10(), reason="inspect.signature(eval_str=True) only supported since 3.10 and higher"
     )

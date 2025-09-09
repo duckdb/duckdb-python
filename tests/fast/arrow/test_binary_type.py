@@ -1,10 +1,8 @@
+
 import duckdb
-import os
 
 try:
     import pyarrow as pa
-    from pyarrow import parquet as pq
-    import numpy as np
 
     can_run = True
 except:
@@ -17,7 +15,7 @@ def create_binary_table(type):
     return pa.Table.from_arrays(inputs, schema=schema)
 
 
-class TestArrowBinary(object):
+class TestArrowBinary:
     def test_binary_types(self, duckdb_cursor):
         if not can_run:
             return

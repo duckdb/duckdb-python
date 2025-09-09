@@ -1,10 +1,8 @@
-import numpy
-import datetime
-import pandas
-import pytest
-import duckdb
-import re
 from io import StringIO
+
+import pytest
+
+import duckdb
 
 
 def TestFile(name):
@@ -14,7 +12,7 @@ def TestFile(name):
     return filename
 
 
-class TestReadJSON(object):
+class TestReadJSON:
     def test_read_json_columns(self):
         rel = duckdb.read_json(TestFile("example.json"), columns={"id": "integer", "name": "varchar"})
         res = rel.fetchone()

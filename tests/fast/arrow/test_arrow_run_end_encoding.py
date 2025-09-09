@@ -1,7 +1,4 @@
-import duckdb
 import pytest
-import pandas as pd
-import duckdb
 
 pa = pytest.importorskip("pyarrow", "21.0.0", reason="Needs pyarrow >= 21")
 pc = pytest.importorskip("pyarrow.compute")
@@ -30,7 +27,7 @@ def list_constructors():
     return result
 
 
-class TestArrowREE(object):
+class TestArrowREE:
     @pytest.mark.parametrize(
         "query",
         [
@@ -130,7 +127,7 @@ class TestArrowREE(object):
         duckdb_cursor.execute(query)
 
         rel = duckdb_cursor.query("select * from ree_tbl")
-        expected = duckdb_cursor.query("select {} from ree_tbl where {}".format(projection, filter)).fetchall()
+        expected = duckdb_cursor.query(f"select {projection} from ree_tbl where {filter}").fetchall()
 
         # Create an Arrow Table from the table
         arrow_conversion = rel.fetch_arrow_table()
@@ -156,7 +153,7 @@ class TestArrowREE(object):
         tbl = pa.Table.from_arrays([encoded_arrays["ree"], encoded_arrays["a"], encoded_arrays["b"]], schema=schema)
 
         # Scan the Arrow Table and verify that the results are the same
-        res = duckdb_cursor.sql("select {} from tbl where {}".format(projection, filter)).fetchall()
+        res = duckdb_cursor.sql(f"select {projection} from tbl where {filter}").fetchall()
         assert res == expected
 
     def test_arrow_ree_empty_table(self, duckdb_cursor):
@@ -227,26 +224,26 @@ class TestArrowREE(object):
         # This should be pushed down into arrow to only provide us with the necessary columns
 
         res = duckdb_cursor.query(
-            """
-            select {} from arrow_tbl
-        """.format(projection)
+            f"""
+            select {projection} from arrow_tbl
+        """
         ).fetch_arrow_table()
 
         # Verify correctness by fetching from the original table and the constructed result
-        expected = duckdb_cursor.query("select {} from tbl".format(projection)).fetchall()
-        actual = duckdb_cursor.query("select {} from res".format(projection)).fetchall()
+        expected = duckdb_cursor.query(f"select {projection} from tbl").fetchall()
+        actual = duckdb_cursor.query(f"select {projection} from res").fetchall()
         assert expected == actual
 
     @pytest.mark.parametrize("create_list", list_constructors())
     def test_arrow_ree_list(self, duckdb_cursor, create_list):
         size = 1000
         duckdb_cursor.query(
-            """
+            f"""
             create table tbl
             as select
                 i // 4 as ree,
-            FROM range({}) t(i)
-        """.format(size)
+            FROM range({size}) t(i)
+        """
         )
 
         # Populate the table with data
@@ -325,15 +322,15 @@ class TestArrowREE(object):
         size = 1000
 
         duckdb_cursor.query(
-            """
+            f"""
             create table tbl
             as select
                 i // 4 as ree,
                 i as a,
                 i % 2 == 0 as b,
                 i::VARCHAR as c
-            FROM range({}) t(i)
-        """.format(size)
+            FROM range({size}) t(i)
+        """
         )
 
         # Populate the table with data
@@ -383,13 +380,13 @@ class TestArrowREE(object):
         size = 1000
 
         duckdb_cursor.query(
-            """
+            f"""
             create table tbl
             as select
                 i // 4 as ree,
                 i as a,
-            FROM range({}) t(i)
-        """.format(size)
+            FROM range({size}) t(i)
+        """
         )
 
         # Populate the table with data
@@ -433,12 +430,12 @@ class TestArrowREE(object):
         size = 1000
 
         duckdb_cursor.query(
-            """
+            f"""
             create table tbl
             as select
                 i // 4 as ree,
-            FROM range({}) t(i)
-        """.format(size)
+            FROM range({size}) t(i)
+        """
         )
 
         # Populate the table with data

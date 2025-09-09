@@ -1,6 +1,8 @@
-import duckdb
 import datetime
+
 import pytest
+
+import duckdb
 
 
 def create_query(positive, type):
@@ -10,7 +12,7 @@ def create_query(positive, type):
     """
 
 
-class TestDateTimeDateTime(object):
+class TestDateTimeDateTime:
     @pytest.mark.parametrize("positive", [True, False])
     @pytest.mark.parametrize(
         "type",

@@ -1,25 +1,21 @@
 # This code is based on code from Apache Spark under the license found in the LICENSE file located in the 'spark' folder.
 
-from typing import (
-    cast,
-    overload,
-    Dict,
-    Optional,
-    List,
-    Tuple,
-    Any,
-    Union,
-    Type,
-    TypeVar,
-    ClassVar,
-    Iterator,
-)
-from builtins import tuple
-import datetime
 import calendar
-import time
+import datetime
 import math
 import re
+import time
+from builtins import tuple
+from collections.abc import Iterator
+from typing import (
+    Any,
+    ClassVar,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import duckdb
 from duckdb.typing import DuckDBPyType
@@ -30,40 +26,40 @@ T = TypeVar("T")
 U = TypeVar("U")
 
 __all__ = [
-    "DataType",
-    "NullType",
-    "StringType",
+    "ArrayType",
     "BinaryType",
-    "UUIDType",
     "BitstringType",
     "BooleanType",
+    "ByteType",
+    "DataType",
     "DateType",
-    "TimestampType",
-    "TimestampNTZType",
-    "TimestampNanosecondNTZType",
-    "TimestampMilisecondNTZType",
-    "TimestampSecondNTZType",
-    "TimeType",
-    "TimeNTZType",
+    "DayTimeIntervalType",
     "DecimalType",
     "DoubleType",
     "FloatType",
-    "ByteType",
-    "UnsignedByteType",
-    "ShortType",
-    "UnsignedShortType",
-    "IntegerType",
-    "UnsignedIntegerType",
-    "LongType",
-    "UnsignedLongType",
     "HugeIntegerType",
-    "UnsignedHugeIntegerType",
-    "DayTimeIntervalType",
-    "Row",
-    "ArrayType",
+    "IntegerType",
+    "LongType",
     "MapType",
+    "NullType",
+    "Row",
+    "ShortType",
+    "StringType",
     "StructField",
     "StructType",
+    "TimeNTZType",
+    "TimeType",
+    "TimestampMilisecondNTZType",
+    "TimestampNTZType",
+    "TimestampNanosecondNTZType",
+    "TimestampSecondNTZType",
+    "TimestampType",
+    "UUIDType",
+    "UnsignedByteType",
+    "UnsignedHugeIntegerType",
+    "UnsignedIntegerType",
+    "UnsignedLongType",
+    "UnsignedShortType",
 ]
 
 
@@ -79,10 +75,10 @@ class DataType:
     def __hash__(self) -> int:
         return hash(str(self))
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
-    def __ne__(self, other: Any) -> bool:
+    def __ne__(self, other: object) -> bool:
         return not self.__eq__(other)
 
     @classmethod
@@ -99,22 +95,19 @@ class DataType:
         raise ContributionsAcceptedError
 
     def needConversion(self) -> bool:
-        """
-        Does this type needs conversion between Python object and internal SQL object.
+        """Does this type needs conversion between Python object and internal SQL object.
 
         This is used to avoid the unnecessary conversion for ArrayType/MapType/StructType.
         """
         return False
 
     def toInternal(self, obj: Any) -> Any:
-        """
-        Converts a Python object into an internal SQL object.
+        """Converts a Python object into an internal SQL object.
         """
         return obj
 
     def fromInternal(self, obj: Any) -> Any:
-        """
-        Converts an internal SQL object into a native Python object.
+        """Converts an internal SQL object into a native Python object.
         """
         return obj
 
@@ -148,7 +141,8 @@ class NullType(DataType, metaclass=DataTypeSingleton):
 
 class AtomicType(DataType):
     """An internal type used to represent everything that is not
-    null, UDTs, arrays, structs, and maps."""
+    null, UDTs, arrays, structs, and maps.
+    """
 
 
 class NumericType(AtomicType):
@@ -538,8 +532,8 @@ class DayTimeIntervalType(AtomicType):
         fields = DayTimeIntervalType._fields
         if startField not in fields.keys() or endField not in fields.keys():
             raise RuntimeError("interval %s to %s is invalid" % (startField, endField))
-        self.startField = cast(int, startField)
-        self.endField = cast(int, endField)
+        self.startField = cast("int", startField)
+        self.endField = cast("int", endField)
 
     def _str_repr(self) -> str:
         fields = DayTimeIntervalType._fields
@@ -577,7 +571,7 @@ class ArrayType(DataType):
     containsNull : bool, optional
         whether the array can contain null (None) values.
 
-    Examples
+    Examples:
     --------
     >>> ArrayType(StringType()) == ArrayType(StringType(), True)
     True
@@ -626,11 +620,11 @@ class MapType(DataType):
     valueContainsNull : bool, optional
         indicates whether values can contain null (None) values.
 
-    Notes
+    Notes:
     -----
     Keys in a map data type are not allowed to be null (None).
 
-    Examples
+    Examples:
     --------
     >>> (MapType(StringType(), IntegerType()) == MapType(StringType(), IntegerType(), True))
     True
@@ -693,7 +687,7 @@ class StructField(DataType):
     metadata : dict, optional
         a dict from string to simple type that can be toInternald to JSON automatically
 
-    Examples
+    Examples:
     --------
     >>> (StructField("f1", StringType(), True) == StructField("f1", StringType(), True))
     True
@@ -750,7 +744,7 @@ class StructType(DataType):
     Iterating a :class:`StructType` will iterate over its :class:`StructField`\\s.
     A contained :class:`StructField` can be accessed by its name or position.
 
-    Examples
+    Examples:
     --------
     >>> struct1 = StructType([StructField("f1", StringType(), True)])
     >>> struct1["f1"]
@@ -805,8 +799,7 @@ class StructType(DataType):
         nullable: bool = True,
         metadata: Optional[dict[str, Any]] = None,
     ) -> "StructType":
-        """
-        Construct a :class:`StructType` by adding new elements to it, to define the schema.
+        """Construct a :class:`StructType` by adding new elements to it, to define the schema.
         The method accepts either:
 
             a) A single parameter which is a :class:`StructField` object.
@@ -825,11 +818,11 @@ class StructType(DataType):
         metadata : dict, optional
             Any additional metadata (default None)
 
-        Returns
+        Returns:
         -------
         :class:`StructType`
 
-        Examples
+        Examples:
         --------
         >>> struct1 = StructType().add("f1", StringType(), True).add("f2", StringType(), True, None)
         >>> struct2 = StructType([StructField("f1", StringType(), True), \\
@@ -875,7 +868,7 @@ class StructType(DataType):
             for field in self:
                 if field.name == key:
                     return field
-            raise KeyError("No StructField named {0}".format(key))
+            raise KeyError(f"No StructField named {key}")
         elif isinstance(key, int):
             try:
                 return self.fields[key]
@@ -904,10 +897,9 @@ class StructType(DataType):
         return (types, names)
 
     def fieldNames(self) -> list[str]:
-        """
-        Returns all field names in a list.
+        """Returns all field names in a list.
 
-        Examples
+        Examples:
         --------
         >>> struct = StructType([StructField("f1", StringType(), True)])
         >>> struct.fieldNames()
@@ -987,22 +979,19 @@ class UserDefinedType(DataType):
 
     @classmethod
     def sqlType(cls) -> DataType:
-        """
-        Underlying SQL storage type for this UDT.
+        """Underlying SQL storage type for this UDT.
         """
         raise NotImplementedError("UDT must implement sqlType().")
 
     @classmethod
     def module(cls) -> str:
-        """
-        The Python module of the UDT.
+        """The Python module of the UDT.
         """
         raise NotImplementedError("UDT must implement module().")
 
     @classmethod
     def scalaUDT(cls) -> str:
-        """
-        The class name of the paired Scala UDT (could be '', if there
+        """The class name of the paired Scala UDT (could be '', if there
         is no corresponding one).
         """
         return ""
@@ -1012,8 +1001,7 @@ class UserDefinedType(DataType):
 
     @classmethod
     def _cachedSqlType(cls) -> DataType:
-        """
-        Cache the sqlType() into class, because it's heavily used in `toInternal`.
+        """Cache the sqlType() into class, because it's heavily used in `toInternal`.
         """
         if not hasattr(cls, "_cached_sql_type"):
             cls._cached_sql_type = cls.sqlType()  # type: ignore[attr-defined]
@@ -1029,21 +1017,19 @@ class UserDefinedType(DataType):
             return self.deserialize(v)
 
     def serialize(self, obj: Any) -> Any:
-        """
-        Converts a user-type object into a SQL datum.
+        """Converts a user-type object into a SQL datum.
         """
         raise NotImplementedError("UDT must implement toInternal().")
 
     def deserialize(self, datum: Any) -> Any:
-        """
-        Converts a SQL datum into a user-type object.
+        """Converts a SQL datum into a user-type object.
         """
         raise NotImplementedError("UDT must implement fromInternal().")
 
     def simpleString(self) -> str:
         return "udt"
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         return type(self) == type(other)
 
 
@@ -1086,8 +1072,7 @@ def _create_row(fields: Union["Row", list[str]], values: Union[tuple[Any, ...], 
 
 
 class Row(tuple):
-    """
-    A row in :class:`DataFrame`.
+    """A row in :class:`DataFrame`.
     The fields in it can be accessed:
 
     * like attributes (``row.key``)
@@ -1104,7 +1089,7 @@ class Row(tuple):
         field names sorted alphabetically and will be ordered in the position as
         entered.
 
-    Examples
+    Examples:
     --------
     >>> row = Row(name="Alice", age=11)
     >>> row
@@ -1159,15 +1144,14 @@ class Row(tuple):
             return tuple.__new__(cls, args)
 
     def asDict(self, recursive: bool = False) -> dict[str, Any]:
-        """
-        Return as a dict
+        """Return as a dict
 
         Parameters
         ----------
         recursive : bool, optional
             turns the nested Rows to dict (default: False).
 
-        Notes
+        Notes:
         -----
         If a row contains duplicate field names, e.g., the rows of a join
         between two :class:`DataFrame` that both have the fields of same names,
@@ -1175,7 +1159,7 @@ class Row(tuple):
         will also return one of the duplicate fields, however returned value might
         be different to ``asDict``.
 
-        Examples
+        Examples:
         --------
         >>> Row(name="Alice", age=11).asDict() == {"name": "Alice", "age": 11}
         True
@@ -1212,7 +1196,7 @@ class Row(tuple):
 
     # let object acts like class
     def __call__(self, *args: Any) -> "Row":
-        """create new Row object"""
+        """Create new Row object"""
         if len(args) > len(self):
             raise ValueError(
                 "Can not create Row with fields %s, expected %d values but got %s" % (self, len(self), args)

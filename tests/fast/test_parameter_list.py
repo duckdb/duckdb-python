@@ -1,9 +1,10 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestParameterList(object):
+class TestParameterList:
     def test_bool(self, duckdb_cursor):
         conn = duckdb.connect()
         conn.execute("create table bool_table (a bool)")

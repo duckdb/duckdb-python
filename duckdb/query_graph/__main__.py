@@ -1,10 +1,10 @@
+import argparse
 import json
 import os
-import sys
 import re
+import sys
 import webbrowser
 from functools import reduce
-import argparse
 
 qgraph_css = """
 .styled-table {

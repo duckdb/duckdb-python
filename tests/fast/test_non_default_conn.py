@@ -1,11 +1,12 @@
-import pandas as pd
-import numpy as np
-import duckdb
 import os
 import tempfile
 
+import pandas as pd
 
-class TestNonDefaultConn(object):
+import duckdb
+
+
+class TestNonDefaultConn:
     def test_values(self, duckdb_cursor):
         duckdb_cursor.execute("create table t (a integer)")
         duckdb.values([1], connection=duckdb_cursor).insert_into("t")

@@ -1,9 +1,11 @@
-import duckdb
-import pytest
+import datetime
 import tempfile
+
 import numpy
 import pandas
-import datetime
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
@@ -37,7 +39,7 @@ def parquet_types_test(type_list):
         assert read_df.equals(read_from_arrow)
 
 
-class TestParquetRoundtrip(object):
+class TestParquetRoundtrip:
     def test_roundtrip_numeric(self, duckdb_cursor):
         type_list = [
             ([-(2**7), 0, 2**7 - 1], numpy.int8, "TINYINT"),

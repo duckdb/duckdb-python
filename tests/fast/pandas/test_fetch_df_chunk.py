@@ -1,10 +1,11 @@
 import pytest
+
 import duckdb
 
 VECTOR_SIZE = duckdb.__standard_vector_size__
 
 
-class TestType(object):
+class TestType:
     def test_fetch_df_chunk(self):
         size = 3000
         con = duckdb.connect()

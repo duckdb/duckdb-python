@@ -1,14 +1,16 @@
-import duckdb
-import pandas as pd
-import numpy as np
 import datetime
 import math
-from decimal import Decimal
-from uuid import UUID
-import pytz
-import pytest
 import warnings
 from contextlib import suppress
+from decimal import Decimal
+from uuid import UUID
+
+import numpy as np
+import pandas as pd
+import pytest
+import pytz
+
+import duckdb
 
 
 def replace_with_ndarray(obj):
@@ -25,7 +27,6 @@ def replace_with_ndarray(obj):
 
 # we need to write our own equality function that considers nan==nan for testing purposes
 def recursive_equality(o1, o2):
-    import math
 
     if type(o1) != type(o2):
         return False
@@ -114,7 +115,7 @@ all_types = [
 ]
 
 
-class TestAllTypes(object):
+class TestAllTypes:
     @pytest.mark.parametrize("cur_type", all_types)
     def test_fetchall(self, cur_type):
         conn = duckdb.connect()
@@ -538,7 +539,7 @@ class TestAllTypes(object):
     @pytest.mark.parametrize("cur_type", all_types)
     def test_arrow(self, cur_type):
         try:
-            import pyarrow as pa
+            pass
         except:
             return
         # We skip those since the extreme ranges are not supported in arrow.

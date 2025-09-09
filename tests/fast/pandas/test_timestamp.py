@@ -1,13 +1,15 @@
-import duckdb
 import datetime
 import os
-import pytest
-import pandas as pd
 import platform
+
+import pandas as pd
+import pytest
 from conftest import pandas_2_or_higher
 
+import duckdb
 
-class TestPandasTimestamps(object):
+
+class TestPandasTimestamps:
     @pytest.mark.parametrize("unit", ["s", "ms", "us", "ns"])
     def test_timestamp_types_roundtrip(self, unit):
         d = {

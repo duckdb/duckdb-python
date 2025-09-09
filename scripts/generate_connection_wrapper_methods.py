@@ -1,10 +1,8 @@
-import os
-import sys
 import json
+import os
 
 # Requires `python3 -m pip install cxxheaderparser pcpp`
-from get_cpp_methods import get_methods, FunctionParam, ConnectionMethod
-from typing import List, Tuple
+from get_cpp_methods import ConnectionMethod, get_methods
 
 os.chdir(os.path.dirname(__file__))
 
@@ -40,7 +38,7 @@ INIT_PY_START = "# START OF CONNECTION WRAPPER"
 INIT_PY_END = "# END OF CONNECTION WRAPPER"
 
 # Read the JSON file
-with open(WRAPPER_JSON_PATH, "r") as json_file:
+with open(WRAPPER_JSON_PATH) as json_file:
     wrapper_methods = json.load(json_file)
 
 # On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
@@ -94,19 +92,19 @@ def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[s
 
 def generate():
     # Read the DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE, "r") as source_file:
+    with open(DUCKDB_PYTHON_SOURCE) as source_file:
         source_code = source_file.readlines()
     start_section, end_section = remove_section(source_code, START_MARKER, END_MARKER)
 
     # Read the DUCKDB_INIT_FILE file
-    with open(DUCKDB_INIT_FILE, "r") as source_file:
+    with open(DUCKDB_INIT_FILE) as source_file:
         source_code = source_file.readlines()
     py_start, py_end = remove_section(source_code, INIT_PY_START, INIT_PY_END)
 
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH, "r") as json_file:
+    with open(JSON_PATH) as json_file:
         connection_methods = json.load(json_file)
 
     # Collect the definitions from the pyconnection.hpp header

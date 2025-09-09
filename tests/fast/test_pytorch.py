@@ -1,6 +1,6 @@
-import duckdb
 import pytest
 
+import duckdb
 
 torch = pytest.importorskip("torch")
 

@@ -1,12 +1,13 @@
-import duckdb
 import os
+
 import pytest
 
+import duckdb
+
 pyarrow_parquet = pytest.importorskip("pyarrow.parquet")
-import sys
 
 
-class TestProgressBarArrow(object):
+class TestProgressBarArrow:
     def test_progress_arrow(self):
         if os.name == "nt":
             return

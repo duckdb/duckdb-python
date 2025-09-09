@@ -1,13 +1,15 @@
-import duckdb
+from datetime import datetime, time, timezone
+
 import numpy as np
 import pytest
-from conftest import NumpyPandas, ArrowPandas
-from datetime import datetime, timezone, time, timedelta
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 _ = pytest.importorskip("pandas", minversion="2.0.0")
 
 
-class TestDateTimeTime(object):
+class TestDateTimeTime:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_time_high(self, duckdb_cursor, pandas):
         duckdb_time = duckdb_cursor.sql("SELECT make_time(23, 1, 34.234345) AS '0'").df()

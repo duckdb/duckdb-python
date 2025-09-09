@@ -1,4 +1,5 @@
-from typing import Optional, List, Tuple
+from typing import Optional
+
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 

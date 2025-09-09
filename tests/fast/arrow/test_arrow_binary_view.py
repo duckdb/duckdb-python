@@ -1,10 +1,11 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowBinaryView(object):
+class TestArrowBinaryView:
     def test_arrow_binary_view(self, duckdb_cursor):
         con = duckdb.connect()
         tab = pa.table({"x": pa.array([b"abc", b"thisisaverybigbinaryyaymorethanfifteen", None], pa.binary_view())})

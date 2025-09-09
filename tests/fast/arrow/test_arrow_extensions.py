@@ -1,14 +1,16 @@
-import duckdb
-import pytest
-import uuid
-import json
-from uuid import UUID
 import datetime
+import json
+import uuid
+from uuid import UUID
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow", "18.0.0")
 
 
-class TestCanonicalExtensionTypes(object):
+class TestCanonicalExtensionTypes:
     def test_uuid(self):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_lossless_conversion = true")

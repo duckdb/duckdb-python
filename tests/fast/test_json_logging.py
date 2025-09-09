@@ -1,7 +1,8 @@
 import json
 
-import duckdb
 import pytest
+
+import duckdb
 
 
 def _parse_json_func(error_prefix: str):

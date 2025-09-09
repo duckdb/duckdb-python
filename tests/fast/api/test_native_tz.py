@@ -1,8 +1,9 @@
-import duckdb
 import datetime
-import pytz
 import os
+
 import pytest
+
+import duckdb
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
@@ -11,7 +12,7 @@ from packaging.version import Version
 filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "tz.parquet")
 
 
-class TestNativeTimeZone(object):
+class TestNativeTimeZone:
     def test_native_python_timestamp_timezone(self, duckdb_cursor):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()

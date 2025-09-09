@@ -13,25 +13,29 @@ This module wraps the scikit-build-core build backend because:
 Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 """
 
-import sys
 import os
 import subprocess
+import sys
 from pathlib import Path
-from typing import Optional, Dict, List, Union
+from typing import Optional, Union
+
+from scikit_build_core.build import (
+    build_editable,
+    get_requires_for_build_editable,
+    get_requires_for_build_sdist,
+    get_requires_for_build_wheel,
+    prepare_metadata_for_build_editable,
+    prepare_metadata_for_build_wheel,
+)
+from scikit_build_core.build import (
+    build_sdist as skbuild_build_sdist,
+)
 from scikit_build_core.build import (
     build_wheel as skbuild_build_wheel,
-    build_editable,
-    build_sdist as skbuild_build_sdist,
-    get_requires_for_build_wheel,
-    get_requires_for_build_sdist,
-    get_requires_for_build_editable,
-    prepare_metadata_for_build_wheel,
-    prepare_metadata_for_build_editable,
 )
 
-from duckdb_packaging._versioning import create_git_tag, pep440_to_git_tag, get_git_describe, strip_post_from_version
-from duckdb_packaging.setuptools_scm_version import forced_version_from_env, MAIN_BRANCH_VERSIONING
-
+from duckdb_packaging._versioning import get_git_describe, pep440_to_git_tag, strip_post_from_version
+from duckdb_packaging.setuptools_scm_version import MAIN_BRANCH_VERSIONING, forced_version_from_env
 
 _DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
 _LOGGING_FORMAT = "[duckdb_pytooling.build_backend] {}"
@@ -251,12 +255,12 @@ def build_wheel(
 
 
 __all__ = [
-    "build_wheel",
-    "build_sdist",
     "build_editable",
-    "get_requires_for_build_wheel",
-    "get_requires_for_build_sdist",
+    "build_sdist",
+    "build_wheel",
     "get_requires_for_build_editable",
-    "prepare_metadata_for_build_wheel",
+    "get_requires_for_build_sdist",
+    "get_requires_for_build_wheel",
     "prepare_metadata_for_build_editable",
+    "prepare_metadata_for_build_wheel",
 ]

@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 os.chdir(os.path.dirname(__file__))
 
@@ -29,7 +29,7 @@ def is_py_args(method):
 
 def generate():
     # Read the PYCONNECTION_SOURCE file
-    with open(PYCONNECTION_SOURCE, "r") as source_file:
+    with open(PYCONNECTION_SOURCE) as source_file:
         source_code = source_file.readlines()
 
     start_index = -1
@@ -52,7 +52,7 @@ def generate():
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH, "r") as json_file:
+    with open(JSON_PATH) as json_file:
         connection_methods = json.load(json_file)
 
     DEFAULT_ARGUMENT_MAP = {

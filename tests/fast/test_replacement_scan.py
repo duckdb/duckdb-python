@@ -1,6 +1,8 @@
-import duckdb
 import os
+
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pl = pytest.importorskip("polars")
@@ -9,7 +11,7 @@ pd = pytest.importorskip("pandas")
 
 def using_table(con, to_scan, object_name):
     local_scope = {"con": con, object_name: to_scan, "object_name": object_name}
-    exec(f"result = con.table(object_name)", globals(), local_scope)
+    exec("result = con.table(object_name)", globals(), local_scope)
     return local_scope["result"]
 
 
@@ -75,7 +77,7 @@ def create_relation(conn, query: str) -> duckdb.DuckDBPyRelation:
     return conn.sql(query)
 
 
-class TestReplacementScan(object):
+class TestReplacementScan:
     def test_csv_replacement(self):
         con = duckdb.connect()
         filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")

@@ -1,7 +1,8 @@
 import sys
 
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
@@ -22,7 +23,7 @@ except adbc_driver_manager.InternalError as e:
     )
 
 
-class TestADBCConnectionGetInfo(object):
+class TestADBCConnectionGetInfo:
     def test_connection_basic(self):
         con = adbc_driver_duckdb.connect()
         with con.cursor() as cursor:

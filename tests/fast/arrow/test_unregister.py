@@ -1,8 +1,10 @@
-import pytest
-import tempfile
 import gc
-import duckdb
 import os
+import tempfile
+
+import pytest
+
+import duckdb
 
 try:
     import pyarrow
@@ -13,7 +15,7 @@ except:
     can_run = False
 
 
-class TestArrowUnregister(object):
+class TestArrowUnregister:
     def test_arrow_unregister1(self, duckdb_cursor):
         if not can_run:
             return

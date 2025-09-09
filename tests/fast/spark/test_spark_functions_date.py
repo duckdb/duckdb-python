@@ -1,4 +1,5 @@
 import warnings
+
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
@@ -6,11 +7,11 @@ from datetime import date, datetime
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
-from spark_namespace.sql.types import Row
 from spark_namespace.sql.functions import col
+from spark_namespace.sql.types import Row
 
 
-class TestsSparkFunctionsDate(object):
+class TestsSparkFunctionsDate:
     def test_date_trunc(self, spark):
         df = spark.createDataFrame(
             [(datetime(2019, 1, 23, 14, 34, 9, 87539),)],

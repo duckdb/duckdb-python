@@ -1,7 +1,8 @@
-import duckdb
-import pytest
-import sys
 import datetime
+
+import pytest
+
+import duckdb
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -20,7 +21,7 @@ def invalid_filter(filter):
     assert sql_expression is None
 
 
-class TestPolars(object):
+class TestPolars:
     def test_polars(self, duckdb_cursor):
         df = pl.DataFrame(
             {

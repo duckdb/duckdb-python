@@ -1,9 +1,6 @@
-from re import S
-import duckdb
-import os
 import pytest
-import tempfile
-from conftest import pandas_supports_arrow_backend
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -11,7 +8,7 @@ ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 
 
-class TestArrowLargeOffsets(object):
+class TestArrowLargeOffsets:
     @pytest.mark.skip(reason="CI does not have enough memory to validate this")
     def test_large_lists(self, duckdb_cursor):
         ary = pa.array([np.arange(start=0, stop=3000, dtype=np.uint8) for i in range(1_000_000)])

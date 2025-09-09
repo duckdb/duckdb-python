@@ -1,8 +1,7 @@
-import duckdb
 import pytest
 
 
-class TestRAPIDescription(object):
+class TestRAPIDescription:
     def test_rapi_description(self, duckdb_cursor):
         res = duckdb_cursor.query("select 42::INT AS a, 84::BIGINT AS b")
         desc = res.description

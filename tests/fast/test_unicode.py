@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
-import duckdb
 import pandas as pd
 
+import duckdb
 
-class TestUnicode(object):
+
+class TestUnicode:
     def test_unicode_pandas_scan(self, duckdb_cursor):
         con = duckdb.connect(database=":memory:", read_only=False)
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "j": ["a", "c", "ë"]})

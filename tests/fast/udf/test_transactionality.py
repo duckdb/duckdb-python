@@ -1,8 +1,9 @@
-import duckdb
 import pytest
 
+import duckdb
 
-class TestUDFTransactionality(object):
+
+class TestUDFTransactionality:
     @pytest.mark.xfail(reason="fetchone() does not realize the stream result was closed before completion")
     def test_type_coverage(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select * from range(4096)")

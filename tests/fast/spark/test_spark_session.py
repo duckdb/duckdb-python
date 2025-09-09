@@ -1,15 +1,16 @@
 import pytest
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import Row
+
 from duckdb.experimental.spark.exception import (
     ContributionsAcceptedError,
 )
-from spark_namespace.sql.types import Row
-from spark_namespace import USE_ACTUAL_SPARK
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace.sql import SparkSession
 
 
-class TestSparkSession(object):
+class TestSparkSession:
     def test_spark_session_default(self):
         session = SparkSession.builder.getOrCreate()
 

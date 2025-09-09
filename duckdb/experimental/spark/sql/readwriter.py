@@ -1,10 +1,8 @@
-from typing import TYPE_CHECKING, List, Optional, Union, cast
-
-from ..exception import ContributionsAcceptedError
-from .types import StructType
-
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from ..errors import PySparkNotImplementedError, PySparkTypeError
+from ..exception import ContributionsAcceptedError
+from .types import StructType
 
 PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
@@ -123,7 +121,7 @@ class DataFrameReader:
         if schema:
             if not isinstance(schema, StructType):
                 raise ContributionsAcceptedError
-            schema = cast(StructType, schema)
+            schema = cast("StructType", schema)
             types, names = schema.extract_types_and_names()
             df = df._cast_types(types)
             df = df.toDF(names)
@@ -225,7 +223,7 @@ class DataFrameReader:
         dtype = None
         names = None
         if schema:
-            schema = cast(StructType, schema)
+            schema = cast("StructType", schema)
             dtype, names = schema.extract_types_and_names()
 
         rel = self.session.conn.read_csv(
@@ -289,8 +287,7 @@ class DataFrameReader:
         modifiedAfter: Optional[Union[bool, str]] = None,
         allowNonNumericNumbers: Optional[Union[bool, str]] = None,
     ) -> "DataFrame":
-        """
-        Loads JSON files and returns the results as a :class:`DataFrame`.
+        """Loads JSON files and returns the results as a :class:`DataFrame`.
 
         `JSON Lines <http://jsonlines.org/>`_ (newline-delimited JSON) is supported by default.
         For JSON (one record per file), set the ``multiLine`` parameter to ``true``.
@@ -321,7 +318,7 @@ class DataFrameReader:
 
             .. # noqa
 
-        Examples
+        Examples:
         --------
         Write a DataFrame into a JSON file and read it back.
 
@@ -340,7 +337,6 @@ class DataFrameReader:
         |100|Hyukjin Kwon|
         +---+------------+
         """
-
         if schema is not None:
             raise ContributionsAcceptedError("The 'schema' option is not supported")
         if primitivesAsString is not None:
@@ -410,4 +406,4 @@ class DataFrameReader:
             )
 
 
-__all__ = ["DataFrameWriter", "DataFrameReader"]
+__all__ = ["DataFrameReader", "DataFrameWriter"]

@@ -1,14 +1,15 @@
-import duckdb
-import tempfile
-import os
-import pandas._testing as tm
-import datetime
 import csv
+import datetime
+import os
+import tempfile
+
 import pytest
-from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
+from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
+
+import duckdb
 
 
-class TestToCSV(object):
+class TestToCSV:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_basic_to_csv(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))

@@ -1,12 +1,12 @@
-import duckdb
 import os
+
 import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 
 
-class TestArrowView(object):
+class TestArrowView:
     def test_arrow_view(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
         userdata_parquet_table = pa.parquet.read_table(parquet_filename)

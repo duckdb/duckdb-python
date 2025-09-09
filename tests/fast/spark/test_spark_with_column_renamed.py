@@ -2,24 +2,17 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
     IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
+    StringType,
+    StructField,
+    StructType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit
-import duckdb
-import re
 
 
-class TestWithColumnRenamed(object):
+class TestWithColumnRenamed:
     def test_with_column_renamed(self, spark):
         dataDF = [
             (("James", "", "Smith"), "1991-04-01", "M", 3000),
@@ -28,7 +21,6 @@ class TestWithColumnRenamed(object):
             (("Maria", "Anne", "Jones"), "1967-12-01", "F", 4000),
             (("Jen", "Mary", "Brown"), "1980-02-17", "F", -1),
         ]
-        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         schema = StructType(
             [

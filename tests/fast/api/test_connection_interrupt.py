@@ -2,11 +2,12 @@ import platform
 import threading
 import time
 
-import duckdb
 import pytest
 
+import duckdb
 
-class TestConnectionInterrupt(object):
+
+class TestConnectionInterrupt:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="threads not allowed on Emscripten",

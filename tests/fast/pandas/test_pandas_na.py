@@ -1,9 +1,10 @@
-import numpy as np
-import datetime
-import duckdb
-import pytest
 import platform
-from conftest import NumpyPandas, ArrowPandas
+
+import numpy as np
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 def assert_nullness(items, null_indices):
@@ -15,7 +16,7 @@ def assert_nullness(items, null_indices):
 
 
 @pytest.mark.skipif(platform.system() == "Emscripten", reason="Pandas interaction is broken in Pyodide 3.11")
-class TestPandasNA(object):
+class TestPandasNA:
     @pytest.mark.parametrize("rows", [100, duckdb.__standard_vector_size__, 5000, 1000000])
     @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     def test_pandas_string_null(self, duckdb_cursor, rows, pd):

@@ -1,10 +1,11 @@
 # simple DB API testcase
 
 import pytest
+
 import duckdb
 
 
-class TestDBAPICursor(object):
+class TestDBAPICursor:
     def test_cursor_basic(self):
         # Create a connection
         con = duckdb.connect(":memory:")

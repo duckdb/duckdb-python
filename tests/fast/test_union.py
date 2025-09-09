@@ -1,8 +1,8 @@
+
 import duckdb
-import pandas as pd
 
 
-class TestUnion(object):
+class TestUnion:
     def test_union_by_all(self):
         connection = duckdb.connect()
 

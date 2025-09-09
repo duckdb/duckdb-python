@@ -7,10 +7,9 @@ This module provides utilities for version management including:
 """
 
 import pathlib
+import re
 import subprocess
 from typing import Optional
-import re
-
 
 VERSION_RE = re.compile(
     r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)(?:rc(?P<rc>[0-9]+)|\.post(?P<post>[0-9]+))?$"
@@ -139,8 +138,7 @@ def create_git_tag(version: str, message: Optional[str] = None, repo_path: Optio
 
 
 def strip_post_from_version(version: str) -> str:
-    """
-    Removing post-release suffixes from the given version.
+    """Removing post-release suffixes from the given version.
 
     DuckDB doesn't allow post-release versions, so .post* suffixes are stripped.
     """

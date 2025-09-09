@@ -1,11 +1,11 @@
 # test fetchdf with various types
-import numpy
 import pytest
-import duckdb
 from conftest import NumpyPandas
 
+import duckdb
 
-class TestType(object):
+
+class TestType:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_fetchdf(self, pandas):
         con = duckdb.connect()

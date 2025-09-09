@@ -1,6 +1,6 @@
-import duckdb
 import pytest
 
+import duckdb
 
 tf = pytest.importorskip("tensorflow")
 

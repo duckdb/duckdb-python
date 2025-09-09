@@ -1,10 +1,11 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 from duckdb import Value
 
 
-class TestDuckDBQuery(object):
+class TestDuckDBQuery:
     def test_duckdb_query(self, duckdb_cursor):
         # we can use duckdb_cursor.sql to run both DDL statements and select statements
         duckdb_cursor.sql("create view v1 as select 42 i")

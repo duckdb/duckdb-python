@@ -16,22 +16,19 @@
 #
 
 import re
-from typing import Dict
 
 from .error_classes import ERROR_CLASSES_MAP
 
 
 class ErrorClassesReader:
-    """
-    A reader to load error information from error_classes.py.
+    """A reader to load error information from error_classes.py.
     """
 
     def __init__(self) -> None:
         self.error_info_map = ERROR_CLASSES_MAP
 
     def get_error_message(self, error_class: str, message_parameters: dict[str, str]) -> str:
-        """
-        Returns the completed error message by applying message parameters to the message template.
+        """Returns the completed error message by applying message parameters to the message template.
         """
         message_template = self.get_message_template(error_class)
         # Verify message parameters.
@@ -44,8 +41,7 @@ class ErrorClassesReader:
         return message_template.translate(table).format(**message_parameters)
 
     def get_message_template(self, error_class: str) -> str:
-        """
-        Returns the message template for corresponding error class from error_classes.py.
+        """Returns the message template for corresponding error class from error_classes.py.
 
         For example,
         when given `error_class` is "EXAMPLE_ERROR_CLASS",

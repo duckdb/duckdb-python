@@ -1,7 +1,7 @@
 import duckdb
 
 
-class Test3728(object):
+class Test3728:
     def test_3728_describe_enum(self, duckdb_cursor):
         # Create an in-memory database, but the problem is also present in file-backed DBs
         cursor = duckdb.connect(":memory:")

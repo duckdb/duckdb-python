@@ -1,4 +1,3 @@
-import duckdb
 
 import pytest
 
@@ -12,7 +11,7 @@ import datetime
 Timestamp = pd.Timestamp
 
 
-class TestArrowDictionary(object):
+class TestArrowDictionary:
     def test_dictionary(self, duckdb_cursor):
         indices = pa.array([0, 1, 0, 1, 2, 1, 0, 2])
         dictionary = pa.array([10, 100, None])

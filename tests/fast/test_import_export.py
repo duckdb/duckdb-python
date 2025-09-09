@@ -1,9 +1,10 @@
-import duckdb
-import pytest
-from os import path
 import shutil
-import os
+from os import path
 from pathlib import Path
+
+import pytest
+
+import duckdb
 
 
 def export_database(export_location):

@@ -1,10 +1,11 @@
-import duckdb
 import numpy as np
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestPandasMergeSameName(object):
+class TestPandasMergeSameName:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_2304(self, duckdb_cursor, pandas):
         df1 = pandas.DataFrame(

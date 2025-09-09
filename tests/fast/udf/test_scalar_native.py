@@ -1,12 +1,11 @@
-import duckdb
-import os
-import pandas as pd
+
 import pytest
 
+import duckdb
 from duckdb.typing import *
 
 
-class TestNativeUDF(object):
+class TestNativeUDF:
     def test_default_conn(self):
         def passthrough(x):
             return x
@@ -23,7 +22,7 @@ class TestNativeUDF(object):
 
         con = duckdb.connect()
         con.create_function("plus_one", plus_one, [BIGINT], BIGINT)
-        assert [(6,)] == con.sql("select plus_one(5)").fetchall()
+        assert con.sql("select plus_one(5)").fetchall() == [(6,)]
 
         range_table = con.table_function("range", [5000])
         res = con.sql("select plus_one(i) from range_table tbl(i)").fetchall()

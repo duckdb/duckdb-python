@@ -1,10 +1,11 @@
-import duckdb
-import numpy as np
 import datetime
-import pytest
+
+import numpy as np
+
+import duckdb
 
 
-class TestNumpyDatetime64(object):
+class TestNumpyDatetime64:
     def test_numpy_datetime64(self, duckdb_cursor):
         duckdb_con = duckdb.connect()
 

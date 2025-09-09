@@ -1,10 +1,10 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
 import os
+from typing import Callable
 
 import cxxheaderparser.parser
-import cxxheaderparser.visitor
 import cxxheaderparser.preprocessor
-from typing import List, Dict, Callable
+import cxxheaderparser.visitor
 
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
 

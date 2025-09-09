@@ -1,7 +1,8 @@
-import pandas as pd
-import duckdb
 import datetime
-import pytest
+
+import pandas as pd
+
+import duckdb
 
 
 def run_checks(df):

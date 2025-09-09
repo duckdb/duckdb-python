@@ -1,16 +1,17 @@
-import duckdb
-import numpy as np
+import datetime
+import gc
+import os
 import platform
 import tempfile
-import os
+
+import numpy as np
 import pandas as pd
 import pytest
 from conftest import ArrowPandas, NumpyPandas
-import datetime
-import gc
-from duckdb import ColumnExpression
 
-from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+import duckdb
+from duckdb import ColumnExpression
+from duckdb.typing import BIGINT, BOOLEAN, TINYINT, VARCHAR
 
 
 @pytest.fixture(scope="session")
@@ -25,7 +26,7 @@ def get_relation(conn):
     return conn.from_df(test_df)
 
 
-class TestRelation(object):
+class TestRelation:
     def test_csv_auto(self):
         conn = duckdb.connect()
         df_rel = get_relation(conn)

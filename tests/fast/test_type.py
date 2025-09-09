@@ -1,47 +1,46 @@
-import duckdb
-import os
-import pandas as pd
-import pytest
-from typing import Union, Optional
 import sys
+from typing import Optional, Union
 
+import pytest
+
+import duckdb
+import duckdb.typing
 from duckdb.typing import (
-    SQLNULL,
-    BOOLEAN,
-    TINYINT,
-    UTINYINT,
-    SMALLINT,
-    USMALLINT,
-    INTEGER,
-    UINTEGER,
     BIGINT,
-    UBIGINT,
-    HUGEINT,
-    UHUGEINT,
-    UUID,
-    FLOAT,
-    DOUBLE,
+    BIT,
+    BLOB,
+    BOOLEAN,
     DATE,
+    DOUBLE,
+    FLOAT,
+    HUGEINT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    SQLNULL,
+    TIME,
+    TIME_TZ,
     TIMESTAMP,
     TIMESTAMP_MS,
     TIMESTAMP_NS,
     TIMESTAMP_S,
-    DuckDBPyType,
-    TIME,
-    TIME_TZ,
     TIMESTAMP_TZ,
+    TINYINT,
+    UBIGINT,
+    UHUGEINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
     VARCHAR,
-    BLOB,
-    BIT,
-    INTERVAL,
+    DuckDBPyType,
 )
-import duckdb.typing
 
 
-class TestType(object):
+class TestType:
     def test_sqltype(self):
         assert str(duckdb.sqltype("struct(a VARCHAR, b BIGINT)")) == "STRUCT(a VARCHAR, b BIGINT)"
-        # todo: add tests with invalid type_str
+        # TODO: add tests with invalid type_str
 
     def test_primitive_types(self):
         assert str(SQLNULL) == '"NULL"'
@@ -118,7 +117,6 @@ class TestType(object):
         type = duckdb.union_type({"a": BIGINT, "b": VARCHAR, "c": TINYINT})
         assert str(type) == "UNION(a BIGINT, b VARCHAR, c TINYINT)"
 
-    import sys
 
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="requires >= python3.9")
     def test_implicit_convert_from_builtin_type(self):

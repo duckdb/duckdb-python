@@ -1,7 +1,9 @@
-import duckdb
-import pytest
 import datetime
+
+import pytest
 import pytz
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
@@ -16,7 +18,7 @@ def generate_table(current_time, precision, timezone):
 timezones = ["UTC", "BET", "CET", "Asia/Kathmandu"]
 
 
-class TestArrowTimestampsTimezone(object):
+class TestArrowTimestampsTimezone:
     def test_timestamp_timezone(self, duckdb_cursor):
         precisions = ["us", "s", "ns", "ms"]
         current_time = datetime.datetime(2017, 11, 28, 23, 55, 59, tzinfo=pytz.UTC)

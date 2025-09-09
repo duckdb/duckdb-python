@@ -1,10 +1,8 @@
-import duckdb
-import pytest
 import os
 import tempfile
 
 
-class TestPivot(object):
+class TestPivot:
     def test_pivot_issue_14600(self, duckdb_cursor):
         duckdb_cursor.sql(
             "create table input_data as select unnest(['u','v','w']) as a, unnest(['x','y','z']) as b, unnest([1,2,3]) as c;"
@@ -26,5 +24,5 @@ class TestPivot(object):
         pivot_1.create("pivot_1")
         export_dir = tempfile.mkdtemp()
         duckdb_cursor.query(f"EXPORT DATABASE '{export_dir}'")
-        with open(os.path.join(export_dir, "schema.sql"), "r") as f:
+        with open(os.path.join(export_dir, "schema.sql")) as f:
             assert "CREATE TYPE" not in f.read()

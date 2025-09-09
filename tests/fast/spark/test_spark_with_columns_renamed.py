@@ -1,4 +1,5 @@
 import re
+
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
@@ -6,7 +7,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace import USE_ACTUAL_SPARK
 
 
-class TestWithColumnsRenamed(object):
+class TestWithColumnsRenamed:
     def test_with_columns_renamed(self, spark):
         dataDF = [
             (("James", "", "Smith"), "1991-04-01", "M", 3000),
@@ -15,7 +16,7 @@ class TestWithColumnsRenamed(object):
             (("Maria", "Anne", "Jones"), "1967-12-01", "F", 4000),
             (("Jen", "Mary", "Brown"), "1980-02-17", "F", -1),
         ]
-        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
 
         schema = StructType(
             [

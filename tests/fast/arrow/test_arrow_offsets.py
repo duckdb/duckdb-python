@@ -1,9 +1,9 @@
-import duckdb
-import pytest
-from pytest import mark
 import datetime
 import decimal
+
+import pytest
 import pytz
+from pytest import mark
 
 pa = pytest.importorskip("pyarrow")
 
@@ -80,10 +80,10 @@ null_test_parameters = lambda: mark.parametrize(
 )
 
 
-class TestArrowOffsets(object):
+class TestArrowOffsets:
     @null_test_parameters()
     def test_struct_of_strings(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -107,7 +107,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_bools(self, duckdb_cursor, col1_null, col2_null):
-        tuples = [False for i in range(0, MAGIC_ARRAY_SIZE)]
+        tuples = [False for i in range(MAGIC_ARRAY_SIZE)]
         tuples[-1] = True
 
         col1 = tuples
@@ -140,7 +140,7 @@ class TestArrowOffsets(object):
     )
     @null_test_parameters()
     def test_struct_of_dates(self, duckdb_cursor, constructor, expected, col1_null, col2_null):
-        tuples = [i for i in range(0, MAGIC_ARRAY_SIZE)]
+        tuples = [i for i in range(MAGIC_ARRAY_SIZE)]
 
         col1 = tuples
         if col1_null:
@@ -192,7 +192,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_blobs(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -230,7 +230,7 @@ class TestArrowOffsets(object):
             # FIXME: We limit the size because we don't support time values > 24 hours
             size = 86400  # The amount of seconds in a day
 
-        col1 = [i for i in range(0, size)]
+        col1 = [i for i in range(size)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -265,7 +265,7 @@ class TestArrowOffsets(object):
     def test_struct_of_interval(self, duckdb_cursor, constructor, expected, converter, col1_null, col2_null):
         size = MAGIC_ARRAY_SIZE
 
-        col1 = [converter(i) for i in range(0, size)]
+        col1 = [converter(i) for i in range(size)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -300,7 +300,7 @@ class TestArrowOffsets(object):
     def test_struct_of_duration(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
         size = MAGIC_ARRAY_SIZE
 
-        col1 = [i for i in range(0, size)]
+        col1 = [i for i in range(size)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -336,7 +336,7 @@ class TestArrowOffsets(object):
         size = MAGIC_ARRAY_SIZE
 
         duckdb_cursor.execute("set timezone='UTC'")
-        col1 = [i for i in range(0, size)]
+        col1 = [i for i in range(size)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -362,7 +362,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_large_blobs(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -400,7 +400,7 @@ class TestArrowOffsets(object):
     )
     def test_struct_of_decimal(self, duckdb_cursor, precision_scale, expected, col1_null, col2_null):
         precision, scale = precision_scale
-        col1 = [decimal_value(i, precision, scale) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [decimal_value(i, precision, scale) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -427,7 +427,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_small_list(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -457,7 +457,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_fixed_size_list(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -487,7 +487,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_fixed_size_blob(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -518,7 +518,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_list_of_blobs(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [str(i) for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [str(i) for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -549,7 +549,7 @@ class TestArrowOffsets(object):
 
     @null_test_parameters()
     def test_struct_of_list_of_list(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [i for i in range(0, MAGIC_ARRAY_SIZE)]
+        col1 = [i for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -581,7 +581,7 @@ class TestArrowOffsets(object):
     @pytest.mark.parametrize("col1_null", [True, False])
     def test_list_of_struct(self, duckdb_cursor, col1_null):
         # One single tuple containing a very big list
-        tuples = [{"a": i} for i in range(0, MAGIC_ARRAY_SIZE)]
+        tuples = [{"a": i} for i in range(MAGIC_ARRAY_SIZE)]
         if col1_null:
             tuples[-1] = None
         tuples = [tuples]
@@ -590,7 +590,7 @@ class TestArrowOffsets(object):
             schema=pa.schema([("col1", pa.list_(pa.struct({"a": pa.int32()})))]),
         )
         res = duckdb_cursor.sql(
-            f"""
+            """
             SELECT
                 col1
             FROM arrow_table

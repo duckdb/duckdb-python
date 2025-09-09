@@ -1,6 +1,4 @@
 import pytest
-
-
 from spark_namespace.sql.types import (
     Row,
 )
@@ -8,7 +6,7 @@ from spark_namespace.sql.types import (
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 
-class TestDataFrameDropDuplicates(object):
+class TestDataFrameDropDuplicates:
     @pytest.mark.parametrize("method", ["dropDuplicates", "drop_duplicates"])
     def test_spark_drop_duplicates(self, method, spark):
         # Prepare Data

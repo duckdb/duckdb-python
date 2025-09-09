@@ -3,22 +3,14 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 pd = pytest.importorskip("pandas")
 
-from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from spark_namespace.sql.functions import col, struct, when
-import duckdb
-import re
 from pandas.testing import assert_frame_equal
+from spark_namespace.sql.types import (
+    IntegerType,
+    Row,
+    StringType,
+    StructField,
+    StructType,
+)
 
 
 @pytest.fixture
@@ -26,10 +18,10 @@ def pandasDF(spark):
     data = [["Scott", 50], ["Jeff", 45], ["Thomas", 54], ["Ann", 34]]
     # Create the pandas DataFrame
     df = pd.DataFrame(data, columns=["Name", "Age"])
-    yield df
+    return df
 
 
-class TestPandasDataFrame(object):
+class TestPandasDataFrame:
     def test_pd_conversion_basic(self, spark, pandasDF):
         sparkDF = spark.createDataFrame(pandasDF)
         res = sparkDF.collect()

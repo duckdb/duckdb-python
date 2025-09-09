@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-"""
-Unit tests for pypi_cleanup.py
+"""Unit tests for pypi_cleanup.py
 
 Run with: python -m pytest test_pypi_cleanup.py -v
 """
@@ -15,18 +14,18 @@ from urllib3 import Retry
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging.pypi_cleanup import (
-    PyPICleanup,
-    CsrfParser,
-    PyPICleanupError,
     AuthenticationError,
+    CsrfParser,
+    PyPICleanup,
+    PyPICleanupError,
     ValidationError,
-    setup_logging,
-    validate_username,
     create_argument_parser,
-    session_with_retries,
     load_credentials,
-    validate_arguments,
     main,
+    session_with_retries,
+    setup_logging,
+    validate_arguments,
+    validate_username,
 )
 
 
@@ -116,7 +115,7 @@ class TestUtilities:
             # Verify retry adapter is mounted
             adapter = session.get_adapter("https://example.com")
             assert hasattr(adapter, "max_retries")
-            retries = getattr(adapter, "max_retries")
+            retries = adapter.max_retries
             assert isinstance(retries, Retry)
 
     @patch("duckdb_packaging.pypi_cleanup.logging.basicConfig")

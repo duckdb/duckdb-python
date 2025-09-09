@@ -2,17 +2,15 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.sql.column import Column
-from spark_namespace.sql.functions import struct, array, col
-from spark_namespace.sql.types import Row
-from spark_namespace.errors import PySparkTypeError
-
-import duckdb
 import re
 
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.errors import PySparkTypeError
+from spark_namespace.sql.functions import array, col, struct
+from spark_namespace.sql.types import Row
 
-class TestSparkColumn(object):
+
+class TestSparkColumn:
     def test_struct_column(self, spark):
         df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)])
 

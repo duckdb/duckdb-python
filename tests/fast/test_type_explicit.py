@@ -1,7 +1,7 @@
 import duckdb
 
 
-class TestMap(object):
+class TestMap:
     def test_array_list_tuple_ambiguity(self):
         con = duckdb.connect()
         res = con.sql("SELECT $arg", params={"arg": (1, 2)}).fetchall()[0][0]

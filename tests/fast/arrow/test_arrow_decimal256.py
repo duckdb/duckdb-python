@@ -1,11 +1,13 @@
-import duckdb
-import pytest
 from decimal import Decimal
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowDecimal256(object):
+class TestArrowDecimal256:
     def test_decimal_256_throws(self, duckdb_cursor):
         with duckdb.connect() as conn:
             pa_decimal256 = pa.Table.from_pylist(

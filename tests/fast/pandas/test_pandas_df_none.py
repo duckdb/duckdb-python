@@ -1,11 +1,7 @@
-import pandas as pd
-import pytest
 import duckdb
-import sys
-import gc
 
 
-class TestPandasDFNone(object):
+class TestPandasDFNone:
     # This used to decrease the ref count of None
     def test_none_deref(self):
         con = duckdb.connect()

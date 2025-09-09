@@ -1,15 +1,16 @@
-import duckdb
-import datetime
+
 import numpy as np
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 def create_generic_dataframe(data, pandas):
     return pandas.DataFrame({"col0": pandas.Series(data=data, dtype="object")})
 
 
-class TestResolveObjectColumns(object):
+class TestResolveObjectColumns:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_sample_low_correct(self, duckdb_cursor, pandas):
         print(pandas.backend)

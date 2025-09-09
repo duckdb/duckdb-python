@@ -2,20 +2,10 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
-from spark_namespace.sql.functions import sum, avg, max, min, mean, count
 
 
 @pytest.fixture
@@ -30,7 +20,7 @@ def dataframe_a(spark):
     ]
     empColumns = ["emp_id", "name", "superior_emp_id", "year_joined", "emp_dept_id", "gender", "salary"]
     dataframe = spark.createDataFrame(data=emp, schema=empColumns)
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture
@@ -38,10 +28,10 @@ def dataframe_b(spark):
     dept = [("Finance", 10), ("Marketing", 20), ("Sales", 30), ("IT", 40)]
     deptColumns = ["dept_name", "dept_id"]
     dataframe = spark.createDataFrame(data=dept, schema=deptColumns)
-    yield dataframe
+    return dataframe
 
 
-class TestDataFrameJoin(object):
+class TestDataFrameJoin:
     def test_inner_join(self, dataframe_a, dataframe_b):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, "inner")
         df = df.sort(*df.columns)

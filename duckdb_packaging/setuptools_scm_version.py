@@ -1,5 +1,4 @@
-"""
-setuptools_scm integration for DuckDB Python versioning.
+"""setuptools_scm integration for DuckDB Python versioning.
 
 This module provides the setuptools_scm version scheme and handles environment variable overrides
 to match the exact behavior of the original DuckDB Python package.
@@ -10,7 +9,7 @@ import re
 from typing import Any
 
 # Import from our own versioning module to avoid duplication
-from ._versioning import parse_version, format_version
+from ._versioning import format_version, parse_version
 
 # MAIN_BRANCH_VERSIONING should be 'True' on main branch only
 MAIN_BRANCH_VERSIONING = False
@@ -26,8 +25,7 @@ def _main_branch_versioning():
 
 
 def version_scheme(version: Any) -> str:
-    """
-    setuptools_scm version scheme that matches DuckDB's original behavior.
+    """setuptools_scm version scheme that matches DuckDB's original behavior.
 
     Args:
         version: setuptools_scm version object
@@ -55,7 +53,7 @@ def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
     # Validate the base version (this should never include anything else than X.Y.Z or X.Y.Z.[rc|post]N)
     try:
         major, minor, patch, post, rc = parse_version(base_version)
-    except ValueError as e:
+    except ValueError:
         raise ValueError(f"Incorrect version format: {base_version} (expected X.Y.Z or X.Y.Z.postN)")
 
     # If we're exactly on a tag (distance = 0, dirty=False)
@@ -76,8 +74,7 @@ def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
 
 
 def forced_version_from_env():
-    """
-    Handle getting versions from environment variables.
+    """Handle getting versions from environment variables.
 
     Only supports a single way of manually overriding the version through
     OVERRIDE_GIT_DESCRIBE. If SETUPTOOLS_SCM_PRETEND_VERSION* is set, it gets unset.

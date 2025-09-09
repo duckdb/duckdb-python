@@ -1,11 +1,13 @@
-import duckdb
-import pytest
 from decimal import Decimal
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowDecimalTypes(object):
+class TestArrowDecimalTypes:
     def test_decimal_32(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_output_version = 1.5")

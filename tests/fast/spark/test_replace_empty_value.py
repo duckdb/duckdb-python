@@ -2,12 +2,11 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.types import Row
 
 
 # https://sparkbyexamples.com/pyspark/pyspark-replace-empty-value-with-none-on-dataframe-2/?expand_article=1
-class TestReplaceEmpty(object):
+class TestReplaceEmpty:
     def test_replace_empty(self, spark):
         # Create the dataframe
         data = [("", "CA"), ("Julia", ""), ("Robert", ""), ("", "NJ")]

@@ -1,8 +1,7 @@
 import numpy
-import pandas
 
 
-class TestHugeint(object):
+class TestHugeint:
     def test_hugeint(self, duckdb_cursor):
         duckdb_cursor.execute("SELECT 437894723897234238947043214")
         result = duckdb_cursor.fetchall()

@@ -1,9 +1,9 @@
-import numpy
-import pandas
 from decimal import *
 
+import numpy
 
-class TestDecimal(object):
+
+class TestDecimal:
     def test_decimal(self, duckdb_cursor):
         duckdb_cursor.execute(
             "SELECT 1.2::DECIMAL(4,1), 100.3::DECIMAL(9,1), 320938.4298::DECIMAL(18,4), 49082094824.904820482094::DECIMAL(30,12), NULL::DECIMAL"

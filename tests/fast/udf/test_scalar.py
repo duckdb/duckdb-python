@@ -1,15 +1,16 @@
-import duckdb
-import os
+
 import pytest
+
+import duckdb
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow", "18.0.0")
-from typing import Union, Any
-import pyarrow.compute as pc
-import uuid
-import datetime
-import numpy as np
 import cmath
+import datetime
+import uuid
+from typing import Any
+
+import numpy as np
 
 from duckdb.typing import *
 
@@ -29,7 +30,7 @@ def make_annotated_function(type):
     return test_function
 
 
-class TestScalarUDF(object):
+class TestScalarUDF:
     @pytest.mark.parametrize("function_type", ["native", "arrow"])
     @pytest.mark.parametrize(
         "test_type",
@@ -69,16 +70,16 @@ class TestScalarUDF(object):
         con = duckdb.connect()
         con.create_function("test", test_function, type=function_type)
         # Single value
-        res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
+        res = con.execute(f"select test(?::{type!s})", [value]).fetchall()
         assert res[0][0] == value
 
         # NULLs
-        res = con.execute(f"select res from (select ?, test(NULL::{str(type)}) as res)", [value]).fetchall()
+        res = con.execute(f"select res from (select ?, test(NULL::{type!s}) as res)", [value]).fetchall()
         assert res[0][0] == None
 
         # Multiple chunks
         size = duckdb.__standard_vector_size__ * 3
-        res = con.execute(f"select test(x) from repeat(?::{str(type)}, {size}) as tbl(x)", [value]).fetchall()
+        res = con.execute(f"select test(x) from repeat(?::{type!s}, {size}) as tbl(x)", [value]).fetchall()
         assert len(res) == size
 
         # Mixed NULL/NON-NULL
@@ -88,7 +89,7 @@ class TestScalarUDF(object):
             f"""
             select test(
                 case when (x > 0.5) then
-                    ?::{str(type)}
+                    ?::{type!s}
                 else
                     NULL
                 end
@@ -102,7 +103,7 @@ class TestScalarUDF(object):
             f"""
             select
                 case when (x > 0.5) then
-                    ?::{str(type)}
+                    ?::{type!s}
                 else
                     NULL
                 end
@@ -113,7 +114,7 @@ class TestScalarUDF(object):
         assert expected == actual
 
         # Using 'relation.project'
-        con.execute(f"create table tbl as select ?::{str(type)} as x", [value])
+        con.execute(f"create table tbl as select ?::{type!s} as x", [value])
         table_rel = con.table("tbl")
         res = table_rel.project("test(x)").fetchall()
         assert res[0][0] == value
@@ -221,7 +222,6 @@ class TestScalarUDF(object):
     @pytest.mark.parametrize("duckdb_type", [FLOAT, DOUBLE])
     def test_math_nan(self, duckdb_type, udf_type):
         def return_math_nan():
-            import cmath
 
             if udf_type == "native":
                 return cmath.nan

@@ -1,11 +1,12 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 ds = pytest.importorskip("pyarrow.dataset")
 
 
-class TestArrowTypes(object):
+class TestArrowTypes:
     def test_null_type(self, duckdb_cursor):
         schema = pa.schema([("data", pa.null())])
         inputs = [pa.array([None, None, None], type=pa.null())]

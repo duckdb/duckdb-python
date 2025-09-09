@@ -1,8 +1,7 @@
+
 import duckdb
-import pytest
 
 try:
-    import pyarrow as pa
 
     can_run = True
 except:
@@ -18,7 +17,7 @@ def check_equal(duckdb_conn):
     assert arrow_result == true_result
 
 
-class TestArrowFetch(object):
+class TestArrowFetch:
     def test_empty_table(self, duckdb_cursor):
         if not can_run:
             return

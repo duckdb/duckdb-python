@@ -1,8 +1,7 @@
-import duckdb
 import numpy
 
 
-class TestBlob(object):
+class TestBlob:
     def test_blob(self, duckdb_cursor):
         duckdb_cursor.execute("SELECT BLOB 'hello'")
         results = duckdb_cursor.fetchall()

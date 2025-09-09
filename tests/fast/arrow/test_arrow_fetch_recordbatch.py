@@ -1,10 +1,11 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowFetchRecordBatch(object):
+class TestArrowFetchRecordBatch:
     # Test with basic numeric conversion (integers, floats, and others fall this code-path)
     def test_record_batch_next_batch_numeric(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()

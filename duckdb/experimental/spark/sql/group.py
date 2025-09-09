@@ -15,18 +15,15 @@
 # limitations under the License.
 #
 
-from ..exception import ContributionsAcceptedError
-from typing import Callable, TYPE_CHECKING, overload, Dict, Union, List
+from typing import Callable, Union, overload
 
+from ..exception import ContributionsAcceptedError
+from ._typing import ColumnOrName
 from .column import Column
-from .session import SparkSession
 from .dataframe import DataFrame
 from .functions import _to_column_expr
-from ._typing import ColumnOrName
+from .session import SparkSession
 from .types import NumericType
-
-if TYPE_CHECKING:
-    from ._typing import LiteralType
 
 __all__ = ["GroupedData", "Grouping"]
 
@@ -35,7 +32,7 @@ def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
     expressions = ",".join(list(cols))
     group_by = str(self._grouping) if self._grouping else ""
     projections = self._grouping.get_columns()
-    jdf = getattr(self._df.relation, "apply")(
+    jdf = self._df.relation.apply(
         function_name=name,  # aggregate function
         function_aggr=expressions,  # inputs to aggregate
         group_expr=group_by,  # groups
@@ -76,8 +73,7 @@ class Grouping:
 
 
 class GroupedData:
-    """
-    A set of methods for aggregations on a :class:`DataFrame`,
+    """A set of methods for aggregations on a :class:`DataFrame`,
     created by :func:`DataFrame.groupBy`.
 
     """
@@ -93,7 +89,7 @@ class GroupedData:
     def count(self) -> DataFrame:
         """Counts the number of records for each group.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
         ...     [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"]
@@ -142,7 +138,7 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
         ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
@@ -188,7 +184,7 @@ class GroupedData:
     def max(self, *cols: str) -> DataFrame:
         """Computes the max value for each numeric columns for each group.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
         ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
@@ -233,7 +229,7 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
         ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
@@ -278,7 +274,7 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
         ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
@@ -352,12 +348,12 @@ class GroupedData:
             a dict mapping from column name (string) to aggregate functions (string),
             or a list of :class:`Column`.
 
-        Notes
+        Notes:
         -----
         Built-in aggregation functions and group aggregate pandas UDFs cannot be mixed
         in a single call to this function.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql import functions as F
         >>> from pyspark.sql.functions import pandas_udf, PandasUDFType

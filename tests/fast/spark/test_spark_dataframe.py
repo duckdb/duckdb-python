@@ -2,25 +2,22 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+
 from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.errors import PySparkTypeError, PySparkValueError
+from spark_namespace.sql.column import Column
+from spark_namespace.sql.functions import col, struct, when
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
+    ArrayType,
     BooleanType,
-    StructField,
-    StringType,
     IntegerType,
     LongType,
-    Row,
-    ArrayType,
     MapType,
+    Row,
+    StringType,
+    StructField,
+    StructType,
 )
-from spark_namespace.sql.functions import col, struct, when
-from spark_namespace.sql.column import Column
-import duckdb
-import re
-
-from spark_namespace.errors import PySparkValueError, PySparkTypeError
 
 
 def assert_column_objects_equal(col1: Column, col2: Column):
@@ -29,7 +26,7 @@ def assert_column_objects_equal(col1: Column, col2: Column):
         assert col1.expr == col2.expr
 
 
-class TestDataFrame(object):
+class TestDataFrame:
     def test_dataframe_from_list_of_tuples(self, spark):
         # Valid
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "CA")]
@@ -194,7 +191,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),
@@ -298,7 +295,7 @@ class TestDataFrame(object):
         )
 
     def test_df_columns(self, spark):
-        from spark_namespace.sql.functions import col, struct, when
+        from spark_namespace.sql.functions import col
 
         structureData = [
             (("James", "", "Smith"), "36636", "M", 3100),
@@ -343,7 +340,6 @@ class TestDataFrame(object):
 
     def test_array_and_map_type(self, spark):
         """Array & Map"""
-
         arrayStructureSchema = StructType(
             [
                 StructField(

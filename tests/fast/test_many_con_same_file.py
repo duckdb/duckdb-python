@@ -1,6 +1,8 @@
-import duckdb
 import os
+
 import pytest
+
+import duckdb
 
 
 def get_tables(con):

@@ -31,7 +31,7 @@ def _bind(stmt, batch):
     stmt.bind(array, schema)
 
 
-class TestADBCStatementBind(object):
+class TestADBCStatementBind:
     def test_bind_multiple_rows(self):
         data = pa.record_batch(
             [

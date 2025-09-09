@@ -1,17 +1,18 @@
-import duckdb
-import polars as pl
-from typing import Iterator, Optional
-
-from polars.io.plugins import register_io_source
-from duckdb import SQLExpression
-import json
-from decimal import Decimal
 import datetime
+import json
+from collections.abc import Iterator
+from decimal import Decimal
+from typing import Optional
+
+import polars as pl
+from polars.io.plugins import register_io_source
+
+import duckdb
+from duckdb import SQLExpression
 
 
 def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
-    """
-    Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
+    """Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
 
     Parameters:
         predicate (pl.Expr): A Polars expression (e.g., col("foo") > 5)
@@ -37,8 +38,7 @@ def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
 
 
 def _pl_operation_to_sql(op: str) -> str:
-    """
-    Map Polars binary operation strings to SQL equivalents.
+    """Map Polars binary operation strings to SQL equivalents.
 
     Example:
         >>> _pl_operation_to_sql("Eq")
@@ -60,8 +60,7 @@ def _pl_operation_to_sql(op: str) -> str:
 
 
 def _escape_sql_identifier(identifier: str) -> str:
-    """
-    Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
+    """Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
 
     Example:
         >>> _escape_sql_identifier('column"name')
@@ -72,8 +71,7 @@ def _escape_sql_identifier(identifier: str) -> str:
 
 
 def _pl_tree_to_sql(tree: dict) -> str:
-    """
-    Recursively convert a Polars expression tree (as JSON) to a SQL string.
+    """Recursively convert a Polars expression tree (as JSON) to a SQL string.
 
     Parameters:
         tree (dict): JSON-deserialized expression tree from Polars
@@ -158,7 +156,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
             micros = value["Datetime"][0]
             dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
-            return f"'{str(dt_timestamp)}'::TIMESTAMP"
+            return f"'{dt_timestamp!s}'::TIMESTAMP"
 
         # Match simple numeric/boolean types
         if dtype in (
@@ -202,14 +200,13 @@ def _pl_tree_to_sql(tree: dict) -> str:
             string_val = value.get("StringOwned", value.get("String", None))
             return f"'{string_val}'"
 
-        raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+        raise NotImplementedError(f"Unsupported scalar type {dtype!s}, with value {value}")
 
     raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
 
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
-    """
-    A polars IO plugin for DuckDB.
+    """A polars IO plugin for DuckDB.
     """
 
     def source_generator(

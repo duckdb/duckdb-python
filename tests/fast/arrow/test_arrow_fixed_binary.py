@@ -3,7 +3,7 @@ import pytest
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowFixedBinary(object):
+class TestArrowFixedBinary:
     def test_arrow_fixed_binary(self, duckdb_cursor):
         ids = [
             None,

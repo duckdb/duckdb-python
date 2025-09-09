@@ -2,25 +2,11 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from spark_namespace.sql.functions import col, struct, when, lit
 from spark_namespace import USE_ACTUAL_SPARK
-import duckdb
-import re
+from spark_namespace.sql.functions import col, lit
 
 
-class TestWithColumn(object):
+class TestWithColumn:
     def test_with_column(self, spark):
         data = [
             ("James", "", "Smith", "1991-04-01", "M", 3000),

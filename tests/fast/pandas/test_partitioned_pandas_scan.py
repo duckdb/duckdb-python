@@ -1,11 +1,11 @@
-import duckdb
-import pandas as pd
+
 import numpy
-import datetime
-import time
+import pandas as pd
+
+import duckdb
 
 
-class TestPartitionedPandasScan(object):
+class TestPartitionedPandasScan:
     def test_parallel_pandas(self, duckdb_cursor):
         con = duckdb.connect()
         df = pd.DataFrame({"i": numpy.arange(10000000)})

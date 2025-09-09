@@ -1,10 +1,11 @@
 # cursor description
-from datetime import datetime, date
+from datetime import date, datetime
+
 from pytest import mark
 import duckdb
 
 
-class TestCursorDescription(object):
+class TestCursorDescription:
     @mark.parametrize(
         "query,column_name,string_type,real_type",
         [
@@ -51,6 +52,6 @@ class TestCursorDescription(object):
         assert duckdb_empty_cursor.description is None
 
 
-class TestCursorRowcount(object):
+class TestCursorRowcount:
     def test_rowcount(self, duckdb_cursor):
         assert duckdb_cursor.rowcount == -1

@@ -1,18 +1,17 @@
-import duckdb
-import os
-import datetime
+
 import pytest
+
+import duckdb
 
 try:
     import pyarrow as pa
-    import pandas as pd
 
     can_run = True
 except:
     can_run = False
 
 
-class TestArrowInterval(object):
+class TestArrowInterval:
     def test_duration_types(self, duckdb_cursor):
         if not can_run:
             return

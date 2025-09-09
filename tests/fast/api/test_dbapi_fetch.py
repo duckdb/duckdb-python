@@ -1,11 +1,13 @@
-import duckdb
-import pytest
-from uuid import UUID
 import datetime
 from decimal import Decimal
+from uuid import UUID
+
+import pytest
+
+import duckdb
 
 
-class TestDBApiFetch(object):
+class TestDBApiFetch:
     def test_multiple_fetch_one(self, duckdb_cursor):
         con = duckdb.connect()
         c = con.execute("SELECT 42")

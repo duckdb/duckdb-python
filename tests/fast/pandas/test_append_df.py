@@ -1,9 +1,10 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestAppendDF(object):
+class TestAppendDF:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_df_to_table_append(self, duckdb_cursor, pandas):
         conn = duckdb.connect()

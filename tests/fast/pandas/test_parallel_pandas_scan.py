@@ -1,14 +1,15 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
-import duckdb
-import numpy
 import datetime
+
+import numpy
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 def run_parallel_queries(main_table, left_join_table, expected_df, pandas, iteration_count=5):
-    for i in range(0, iteration_count):
+    for i in range(iteration_count):
         output_df = None
         sql = """
         select
@@ -35,7 +36,7 @@ def run_parallel_queries(main_table, left_join_table, expected_df, pandas, itera
             duckdb_conn.close()
 
 
-class TestParallelPandasScan(object):
+class TestParallelPandasScan:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_parallel_numeric_scan(self, duckdb_cursor, pandas):
         main_table = pandas.DataFrame([{"join_column": 3}])

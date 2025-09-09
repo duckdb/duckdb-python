@@ -1,9 +1,11 @@
-import duckdb
-import pytest
 import datetime
 
+import pytest
 
-class TestPythonResult(object):
+import duckdb
+
+
+class TestPythonResult:
     def test_result_closed(self, duckdb_cursor):
         connection = duckdb.connect("")
         cursor = connection.cursor()

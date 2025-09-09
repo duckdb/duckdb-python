@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 
 try:
     import pyarrow as pa
@@ -7,10 +8,10 @@ try:
     can_run = True
 except:
     can_run = False
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 
 
-class Test3654(object):
+class Test3654:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_3654_pandas(self, duckdb_cursor, pandas):
         df1 = pandas.DataFrame(

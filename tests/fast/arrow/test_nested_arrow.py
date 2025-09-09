@@ -1,6 +1,6 @@
-import duckdb
-
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -27,7 +27,7 @@ def get_use_list_view_options():
     return result
 
 
-class TestArrowNested(object):
+class TestArrowNested:
     def test_lists_basic(self, duckdb_cursor):
         # Test Constant List
         query = (

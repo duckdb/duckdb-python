@@ -1,8 +1,9 @@
-import duckdb
 import pandas as pd
 
+import duckdb
 
-class TestPandasUpdateList(object):
+
+class TestPandasUpdateList:
     def test_pandas_update_list(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect(":memory:")
         duckdb_cursor.execute("create table t (l int[])")

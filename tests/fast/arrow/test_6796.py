@@ -1,6 +1,7 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 pyarrow = pytest.importorskip("pyarrow")
 

@@ -1,12 +1,9 @@
-import duckdb
-import os
-import datetime
-import pytest
-import pandas as pd
 import io
 
+import pandas as pd
 
-class TestPandasStringNull(object):
+
+class TestPandasStringNull:
     def test_pandas_string_null(self, duckdb_cursor):
         csv = """what,is_control,is_test
 ,0,0

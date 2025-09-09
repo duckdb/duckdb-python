@@ -1,11 +1,12 @@
-import pandas as pd
-import duckdb
 import datetime
+
 import numpy as np
-import random
+import pandas as pd
+
+import duckdb
 
 
-class TestPandasObject(object):
+class TestPandasObject:
     def test_object_lotof_nulls(self):
         # Test mostly null column
         data = [None] + [1] + [None] * 10000  # Last element is 1, others are None

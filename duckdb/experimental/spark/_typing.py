@@ -16,10 +16,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Callable, Iterable, Sized, TypeVar, Union
-from typing_extensions import Literal, Protocol
+from collections.abc import Iterable, Sized
+from typing import Callable, TypeVar, Union
 
-from numpy import int32, int64, float32, float64, ndarray
+from numpy import float32, float64, int32, int64, ndarray
+from typing_extensions import Literal, Protocol
 
 F = TypeVar("F", bound=Callable)
 T_co = TypeVar("T_co", covariant=True)

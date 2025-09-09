@@ -1,6 +1,8 @@
-import duckdb
 import os
+
 import pytest
+
+import duckdb
 
 pyarrow = pytest.importorskip("pyarrow")
 pyarrow.parquet = pytest.importorskip("pyarrow.parquet")
@@ -8,7 +10,7 @@ pyarrow.dataset = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 
 
-class TestArrowRecordBatchReader(object):
+class TestArrowRecordBatchReader:
     def test_parallel_reader(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")

@@ -1,13 +1,14 @@
+import glob
 import os
+import shutil
+import warnings
+from importlib import import_module
+from os.path import abspath, dirname, join, normpath
 from typing import Any
 
 import pytest
-import shutil
-from os.path import abspath, join, dirname, normpath
-import glob
+
 import duckdb
-import warnings
-from importlib import import_module
 
 try:
     # need to ignore warnings that might be thrown deep inside pandas's import tree (from dateutil in this case)
@@ -71,11 +72,12 @@ def duckdb_empty_cursor(request):
 
 
 def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
-    from pandas import DatetimeIndex, bdate_range, Series
-    from datetime import datetime
-    from pandas._typing import Frequency
-    import numpy as np
     import string
+    from datetime import datetime
+
+    import numpy as np
+    from pandas import DatetimeIndex, Series, bdate_range
+    from pandas._typing import Frequency
 
     _N = 30
     _K = 4
@@ -226,7 +228,6 @@ def require():
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
 @pytest.fixture(scope="function")
 def spark():
-    from spark_namespace import USE_ACTUAL_SPARK
 
     if not hasattr(spark, "session"):
         # Cache the import

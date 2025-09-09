@@ -1,6 +1,7 @@
-import duckdb
-from decimal import Decimal
+
 import pytest
+
+import duckdb
 
 
 @pytest.fixture(autouse=True)
@@ -23,12 +24,12 @@ def setup_and_teardown_of_table(duckdb_cursor):
     duckdb_cursor.execute("drop table agg")
 
 
-@pytest.fixture()
+@pytest.fixture
 def table(duckdb_cursor):
     return duckdb_cursor.table("agg")
 
 
-class TestRAPIAggregations(object):
+class TestRAPIAggregations:
     # General aggregate functions
 
     def test_any_value(self, table):

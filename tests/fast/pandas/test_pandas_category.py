@@ -1,7 +1,8 @@
-import duckdb
-import pandas as pd
 import numpy
+import pandas as pd
 import pytest
+
+import duckdb
 
 
 def check_category_equal(category):
@@ -54,7 +55,7 @@ def check_create_table(category):
     conn.execute("DROP TABLE t1")
 
 
-class TestCategory(object):
+class TestCategory:
     def test_category_simple(self, duckdb_cursor):
         df_in = pd.DataFrame({"float": [1.0, 2.0, 1.0], "int": pd.Series([1, 2, 1], dtype="category")})
 

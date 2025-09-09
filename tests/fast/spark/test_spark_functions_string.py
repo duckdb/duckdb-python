@@ -7,7 +7,7 @@ from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
 
-class TestSparkFunctionsString(object):
+class TestSparkFunctionsString:
     def test_length(self, spark):
         data = [
             ("firstRowFirstColumn",),

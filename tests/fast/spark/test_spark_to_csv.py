@@ -1,7 +1,6 @@
-import pytest
-import tempfile
-
 import os
+
+import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -15,12 +14,13 @@ if USE_ACTUAL_SPARK:
         allow_module_level=True,
     )
 
-from duckdb import connect, InvalidInputException, read_csv
-from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
-from spark_namespace import USE_ACTUAL_SPARK
-import pandas._testing as tm
-import datetime
 import csv
+import datetime
+
+from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
+from spark_namespace import USE_ACTUAL_SPARK
+
+from duckdb import InvalidInputException, read_csv
 
 
 @pytest.fixture
@@ -34,24 +34,24 @@ def df(spark):
     )
     columns = ["CourseName", "fee", "discount"]
     dataframe = spark.createDataFrame(data=simpleData, schema=columns)
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_ints(request, spark):
     pandas = request.param
     dataframe = pandas.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_strings(request, spark):
     pandas = request.param
     dataframe = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
-    yield dataframe
+    return dataframe
 
 
-class TestSparkToCSV(object):
+class TestSparkToCSV:
     def test_basic_to_csv(self, pandas_df_ints, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")
 

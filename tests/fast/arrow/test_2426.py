@@ -1,15 +1,14 @@
+
 import duckdb
-import os
 
 try:
-    import pyarrow as pa
 
     can_run = True
 except:
     can_run = False
 
 
-class Test2426(object):
+class Test2426:
     def test_2426(self, duckdb_cursor):
         if not can_run:
             return

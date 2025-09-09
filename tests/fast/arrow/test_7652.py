@@ -1,13 +1,12 @@
-import duckdb
-import os
-import pytest
 import tempfile
+
+import pytest
 
 pa = pytest.importorskip("pyarrow", minversion="11")
 pq = pytest.importorskip("pyarrow.parquet", minversion="11")
 
 
-class Test7652(object):
+class Test7652:
     def test_7652(self, duckdb_cursor):
         temp_file_name = tempfile.NamedTemporaryFile(suffix=".parquet").name
         # Generate a list of values that aren't uniform in changes.

@@ -1,9 +1,11 @@
-import duckdb
-import pytest
-import sys
 import datetime
 import os
+import sys
+
 import numpy as np
+import pytest
+
+import duckdb
 
 if sys.version_info < (3, 9):
     pytest.skip(

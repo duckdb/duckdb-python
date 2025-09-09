@@ -1,15 +1,10 @@
-import duckdb
-import tempfile
-import os
-import pandas as pd
-import tempfile
-import pandas._testing as tm
-import datetime
-import csv
+
 import pytest
 
+import duckdb
 
-class TestGetAttribute(object):
+
+class TestGetAttribute:
     def test_basic_getattr(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)")
         assert rel.a.fetchmany(5) == [(0,), (1,), (2,), (3,), (4,)]

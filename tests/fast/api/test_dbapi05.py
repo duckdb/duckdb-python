@@ -1,7 +1,7 @@
 # simple DB API testcase
 
 
-class TestSimpleDBAPI(object):
+class TestSimpleDBAPI:
     def test_prepare(self, duckdb_cursor):
         result = duckdb_cursor.execute("SELECT CAST(? AS INTEGER), CAST(? AS INTEGER)", ["42", "84"]).fetchall()
         assert result == [

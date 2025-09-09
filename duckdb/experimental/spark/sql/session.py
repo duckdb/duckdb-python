@@ -1,24 +1,24 @@
-from typing import Optional, List, Any, Union, Iterable, TYPE_CHECKING
 import uuid
+from collections.abc import Iterable
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
-    from .catalog import Catalog
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-from ..exception import ContributionsAcceptedError
-from .types import StructType, AtomicType, DataType
+    from .catalog import Catalog
+
+
 from ..conf import SparkConf
-from .dataframe import DataFrame
-from .conf import RuntimeConfig
-from .readwriter import DataFrameReader
 from ..context import SparkContext
-from .udf import UDFRegistration
-from .streaming import DataStreamReader
-import duckdb
-
-from ..errors import PySparkTypeError, PySparkValueError
-
+from ..errors import PySparkTypeError
 from ..errors.error_classes import *
+from ..exception import ContributionsAcceptedError
+from .conf import RuntimeConfig
+from .dataframe import DataFrame
+from .readwriter import DataFrameReader
+from .streaming import DataStreamReader
+from .types import StructType
+from .udf import UDFRegistration
 
 # In spark:
 # SparkSession holds a SparkContext

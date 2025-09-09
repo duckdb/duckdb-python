@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 from duckdb import ColumnExpression
 
 
@@ -26,10 +27,10 @@ def con():
         ) AS t(a, b))
     """
     )
-    yield conn
+    return conn
 
 
-class TestRAPIJoins(object):
+class TestRAPIJoins:
     def test_outer_join(self, con):
         a = con.table("tbl_a")
         b = con.table("tbl_b")

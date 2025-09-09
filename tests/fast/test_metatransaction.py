@@ -7,7 +7,7 @@ NUMBER_OF_ROWS = 200000
 NUMBER_OF_COLUMNS = 1
 
 
-class TestMetaTransaction(object):
+class TestMetaTransaction:
     def test_fetchmany(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE SEQUENCE id_seq")
         column_names = ",\n".join([f"column_{i} FLOAT" for i in range(1, NUMBER_OF_COLUMNS + 1)])

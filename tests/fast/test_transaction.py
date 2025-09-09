@@ -1,8 +1,8 @@
+
 import duckdb
-import pandas as pd
 
 
-class TestConnectionTransaction(object):
+class TestConnectionTransaction:
     def test_transaction(self, duckdb_cursor):
         con = duckdb.connect()
         con.execute("create table t (i integer)")

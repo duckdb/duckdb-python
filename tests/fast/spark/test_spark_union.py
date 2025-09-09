@@ -1,10 +1,11 @@
 import platform
+
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace.sql.types import Row
 from spark_namespace.sql.functions import col
+from spark_namespace.sql.types import Row
 
 
 @pytest.fixture
@@ -18,7 +19,7 @@ def df(spark):
 
     columns = ["employee_name", "department", "state", "salary", "age", "bonus"]
     dataframe = spark.createDataFrame(data=simpleData, schema=columns)
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture
@@ -32,10 +33,10 @@ def df2(spark):
     ]
     columns2 = ["employee_name", "department", "state", "salary", "age", "bonus"]
     dataframe = spark.createDataFrame(data=simpleData2, schema=columns2)
-    yield dataframe
+    return dataframe
 
 
-class TestDataFrameUnion(object):
+class TestDataFrameUnion:
     def test_merge_with_union(self, df, df2):
         unionDF = df.union(df2)
         res = unionDF.collect()

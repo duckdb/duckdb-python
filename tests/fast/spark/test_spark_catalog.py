@@ -3,10 +3,10 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.sql.catalog import Table, Database, Column
+from spark_namespace.sql.catalog import Column, Database, Table
 
 
-class TestSparkCatalog(object):
+class TestSparkCatalog:
     def test_list_databases(self, spark):
         dbs = spark.catalog.listDatabases()
         if USE_ACTUAL_SPARK:

@@ -7,7 +7,7 @@ from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
 
-class TestsSparkFunctionsNull(object):
+class TestsSparkFunctionsNull:
     def test_coalesce(self, spark):
         data = [
             (None, 2),

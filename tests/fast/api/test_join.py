@@ -1,8 +1,9 @@
-import duckdb
 import pytest
 
+import duckdb
 
-class TestJoin(object):
+
+class TestJoin:
     def test_alias_from_sql(self):
         con = duckdb.connect()
         rel1 = con.sql("SELECT 1 AS col1, 2 AS col2")

@@ -1,11 +1,11 @@
-import duckdb
-import tempfile
-import os
+
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
-class TestInsert(object):
+class TestInsert:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_insert(self, pandas):
         test_df = pandas.DataFrame({"i": [1, 2, 3], "j": ["one", "two", "three"]})

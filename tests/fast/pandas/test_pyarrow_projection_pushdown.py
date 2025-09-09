@@ -1,8 +1,8 @@
-import duckdb
-import os
-import pytest
 
+import pytest
 from conftest import pandas_supports_arrow_backend
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 ds = pytest.importorskip("pyarrow.dataset")
@@ -10,7 +10,7 @@ _ = pytest.importorskip("pandas", "2.0.0")
 
 
 @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
-class TestArrowDFProjectionPushdown(object):
+class TestArrowDFProjectionPushdown:
     def test_projection_pushdown_no_filter(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)")

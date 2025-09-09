@@ -1,9 +1,10 @@
-import duckdb
-from pandas import DataFrame
 import pytest
+from pandas import DataFrame
+
+import duckdb
 
 
-class TestInsertInto(object):
+class TestInsertInto:
     def test_insert_into_schema(self, duckdb_cursor):
         # open connection
         con = duckdb.connect()

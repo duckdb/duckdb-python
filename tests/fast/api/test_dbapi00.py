@@ -2,15 +2,14 @@
 
 import numpy
 import pytest
-import duckdb
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 
 
 def assert_result_equal(result):
     assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
 
 
-class TestSimpleDBAPI(object):
+class TestSimpleDBAPI:
     def test_regular_selection(self, duckdb_cursor, integers):
         duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchall()

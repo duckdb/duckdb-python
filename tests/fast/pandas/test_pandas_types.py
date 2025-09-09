@@ -1,11 +1,13 @@
-import duckdb
-import pytest
-import pandas as pd
-import numpy
 import string
-from packaging import version
 import warnings
 from contextlib import suppress
+
+import numpy
+import pandas as pd
+import pytest
+from packaging import version
+
+import duckdb
 
 
 def round_trip(data, pandas_type):
@@ -21,7 +23,7 @@ def round_trip(data, pandas_type):
     assert df_out.equals(df_in)
 
 
-class TestNumpyNullableTypes(object):
+class TestNumpyNullableTypes:
     def test_pandas_numeric(self):
         base_df = pd.DataFrame({"a": range(10)})
 

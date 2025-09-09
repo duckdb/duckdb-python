@@ -1,9 +1,9 @@
 from typing import Optional
+
 import duckdb
 from duckdb import DuckDBPyConnection
-
-from duckdb.experimental.spark.exception import ContributionsAcceptedError
 from duckdb.experimental.spark.conf import SparkConf
+from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 
 class SparkContext:

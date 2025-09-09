@@ -1,7 +1,9 @@
-from fsspec import filesystem, AbstractFileSystem
-from fsspec.implementations.memory import MemoryFileSystem, MemoryFile
-from .bytes_io_wrapper import BytesIOWrapper
 from io import TextIOBase
+
+from fsspec import AbstractFileSystem
+from fsspec.implementations.memory import MemoryFile, MemoryFileSystem
+
+from .bytes_io_wrapper import BytesIOWrapper
 
 
 def is_file_like(obj):

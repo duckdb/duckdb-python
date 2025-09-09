@@ -1,11 +1,13 @@
-import duckdb
-import pytest
 import os
+
+import pytest
+
+import duckdb
 
 script_path = os.path.dirname(__file__)
 
 
-class TestTableFunction(object):
+class TestTableFunction:
     def test_table_function(self, duckdb_cursor):
         path = os.path.join(script_path, "..", "data/integers.csv")
         rel = duckdb_cursor.table_function("read_csv", [path])

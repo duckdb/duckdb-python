@@ -1,4 +1,5 @@
-from typing import List, NamedTuple, Optional
+from typing import NamedTuple, Optional
+
 from .session import SparkSession
 
 
@@ -75,4 +76,4 @@ class Catalog:
         raise NotImplementedError
 
 
-__all__ = ["Catalog", "Table", "Column", "Function", "Database"]
+__all__ = ["Catalog", "Column", "Database", "Function", "Table"]
