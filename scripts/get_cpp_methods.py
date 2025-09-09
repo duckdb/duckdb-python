@@ -16,7 +16,7 @@ class FunctionParam:
 
 
 class ConnectionMethod:
-    def __init__(self, name: str, params: List[FunctionParam], is_void: bool):
+    def __init__(self, name: str, params: list[FunctionParam], is_void: bool):
         self.name = name
         self.params = params
         self.is_void = is_void
@@ -49,7 +49,7 @@ class Visitor:
         self.methods_dict[name] = ConnectionMethod(name, params, is_void)
 
 
-def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
+def get_methods(class_name: str) -> dict[str, ConnectionMethod]:
     CLASSES = {
         "DuckDBPyConnection": os.path.join(
             scripts_folder,

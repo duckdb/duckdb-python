@@ -12,20 +12,20 @@ class SparkConf:
     def get(self, key: str, defaultValue: Optional[str] = None) -> Optional[str]:
         raise ContributionsAcceptedError
 
-    def getAll(self) -> List[Tuple[str, str]]:
+    def getAll(self) -> list[tuple[str, str]]:
         raise ContributionsAcceptedError
 
     def set(self, key: str, value: str) -> "SparkConf":
         raise ContributionsAcceptedError
 
-    def setAll(self, pairs: List[Tuple[str, str]]) -> "SparkConf":
+    def setAll(self, pairs: list[tuple[str, str]]) -> "SparkConf":
         raise ContributionsAcceptedError
 
     def setAppName(self, value: str) -> "SparkConf":
         raise ContributionsAcceptedError
 
     def setExecutorEnv(
-        self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[List[Tuple[str, str]]] = None
+        self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[list[tuple[str, str]]] = None
     ) -> "SparkConf":
         raise ContributionsAcceptedError
 

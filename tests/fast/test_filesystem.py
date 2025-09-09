@@ -20,7 +20,7 @@ FILENAME = 'integers.csv'
 logging.basicConfig(level=logging.DEBUG)
 
 
-def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
+def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> list[str]:
     error_occurred = []
     orig = getattr(obj, name)
 

@@ -13,7 +13,7 @@ class PySparkException(Exception):
         # The error class, decides the message format, must be one of the valid options listed in 'error_classes.py'
         error_class: Optional[str] = None,
         # The dictionary listing the arguments specified in the message (or the error_class)
-        message_parameters: Optional[Dict[str, str]] = None,
+        message_parameters: Optional[dict[str, str]] = None,
     ):
         # `message` vs `error_class` & `message_parameters` are mutually exclusive.
         assert (message is not None and (error_class is None and message_parameters is None)) or (
@@ -24,7 +24,7 @@ class PySparkException(Exception):
 
         if message is None:
             self.message = self.error_reader.get_error_message(
-                cast(str, error_class), cast(Dict[str, str], message_parameters)
+                cast(str, error_class), cast(dict[str, str], message_parameters)
             )
         else:
             self.message = message
@@ -45,7 +45,7 @@ class PySparkException(Exception):
         """
         return self.error_class
 
-    def getMessageParameters(self) -> Optional[Dict[str, str]]:
+    def getMessageParameters(self) -> Optional[dict[str, str]]:
         """
         Returns a message parameters as a dictionary.
 

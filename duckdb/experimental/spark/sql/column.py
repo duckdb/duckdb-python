@@ -234,10 +234,10 @@ class Column:
     def isin(self, *cols: Any) -> "Column":
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
-            cols = cast(Tuple, cols[0])
+            cols = cast(tuple, cols[0])
 
         cols = cast(
-            Tuple,
+            tuple,
             [_get_expr(c) for c in cols],
         )
         return Column(self.expr.isin(*cols))

@@ -177,7 +177,7 @@ class GroupedData:
         if len(columns) == 0:
             schema = self._df.schema
             # Take only the numeric types of the relation
-            columns: List[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
+            columns: list[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
         return _api_internal(self, "avg", *columns)
 
     @df_varargs_api
@@ -312,10 +312,10 @@ class GroupedData:
         ...
 
     @overload
-    def agg(self, __exprs: Dict[str, str]) -> DataFrame:
+    def agg(self, __exprs: dict[str, str]) -> DataFrame:
         ...
 
-    def agg(self, *exprs: Union[Column, Dict[str, str]]) -> DataFrame:
+    def agg(self, *exprs: Union[Column, dict[str, str]]) -> DataFrame:
         """Compute aggregates and returns the result as a :class:`DataFrame`.
 
         The available aggregate functions can be:

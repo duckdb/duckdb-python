@@ -143,7 +143,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumns(self, *colsMap: Dict[str, Column]) -> "DataFrame":
+    def withColumns(self, *colsMap: dict[str, Column]) -> "DataFrame":
         """
         Returns a new :class:`DataFrame` by adding multiple columns or replacing the
         existing columns that have the same names.
@@ -218,7 +218,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumnsRenamed(self, colsMap: Dict[str, str]) -> "DataFrame":
+    def withColumnsRenamed(self, colsMap: dict[str, str]) -> "DataFrame":
         """
         Returns a new :class:`DataFrame` by renaming multiple columns.
         This is a no-op if the schema doesn't contain the given column names.
@@ -356,7 +356,7 @@ class DataFrame:
         return result
 
     def sort(
-        self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any
+        self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any
     ) -> "DataFrame":
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
@@ -487,7 +487,7 @@ class DataFrame:
 
     orderBy = sort
 
-    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], list[Row]]:
         if n is None:
             rs = self.head(1)
             return rs[0] if rs else None
@@ -495,7 +495,7 @@ class DataFrame:
 
     first = head
 
-    def take(self, num: int) -> List[Row]:
+    def take(self, num: int) -> list[Row]:
         return self.limit(num).collect()
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
@@ -579,7 +579,7 @@ class DataFrame:
         return DataFrame(rel, self.session)
 
     @property
-    def columns(self) -> List[str]:
+    def columns(self) -> list[str]:
         """Returns all column names as a list.
 
         Examples
@@ -589,12 +589,12 @@ class DataFrame:
         """
         return [f.name for f in self.schema.fields]
 
-    def _ipython_key_completions_(self) -> List[str]:
+    def _ipython_key_completions_(self) -> list[str]:
         # Provides tab-completion for column names in PySpark DataFrame
         # when accessed in bracket notation, e.g. df['<TAB>]
         return self.columns
 
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:
         out = set(super().__dir__())
         out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
         return sorted(out)
@@ -602,7 +602,7 @@ class DataFrame:
     def join(
         self,
         other: "DataFrame",
-        on: Optional[Union[str, List[str], Column, List[Column]]] = None,
+        on: Optional[Union[str, list[str], Column, list[Column]]] = None,
         how: Optional[str] = None,
     ) -> "DataFrame":
         """Joins with another :class:`DataFrame`, using the given join expression.
@@ -704,7 +704,7 @@ class DataFrame:
             assert isinstance(
                 on[0], Expression
             ), "on should be Column or list of Column"
-            on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
+            on = reduce(lambda x, y: x.__and__(y), cast(list[Expression], on))
 
 
         if on is None and how is None:
@@ -893,11 +893,11 @@ class DataFrame:
         ...
 
     @overload
-    def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
+    def __getitem__(self, item: Union[Column, list, tuple]) -> "DataFrame":
         ...
 
     def __getitem__(
-        self, item: Union[int, str, Column, List, Tuple]
+        self, item: Union[int, str, Column, list, tuple]
     ) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
@@ -942,7 +942,7 @@ class DataFrame:
         ...
 
     @overload
-    def groupBy(self, __cols: Union[List[Column], List[str]]) -> "GroupedData":
+    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData":
         ...
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
@@ -1259,7 +1259,7 @@ class DataFrame:
         """
         return DataFrame(self.relation.except_(other.relation), self.session)
 
-    def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
+    def dropDuplicates(self, subset: Optional[list[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
 
@@ -1391,7 +1391,7 @@ class DataFrame:
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
-    def collect(self) -> List[Row]:
+    def collect(self) -> list[Row]:
         columns = self.relation.columns
         result = self.relation.fetchall()
 

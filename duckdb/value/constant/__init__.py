@@ -210,7 +210,7 @@ class ListValue(Value):
 
 
 class StructValue(Value):
-    def __init__(self, object: Any, children: Dict[str, DuckDBPyType]):
+    def __init__(self, object: Any, children: dict[str, DuckDBPyType]):
         import duckdb
 
         struct_type = duckdb.struct_type(children)
@@ -226,7 +226,7 @@ class MapValue(Value):
 
 
 class UnionType(Value):
-    def __init__(self, object: Any, members: Dict[str, DuckDBPyType]):
+    def __init__(self, object: Any, members: dict[str, DuckDBPyType]):
         import duckdb
 
         union_type = duckdb.union_type(members)

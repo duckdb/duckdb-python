@@ -290,7 +290,7 @@ class PyPICleanup:
         logging.info(f"Successfully cleaned up {len(versions_to_delete)} development versions")
         return 0
     
-    def _fetch_released_versions(self, http_session: Session) -> Set[str]:
+    def _fetch_released_versions(self, http_session: Session) -> set[str]:
         """Fetch package release information from PyPI API."""
         logging.debug(f"Fetching package information for '{self._package}'")
         
@@ -330,7 +330,7 @@ class PyPICleanup:
             raise PyPICleanupError(f"Invalid dev version '{version}'")
         return match.group("version"), int(match.group("dev_id"))
 
-    def _determine_versions_to_delete(self, versions: Set[str]) -> Set[str]:
+    def _determine_versions_to_delete(self, versions: set[str]) -> set[str]:
         """Determine which package versions should be deleted."""
         logging.debug("Analyzing versions to determine cleanup candidates")
 
@@ -488,7 +488,7 @@ class PyPICleanup:
         
         raise AuthenticationError("Two-factor authentication failed after all attempts")
     
-    def _delete_versions(self, http_session: Session, versions_to_delete: Set[str]) -> None:
+    def _delete_versions(self, http_session: Session, versions_to_delete: set[str]) -> None:
         """Delete the specified package versions."""
         logging.info(f"Starting deletion of {len(versions_to_delete)} development versions")
         

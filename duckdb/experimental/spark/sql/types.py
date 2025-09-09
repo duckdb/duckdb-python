@@ -92,7 +92,7 @@ class DataType:
     def simpleString(self) -> str:
         return self.typeName()
 
-    def jsonValue(self) -> Union[str, Dict[str, Any]]:
+    def jsonValue(self) -> Union[str, dict[str, Any]]:
         raise ContributionsAcceptedError
 
     def json(self) -> str:
@@ -124,9 +124,9 @@ class DataType:
 class DataTypeSingleton(type):
     """Metaclass for DataType"""
 
-    _instances: ClassVar[Dict[Type["DataTypeSingleton"], "DataTypeSingleton"]] = {}
+    _instances: ClassVar[dict[type["DataTypeSingleton"], "DataTypeSingleton"]] = {}
 
-    def __call__(cls: Type[T]) -> T:  # type: ignore[override]
+    def __call__(cls: type[T]) -> T:  # type: ignore[override]
         if cls not in cls._instances:  # type: ignore[attr-defined]
             cls._instances[cls] = super(DataTypeSingleton, cls).__call__()  # type: ignore[misc, attr-defined]
         return cls._instances[cls]  # type: ignore[attr-defined]
@@ -603,12 +603,12 @@ class ArrayType(DataType):
     def needConversion(self) -> bool:
         return self.elementType.needConversion()
 
-    def toInternal(self, obj: List[Optional[T]]) -> List[Optional[T]]:
+    def toInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:
         if not self.needConversion():
             return obj
         return obj and [self.elementType.toInternal(v) for v in obj]
 
-    def fromInternal(self, obj: List[Optional[T]]) -> List[Optional[T]]:
+    def fromInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:
         if not self.needConversion():
             return obj
         return obj and [self.elementType.fromInternal(v) for v in obj]
@@ -670,12 +670,12 @@ class MapType(DataType):
     def needConversion(self) -> bool:
         return self.keyType.needConversion() or self.valueType.needConversion()
 
-    def toInternal(self, obj: Dict[T, Optional[U]]) -> Dict[T, Optional[U]]:
+    def toInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:
         if not self.needConversion():
             return obj
         return obj and dict((self.keyType.toInternal(k), self.valueType.toInternal(v)) for k, v in obj.items())
 
-    def fromInternal(self, obj: Dict[T, Optional[U]]) -> Dict[T, Optional[U]]:
+    def fromInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:
         if not self.needConversion():
             return obj
         return obj and dict((self.keyType.fromInternal(k), self.valueType.fromInternal(v)) for k, v in obj.items())
@@ -710,7 +710,7 @@ class StructField(DataType):
         name: str,
         dataType: DataType,
         nullable: bool = True,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ):
         super().__init__(dataType.duckdb_type)
         assert isinstance(dataType, DataType), "dataType %s should be an instance of %s" % (
@@ -776,7 +776,7 @@ class StructType(DataType):
     def _update_internal_duckdb_type(self):
         self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
-    def __init__(self, fields: Optional[List[StructField]] = None):
+    def __init__(self, fields: Optional[list[StructField]] = None):
         if not fields:
             self.fields = []
             self.names = []
@@ -795,7 +795,7 @@ class StructType(DataType):
         field: str,
         data_type: Union[str, DataType],
         nullable: bool = True,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> "StructType":
         ...
 
@@ -808,7 +808,7 @@ class StructType(DataType):
         field: Union[str, StructField],
         data_type: Optional[Union[str, DataType]] = None,
         nullable: bool = True,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: Optional[dict[str, Any]] = None,
     ) -> "StructType":
         """
         Construct a :class:`StructType` by adding new elements to it, to define the schema.
@@ -900,7 +900,7 @@ class StructType(DataType):
     def __contains__(self, item: Any) -> bool:
         return item in self.names
 
-    def extract_types_and_names(self) -> Tuple[List[str], List[str]]:
+    def extract_types_and_names(self) -> tuple[list[str], list[str]]:
         names = []
         types = []
         for f in self.fields:
@@ -908,7 +908,7 @@ class StructType(DataType):
             names.append(f.name)
         return (types, names)
 
-    def fieldNames(self) -> List[str]:
+    def fieldNames(self) -> list[str]:
         """
         Returns all field names in a list.
 
@@ -924,7 +924,7 @@ class StructType(DataType):
         # We need convert Row()/namedtuple into tuple()
         return True
 
-    def toInternal(self, obj: Tuple) -> Tuple:
+    def toInternal(self, obj: tuple) -> tuple:
         if obj is None:
             return
 
@@ -956,14 +956,14 @@ class StructType(DataType):
             else:
                 raise ValueError("Unexpected tuple %r with StructType" % obj)
 
-    def fromInternal(self, obj: Tuple) -> "Row":
+    def fromInternal(self, obj: tuple) -> "Row":
         if obj is None:
             return
         if isinstance(obj, Row):
             # it's already converted by pickler
             return obj
 
-        values: Union[Tuple, List]
+        values: Union[tuple, list]
         if self._needSerializeAnyField:
             # Only calling fromInternal function for fields that need conversion
             values = [f.fromInternal(v) if c else v for f, v, c in zip(self.fields, obj, self._needConversion)]
@@ -1052,7 +1052,7 @@ class UserDefinedType(DataType):
         return type(self) == type(other)
 
 
-_atomic_types: List[Type[DataType]] = [
+_atomic_types: list[type[DataType]] = [
     StringType,
     BinaryType,
     BooleanType,
@@ -1068,14 +1068,14 @@ _atomic_types: List[Type[DataType]] = [
     TimestampNTZType,
     NullType,
 ]
-_all_atomic_types: Dict[str, Type[DataType]] = dict((t.typeName(), t) for t in _atomic_types)
+_all_atomic_types: dict[str, type[DataType]] = dict((t.typeName(), t) for t in _atomic_types)
 
-_complex_types: List[Type[Union[ArrayType, MapType, StructType]]] = [
+_complex_types: list[type[Union[ArrayType, MapType, StructType]]] = [
     ArrayType,
     MapType,
     StructType,
 ]
-_all_complex_types: Dict[str, Type[Union[ArrayType, MapType, StructType]]] = dict(
+_all_complex_types: dict[str, type[Union[ArrayType, MapType, StructType]]] = dict(
     (v.typeName(), v) for v in _complex_types
 )
 
@@ -1084,7 +1084,7 @@ _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")
 _INTERVAL_DAYTIME = re.compile(r"interval (day|hour|minute|second)( to (day|hour|minute|second))?")
 
 
-def _create_row(fields: Union["Row", List[str]], values: Union[Tuple[Any, ...], List[Any]]) -> "Row":
+def _create_row(fields: Union["Row", list[str]], values: Union[tuple[Any, ...], list[Any]]) -> "Row":
     row = Row(*values)
     row.__fields__ = fields
     return row
@@ -1166,7 +1166,7 @@ class Row(tuple):
             # create row class or objects
             return tuple.__new__(cls, args)
 
-    def asDict(self, recursive: bool = False) -> Dict[str, Any]:
+    def asDict(self, recursive: bool = False) -> dict[str, Any]:
         """
         Return as a dict
 
@@ -1260,7 +1260,7 @@ class Row(tuple):
 
     def __reduce__(
         self,
-    ) -> Union[str, Tuple[Any, ...]]:
+    ) -> Union[str, tuple[Any, ...]]:
         """Returns a tuple so Python knows how to pickle Row."""
         if hasattr(self, "__fields__"):
             return (_create_row, (self.__fields__, tuple(self)))

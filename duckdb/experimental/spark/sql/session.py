@@ -126,7 +126,7 @@ class SparkSession:
     def createDataFrame(
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
-        schema: Optional[Union[StructType, List[str]]] = None,
+        schema: Optional[Union[StructType, list[str]]] = None,
         samplingRatio: Optional[float] = None,
         verifySchema: bool = True,
     ) -> DataFrame:

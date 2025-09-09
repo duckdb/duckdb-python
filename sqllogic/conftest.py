@@ -90,7 +90,7 @@ def get_test_id(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Confi
     return str(path.relative_to(root_dir.parent))
 
 
-def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Config) -> typing.List[typing.Any]:
+def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Config) -> list[typing.Any]:
     # Tests are tagged with the their category (i.e., name of their parent directory)
     category = path.parent.name
 
@@ -142,7 +142,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     if metafunc.definition.name != SQLLOGIC_TEST_CASE_NAME:
         return
 
-    test_dirs: typing.List[pathlib.Path] = metafunc.config.getoption("test_dirs")
+    test_dirs: list[pathlib.Path] = metafunc.config.getoption("test_dirs")
     test_glob: typing.Optional[pathlib.Path] = metafunc.config.getoption("path")
 
     parameters = []
@@ -165,7 +165,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     metafunc.parametrize(SQLLOGIC_TEST_PARAMETER, parameters)
 
 
-def determine_test_offsets(config: pytest.Config, num_tests: int) -> typing.Tuple[int, int]:
+def determine_test_offsets(config: pytest.Config, num_tests: int) -> tuple[int, int]:
     """
     If start_offset and end_offset are specified, then these are used.
     start_offset defaults to 0. end_offset defaults to and is capped to the last test index.

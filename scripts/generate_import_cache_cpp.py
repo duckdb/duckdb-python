@@ -16,7 +16,7 @@ except FileNotFoundError:
 
 # deal with leaf nodes?? Those are just PythonImportCacheItem
 def get_class_name(path: str) -> str:
-    parts: List[str] = path.replace('_', '').split('.')
+    parts: list[str] = path.replace('_', '').split('.')
     parts = [x.title() for x in parts]
     return ''.join(parts) + 'CacheItem'
 
@@ -31,7 +31,7 @@ def get_variable_name(name: str) -> str:
     return name
 
 
-def collect_items_of_module(module: dict, collection: Dict):
+def collect_items_of_module(module: dict, collection: dict):
     global json_data
     children = module['children']
     collection[module['full_path']] = module
@@ -122,8 +122,8 @@ public:
 """
 
 
-def collect_classes(items: Dict) -> List:
-    output: List = []
+def collect_classes(items: dict) -> list:
+    output: list = []
     for item in items.values():
         if item['children'] == []:
             continue
@@ -174,7 +174,7 @@ namespace duckdb {{
         return string
 
 
-files: List[ModuleFile] = []
+files: list[ModuleFile] = []
 for name, value in json_data.items():
     if value['full_path'] != value['name']:
         continue
@@ -188,7 +188,7 @@ for file in files:
         f.write(content)
 
 
-def get_root_modules(files: List[ModuleFile]):
+def get_root_modules(files: list[ModuleFile]):
     modules = []
     for file in files:
         name = file.module['name']
@@ -244,7 +244,7 @@ with open(import_cache_path, "w") as f:
     f.write(import_cache_file)
 
 
-def get_module_file_path_includes(files: List[ModuleFile]):
+def get_module_file_path_includes(files: list[ModuleFile]):
     includes = []
     for file in files:
         includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}"')

@@ -29,7 +29,7 @@ class ErrorClassesReader:
     def __init__(self) -> None:
         self.error_info_map = ERROR_CLASSES_MAP
 
-    def get_error_message(self, error_class: str, message_parameters: Dict[str, str]) -> str:
+    def get_error_message(self, error_class: str, message_parameters: dict[str, str]) -> str:
         """
         Returns the completed error message by applying message parameters to the message template.
         """

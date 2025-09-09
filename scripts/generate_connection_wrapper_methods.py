@@ -71,7 +71,7 @@ def is_py_kwargs(method):
     return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
 
 
-def remove_section(content, start_marker, end_marker) -> Tuple[List[str], List[str]]:
+def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[str]]:
     start_index = -1
     end_index = -1
     for i, line in enumerate(content):

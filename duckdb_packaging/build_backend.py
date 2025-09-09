@@ -126,7 +126,7 @@ def _read_duckdb_long_version() -> str:
 
 
 def _skbuild_config_add(
-        key: str, value: Union[List, str], config_settings: Dict[str, Union[List[str],str]], fail_if_exists: bool=False
+        key: str, value: Union[list, str], config_settings: dict[str, Union[list[str],str]], fail_if_exists: bool=False
 ):
     """Add or modify a configuration setting for scikit-build-core.
 
@@ -178,7 +178,7 @@ def _skbuild_config_add(
         )
 
 
-def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[List[str],str]]] = None) -> str:
+def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str],str]]] = None) -> str:
     """Build a source distribution using the DuckDB submodule.
 
     This function extracts the DuckDB version from either the git submodule and saves it
@@ -208,7 +208,7 @@ def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[
 
 def build_wheel(
         wheel_directory: str,
-        config_settings: Optional[Dict[str, Union[List[str],str]]] = None,
+        config_settings: Optional[dict[str, Union[list[str],str]]] = None,
         metadata_directory: Optional[str] = None,
 ) -> str:
     """Build a wheel from either git submodule or extracted sdist sources.

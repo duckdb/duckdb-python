@@ -36,7 +36,7 @@ class Catalog:
     def __init__(self, session: SparkSession):
         self._session = session
 
-    def listDatabases(self) -> List[Database]:
+    def listDatabases(self) -> list[Database]:
         res = self._session.conn.sql('select database_name from duckdb_databases()').fetchall()
 
         def transform_to_database(x) -> Database:
@@ -45,7 +45,7 @@ class Catalog:
         databases = [transform_to_database(x) for x in res]
         return databases
 
-    def listTables(self) -> List[Table]:
+    def listTables(self) -> list[Table]:
         res = self._session.conn.sql('select table_name, database_name, sql, temporary from duckdb_tables()').fetchall()
 
         def transform_to_table(x) -> Table:
@@ -54,7 +54,7 @@ class Catalog:
         tables = [transform_to_table(x) for x in res]
         return tables
 
-    def listColumns(self, tableName: str, dbName: Optional[str] = None) -> List[Column]:
+    def listColumns(self, tableName: str, dbName: Optional[str] = None) -> list[Column]:
         query = f"""
 			select column_name, data_type, is_nullable from duckdb_columns() where table_name = '{tableName}'
 		"""
@@ -68,7 +68,7 @@ class Catalog:
         columns = [transform_to_column(x) for x in res]
         return columns
 
-    def listFunctions(self, dbName: Optional[str] = None) -> List[Function]:
+    def listFunctions(self, dbName: Optional[str] = None) -> list[Function]:
         raise NotImplementedError
 
     def setCurrentDatabase(self, dbName: str) -> None:

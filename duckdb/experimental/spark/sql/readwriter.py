@@ -26,7 +26,7 @@ class DataFrameWriter:
         self,
         path: str,
         mode: Optional[str] = None,
-        partitionBy: Union[str, List[str], None] = None,
+        partitionBy: Union[str, list[str], None] = None,
         compression: Optional[str] = None,
     ) -> None:
         relation = self.dataframe.relation
@@ -94,7 +94,7 @@ class DataFrameReader:
 
     def load(
         self,
-        path: Optional[Union[str, List[str]]] = None,
+        path: Optional[Union[str, list[str]]] = None,
         format: Optional[str] = None,
         schema: Optional[Union[StructType, str]] = None,
         **options: OptionalPrimitiveType,
@@ -131,7 +131,7 @@ class DataFrameReader:
 
     def csv(
         self,
-        path: Union[str, List[str]],
+        path: Union[str, list[str]],
         schema: Optional[Union[StructType, str]] = None,
         sep: Optional[str] = None,
         encoding: Optional[str] = None,
@@ -263,7 +263,7 @@ class DataFrameReader:
 
     def json(
         self,
-        path: Union[str, List[str]],
+        path: Union[str, list[str]],
         schema: Optional[Union[StructType, str]] = None,
         primitivesAsString: Optional[Union[bool, str]] = None,
         prefersDecimal: Optional[Union[bool, str]] = None,

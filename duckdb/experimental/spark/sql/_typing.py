@@ -57,7 +57,7 @@ AtomicValue = TypeVar(
     float,
 )
 
-RowLike = TypeVar("RowLike", List[Any], Tuple[Any, ...], types.Row)
+RowLike = TypeVar("RowLike", list[Any], tuple[Any, ...], types.Row)
 
 SQLBatchedUDFType = Literal[100]
 

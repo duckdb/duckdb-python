@@ -111,7 +111,7 @@ def struct(*cols: Column) -> Column:
 
 
 def array(
-    *cols: Union["ColumnOrName", Union[List["ColumnOrName"], Tuple["ColumnOrName", ...]]]
+    *cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["ColumnOrName", ...]]]
 ) -> Column:
     """Creates a new array column.
 
