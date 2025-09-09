@@ -312,14 +312,14 @@ branch = true
 source = ["duckdb"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 indent-width = 4
 target-version = "py39"
 fix = true
-fixable = ["ALL"]
 exclude = ['external/duckdb']
 
 [tool.ruff.lint]
+fixable = ["ALL"]
 exclude = ['*.pyi']
 select = [
     "ANN", # flake8-annotations
