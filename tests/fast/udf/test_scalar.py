@@ -4,7 +4,7 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip('pyarrow', '18.0.0')
-from typing import Union
+from typing import Union, Any
 import pyarrow.compute as pc
 import uuid
 import datetime
@@ -156,10 +156,10 @@ class TestScalarUDF(object):
             con.create_function('func', 5, [BIGINT], BIGINT, type='arrow')
 
         class MyCallable:
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
-            def __call__(self, x):
+            def __call__(self, x) -> Any:
                 return x
 
         my_callable = MyCallable()

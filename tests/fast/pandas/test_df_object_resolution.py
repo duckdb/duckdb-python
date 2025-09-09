@@ -30,10 +30,10 @@ def create_trailing_non_null(size):
 
 
 class IntString:
-    def __init__(self, value: int):
+    def __init__(self, value: int) -> None:
         self.value = value
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.value)
 
 
@@ -48,11 +48,11 @@ def ConvertStringToDecimal(data: list, pandas):
 
 
 class ObjectPair:
-    def __init__(self, obj1, obj2):
+    def __init__(self, obj1, obj2) -> None:
         self.first = obj1
         self.second = obj2
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str([self.first, self.second])
 
 

@@ -39,7 +39,7 @@ signal.signal(signal.SIGQUIT, sigquit_handler)
 
 
 class SQLLogicTestExecutor(SQLLogicRunner):
-    def __init__(self, test_directory: str, build_directory: Optional[str] = None):
+    def __init__(self, test_directory: str, build_directory: Optional[str] = None) -> None:
         super().__init__(build_directory)
         self.test_directory = test_directory
         # TODO: get this from the `duckdb` package

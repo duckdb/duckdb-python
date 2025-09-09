@@ -25,7 +25,7 @@ def everything_succeeded(results: list[bool]):
 
 
 class DuckDBThreaded:
-    def __init__(self, duckdb_insert_thread_count, thread_function, pandas):
+    def __init__(self, duckdb_insert_thread_count, thread_function, pandas) -> None:
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
         self.threads = []
         self.thread_function = thread_function

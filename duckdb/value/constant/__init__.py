@@ -32,7 +32,7 @@ from duckdb.typing import (
 
 
 class Value:
-    def __init__(self, object: Any, type: DuckDBPyType):
+    def __init__(self, object: Any, type: DuckDBPyType) -> None:
         self.object = object
         self.type = type
 
@@ -44,12 +44,12 @@ class Value:
 
 
 class NullValue(Value):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(None, SQLNULL)
 
 
 class BooleanValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BOOLEAN)
 
 
@@ -57,22 +57,22 @@ class BooleanValue(Value):
 
 
 class UnsignedBinaryValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UTINYINT)
 
 
 class UnsignedShortValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, USMALLINT)
 
 
 class UnsignedIntegerValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UINTEGER)
 
 
 class UnsignedLongValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UBIGINT)
 
 
@@ -80,32 +80,32 @@ class UnsignedLongValue(Value):
 
 
 class BinaryValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TINYINT)
 
 
 class ShortValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, SMALLINT)
 
 
 class IntegerValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, INTEGER)
 
 
 class LongValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BIGINT)
 
 
 class HugeIntegerValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, HUGEINT)
 
 
 class UnsignedHugeIntegerValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UHUGEINT)
 
 
@@ -113,17 +113,17 @@ class UnsignedHugeIntegerValue(Value):
 
 
 class FloatValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, FLOAT)
 
 
 class DoubleValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, DOUBLE)
 
 
 class DecimalValue(Value):
-    def __init__(self, object: Any, width: int, scale: int):
+    def __init__(self, object: Any, width: int, scale: int) -> None:
         import duckdb
 
         decimal_type = duckdb.decimal_type(width, scale)
@@ -134,22 +134,22 @@ class DecimalValue(Value):
 
 
 class StringValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, VARCHAR)
 
 
 class UUIDValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UUID)
 
 
 class BitValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BIT)
 
 
 class BlobValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BLOB)
 
 
@@ -157,52 +157,52 @@ class BlobValue(Value):
 
 
 class DateValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, DATE)
 
 
 class IntervalValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, INTERVAL)
 
 
 class TimestampValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP)
 
 
 class TimestampSecondValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_S)
 
 
 class TimestampMilisecondValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_MS)
 
 
 class TimestampNanosecondValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_NS)
 
 
 class TimestampTimeZoneValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_TZ)
 
 
 class TimeValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIME)
 
 
 class TimeTimeZoneValue(Value):
-    def __init__(self, object: Any):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIME_TZ)
 
 
 class ListValue(Value):
-    def __init__(self, object: Any, child_type: DuckDBPyType):
+    def __init__(self, object: Any, child_type: DuckDBPyType) -> None:
         import duckdb
 
         list_type = duckdb.list_type(child_type)
@@ -210,7 +210,7 @@ class ListValue(Value):
 
 
 class StructValue(Value):
-    def __init__(self, object: Any, children: dict[str, DuckDBPyType]):
+    def __init__(self, object: Any, children: dict[str, DuckDBPyType]) -> None:
         import duckdb
 
         struct_type = duckdb.struct_type(children)
@@ -218,7 +218,7 @@ class StructValue(Value):
 
 
 class MapValue(Value):
-    def __init__(self, object: Any, key_type: DuckDBPyType, value_type: DuckDBPyType):
+    def __init__(self, object: Any, key_type: DuckDBPyType, value_type: DuckDBPyType) -> None:
         import duckdb
 
         map_type = duckdb.map_type(key_type, value_type)
@@ -226,7 +226,7 @@ class MapValue(Value):
 
 
 class UnionType(Value):
-    def __init__(self, object: Any, members: dict[str, DuckDBPyType]):
+    def __init__(self, object: Any, members: dict[str, DuckDBPyType]) -> None:
         import duckdb
 
         union_type = duckdb.union_type(members)

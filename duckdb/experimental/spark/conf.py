@@ -3,7 +3,7 @@ from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 
 class SparkConf:
-    def __init__(self):
+    def __init__(self) -> None:
         raise NotImplementedError
 
     def contains(self, key: str) -> bool:

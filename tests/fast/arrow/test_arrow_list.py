@@ -41,7 +41,7 @@ def create_and_register_comparison_result(column_list, duckdb_cursor):
 
 
 class ListGenerationResult:
-    def __init__(self, list, list_view):
+    def __init__(self, list, list_view) -> None:
         self.list = list
         self.list_view = list_view
 

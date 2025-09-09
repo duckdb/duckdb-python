@@ -45,7 +45,7 @@ def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
 
 
 class SparkSession:
-    def __init__(self, context: SparkContext):
+    def __init__(self, context: SparkContext) -> None:
         self.conn = context.connection
         self._context = context
         self._conf = RuntimeConfig(self.conn)
@@ -258,7 +258,7 @@ class SparkSession:
         return '1.0.0'
 
     class Builder:
-        def __init__(self):
+        def __init__(self) -> None:
             pass
 
         def master(self, name: str) -> "SparkSession.Builder":

@@ -95,11 +95,11 @@ class Column:
     .. versionadded:: 1.3.0
     """
 
-    def __init__(self, expr: Expression):
+    def __init__(self, expr: Expression) -> None:
         self.expr = expr
 
     # arithmetic operators
-    def __neg__(self):
+    def __neg__(self) -> 'Column':
         return Column(-self.expr)
 
     # `and`, `or`, `not` cannot be overloaded in Python,

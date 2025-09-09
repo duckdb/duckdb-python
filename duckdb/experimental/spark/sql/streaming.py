@@ -10,7 +10,7 @@ OptionalPrimitiveType = Optional[PrimitiveType]
 
 
 class DataStreamWriter:
-    def __init__(self, dataframe: "DataFrame"):
+    def __init__(self, dataframe: "DataFrame") -> None:
         self.dataframe = dataframe
 
     def toTable(self, table_name: str) -> None:
@@ -19,7 +19,7 @@ class DataStreamWriter:
 
 
 class DataStreamReader:
-    def __init__(self, session: "SparkSession"):
+    def __init__(self, session: "SparkSession") -> None:
         self.session = session
 
     def load(

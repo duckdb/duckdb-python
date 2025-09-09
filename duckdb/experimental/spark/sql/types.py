@@ -70,7 +70,7 @@ __all__ = [
 class DataType:
     """Base class for data types."""
 
-    def __init__(self, duckdb_type):
+    def __init__(self, duckdb_type) -> None:
         self.duckdb_type = duckdb_type
 
     def __repr__(self) -> str:
@@ -138,7 +138,7 @@ class NullType(DataType, metaclass=DataTypeSingleton):
     The data type representing None, used for the types that cannot be inferred.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("NULL"))
 
     @classmethod
@@ -166,42 +166,42 @@ class FractionalType(NumericType):
 class StringType(AtomicType, metaclass=DataTypeSingleton):
     """String data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("VARCHAR"))
 
 
 class BitstringType(AtomicType, metaclass=DataTypeSingleton):
     """Bitstring data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("BIT"))
 
 
 class UUIDType(AtomicType, metaclass=DataTypeSingleton):
     """UUID data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("UUID"))
 
 
 class BinaryType(AtomicType, metaclass=DataTypeSingleton):
     """Binary (byte array) data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("BLOB"))
 
 
 class BooleanType(AtomicType, metaclass=DataTypeSingleton):
     """Boolean data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("BOOLEAN"))
 
 
 class DateType(AtomicType, metaclass=DataTypeSingleton):
     """Date (datetime.date) data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("DATE"))
 
     EPOCH_ORDINAL = datetime.datetime(1970, 1, 1).toordinal()
@@ -221,7 +221,7 @@ class DateType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMESTAMPTZ"))
 
     @classmethod
@@ -245,7 +245,7 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with microsecond precision."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMESTAMP"))
 
     def needConversion(self) -> bool:
@@ -269,7 +269,7 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with second precision."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMESTAMP_S"))
 
     def needConversion(self) -> bool:
@@ -289,7 +289,7 @@ class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with milisecond precision."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMESTAMP_MS"))
 
     def needConversion(self) -> bool:
@@ -309,7 +309,7 @@ class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with nanosecond precision."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMESTAMP_NS"))
 
     def needConversion(self) -> bool:
@@ -346,7 +346,7 @@ class DecimalType(FractionalType):
         the number of digits on right side of dot. (default: 0)
     """
 
-    def __init__(self, precision: int = 10, scale: int = 0):
+    def __init__(self, precision: int = 10, scale: int = 0) -> None:
         super().__init__(duckdb.decimal_type(precision, scale))
         self.precision = precision
         self.scale = scale
@@ -362,21 +362,21 @@ class DecimalType(FractionalType):
 class DoubleType(FractionalType, metaclass=DataTypeSingleton):
     """Double data type, representing double precision floats."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("DOUBLE"))
 
 
 class FloatType(FractionalType, metaclass=DataTypeSingleton):
     """Float data type, representing single precision floats."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("FLOAT"))
 
 
 class ByteType(IntegralType):
     """Byte data type, i.e. a signed integer in a single byte."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TINYINT"))
 
     def simpleString(self) -> str:
@@ -386,7 +386,7 @@ class ByteType(IntegralType):
 class UnsignedByteType(IntegralType):
     """Unsigned byte data type, i.e. a unsigned integer in a single byte."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("UTINYINT"))
 
     def simpleString(self) -> str:
@@ -396,7 +396,7 @@ class UnsignedByteType(IntegralType):
 class ShortType(IntegralType):
     """Short data type, i.e. a signed 16-bit integer."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("SMALLINT"))
 
     def simpleString(self) -> str:
@@ -406,7 +406,7 @@ class ShortType(IntegralType):
 class UnsignedShortType(IntegralType):
     """Unsigned short data type, i.e. a unsigned 16-bit integer."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("USMALLINT"))
 
     def simpleString(self) -> str:
@@ -416,7 +416,7 @@ class UnsignedShortType(IntegralType):
 class IntegerType(IntegralType):
     """Int data type, i.e. a signed 32-bit integer."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("INTEGER"))
 
     def simpleString(self) -> str:
@@ -426,7 +426,7 @@ class IntegerType(IntegralType):
 class UnsignedIntegerType(IntegralType):
     """Unsigned int data type, i.e. a unsigned 32-bit integer."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("UINTEGER"))
 
     def simpleString(self) -> str:
@@ -440,7 +440,7 @@ class LongType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("BIGINT"))
 
     def simpleString(self) -> str:
@@ -454,7 +454,7 @@ class UnsignedLongType(IntegralType):
     please use :class:`HugeIntegerType`.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("UBIGINT"))
 
     def simpleString(self) -> str:
@@ -468,7 +468,7 @@ class HugeIntegerType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("HUGEINT"))
 
     def simpleString(self) -> str:
@@ -482,7 +482,7 @@ class UnsignedHugeIntegerType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("UHUGEINT"))
 
     def simpleString(self) -> str:
@@ -492,7 +492,7 @@ class UnsignedHugeIntegerType(IntegralType):
 class TimeType(IntegralType):
     """Time (datetime.time) data type."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIMETZ"))
 
     def simpleString(self) -> str:
@@ -502,7 +502,7 @@ class TimeType(IntegralType):
 class TimeNTZType(IntegralType):
     """Time (datetime.time) data type without timezone information."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(DuckDBPyType("TIME"))
 
     def simpleString(self) -> str:
@@ -526,7 +526,7 @@ class DayTimeIntervalType(AtomicType):
 
     _inverted_fields = dict(zip(_fields.values(), _fields.keys()))
 
-    def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None):
+    def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None) -> None:
         super().__init__(DuckDBPyType("INTERVAL"))
         if startField is None and endField is None:
             # Default matched to scala side.
@@ -585,7 +585,7 @@ class ArrayType(DataType):
     False
     """
 
-    def __init__(self, elementType: DataType, containsNull: bool = True):
+    def __init__(self, elementType: DataType, containsNull: bool = True) -> None:
         super().__init__(duckdb.list_type(elementType.duckdb_type))
         assert isinstance(elementType, DataType), "elementType %s should be an instance of %s" % (
             elementType,
@@ -640,7 +640,7 @@ class MapType(DataType):
     False
     """
 
-    def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True):
+    def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True) -> None:
         super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
         assert isinstance(keyType, DataType), "keyType %s should be an instance of %s" % (
             keyType,
@@ -711,7 +711,7 @@ class StructField(DataType):
         dataType: DataType,
         nullable: bool = True,
         metadata: Optional[dict[str, Any]] = None,
-    ):
+    ) -> None:
         super().__init__(dataType.duckdb_type)
         assert isinstance(dataType, DataType), "dataType %s should be an instance of %s" % (
             dataType,
@@ -776,7 +776,7 @@ class StructType(DataType):
     def _update_internal_duckdb_type(self):
         self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
-    def __init__(self, fields: Optional[list[StructField]] = None):
+    def __init__(self, fields: Optional[list[StructField]] = None) -> None:
         if not fields:
             self.fields = []
             self.names = []
@@ -973,7 +973,7 @@ class StructType(DataType):
 
 
 class UnionType(DataType):
-    def __init__(self):
+    def __init__(self) -> None:
         raise ContributionsAcceptedError
 
 
@@ -983,7 +983,7 @@ class UserDefinedType(DataType):
     .. note:: WARN: Spark Internal Use Only
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         raise ContributionsAcceptedError
 
     @classmethod

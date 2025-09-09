@@ -987,7 +987,7 @@ class TestExpression(object):
         ):
 
             class MyClass:
-                def __init__(self):
+                def __init__(self) -> None:
                     pass
 
             res = rel.aggregate([MyClass()]).fetchone()[0]

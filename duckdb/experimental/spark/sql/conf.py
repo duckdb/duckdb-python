@@ -4,7 +4,7 @@ from duckdb import DuckDBPyConnection
 
 
 class RuntimeConfig:
-    def __init__(self, connection: DuckDBPyConnection):
+    def __init__(self, connection: DuckDBPyConnection) -> None:
         self._connection = connection
 
     def set(self, key: str, value: str) -> None:

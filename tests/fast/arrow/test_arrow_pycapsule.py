@@ -17,11 +17,11 @@ def polars_supports_capsule():
 class TestArrowPyCapsule(object):
     def test_polars_pycapsule_scan(self, duckdb_cursor):
         class MyObject:
-            def __init__(self, obj):
+            def __init__(self, obj) -> None:
                 self.obj = obj
                 self.count = 0
 
-            def __arrow_c_stream__(self, requested_schema=None):
+            def __arrow_c_stream__(self, requested_schema=None) -> object:
                 self.count += 1
                 return self.obj.__arrow_c_stream__(requested_schema=requested_schema)
 
@@ -71,11 +71,11 @@ class TestArrowPyCapsule(object):
     def test_consumer_interface_roundtrip(self, duckdb_cursor):
         def create_table():
             class MyTable:
-                def __init__(self, rel, conn):
+                def __init__(self, rel, conn) -> None:
                     self.rel = rel
                     self.conn = conn
 
-                def __arrow_c_stream__(self, requested_schema=None):
+                def __arrow_c_stream__(self, requested_schema=None) -> object:
                     return self.rel.__arrow_c_stream__(requested_schema=requested_schema)
 
             conn = duckdb.connect()

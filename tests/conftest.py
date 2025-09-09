@@ -1,4 +1,6 @@
 import os
+from typing import Any
+
 import pytest
 import shutil
 from os.path import abspath, join, dirname, normpath
@@ -121,12 +123,12 @@ def arrow_pandas_df(*args, **kwargs):
 
 
 class NumpyPandas:
-    def __init__(self):
+    def __init__(self) -> None:
         self.backend = 'numpy_nullable'
         self.DataFrame = numpy_pandas_df
         self.pandas = import_pandas()
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self.pandas, name)
 
 
@@ -156,11 +158,11 @@ def convert_and_equal(df1, df2, **kwargs):
 
 
 class ArrowMockTesting:
-    def __init__(self):
+    def __init__(self) -> None:
         self.testing = import_pandas().testing
         self.assert_frame_equal = convert_and_equal
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self.testing, name)
 
 
@@ -168,7 +170,7 @@ class ArrowMockTesting:
 # Assert equal does the opposite, turning all pyarrow backed dataframes into numpy backed ones
 # this is done because we don't produce pyarrow backed dataframes yet
 class ArrowPandas:
-    def __init__(self):
+    def __init__(self) -> None:
         self.pandas = import_pandas()
         if pandas_2_or_higher() and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
@@ -179,7 +181,7 @@ class ArrowPandas:
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
 
-    def __getattr__(self, name: str):
+    def __getattr__(self, name: str) -> Any:
         return getattr(self.pandas, name)
 
 

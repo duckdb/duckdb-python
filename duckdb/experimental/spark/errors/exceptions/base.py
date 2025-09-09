@@ -14,7 +14,7 @@ class PySparkException(Exception):
         error_class: Optional[str] = None,
         # The dictionary listing the arguments specified in the message (or the error_class)
         message_parameters: Optional[dict[str, str]] = None,
-    ):
+    ) -> None:
         # `message` vs `error_class` & `message_parameters` are mutually exclusive.
         assert (message is not None and (error_class is None and message_parameters is None)) or (
             message is None and (error_class is not None and message_parameters is not None)

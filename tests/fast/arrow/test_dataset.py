@@ -102,7 +102,7 @@ class CustomDataset(pyarrow.dataset.Dataset):
     SCHEMA = pyarrow.schema([pyarrow.field("a", pyarrow.int64(), True), pyarrow.field("b", pyarrow.float64(), True)])
     DATA = pyarrow.Table.from_arrays([pyarrow.array(range(100)), pyarrow.array(np.arange(100) * 1.0)], schema=SCHEMA)
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def scanner(self, **kwargs):
@@ -114,7 +114,7 @@ class CustomDataset(pyarrow.dataset.Dataset):
 
 
 class CustomScanner(pyarrow.dataset.Scanner):
-    def __init__(self, filter=None, columns=None, **kwargs):
+    def __init__(self, filter=None, columns=None, **kwargs) -> None:
         self.filter = filter
         self.columns = columns
         self.kwargs = kwargs

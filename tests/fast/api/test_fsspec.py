@@ -44,7 +44,7 @@ class TestReadParquet(object):
             def _open(self, path, **kwargs):
                 return io.BytesIO(self._data[path])
 
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self._data = {"a": parquet_data, "b": parquet_data}
 

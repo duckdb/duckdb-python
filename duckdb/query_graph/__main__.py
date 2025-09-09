@@ -95,7 +95,7 @@ class NodeTiming:
 
 class AllTimings:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.phase_to_timings = {}
 
     def add_node_timing(self, node_timing: NodeTiming):

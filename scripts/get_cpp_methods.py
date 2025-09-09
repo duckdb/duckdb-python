@@ -4,30 +4,30 @@ import os
 import cxxheaderparser.parser
 import cxxheaderparser.visitor
 import cxxheaderparser.preprocessor
-from typing import List, Dict
+from typing import List, Dict, Callable
 
 scripts_folder = os.path.dirname(os.path.abspath(__file__))
 
 
 class FunctionParam:
-    def __init__(self, name: str, proto: str):
+    def __init__(self, name: str, proto: str) -> None:
         self.proto = proto
         self.name = name
 
 
 class ConnectionMethod:
-    def __init__(self, name: str, params: list[FunctionParam], is_void: bool):
+    def __init__(self, name: str, params: list[FunctionParam], is_void: bool) -> None:
         self.name = name
         self.params = params
         self.is_void = is_void
 
 
 class Visitor:
-    def __init__(self, class_name: str):
+    def __init__(self, class_name: str) -> None:
         self.methods_dict = {}
         self.class_name = class_name
 
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> Callable[[...], bool]:
         return lambda *state: True
 
     def on_class_start(self, state):

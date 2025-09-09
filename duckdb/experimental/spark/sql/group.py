@@ -53,7 +53,7 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
 
 
 class Grouping:
-    def __init__(self, *cols: "ColumnOrName", **kwargs):
+    def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:
         self._type = ""
         self._cols = [_to_column_expr(x) for x in cols]
         if 'special' in kwargs:
@@ -66,7 +66,7 @@ class Grouping:
         columns = ",".join([str(x) for x in self._cols])
         return columns
 
-    def __str__(self):
+    def __str__(self) -> str:
         columns = self.get_columns()
         if self._type:
             return self._type + '(' + columns + ')'
@@ -80,7 +80,7 @@ class GroupedData:
 
     """
 
-    def __init__(self, grouping: Grouping, df: DataFrame):
+    def __init__(self, grouping: Grouping, df: DataFrame) -> None:
         self._grouping = grouping
         self._df = df
         self.session: SparkSession = df.session

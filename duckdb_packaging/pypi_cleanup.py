@@ -183,7 +183,7 @@ class CsrfParser(HTMLParser):
     
     Based on pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
     """
-    def __init__(self, target, contains_input=None):
+    def __init__(self, target, contains_input=None) -> None:
         super().__init__()
         self._target = target
         self._contains_input = contains_input
@@ -223,7 +223,7 @@ class PyPICleanup:
     """Main class for performing PyPI package cleanup operations."""
 
     def __init__(self, index_url: str, do_delete: bool, max_dev_releases: int=_DEFAULT_MAX_NIGHTLIES,
-                 username: Optional[str]=None, password: Optional[str]=None, otp: Optional[str]=None):
+                 username: Optional[str]=None, password: Optional[str]=None, otp: Optional[str]=None) -> None:
         parsed_url = urlparse(index_url)
         self._index_url = parsed_url.geturl().rstrip('/')
         self._index_host = parsed_url.hostname

@@ -1,5 +1,5 @@
 from io import StringIO, TextIOBase
-from typing import Union
+from typing import Any, Union
 
 """
 BSD 3-Clause License
@@ -48,7 +48,7 @@ class BytesIOWrapper:
         # overflow to the front of the bytestring the next time reading is performed
         self.overflow = b""
 
-    def __getattr__(self, attr: str):
+    def __getattr__(self, attr: str) -> Any:
         return getattr(self.buffer, attr)
 
     def read(self, n: Union[int, None] = -1) -> bytes:

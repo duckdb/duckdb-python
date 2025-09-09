@@ -33,7 +33,7 @@ class Function(NamedTuple):
 
 
 class Catalog:
-    def __init__(self, session: SparkSession):
+    def __init__(self, session: SparkSession) -> None:
         self._session = session
 
     def listDatabases(self) -> list[Database]:

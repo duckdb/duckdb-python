@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 class DataFrameWriter:
-    def __init__(self, dataframe: "DataFrame"):
+    def __init__(self, dataframe: "DataFrame") -> None:
         self.dataframe = dataframe
 
     def saveAsTable(self, table_name: str) -> None:
@@ -89,7 +89,7 @@ class DataFrameWriter:
 
 
 class DataFrameReader:
-    def __init__(self, session: "SparkSession"):
+    def __init__(self, session: "SparkSession") -> None:
         self.session = session
 
     def load(

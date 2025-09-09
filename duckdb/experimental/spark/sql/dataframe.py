@@ -37,7 +37,7 @@ from .functions import _to_column_expr, col, lit
 
 
 class DataFrame:
-    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
+    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession") -> None:
         self.relation = relation
         self.session = session
         self._schema = None
@@ -870,7 +870,7 @@ class DataFrame:
         rel = self.relation.limit(num)
         return DataFrame(rel, self.session)
 
-    def __contains__(self, item: str):
+    def __contains__(self, item: str) -> bool:
         """
         Check if the :class:`DataFrame` contains a column by the name of `item`
         """

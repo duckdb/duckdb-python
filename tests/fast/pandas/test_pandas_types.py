@@ -185,7 +185,7 @@ class TestNumpyNullableTypes(object):
     )
     def test_producing_nullable_dtypes(self, duckdb_cursor, dtype):
         class Input:
-            def __init__(self, value, expected_dtype):
+            def __init__(self, value, expected_dtype) -> None:
                 self.value = value
                 self.expected_dtype = expected_dtype
 

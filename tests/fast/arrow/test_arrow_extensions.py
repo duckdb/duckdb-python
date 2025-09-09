@@ -116,10 +116,10 @@ class TestCanonicalExtensionTypes(object):
 
     def test_unimplemented_extension(self, duckdb_cursor):
         class MyType(pa.ExtensionType):
-            def __init__(self):
+            def __init__(self) -> None:
                 pa.ExtensionType.__init__(self, pa.binary(5), "pedro.binary")
 
-            def __arrow_ext_serialize__(self):
+            def __arrow_ext_serialize__(self) -> bytes:
                 return b''
 
             @classmethod

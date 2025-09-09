@@ -11,7 +11,7 @@ UserDefinedFunctionLike = TypeVar("UserDefinedFunctionLike")
 
 
 class UDFRegistration:
-    def __init__(self, sparkSession: "SparkSession"):
+    def __init__(self, sparkSession: "SparkSession") -> None:
         self.sparkSession = sparkSession
 
     def register(

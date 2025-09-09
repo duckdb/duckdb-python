@@ -40,7 +40,7 @@ def collect_items_of_module(module: dict, collection: dict):
 
 
 class CacheItem:
-    def __init__(self, module: dict, items):
+    def __init__(self, module: dict, items) -> None:
         self.name = module['name']
         self.module = module
         self.items = items
@@ -132,7 +132,7 @@ def collect_classes(items: dict) -> list:
 
 
 class ModuleFile:
-    def __init__(self, module: dict):
+    def __init__(self, module: dict) -> None:
         self.module = module
         self.file_name = get_filename(module['name'])
         self.items = {}

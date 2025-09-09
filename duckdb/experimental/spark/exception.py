@@ -5,7 +5,7 @@ class ContributionsAcceptedError(NotImplementedError):
     feel free to open up a PR or a Discussion over on https://github.com/duckdb/duckdb
     """
 
-    def __init__(self, message=None):
+    def __init__(self, message=None) -> None:
         doc = self.__class__.__doc__
         if message:
             doc = message + '\n' + doc

@@ -8,7 +8,7 @@ lines: list[str] = [file for file in open(f'{script_dir}/imports.py').read().spl
 
 
 class ImportCacheAttribute:
-    def __init__(self, full_path: str):
+    def __init__(self, full_path: str) -> None:
         parts = full_path.split('.')
         self.type = "attribute"
         self.name = parts[-1]
@@ -41,7 +41,7 @@ class ImportCacheAttribute:
 
 
 class ImportCacheModule:
-    def __init__(self, full_path):
+    def __init__(self, full_path) -> None:
         parts = full_path.split('.')
         self.type = "module"
         self.name = parts[-1]
@@ -78,7 +78,7 @@ class ImportCacheModule:
 
 
 class ImportCacheGenerator:
-    def __init__(self):
+    def __init__(self) -> None:
         self.modules: dict[str, ImportCacheModule] = {}
 
     def add_module(self, path: str):

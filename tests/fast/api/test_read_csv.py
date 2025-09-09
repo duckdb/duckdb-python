@@ -327,7 +327,7 @@ class TestReadCSV(object):
         _ = pytest.importorskip("fsspec")
 
         class ReadError:
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
             def read(self, amount=-1):
@@ -337,7 +337,7 @@ class TestReadCSV(object):
                 return 0
 
         class SeekError:
-            def __init__(self):
+            def __init__(self) -> None:
                 pass
 
             def read(self, amount=-1):
@@ -359,7 +359,7 @@ class TestReadCSV(object):
         _ = pytest.importorskip("fsspec")
 
         class CustomIO:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.loc = 0
                 pass
 
@@ -398,11 +398,11 @@ class TestReadCSV(object):
         class CountedObject(StringIO):
             instance_count = 0
 
-            def __init__(self, str):
+            def __init__(self, str) -> None:
                 CountedObject.instance_count += 1
                 super().__init__(str)
 
-            def __del__(self):
+            def __del__(self) -> None:
                 CountedObject.instance_count -= 1
 
         def scoped_objects(duckdb_cursor):
