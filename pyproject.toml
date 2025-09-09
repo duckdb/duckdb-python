@@ -329,7 +329,6 @@ select = [
     "E", # pycodestyle
     "EM", # flake8-errmsg
     "F", # pyflakes
-    "FA", # flake8-future-annotations
     "FBT001", # flake8-boolean-trap
     "I", # isort
     "ICN", # flake8-import-conventions
