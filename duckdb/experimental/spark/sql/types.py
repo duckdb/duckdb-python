@@ -731,7 +731,8 @@ class StructField(DataType):
         return self.dataType.fromInternal(obj)
 
     def typeName(self) -> str:  # type: ignore[override]
-        raise TypeError("StructField does not have typeName. Use typeName on its type explicitly instead.")
+        msg = "StructField does not have typeName. Use typeName on its type explicitly instead."
+        raise TypeError(msg)
 
 
 class StructType(DataType):
@@ -841,7 +842,8 @@ class StructType(DataType):
             self.names.append(field.name)
         else:
             if isinstance(field, str) and data_type is None:
-                raise ValueError("Must specify DataType if passing name of struct_field to create.")
+                msg = "Must specify DataType if passing name of struct_field to create."
+                raise ValueError(msg)
             else:
                 data_type_f = data_type
             self.fields.append(StructField(field, data_type_f, nullable, metadata))
@@ -866,16 +868,19 @@ class StructType(DataType):
             for field in self:
                 if field.name == key:
                     return field
-            raise KeyError(f"No StructField named {key}")
+            msg = f"No StructField named {key}"
+            raise KeyError(msg)
         elif isinstance(key, int):
             try:
                 return self.fields[key]
             except IndexError:
-                raise IndexError("StructType index out of range")
+                msg = "StructType index out of range"
+                raise IndexError(msg)
         elif isinstance(key, slice):
             return StructType(self.fields[key])
         else:
-            raise TypeError("StructType keys should be strings, integers or slices")
+            msg = "StructType keys should be strings, integers or slices"
+            raise TypeError(msg)
 
     def simpleString(self) -> str:
         return "struct<%s>" % (",".join(f.simpleString() for f in self))
@@ -978,12 +983,14 @@ class UserDefinedType(DataType):
     @classmethod
     def sqlType(cls) -> DataType:
         """Underlying SQL storage type for this UDT."""
-        raise NotImplementedError("UDT must implement sqlType().")
+        msg = "UDT must implement sqlType()."
+        raise NotImplementedError(msg)
 
     @classmethod
     def module(cls) -> str:
         """The Python module of the UDT."""
-        raise NotImplementedError("UDT must implement module().")
+        msg = "UDT must implement module()."
+        raise NotImplementedError(msg)
 
     @classmethod
     def scalaUDT(cls) -> str:
@@ -1013,11 +1020,13 @@ class UserDefinedType(DataType):
 
     def serialize(self, obj: Any) -> Any:
         """Converts a user-type object into a SQL datum."""
-        raise NotImplementedError("UDT must implement toInternal().")
+        msg = "UDT must implement toInternal()."
+        raise NotImplementedError(msg)
 
     def deserialize(self, datum: Any) -> Any:
         """Converts a SQL datum into a user-type object."""
-        raise NotImplementedError("UDT must implement fromInternal().")
+        msg = "UDT must implement fromInternal()."
+        raise NotImplementedError(msg)
 
     def simpleString(self) -> str:
         return "udt"
@@ -1126,7 +1135,8 @@ class Row(tuple):
 
     def __new__(cls, *args: Optional[str], **kwargs: Optional[Any]) -> "Row":
         if args and kwargs:
-            raise ValueError("Can not use both args and kwargs to create Row")
+            msg = "Can not use both args and kwargs to create Row"
+            raise ValueError(msg)
         if kwargs:
             # create row objects
             row = tuple.__new__(cls, list(kwargs.values()))
@@ -1163,7 +1173,8 @@ class Row(tuple):
         True
         """
         if not hasattr(self, "__fields__"):
-            raise TypeError("Cannot convert a Row class into dict")
+            msg = "Cannot convert a Row class into dict"
+            raise TypeError(msg)
 
         if recursive:
 
@@ -1224,7 +1235,8 @@ class Row(tuple):
 
     def __setattr__(self, key: Any, value: Any) -> None:
         if key != "__fields__":
-            raise RuntimeError("Row is read-only")
+            msg = "Row is read-only"
+            raise RuntimeError(msg)
         self.__dict__[key] = value
 
     def __reduce__(

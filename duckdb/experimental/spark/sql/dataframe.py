@@ -108,7 +108,8 @@ class DataFrame:
 
     def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":
         if columnName not in self.relation:
-            raise ValueError(f"DataFrame does not contain a column named {columnName}")
+            msg = f"DataFrame does not contain a column named {columnName}"
+            raise ValueError(msg)
         cols = []
         for x in self.relation.columns:
             col = ColumnExpression(x)
@@ -258,7 +259,8 @@ class DataFrame:
 
         unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
         if unknown_columns:
-            raise ValueError(f"DataFrame does not contain column(s): {', '.join(unknown_columns)}")
+            msg = f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
+            raise ValueError(msg)
 
         # Compute this only once
         old_column_names = list(colsMap.keys())
@@ -887,7 +889,8 @@ class DataFrame:
         elif isinstance(item, int):
             return col(self._schema[item].name)
         else:
-            raise TypeError(f"Unexpected item type: {type(item)}")
+            msg = f"Unexpected item type: {type(item)}"
+            raise TypeError(msg)
 
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.

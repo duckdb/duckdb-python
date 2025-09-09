@@ -75,15 +75,18 @@ def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[s
     for i, line in enumerate(content):
         if line.startswith(start_marker):
             if start_index != -1:
-                raise ValueError("Encountered the START_MARKER a second time, quitting!")
+                msg = "Encountered the START_MARKER a second time, quitting!"
+                raise ValueError(msg)
             start_index = i
         elif line.startswith(end_marker):
             if end_index != -1:
-                raise ValueError("Encountered the END_MARKER a second time, quitting!")
+                msg = "Encountered the END_MARKER a second time, quitting!"
+                raise ValueError(msg)
             end_index = i
 
     if start_index == -1 or end_index == -1:
-        raise ValueError("Couldn't find start or end marker in source file")
+        msg = "Couldn't find start or end marker in source file"
+        raise ValueError(msg)
 
     start_section = content[: start_index + 1]
     end_section = content[end_index:]

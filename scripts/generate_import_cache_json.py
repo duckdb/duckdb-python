@@ -107,7 +107,8 @@ class ImportCacheGenerator:
 
     def get_module(self, module_name: str) -> ImportCacheModule:
         if module_name not in self.modules:
-            raise ValueError("Import the module before registering its attributes!")
+            msg = "Import the module before registering its attributes!"
+            raise ValueError(msg)
         return self.modules[module_name]
 
     def get_item(self, item_name: str) -> Union[ImportCacheModule, ImportCacheAttribute]:

@@ -248,10 +248,12 @@ class DataFrameReader:
     def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":
         input = list(paths)
         if len(input) != 1:
-            raise NotImplementedError("Only single paths are supported for now")
+            msg = "Only single paths are supported for now"
+            raise NotImplementedError(msg)
         option_amount = len(options.keys())
         if option_amount != 0:
-            raise ContributionsAcceptedError("Options are not supported")
+            msg = "Options are not supported"
+            raise ContributionsAcceptedError(msg)
         path = input[0]
         rel = self.session.conn.read_parquet(path)
         from ..sql.dataframe import DataFrame
@@ -338,53 +340,77 @@ class DataFrameReader:
         +---+------------+
         """
         if schema is not None:
-            raise ContributionsAcceptedError("The 'schema' option is not supported")
+            msg = "The 'schema' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if primitivesAsString is not None:
-            raise ContributionsAcceptedError("The 'primitivesAsString' option is not supported")
+            msg = "The 'primitivesAsString' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if prefersDecimal is not None:
-            raise ContributionsAcceptedError("The 'prefersDecimal' option is not supported")
+            msg = "The 'prefersDecimal' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowComments is not None:
-            raise ContributionsAcceptedError("The 'allowComments' option is not supported")
+            msg = "The 'allowComments' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowUnquotedFieldNames is not None:
-            raise ContributionsAcceptedError("The 'allowUnquotedFieldNames' option is not supported")
+            msg = "The 'allowUnquotedFieldNames' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowSingleQuotes is not None:
-            raise ContributionsAcceptedError("The 'allowSingleQuotes' option is not supported")
+            msg = "The 'allowSingleQuotes' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowNumericLeadingZero is not None:
-            raise ContributionsAcceptedError("The 'allowNumericLeadingZero' option is not supported")
+            msg = "The 'allowNumericLeadingZero' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowBackslashEscapingAnyCharacter is not None:
-            raise ContributionsAcceptedError("The 'allowBackslashEscapingAnyCharacter' option is not supported")
+            msg = "The 'allowBackslashEscapingAnyCharacter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if mode is not None:
-            raise ContributionsAcceptedError("The 'mode' option is not supported")
+            msg = "The 'mode' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if columnNameOfCorruptRecord is not None:
-            raise ContributionsAcceptedError("The 'columnNameOfCorruptRecord' option is not supported")
+            msg = "The 'columnNameOfCorruptRecord' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if dateFormat is not None:
-            raise ContributionsAcceptedError("The 'dateFormat' option is not supported")
+            msg = "The 'dateFormat' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if timestampFormat is not None:
-            raise ContributionsAcceptedError("The 'timestampFormat' option is not supported")
+            msg = "The 'timestampFormat' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if multiLine is not None:
-            raise ContributionsAcceptedError("The 'multiLine' option is not supported")
+            msg = "The 'multiLine' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowUnquotedControlChars is not None:
-            raise ContributionsAcceptedError("The 'allowUnquotedControlChars' option is not supported")
+            msg = "The 'allowUnquotedControlChars' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if lineSep is not None:
-            raise ContributionsAcceptedError("The 'lineSep' option is not supported")
+            msg = "The 'lineSep' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if samplingRatio is not None:
-            raise ContributionsAcceptedError("The 'samplingRatio' option is not supported")
+            msg = "The 'samplingRatio' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if dropFieldIfAllNull is not None:
-            raise ContributionsAcceptedError("The 'dropFieldIfAllNull' option is not supported")
+            msg = "The 'dropFieldIfAllNull' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if encoding is not None:
-            raise ContributionsAcceptedError("The 'encoding' option is not supported")
+            msg = "The 'encoding' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if locale is not None:
-            raise ContributionsAcceptedError("The 'locale' option is not supported")
+            msg = "The 'locale' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if pathGlobFilter is not None:
-            raise ContributionsAcceptedError("The 'pathGlobFilter' option is not supported")
+            msg = "The 'pathGlobFilter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if recursiveFileLookup is not None:
-            raise ContributionsAcceptedError("The 'recursiveFileLookup' option is not supported")
+            msg = "The 'recursiveFileLookup' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if modifiedBefore is not None:
-            raise ContributionsAcceptedError("The 'modifiedBefore' option is not supported")
+            msg = "The 'modifiedBefore' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if modifiedAfter is not None:
-            raise ContributionsAcceptedError("The 'modifiedAfter' option is not supported")
+            msg = "The 'modifiedAfter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowNonNumericNumbers is not None:
-            raise ContributionsAcceptedError("The 'allowNonNumericNumbers' option is not supported")
+            msg = "The 'allowNonNumericNumbers' option is not supported"
+            raise ContributionsAcceptedError(msg)
 
         if isinstance(path, str):
             path = [path]

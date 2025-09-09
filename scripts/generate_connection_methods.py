@@ -37,15 +37,18 @@ def generate():
     for i, line in enumerate(source_code):
         if line.startswith(INITIALIZE_METHOD):
             if start_index != -1:
-                raise ValueError("Encountered the INITIALIZE_METHOD a second time, quitting!")
+                msg = "Encountered the INITIALIZE_METHOD a second time, quitting!"
+                raise ValueError(msg)
             start_index = i
         elif line.startswith(END_MARKER):
             if end_index != -1:
-                raise ValueError("Encountered the END_MARKER a second time, quitting!")
+                msg = "Encountered the END_MARKER a second time, quitting!"
+                raise ValueError(msg)
             end_index = i
 
     if start_index == -1 or end_index == -1:
-        raise ValueError("Couldn't find start or end marker in source file")
+        msg = "Couldn't find start or end marker in source file"
+        raise ValueError(msg)
 
     start_section = source_code[: start_index + 1]
     end_section = source_code[end_index:]
@@ -128,5 +131,6 @@ def generate():
 
 
 if __name__ == "__main__":
-    raise ValueError("Please use 'generate_connection_code.py' instead of running the individual script(s)")
+    msg = "Please use 'generate_connection_code.py' instead of running the individual script(s)"
+    raise ValueError(msg)
     # generate()

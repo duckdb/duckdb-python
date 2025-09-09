@@ -30,7 +30,8 @@ def parse_version(version: str) -> tuple[int, int, int, int, int]:
     """
     match = VERSION_RE.match(version)
     if not match:
-        raise ValueError(f"Invalid version format: {version} (expected X.Y.Z, X.Y.Z.rcM or X.Y.Z.postN)")
+        msg = f"Invalid version format: {version} (expected X.Y.Z, X.Y.Z.rcM or X.Y.Z.postN)"
+        raise ValueError(msg)
 
     major, minor, patch, rc, post = match.groups()
     return int(major), int(minor), int(patch), int(post or 0), int(rc or 0)
@@ -51,7 +52,8 @@ def format_version(major: int, minor: int, patch: int, post: int = 0, rc: int = 
     """
     version = f"{major}.{minor}.{patch}"
     if post != 0 and rc != 0:
-        raise ValueError("post and rc are mutually exclusive")
+        msg = "post and rc are mutually exclusive"
+        raise ValueError(msg)
     if post != 0:
         version += f".post{post}"
     if rc != 0:
@@ -168,4 +170,5 @@ def get_git_describe(repo_path: Optional[pathlib.Path] = None, since_major=False
         result.check_returncode()
         return result.stdout.strip()
     except FileNotFoundError:
-        raise RuntimeError("git executable can't be found")
+        msg = "git executable can't be found"
+        raise RuntimeError(msg)

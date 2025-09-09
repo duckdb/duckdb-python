@@ -75,7 +75,8 @@ def _in_sdist() -> bool:
 def _duckdb_submodule_path() -> Path:
     """Verify that the duckdb submodule is checked out and usable and return its path."""
     if not _in_git_repository():
-        raise RuntimeError("Not in a git repository, no duckdb submodule present")
+        msg = "Not in a git repository, no duckdb submodule present"
+        raise RuntimeError(msg)
     # search the duckdb submodule
     gitmodules_path = Path(".gitmodules")
     modules = dict()
@@ -97,7 +98,8 @@ def _duckdb_submodule_path() -> Path:
             modules[cur_module_reponame] = cur_module_path
 
     if "duckdb" not in modules:
-        raise RuntimeError("DuckDB submodule missing")
+        msg = "DuckDB submodule missing"
+        raise RuntimeError(msg)
 
     duckdb_path = modules["duckdb"]
     # now check that the submodule is usable
@@ -106,9 +108,11 @@ def _duckdb_submodule_path() -> Path:
     status = status.decode("ascii", "replace")
     for line in status.splitlines():
         if line.startswith("-"):
-            raise RuntimeError(f"Duckdb submodule not initialized: {line}")
+            msg = f"Duckdb submodule not initialized: {line}"
+            raise RuntimeError(msg)
         if line.startswith("U"):
-            raise RuntimeError(f"Duckdb submodule has merge conflicts: {line}")
+            msg = f"Duckdb submodule has merge conflicts: {line}"
+            raise RuntimeError(msg)
         if line.startswith("+"):
             _log(f"WARNING: Duckdb submodule not clean: {line}")
     # all good
@@ -169,7 +173,8 @@ def _skbuild_config_add(
     if not key_exists:
         config_settings[store_key] = value
     elif fail_if_exists:
-        raise RuntimeError(f"{key} already present in config and may not be overridden")
+        msg = f"{key} already present in config and may not be overridden"
+        raise RuntimeError(msg)
     elif key_exists_as_list and val_is_list:
         config_settings[store_key].extend(value)
     elif key_exists_as_list and val_is_str:
@@ -178,9 +183,8 @@ def _skbuild_config_add(
         _log(f"WARNING: overriding existing value in {store_key}")
         config_settings[store_key] = value
     else:
-        raise RuntimeError(
-            f"Type mismatch: cannot set {store_key} ({type(config_settings[store_key])}) to `{value}` ({type(value)})"
-        )
+        msg = f"Type mismatch: cannot set {store_key} ({type(config_settings[store_key])}) to `{value}` ({type(value)})"
+        raise RuntimeError(msg)
 
 
 def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str], str]]] = None) -> str:
@@ -201,7 +205,8 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[
         RuntimeError: If not in a git repository or DuckDB submodule issues.
     """
     if not _in_git_repository():
-        raise RuntimeError("Not in a git repository, can't create an sdist")
+        msg = "Not in a git repository, can't create an sdist"
+        raise RuntimeError(msg)
     submodule_path = _duckdb_submodule_path()
     if _FORCED_PEP440_VERSION is not None:
         duckdb_version = pep440_to_git_tag(strip_post_from_version(_FORCED_PEP440_VERSION))
@@ -237,7 +242,8 @@ def build_wheel(
     duckdb_version = None
     if not _in_git_repository():
         if not _in_sdist():
-            raise RuntimeError("Not in a git repository nor in an sdist, can't build a wheel")
+            msg = "Not in a git repository nor in an sdist, can't build a wheel"
+            raise RuntimeError(msg)
         _log("Building duckdb wheel from sdist. Reading duckdb version from file.")
         config_settings = config_settings or {}
         duckdb_version = _read_duckdb_long_version()

@@ -201,7 +201,8 @@ class Column:
         +------+
         """
         if item.startswith("__"):
-            raise AttributeError("Can not access __ (dunder) method")
+            msg = "Can not access __ (dunder) method"
+            raise AttributeError(msg)
         return self[item]
 
     def alias(self, alias: str):
@@ -209,7 +210,8 @@ class Column:
 
     def when(self, condition: "Column", value: Any):
         if not isinstance(condition, Column):
-            raise TypeError("condition should be a Column")
+            msg = "condition should be a Column"
+            raise TypeError(msg)
         v = _get_expr(value)
         expr = self.expr.when(condition.expr, v)
         return Column(expr)

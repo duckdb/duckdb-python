@@ -40,12 +40,14 @@ def version_scheme(version: Any) -> str:
 
     # Handle case where tag is None
     if version.tag is None:
-        raise ValueError("Need a valid version. Did you set a fallback_version in pyproject.toml?")
+        msg = "Need a valid version. Did you set a fallback_version in pyproject.toml?"
+        raise ValueError(msg)
 
     try:
         return _bump_version(str(version.tag), version.distance, version.dirty)
     except Exception as e:
-        raise RuntimeError(f"Failed to bump version: {e}")
+        msg = f"Failed to bump version: {e}"
+        raise RuntimeError(msg)
 
 
 def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
@@ -54,7 +56,8 @@ def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
     try:
         major, minor, patch, post, rc = parse_version(base_version)
     except ValueError:
-        raise ValueError(f"Incorrect version format: {base_version} (expected X.Y.Z or X.Y.Z.postN)")
+        msg = f"Incorrect version format: {base_version} (expected X.Y.Z or X.Y.Z.postN)"
+        raise ValueError(msg)
 
     # If we're exactly on a tag (distance = 0, dirty=False)
     distance = int(distance or 0)
@@ -110,7 +113,8 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
 
     match = describe_pattern.match(override_value)
     if not match:
-        raise ValueError(f"Invalid git describe override: {override_value}")
+        msg = f"Invalid git describe override: {override_value}"
+        raise ValueError(msg)
 
     version, distance, commit_hash = match.groups()
 

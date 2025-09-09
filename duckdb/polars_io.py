@@ -132,9 +132,11 @@ def _pl_tree_to_sql(tree: dict) -> str:
                 return f"({arg_sql} IS NULL)"
             if func == "IsNotNull":
                 return f"({arg_sql} IS NOT NULL)"
-            raise NotImplementedError(f"Boolean function not supported: {func}")
+            msg = f"Boolean function not supported: {func}"
+            raise NotImplementedError(msg)
 
-        raise NotImplementedError(f"Unsupported function type: {func_dict}")
+        msg = f"Unsupported function type: {func_dict}"
+        raise NotImplementedError(msg)
 
     if node_type == "Scalar":
         # Detect format: old style (dtype/value) or new style (direct type key)
@@ -200,9 +202,11 @@ def _pl_tree_to_sql(tree: dict) -> str:
             string_val = value.get("StringOwned", value.get("String", None))
             return f"'{string_val}'"
 
-        raise NotImplementedError(f"Unsupported scalar type {dtype!s}, with value {value}")
+        msg = f"Unsupported scalar type {dtype!s}, with value {value}"
+        raise NotImplementedError(msg)
 
-    raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
+    msg = f"Node type: {node_type} is not implemented. {subtree}"
+    raise NotImplementedError(msg)
 
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:

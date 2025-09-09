@@ -92,7 +92,8 @@ def ucase(str: "ColumnOrName") -> Column:
 
 def when(condition: "Column", value: Any) -> Column:
     if not isinstance(condition, Column):
-        raise TypeError("condition should be a Column")
+        msg = "condition should be a Column"
+        raise TypeError(msg)
     v = _get_expr(value)
     expr = CaseExpression(condition.expr, v)
     return Column(expr)
@@ -1480,7 +1481,8 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
     +---------------+
     """
     if rsd is not None:
-        raise ValueError("rsd is not supported by DuckDB")
+        msg = "rsd is not supported by DuckDB"
+        raise ValueError(msg)
     return _invoke_function_over_columns("approx_count_distinct", col)
 
 
@@ -2365,7 +2367,8 @@ def rand(seed: Optional[int] = None) -> Column:
     """
     if seed is not None:
         # Maybe call setseed just before but how do we know when it is executed?
-        raise ContributionsAcceptedError("Seed is not yet implemented")
+        msg = "Seed is not yet implemented"
+        raise ContributionsAcceptedError(msg)
     return _invoke_function("random")
 
 
@@ -2842,7 +2845,8 @@ def encode(col: "ColumnOrName", charset: str) -> Column:
     +----------------+
     """
     if charset != "UTF-8":
-        raise ContributionsAcceptedError("Only UTF-8 charset is supported right now")
+        msg = "Only UTF-8 charset is supported right now"
+        raise ContributionsAcceptedError(msg)
     return _invoke_function("encode", _to_column_expr(col))
 
 
@@ -3017,7 +3021,8 @@ def greatest(*cols: "ColumnOrName") -> Column:
     [Row(greatest=4)]
     """
     if len(cols) < 2:
-        raise ValueError("greatest should take at least 2 columns")
+        msg = "greatest should take at least 2 columns"
+        raise ValueError(msg)
 
     cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("greatest", *cols)
@@ -3049,7 +3054,8 @@ def least(*cols: "ColumnOrName") -> Column:
     [Row(least=1)]
     """
     if len(cols) < 2:
-        raise ValueError("least should take at least 2 columns")
+        msg = "least should take at least 2 columns"
+        raise ValueError(msg)
 
     cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("least", *cols)
@@ -3550,12 +3556,14 @@ def sha2(col: "ColumnOrName", numBits: int) -> Column:
     +-----+----------------------------------------------------------------+
     """
     if numBits not in {224, 256, 384, 512, 0}:
-        raise ValueError("numBits should be one of {224, 256, 384, 512, 0}")
+        msg = "numBits should be one of {224, 256, 384, 512, 0}"
+        raise ValueError(msg)
 
     if numBits == 256:
         return _invoke_function_over_columns("sha256", col)
 
-    raise ContributionsAcceptedError("SHA-224, SHA-384, and SHA-512 are not supported yet.")
+    msg = "SHA-224, SHA-384, and SHA-512 are not supported yet."
+    raise ContributionsAcceptedError(msg)
 
 
 def curdate() -> Column:
@@ -5241,7 +5249,8 @@ def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Colum
     [Row(r=['foobar', 'foo', None, 'bar']), Row(r=['foo']), Row(r=[])]
     """
     if comparator is not None:
-        raise ContributionsAcceptedError("comparator is not yet supported")
+        msg = "comparator is not yet supported"
+        raise ContributionsAcceptedError(msg)
     else:
         return _invoke_function_over_columns("list_sort", col, lit("ASC"), lit("NULLS LAST"))
 
@@ -5335,7 +5344,8 @@ def split(str: "ColumnOrName", pattern: str, limit: int = -1) -> Column:
     if limit > 0:
         # Unclear how to implement this in DuckDB as we'd need to map back from the split array
         # to the original array which is tricky with regular expressions.
-        raise ContributionsAcceptedError("limit is not yet supported")
+        msg = "limit is not yet supported"
+        raise ContributionsAcceptedError(msg)
     return _invoke_function_over_columns("regexp_split_to_array", str, lit(pattern))
 
 

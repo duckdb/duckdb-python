@@ -39,7 +39,8 @@ __ALL__ = ["_NoValue"]
 # Disallow reloading this module so as to preserve the identities of the
 # classes defined here.
 if "_is_loaded" in globals():
-    raise RuntimeError("Reloading duckdb.experimental.spark._globals is not allowed")
+    msg = "Reloading duckdb.experimental.spark._globals is not allowed"
+    raise RuntimeError(msg)
 _is_loaded = True
 
 

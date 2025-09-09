@@ -18,7 +18,8 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
 
     def add_file(self, object, path):
         if not is_file_like(object):
-            raise ValueError("Can not read from a non file-like object")
+            msg = "Can not read from a non file-like object"
+            raise ValueError(msg)
         path = self._strip_protocol(path)
         if isinstance(object, TextIOBase):
             # Wrap this so that we can return a bytes object from 'read'

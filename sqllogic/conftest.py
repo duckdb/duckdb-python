@@ -179,16 +179,20 @@ def determine_test_offsets(config: pytest.Config, num_tests: int) -> tuple[int, 
     percentage_specified = start_offset_percentage is not None or end_offset_percentage is not None
 
     if index_specified and percentage_specified:
-        raise ValueError("You can only specify either start/end offsets or start/end offset percentages, not both")
+        msg = "You can only specify either start/end offsets or start/end offset percentages, not both"
+        raise ValueError(msg)
 
     if start_offset is not None and start_offset < 0:
-        raise ValueError("--start-offset must be a non-negative integer")
+        msg = "--start-offset must be a non-negative integer"
+        raise ValueError(msg)
 
     if start_offset_percentage is not None and (start_offset_percentage < 0 or start_offset_percentage > 100):
-        raise ValueError("--start-offset-percentage must be between 0 and 100")
+        msg = "--start-offset-percentage must be between 0 and 100"
+        raise ValueError(msg)
 
     if end_offset_percentage is not None and (end_offset_percentage < 0 or end_offset_percentage > 100):
-        raise ValueError("--end-offset-percentage must be between 0 and 100")
+        msg = "--end-offset-percentage must be between 0 and 100"
+        raise ValueError(msg)
 
     if start_offset is None:
         if start_offset_percentage is not None:
@@ -197,9 +201,8 @@ def determine_test_offsets(config: pytest.Config, num_tests: int) -> tuple[int, 
             start_offset = 0
 
     if end_offset is not None and end_offset < start_offset:
-        raise ValueError(
-            f"--end-offset ({end_offset}) must be greater than or equal to the start offset ({start_offset})"
-        )
+        msg = f"--end-offset ({end_offset}) must be greater than or equal to the start offset ({start_offset})"
+        raise ValueError(msg)
 
     if end_offset is None:
         if end_offset_percentage is not None:

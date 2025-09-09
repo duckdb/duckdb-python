@@ -133,7 +133,8 @@ class TestScalarUDF:
     @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_exceptions(self, udf_type):
         def raises_exception(x):
-            raise AttributeError("error")
+            msg = "error"
+            raise AttributeError(msg)
 
         con = duckdb.connect()
         con.create_function("raises", raises_exception, [BIGINT], BIGINT, type=udf_type)

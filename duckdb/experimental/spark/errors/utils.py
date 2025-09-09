@@ -86,7 +86,8 @@ class ErrorClassesReader:
         if main_error_class in self.error_info_map:
             main_error_class_info_map = self.error_info_map[main_error_class]
         else:
-            raise ValueError(f"Cannot find main error class '{main_error_class}'")
+            msg = f"Cannot find main error class '{main_error_class}'"
+            raise ValueError(msg)
 
         main_message_template = "\n".join(main_error_class_info_map["message"])
 
@@ -101,7 +102,8 @@ class ErrorClassesReader:
             if sub_error_class in main_error_class_subclass_info_map:
                 sub_error_class_info_map = main_error_class_subclass_info_map[sub_error_class]
             else:
-                raise ValueError(f"Cannot find sub error class '{sub_error_class}'")
+                msg = f"Cannot find sub error class '{sub_error_class}'"
+                raise ValueError(msg)
 
             sub_message_template = "\n".join(sub_error_class_info_map["message"])
             message_template = main_message_template + " " + sub_message_template

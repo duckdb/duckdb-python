@@ -21,7 +21,8 @@ def _import(handle):
         return pa.RecordBatchReader._import_from_c(handle.address)
     elif isinstance(handle, adbc_driver_manager.ArrowSchemaHandle):
         return pa.Schema._import_from_c(handle.address)
-    raise NotImplementedError(f"Importing {handle!r}")
+    msg = f"Importing {handle!r}"
+    raise NotImplementedError(msg)
 
 
 def _bind(stmt, batch):
