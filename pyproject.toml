@@ -320,6 +320,7 @@ fixable = ["ALL"]
 exclude = ['external/duckdb']
 
 [tool.ruff.lint]
+exclude = ['*.pyi']
 select = [
     "ANN", # flake8-annotations
     "B", # flake8-bugbear
