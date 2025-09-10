@@ -32,9 +32,33 @@ class DBAPITypeObject:
         return f"<DBAPITypeObject {self.name}>"
 
 # Define the standard DBAPI sentinels
-STRING   = DBAPITypeObject("STRING", {"VARCHAR", "CHAR", "TEXT"})
-NUMBER   = DBAPITypeObject("NUMBER", {"INTEGER", "BIGINT", "DECIMAL", "DOUBLE"})
-DATETIME = DBAPITypeObject("DATETIME", {"DATE", "TIME", "TIMESTAMP"})
+STRING   = DBAPITypeObject("STRING", {"VARCHAR"})
+NUMBER   = DBAPITypeObject("NUMBER", {
+    "TINYINT",
+    "UTINYINT",
+    "SMALLINT",
+    "USMALLINT",
+    "INTEGER",
+    "UINTEGER",
+    "BIGINT",
+    "UBIGINT",
+    "HUGEINT",
+    "UHUGEINT",
+    "BIGNUM",
+    "DECIMAL",
+    "FLOAT",
+    "DOUBLE"
+})
+DATETIME = DBAPITypeObject("DATETIME", {
+    "DATE",
+    "TIME",
+    "TIME_TZ",
+    "TIMESTAMP",
+    "TIMESTAMP_TZ",
+    "TIMESTAMP_NS",
+    "TIMESTAMP_MS",
+    "TIMESTAMP_SEC"
+})
 BINARY   = DBAPITypeObject("BINARY", {"BLOB"})
 ROWID    = None
 

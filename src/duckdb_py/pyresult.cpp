@@ -514,66 +514,6 @@ py::object DuckDBPyResult::FetchArrowCapsule(idx_t rows_per_batch) {
 	return py::capsule(stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
 }
 
-py::str GetTypeToPython(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return py::str("bool");
-	case LogicalTypeId::TINYINT:
-	case LogicalTypeId::SMALLINT:
-	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::UTINYINT:
-	case LogicalTypeId::USMALLINT:
-	case LogicalTypeId::UINTEGER:
-	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UHUGEINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
-	case LogicalTypeId::DECIMAL: {
-		return py::str("NUMBER");
-	}
-	case LogicalTypeId::VARCHAR: {
-		if (type.HasAlias() && type.GetAlias() == "JSON") {
-			return py::str("JSON");
-		} else {
-			return py::str("STRING");
-		}
-	}
-	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-		return py::str("BINARY");
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		return py::str("DATETIME");
-	}
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ: {
-		return py::str("Time");
-	}
-	case LogicalTypeId::DATE: {
-		return py::str("Date");
-	}
-	case LogicalTypeId::STRUCT:
-	case LogicalTypeId::MAP:
-		return py::str("dict");
-	case LogicalTypeId::LIST: {
-		return py::str("list");
-	}
-	case LogicalTypeId::INTERVAL: {
-		return py::str("TIMEDELTA");
-	}
-	case LogicalTypeId::UUID: {
-		return py::str("UUID");
-	}
-	default:
-		return py::str(type.ToString());
-	}
-}
-
 py::list DuckDBPyResult::GetDescription(const vector<string> &names, const vector<LogicalType> &types) {
 	py::list desc;
 
