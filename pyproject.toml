@@ -363,13 +363,13 @@ strict = true
     # No need for package, module, class, function, init etc docstrings in tests
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107',
     # No need for type hinting in tests
-    'ANN001'
+    'ANN001', 'ANN201'
 ]
 "scripts/**.py" = [
     # No need for package, module, class, function, init etc docstrings in scripts
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205',
     # No need for type hinting in scripts
-    'ANN001'
+    'ANN001', 'ANN201'
 ]
 "tests/spark_namespace/**.py" = [
     # we need * imports for Spark
