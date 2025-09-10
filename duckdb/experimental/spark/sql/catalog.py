@@ -63,7 +63,7 @@ class Catalog:  # noqa: D101
             query += f" and database_name = '{dbName}'"
         res = self._session.conn.sql(query).fetchall()
 
-        def transform_to_column(x: list[str|bool]) -> Column:
+        def transform_to_column(x: list[str | bool]) -> Column:
             return Column(name=x[0], description=None, dataType=x[1], nullable=x[2], isPartition=False, isBucket=False)
 
         columns = [transform_to_column(x) for x in res]

@@ -109,7 +109,9 @@ class SparkSession:  # noqa: D101
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
-    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None) -> DataFrame:
+    def _createDataFrameFromPandas(
+        self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None
+    ) -> DataFrame:
         df = self._create_dataframe(data)
 
         # Cast to types

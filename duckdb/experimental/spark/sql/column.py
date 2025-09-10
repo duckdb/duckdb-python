@@ -12,7 +12,7 @@ from duckdb.typing import DuckDBPyType
 __all__ = ["Column"]
 
 
-def _get_expr(x: 'Column' | str) -> Expression:
+def _get_expr(x: "Column" | str) -> Expression:
     return x.expr if isinstance(x, Column) else ConstantExpression(x)
 
 
