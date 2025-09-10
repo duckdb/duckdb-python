@@ -1,4 +1,4 @@
-# This code is based on code from Apache Spark under the license found in the LICENSE file located in the 'spark' folder.
+# This code is based on code from Apache Spark under the license found in the LICENSE file located in the 'spark' folder.  # noqa: D100
 
 import calendar
 import datetime
@@ -66,32 +66,32 @@ __all__ = [
 class DataType:
     """Base class for data types."""
 
-    def __init__(self, duckdb_type) -> None:
+    def __init__(self, duckdb_type) -> None:  # noqa: D107
         self.duckdb_type = duckdb_type
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return self.__class__.__name__ + "()"
 
-    def __hash__(self) -> int:
+    def __hash__(self) -> int:  # noqa: D105
         return hash(str(self))
 
-    def __eq__(self, other: object) -> bool:
+    def __eq__(self, other: object) -> bool:  # noqa: D105
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
 
-    def __ne__(self, other: object) -> bool:
+    def __ne__(self, other: object) -> bool:  # noqa: D105
         return not self.__eq__(other)
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return cls.__name__[:-4].lower()
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return self.typeName()
 
-    def jsonValue(self) -> Union[str, dict[str, Any]]:
+    def jsonValue(self) -> Union[str, dict[str, Any]]:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def json(self) -> str:
+    def json(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
     def needConversion(self) -> bool:
@@ -129,11 +129,11 @@ class NullType(DataType, metaclass=DataTypeSingleton):
     The data type representing None, used for the types that cannot be inferred.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("NULL"))
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "void"
 
 
@@ -158,54 +158,54 @@ class FractionalType(NumericType):
 class StringType(AtomicType, metaclass=DataTypeSingleton):
     """String data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("VARCHAR"))
 
 
 class BitstringType(AtomicType, metaclass=DataTypeSingleton):
     """Bitstring data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("BIT"))
 
 
 class UUIDType(AtomicType, metaclass=DataTypeSingleton):
     """UUID data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("UUID"))
 
 
 class BinaryType(AtomicType, metaclass=DataTypeSingleton):
     """Binary (byte array) data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("BLOB"))
 
 
 class BooleanType(AtomicType, metaclass=DataTypeSingleton):
     """Boolean data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("BOOLEAN"))
 
 
 class DateType(AtomicType, metaclass=DataTypeSingleton):
     """Date (datetime.date) data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("DATE"))
 
     EPOCH_ORDINAL = datetime.datetime(1970, 1, 1).toordinal()
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
-    def toInternal(self, d: datetime.date) -> int:
+    def toInternal(self, d: datetime.date) -> int:  # noqa: D102
         if d is not None:
             return d.toordinal() - self.EPOCH_ORDINAL
 
-    def fromInternal(self, v: int) -> datetime.date:
+    def fromInternal(self, v: int) -> datetime.date:  # noqa: D102
         if v is not None:
             return datetime.date.fromordinal(v + self.EPOCH_ORDINAL)
 
@@ -213,22 +213,22 @@ class DateType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMPTZ"))
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "timestamptz"
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
-    def toInternal(self, dt: datetime.datetime) -> int:
+    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
         if dt is not None:
             seconds = calendar.timegm(dt.utctimetuple()) if dt.tzinfo else time.mktime(dt.timetuple())
             return int(seconds) * 1000000 + dt.microsecond
 
-    def fromInternal(self, ts: int) -> datetime.datetime:
+    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
         if ts is not None:
             # using int to avoid precision loss in float
             return datetime.datetime.fromtimestamp(ts // 1000000).replace(microsecond=ts % 1000000)
@@ -237,22 +237,22 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with microsecond precision."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMP"))
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "timestamp"
 
-    def toInternal(self, dt: datetime.datetime) -> int:
+    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
         if dt is not None:
             seconds = calendar.timegm(dt.timetuple())
             return int(seconds) * 1000000 + dt.microsecond
 
-    def fromInternal(self, ts: int) -> datetime.datetime:
+    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
         if ts is not None:
             # using int to avoid precision loss in float
             return datetime.datetime.utcfromtimestamp(ts // 1000000).replace(microsecond=ts % 1000000)
@@ -261,60 +261,60 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
 class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with second precision."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMP_S"))
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "timestamp_s"
 
-    def toInternal(self, dt: datetime.datetime) -> int:
+    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def fromInternal(self, ts: int) -> datetime.datetime:
+    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
         raise ContributionsAcceptedError
 
 
 class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with milisecond precision."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMP_MS"))
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "timestamp_ms"
 
-    def toInternal(self, dt: datetime.datetime) -> int:
+    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def fromInternal(self, ts: int) -> datetime.datetime:
+    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
         raise ContributionsAcceptedError
 
 
 class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with nanosecond precision."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMP_NS"))
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
     @classmethod
-    def typeName(cls) -> str:
+    def typeName(cls) -> str:  # noqa: D102
         return "timestamp_ns"
 
-    def toInternal(self, dt: datetime.datetime) -> int:
+    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def fromInternal(self, ts: int) -> datetime.datetime:
+    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
         raise ContributionsAcceptedError
 
 
@@ -338,90 +338,90 @@ class DecimalType(FractionalType):
         the number of digits on right side of dot. (default: 0)
     """
 
-    def __init__(self, precision: int = 10, scale: int = 0) -> None:
+    def __init__(self, precision: int = 10, scale: int = 0) -> None:  # noqa: D107
         super().__init__(duckdb.decimal_type(precision, scale))
         self.precision = precision
         self.scale = scale
         self.hasPrecisionInfo = True  # this is a public API
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "decimal(%d,%d)" % (self.precision, self.scale)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "DecimalType(%d,%d)" % (self.precision, self.scale)
 
 
 class DoubleType(FractionalType, metaclass=DataTypeSingleton):
     """Double data type, representing double precision floats."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("DOUBLE"))
 
 
 class FloatType(FractionalType, metaclass=DataTypeSingleton):
     """Float data type, representing single precision floats."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("FLOAT"))
 
 
 class ByteType(IntegralType):
     """Byte data type, i.e. a signed integer in a single byte."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TINYINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "tinyint"
 
 
 class UnsignedByteType(IntegralType):
     """Unsigned byte data type, i.e. a unsigned integer in a single byte."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("UTINYINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "utinyint"
 
 
 class ShortType(IntegralType):
     """Short data type, i.e. a signed 16-bit integer."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("SMALLINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "smallint"
 
 
 class UnsignedShortType(IntegralType):
     """Unsigned short data type, i.e. a unsigned 16-bit integer."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("USMALLINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "usmallint"
 
 
 class IntegerType(IntegralType):
     """Int data type, i.e. a signed 32-bit integer."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("INTEGER"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "integer"
 
 
 class UnsignedIntegerType(IntegralType):
     """Unsigned int data type, i.e. a unsigned 32-bit integer."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("UINTEGER"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "uinteger"
 
 
@@ -432,10 +432,10 @@ class LongType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("BIGINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "bigint"
 
 
@@ -446,10 +446,10 @@ class UnsignedLongType(IntegralType):
     please use :class:`HugeIntegerType`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("UBIGINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "ubigint"
 
 
@@ -460,10 +460,10 @@ class HugeIntegerType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("HUGEINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "hugeint"
 
 
@@ -474,30 +474,30 @@ class UnsignedHugeIntegerType(IntegralType):
     please use :class:`DecimalType`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("UHUGEINT"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "uhugeint"
 
 
 class TimeType(IntegralType):
     """Time (datetime.time) data type."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMETZ"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "timetz"
 
 
 class TimeNTZType(IntegralType):
     """Time (datetime.time) data type without timezone information."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIME"))
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "time"
 
 
@@ -518,7 +518,7 @@ class DayTimeIntervalType(AtomicType):
 
     _inverted_fields = dict(zip(_fields.values(), _fields.keys()))
 
-    def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None) -> None:
+    def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("INTERVAL"))
         if startField is None and endField is None:
             # Default matched to scala side.
@@ -544,17 +544,17 @@ class DayTimeIntervalType(AtomicType):
 
     simpleString = _str_repr
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "%s(%d, %d)" % (type(self).__name__, self.startField, self.endField)
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return True
 
-    def toInternal(self, dt: datetime.timedelta) -> Optional[int]:
+    def toInternal(self, dt: datetime.timedelta) -> Optional[int]:  # noqa: D102
         if dt is not None:
             return (math.floor(dt.total_seconds()) * 1000000) + dt.microseconds
 
-    def fromInternal(self, micros: int) -> Optional[datetime.timedelta]:
+    def fromInternal(self, micros: int) -> Optional[datetime.timedelta]:  # noqa: D102
         if micros is not None:
             return datetime.timedelta(microseconds=micros)
 
@@ -577,7 +577,7 @@ class ArrayType(DataType):
     False
     """
 
-    def __init__(self, elementType: DataType, containsNull: bool = True) -> None:
+    def __init__(self, elementType: DataType, containsNull: bool = True) -> None:  # noqa: D107
         super().__init__(duckdb.list_type(elementType.duckdb_type))
         assert isinstance(elementType, DataType), "elementType %s should be an instance of %s" % (
             elementType,
@@ -586,21 +586,21 @@ class ArrayType(DataType):
         self.elementType = elementType
         self.containsNull = containsNull
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "array<%s>" % self.elementType.simpleString()
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "ArrayType(%s, %s)" % (self.elementType, str(self.containsNull))
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return self.elementType.needConversion()
 
-    def toInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:
+    def toInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:  # noqa: D102
         if not self.needConversion():
             return obj
         return obj and [self.elementType.toInternal(v) for v in obj]
 
-    def fromInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:
+    def fromInternal(self, obj: list[Optional[T]]) -> list[Optional[T]]:  # noqa: D102
         if not self.needConversion():
             return obj
         return obj and [self.elementType.fromInternal(v) for v in obj]
@@ -630,7 +630,7 @@ class MapType(DataType):
     False
     """
 
-    def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True) -> None:
+    def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True) -> None:  # noqa: D107
         super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
         assert isinstance(keyType, DataType), "keyType %s should be an instance of %s" % (
             keyType,
@@ -644,28 +644,28 @@ class MapType(DataType):
         self.valueType = valueType
         self.valueContainsNull = valueContainsNull
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "map<%s,%s>" % (
             self.keyType.simpleString(),
             self.valueType.simpleString(),
         )
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "MapType(%s, %s, %s)" % (
             self.keyType,
             self.valueType,
             str(self.valueContainsNull),
         )
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return self.keyType.needConversion() or self.valueType.needConversion()
 
-    def toInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:
+    def toInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:  # noqa: D102
         if not self.needConversion():
             return obj
         return obj and dict((self.keyType.toInternal(k), self.valueType.toInternal(v)) for k, v in obj.items())
 
-    def fromInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:
+    def fromInternal(self, obj: dict[T, Optional[U]]) -> dict[T, Optional[U]]:  # noqa: D102
         if not self.needConversion():
             return obj
         return obj and dict((self.keyType.fromInternal(k), self.valueType.fromInternal(v)) for k, v in obj.items())
@@ -693,7 +693,7 @@ class StructField(DataType):
     False
     """
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         name: str,
         dataType: DataType,
@@ -711,26 +711,26 @@ class StructField(DataType):
         self.nullable = nullable
         self.metadata = metadata or {}
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "%s:%s" % (self.name, self.dataType.simpleString())
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "StructField('%s', %s, %s)" % (
             self.name,
             self.dataType,
             str(self.nullable),
         )
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         return self.dataType.needConversion()
 
-    def toInternal(self, obj: T) -> T:
+    def toInternal(self, obj: T) -> T:  # noqa: D102
         return self.dataType.toInternal(obj)
 
-    def fromInternal(self, obj: T) -> T:
+    def fromInternal(self, obj: T) -> T:  # noqa: D102
         return self.dataType.fromInternal(obj)
 
-    def typeName(self) -> str:  # type: ignore[override]
+    def typeName(self) -> str:  # type: ignore[override]  # noqa: D102
         msg = "StructField does not have typeName. Use typeName on its type explicitly instead."
         raise TypeError(msg)
 
@@ -766,7 +766,7 @@ class StructType(DataType):
     def _update_internal_duckdb_type(self):
         self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
-    def __init__(self, fields: Optional[list[StructField]] = None) -> None:
+    def __init__(self, fields: Optional[list[StructField]] = None) -> None:  # noqa: D107
         if not fields:
             self.fields = []
             self.names = []
@@ -836,7 +836,7 @@ class StructType(DataType):
         >>> struct2 = StructType([StructField("f1", StringType(), True)])
         >>> struct1 == struct2
         True
-        """  # noqa: D205
+        """  # noqa: D205, D415
         if isinstance(field, StructField):
             self.fields.append(field)
             self.names.append(field.name)
@@ -882,16 +882,16 @@ class StructType(DataType):
             msg = "StructType keys should be strings, integers or slices"
             raise TypeError(msg)
 
-    def simpleString(self) -> str:
+    def simpleString(self) -> str:  # noqa: D102
         return "struct<%s>" % (",".join(f.simpleString() for f in self))
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return "StructType([%s])" % ", ".join(str(field) for field in self)
 
-    def __contains__(self, item: Any) -> bool:
+    def __contains__(self, item: Any) -> bool:  # noqa: D105
         return item in self.names
 
-    def extract_types_and_names(self) -> tuple[list[str], list[str]]:
+    def extract_types_and_names(self) -> tuple[list[str], list[str]]:  # noqa: D102
         names = []
         types = []
         for f in self.fields:
@@ -910,11 +910,11 @@ class StructType(DataType):
         """
         return list(self.names)
 
-    def needConversion(self) -> bool:
+    def needConversion(self) -> bool:  # noqa: D102
         # We need convert Row()/namedtuple into tuple()
         return True
 
-    def toInternal(self, obj: tuple) -> tuple:
+    def toInternal(self, obj: tuple) -> tuple:  # noqa: D102
         if obj is None:
             return
 
@@ -946,7 +946,7 @@ class StructType(DataType):
             else:
                 raise ValueError("Unexpected tuple %r with StructType" % obj)
 
-    def fromInternal(self, obj: tuple) -> "Row":
+    def fromInternal(self, obj: tuple) -> "Row":  # noqa: D102
         if obj is None:
             return
         if isinstance(obj, Row):
@@ -1125,7 +1125,7 @@ class Row(tuple):
     >>> row2 = Row(name="Alice", age=11)
     >>> row1 == row2
     True
-    """  # noqa: D205
+    """  # noqa: D205, D415
 
     @overload
     def __new__(cls, *args: str) -> "Row": ...
@@ -1133,7 +1133,7 @@ class Row(tuple):
     @overload
     def __new__(cls, **kwargs: Any) -> "Row": ...
 
-    def __new__(cls, *args: Optional[str], **kwargs: Optional[Any]) -> "Row":
+    def __new__(cls, *args: Optional[str], **kwargs: Optional[Any]) -> "Row":  # noqa: D102
         if args and kwargs:
             msg = "Can not use both args and kwargs to create Row"
             raise ValueError(msg)
@@ -1192,7 +1192,7 @@ class Row(tuple):
         else:
             return dict(zip(self.__fields__, self))
 
-    def __contains__(self, item: Any) -> bool:
+    def __contains__(self, item: Any) -> bool:  # noqa: D105
         if hasattr(self, "__fields__"):
             return item in self.__fields__
         else:
@@ -1207,7 +1207,7 @@ class Row(tuple):
             )
         return _create_row(self, args)
 
-    def __getitem__(self, item: Any) -> Any:
+    def __getitem__(self, item: Any) -> Any:  # noqa: D105
         if isinstance(item, (int, slice)):
             return super(Row, self).__getitem__(item)
         try:
@@ -1220,7 +1220,7 @@ class Row(tuple):
         except ValueError:
             raise ValueError(item)
 
-    def __getattr__(self, item: str) -> Any:
+    def __getattr__(self, item: str) -> Any:  # noqa: D105
         if item.startswith("__"):
             raise AttributeError(item)
         try:
@@ -1233,7 +1233,7 @@ class Row(tuple):
         except ValueError:
             raise AttributeError(item)
 
-    def __setattr__(self, key: Any, value: Any) -> None:
+    def __setattr__(self, key: Any, value: Any) -> None:  # noqa: D105
         if key != "__fields__":
             msg = "Row is read-only"
             raise RuntimeError(msg)

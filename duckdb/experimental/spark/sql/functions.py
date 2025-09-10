@@ -1,4 +1,4 @@
-import warnings
+import warnings  # noqa: D100
 from typing import TYPE_CHECKING, Any, Callable, Optional, Union, overload
 
 from duckdb import (
@@ -30,7 +30,7 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     return _invoke_function(name, *cols)
 
 
-def col(column: str):
+def col(column: str):  # noqa: D103
     return Column(ColumnExpression(column))
 
 
@@ -90,7 +90,7 @@ def ucase(str: "ColumnOrName") -> Column:
     return upper(str)
 
 
-def when(condition: "Column", value: Any) -> Column:
+def when(condition: "Column", value: Any) -> Column:  # noqa: D103
     if not isinstance(condition, Column):
         msg = "condition should be a Column"
         raise TypeError(msg)
@@ -103,7 +103,7 @@ def _inner_expr_or_val(val):
     return val.expr if isinstance(val, Column) else val
 
 
-def struct(*cols: Column) -> Column:
+def struct(*cols: Column) -> Column:  # noqa: D103
     return Column(FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols]))
 
 
@@ -143,7 +143,7 @@ def array(*cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["Column
     return _invoke_function_over_columns("list_value", *cols)
 
 
-def lit(col: Any) -> Column:
+def lit(col: Any) -> Column:  # noqa: D103
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
 
 
@@ -1680,7 +1680,7 @@ def ceil(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("ceil", col)
 
 
-def ceiling(col: "ColumnOrName") -> Column:
+def ceiling(col: "ColumnOrName") -> Column:  # noqa: D103
     return ceil(col)
 
 
@@ -1854,7 +1854,7 @@ def equal_null(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     ... )
     >>> df.select(equal_null(df.a, df.b).alias("r")).collect()
     [Row(r=True), Row(r=False)]
-    """  # noqa: D205
+    """  # noqa: D205, D415
     if isinstance(col1, str):
         col1 = col(col1)
 
@@ -2183,7 +2183,7 @@ def negative(col: "ColumnOrName") -> Column:
     |          -1|
     |          -2|
     +------------+
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return abs(col) * -1
 
 
@@ -3370,7 +3370,7 @@ def coalesce(*cols: "ColumnOrName") -> Column:
     |   1|NULL|             1.0|
     |NULL|   2|             0.0|
     +----+----+----------------+
-    """  # noqa: D205
+    """  # noqa: D205, D415
     cols = [_to_column_expr(expr) for expr in cols]
     return Column(CoalesceOperator(*cols))
 
@@ -3400,7 +3400,7 @@ def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     ... )
     >>> df.select(nvl(df.a, df.b).alias("r")).collect()
     [Row(r=8), Row(r=1)]
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return coalesce(col1, col2)
 
 
@@ -3460,7 +3460,7 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     |           8|
     |           1|
     +------------+
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return coalesce(col1, col2)
 
 
@@ -5824,7 +5824,7 @@ def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = Non
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
     >>> df.select(try_to_timestamp(df.t, lit("yyyy-MM-dd HH:mm:ss")).alias("dt")).collect()
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
-    """  # noqa: D205
+    """  # noqa: D205, D415
     if format is None:
         format = lit(["%Y-%m-%d", "%Y-%m-%d %H:%M:%S"])
 
@@ -6130,7 +6130,7 @@ def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
     +--------------+--------------+
     |          true|         false|
     +--------------+--------------+
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return _invoke_function_over_columns("contains", left, right)
 
 
@@ -6157,7 +6157,7 @@ def reverse(col: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([([2, 1, 3],), ([1],), ([],)], ["data"])
     >>> df.select(reverse(df.data).alias("r")).collect()
     [Row(r=[3, 1, 2]), Row(r=[1]), Row(r=[])]
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return _invoke_function("reverse", _to_column_expr(col))
 
 
@@ -6197,7 +6197,7 @@ def concat(*cols: "ColumnOrName") -> Column:
     [Row(arr=[1, 2, 3, 4, 5]), Row(arr=None)]
     >>> df
     DataFrame[arr: array<bigint>]
-    """  # noqa: D205
+    """  # noqa: D205, D415
     return _invoke_function_over_columns("concat", *cols)
 
 

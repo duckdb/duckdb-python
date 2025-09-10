@@ -1,4 +1,4 @@
-#
+#  # noqa: D100
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -51,8 +51,8 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     return _api
 
 
-class Grouping:
-    def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:
+class Grouping:  # noqa: D101
+    def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:  # noqa: D107
         self._type = ""
         self._cols = [_to_column_expr(x) for x in cols]
         if "special" in kwargs:
@@ -61,11 +61,11 @@ class Grouping:
             assert special in accepted_special
             self._type = special
 
-    def get_columns(self) -> str:
+    def get_columns(self) -> str:  # noqa: D102
         columns = ",".join([str(x) for x in self._cols])
         return columns
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # noqa: D105
         columns = self.get_columns()
         if self._type:
             return self._type + "(" + columns + ")"
@@ -78,12 +78,12 @@ class GroupedData:
 
     """  # noqa: D205
 
-    def __init__(self, grouping: Grouping, df: DataFrame) -> None:
+    def __init__(self, grouping: Grouping, df: DataFrame) -> None:  # noqa: D107
         self._grouping = grouping
         self._df = df
         self.session: SparkSession = df.session
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return str(self._df)
 
     def count(self) -> DataFrame:

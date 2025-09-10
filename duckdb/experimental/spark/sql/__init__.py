@@ -1,4 +1,4 @@
-from .catalog import Catalog
+from .catalog import Catalog  # noqa: D104
 from .conf import RuntimeConfig
 from .dataframe import DataFrame
 from .readwriter import DataFrameWriter

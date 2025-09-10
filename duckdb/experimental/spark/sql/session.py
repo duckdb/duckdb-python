@@ -1,4 +1,4 @@
-import uuid
+import uuid  # noqa: D100
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, Optional, Union
 
@@ -41,8 +41,8 @@ def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     return new_data
 
 
-class SparkSession:
-    def __init__(self, context: SparkContext) -> None:
+class SparkSession:  # noqa: D101
+    def __init__(self, context: SparkContext) -> None:  # noqa: D107
         self.conn = context.connection
         self._context = context
         self._conf = RuntimeConfig(self.conn)
@@ -121,7 +121,7 @@ class SparkSession:
             df = df.toDF(*names)
         return df
 
-    def createDataFrame(
+    def createDataFrame(  # noqa: D102
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
         schema: Optional[Union[StructType, list[str]]] = None,
@@ -184,10 +184,10 @@ class SparkSession:
             df = df.toDF(*names)
         return df
 
-    def newSession(self) -> "SparkSession":
+    def newSession(self) -> "SparkSession":  # noqa: D102
         return SparkSession(self._context)
 
-    def range(
+    def range(  # noqa: D102
         self,
         start: int,
         end: Optional[int] = None,
@@ -203,24 +203,24 @@ class SparkSession:
 
         return DataFrame(self.conn.table_function("range", parameters=[start, end, step]), self)
 
-    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
+    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:  # noqa: D102
         if kwargs:
             raise NotImplementedError
         relation = self.conn.sql(sqlQuery)
         return DataFrame(relation, self)
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # noqa: D102
         self._context.stop()
 
-    def table(self, tableName: str) -> DataFrame:
+    def table(self, tableName: str) -> DataFrame:  # noqa: D102
         relation = self.conn.table(tableName)
         return DataFrame(relation, self)
 
-    def getActiveSession(self) -> "SparkSession":
+    def getActiveSession(self) -> "SparkSession":  # noqa: D102
         return self
 
     @property
-    def catalog(self) -> "Catalog":
+    def catalog(self) -> "Catalog":  # noqa: D102
         if not hasattr(self, "_catalog"):
             from duckdb.experimental.spark.sql.catalog import Catalog
 
@@ -228,59 +228,59 @@ class SparkSession:
         return self._catalog
 
     @property
-    def conf(self) -> RuntimeConfig:
+    def conf(self) -> RuntimeConfig:  # noqa: D102
         return self._conf
 
     @property
-    def read(self) -> DataFrameReader:
+    def read(self) -> DataFrameReader:  # noqa: D102
         return DataFrameReader(self)
 
     @property
-    def readStream(self) -> DataStreamReader:
+    def readStream(self) -> DataStreamReader:  # noqa: D102
         return DataStreamReader(self)
 
     @property
-    def sparkContext(self) -> SparkContext:
+    def sparkContext(self) -> SparkContext:  # noqa: D102
         return self._context
 
     @property
-    def streams(self) -> Any:
+    def streams(self) -> Any:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def udf(self) -> UDFRegistration:
+    def udf(self) -> UDFRegistration:  # noqa: D102
         return UDFRegistration(self)
 
     @property
-    def version(self) -> str:
+    def version(self) -> str:  # noqa: D102
         return "1.0.0"
 
-    class Builder:
-        def __init__(self) -> None:
+    class Builder:  # noqa: D106
+        def __init__(self) -> None:  # noqa: D107
             pass
 
-        def master(self, name: str) -> "SparkSession.Builder":
+        def master(self, name: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def appName(self, name: str) -> "SparkSession.Builder":
+        def appName(self, name: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def remote(self, url: str) -> "SparkSession.Builder":
+        def remote(self, url: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def getOrCreate(self) -> "SparkSession":
+        def getOrCreate(self) -> "SparkSession":  # noqa: D102
             context = SparkContext("__ignored__")
             return SparkSession(context)
 
-        def config(
+        def config(  # noqa: D102
             self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None
         ) -> "SparkSession.Builder":
             return self
 
-        def enableHiveSupport(self) -> "SparkSession.Builder":
+        def enableHiveSupport(self) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 

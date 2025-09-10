@@ -1,4 +1,4 @@
-import uuid
+import uuid  # noqa: D100
 from functools import reduce
 from keyword import iskeyword
 from typing import (
@@ -32,18 +32,18 @@ if TYPE_CHECKING:
 from .functions import _to_column_expr, col, lit
 
 
-class DataFrame:
-    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession") -> None:
+class DataFrame:  # noqa: D101
+    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession") -> None:  # noqa: D107
         self.relation = relation
         self.session = session
         self._schema = None
         if self.relation is not None:
             self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
-    def show(self, **kwargs) -> None:
+    def show(self, **kwargs) -> None:  # noqa: D102
         self.relation.show()
 
-    def toPandas(self) -> "PandasDataFrame":
+    def toPandas(self) -> "PandasDataFrame":  # noqa: D102
         return self.relation.df()
 
     def toArrow(self) -> "pa.Table":
@@ -103,10 +103,10 @@ class DataFrame:
         """
         self.relation.create_view(name, True)
 
-    def createGlobalTempView(self, name: str) -> None:
+    def createGlobalTempView(self, name: str) -> None:  # noqa: D102
         raise NotImplementedError
 
-    def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":
+    def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":  # noqa: D102
         if columnName not in self.relation:
             msg = f"DataFrame does not contain a column named {columnName}"
             raise ValueError(msg)
@@ -119,7 +119,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumn(self, columnName: str, col: Column) -> "DataFrame":
+    def withColumn(self, columnName: str, col: Column) -> "DataFrame":  # noqa: D102
         if not isinstance(col, Column):
             raise PySparkTypeError(
                 error_class="NOT_COLUMN",
@@ -472,7 +472,7 @@ class DataFrame:
 
     orderBy = sort
 
-    def head(self, n: Optional[int] = None) -> Union[Optional[Row], list[Row]]:
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], list[Row]]:  # noqa: D102
         if n is None:
             rs = self.head(1)
             return rs[0] if rs else None
@@ -480,7 +480,7 @@ class DataFrame:
 
     first = head
 
-    def take(self, num: int) -> list[Row]:
+    def take(self, num: int) -> list[Row]:  # noqa: D102
         return self.limit(num).collect()
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
@@ -547,7 +547,7 @@ class DataFrame:
 
     where = filter
 
-    def select(self, *cols) -> "DataFrame":
+    def select(self, *cols) -> "DataFrame":  # noqa: D102
         cols = list(cols)
         if len(cols) == 1:
             cols = cols[0]
@@ -574,7 +574,7 @@ class DataFrame:
         # when accessed in bracket notation, e.g. df['<TAB>]
         return self.columns
 
-    def __dir__(self) -> list[str]:
+    def __dir__(self) -> list[str]:  # noqa: D105
         out = set(super().__dir__())
         out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
         return sorted(out)
@@ -792,7 +792,7 @@ class DataFrame:
         assert isinstance(alias, str), "alias should be a string"
         return DataFrame(self.relation.set_alias(alias), self.session)
 
-    def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
+    def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]  # noqa: D102
         exclude = []
         for col in cols:
             if isinstance(col, str):
@@ -809,7 +809,7 @@ class DataFrame:
         expr = StarExpression(exclude=exclude)
         return DataFrame(self.relation.select(expr), self.session)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return str(self.relation)
 
     def limit(self, num: int) -> "DataFrame":
@@ -986,10 +986,10 @@ class DataFrame:
     groupby = groupBy
 
     @property
-    def write(self) -> DataFrameWriter:
+    def write(self) -> DataFrameWriter:  # noqa: D102
         return DataFrameWriter(self)
 
-    def printSchema(self):
+    def printSchema(self):  # noqa: D102
         raise ContributionsAcceptedError
 
     def union(self, other: "DataFrame") -> "DataFrame":
@@ -1339,7 +1339,7 @@ class DataFrame:
         new_rel = self.relation.project(cast_expressions)
         return DataFrame(new_rel, self.session)
 
-    def toDF(self, *cols) -> "DataFrame":
+    def toDF(self, *cols) -> "DataFrame":  # noqa: D102
         existing_columns = self.relation.columns
         column_count = len(cols)
         if column_count != len(existing_columns):
@@ -1350,7 +1350,7 @@ class DataFrame:
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
-    def collect(self) -> list[Row]:
+    def collect(self) -> list[Row]:  # noqa: D102
         columns = self.relation.columns
         result = self.relation.fetchall()
 

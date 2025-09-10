@@ -1,4 +1,4 @@
-import argparse
+import argparse  # noqa: D100
 import json
 import os
 import re
@@ -76,63 +76,63 @@ qgraph_css = """
 """
 
 
-class NodeTiming:
-    def __init__(self, phase: str, time: float) -> object:
+class NodeTiming:  # noqa: D101
+    def __init__(self, phase: str, time: float) -> object:  # noqa: D107
         self.phase = phase
         self.time = time
         # percentage is determined later.
         self.percentage = 0
 
-    def calculate_percentage(self, total_time: float) -> None:
+    def calculate_percentage(self, total_time: float) -> None:  # noqa: D102
         self.percentage = self.time / total_time
 
-    def combine_timing(l: object, r: object) -> object:
+    def combine_timing(l: object, r: object) -> object:  # noqa: D102
         # TODO: can only add timings for same-phase nodes
         total_time = l.time + r.time
         return NodeTiming(l.phase, total_time)
 
 
-class AllTimings:
-    def __init__(self) -> None:
+class AllTimings:  # noqa: D101
+    def __init__(self) -> None:  # noqa: D107
         self.phase_to_timings = {}
 
-    def add_node_timing(self, node_timing: NodeTiming):
+    def add_node_timing(self, node_timing: NodeTiming):  # noqa: D102
         if node_timing.phase in self.phase_to_timings:
             self.phase_to_timings[node_timing.phase].append(node_timing)
             return
         self.phase_to_timings[node_timing.phase] = [node_timing]
 
-    def get_phase_timings(self, phase: str):
+    def get_phase_timings(self, phase: str):  # noqa: D102
         return self.phase_to_timings[phase]
 
-    def get_summary_phase_timings(self, phase: str):
+    def get_summary_phase_timings(self, phase: str):  # noqa: D102
         return reduce(NodeTiming.combine_timing, self.phase_to_timings[phase])
 
-    def get_phases(self):
+    def get_phases(self):  # noqa: D102
         phases = list(self.phase_to_timings.keys())
         phases.sort(key=lambda x: (self.get_summary_phase_timings(x)).time)
         phases.reverse()
         return phases
 
-    def get_sum_of_all_timings(self):
+    def get_sum_of_all_timings(self):  # noqa: D102
         total_timing_sum = 0
         for phase in self.phase_to_timings.keys():
             total_timing_sum += self.get_summary_phase_timings(phase).time
         return total_timing_sum
 
 
-def open_utf8(fpath: str, flags: str) -> object:
+def open_utf8(fpath: str, flags: str) -> object:  # noqa: D103
     return open(fpath, flags, encoding="utf8")
 
 
-def get_child_timings(top_node: object, query_timings: object) -> str:
+def get_child_timings(top_node: object, query_timings: object) -> str:  # noqa: D103
     node_timing = NodeTiming(top_node["operator_type"], float(top_node["operator_timing"]))
     query_timings.add_node_timing(node_timing)
     for child in top_node["children"]:
         get_child_timings(child, query_timings)
 
 
-def get_pink_shade_hex(fraction: float):
+def get_pink_shade_hex(fraction: float):  # noqa: D103
     fraction = max(0, min(1, fraction))
 
     # Define the RGB values for very light pink (almost white) and dark pink
@@ -148,7 +148,7 @@ def get_pink_shade_hex(fraction: float):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:
+def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:  # noqa: D103
     node_style = f"background-color: {get_pink_shade_hex(float(result) / cpu_time)};"
 
     body = f'<span class="tf-nc custom-tooltip" style="{node_style}">'
@@ -167,7 +167,7 @@ def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, 
     return body
 
 
-def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
+def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:  # noqa: D103
     node_prefix_html = "<li>"
     node_suffix_html = "</li>"
 
@@ -206,7 +206,7 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:
 
 
 # For generating the table in the top left.
-def generate_timing_html(graph_json: object, query_timings: object) -> object:
+def generate_timing_html(graph_json: object, query_timings: object) -> object:  # noqa: D103
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
     total_time = float(json_graph.get("operator_timing") or json_graph.get("latency"))
@@ -244,7 +244,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:
     return table_head + table_body
 
 
-def generate_tree_html(graph_json: object) -> str:
+def generate_tree_html(graph_json: object) -> str:  # noqa: D103
     json_graph = json.loads(graph_json)
     cpu_time = float(json_graph["cpu_time"])
     tree_prefix = '<div class="tf-tree tf-gap-sm"> \n <ul>'
@@ -255,7 +255,7 @@ def generate_tree_html(graph_json: object) -> str:
     return tree_prefix + tree_body + tree_suffix
 
 
-def generate_ipython(json_input: str) -> str:
+def generate_ipython(json_input: str) -> str:  # noqa: D103
     from IPython.core.display import HTML
 
     html_output = generate_html(json_input, False)
@@ -268,7 +268,7 @@ def generate_ipython(json_input: str) -> str:
     )
 
 
-def generate_style_html(graph_json: str, include_meta_info: bool) -> None:
+def generate_style_html(graph_json: str, include_meta_info: bool) -> None:  # noqa: D103
     treeflex_css = '<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">\n'
     css = "<style>\n"
     css += qgraph_css + "\n"
@@ -276,14 +276,14 @@ def generate_style_html(graph_json: str, include_meta_info: bool) -> None:
     return {"treeflex_css": treeflex_css, "duckdb_css": css, "libraries": "", "chart_script": ""}
 
 
-def gather_timing_information(json: str, query_timings: object) -> None:
+def gather_timing_information(json: str, query_timings: object) -> None:  # noqa: D103
     # add up all of the times
     # measure each time as a percentage of the total time.
     # then you can return a list of [phase, time, percentage]
     get_child_timings(json["children"][0], query_timings)
 
 
-def translate_json_to_html(input_file: str, output_file: str) -> None:
+def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: D103
     query_timings = AllTimings()
     with open_utf8(input_file, "r") as f:
         text = f.read()
@@ -321,7 +321,7 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:
         f.write(html)
 
 
-def main() -> None:
+def main() -> None:  # noqa: D103
     if sys.version_info[0] < 3:
         print("Please use python3")
         exit(1)

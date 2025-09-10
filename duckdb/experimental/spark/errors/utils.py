@@ -1,4 +1,4 @@
-#
+#  # noqa: D100
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -23,7 +23,7 @@ from .error_classes import ERROR_CLASSES_MAP
 class ErrorClassesReader:
     """A reader to load error information from error_classes.py."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         self.error_info_map = ERROR_CLASSES_MAP
 
     def get_error_message(self, error_class: str, message_parameters: dict[str, str]) -> str:

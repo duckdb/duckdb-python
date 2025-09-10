@@ -1,4 +1,4 @@
-from typing import cast
+from typing import cast  # noqa: D100
 
 from duckdb.typing import DuckDBPyType
 
@@ -74,7 +74,7 @@ _sqltype_to_spark_class = {
 }
 
 
-def convert_nested_type(dtype: DuckDBPyType) -> DataType:
+def convert_nested_type(dtype: DuckDBPyType) -> DataType:  # noqa: D103
     id = dtype.id
     if id == "list" or id == "array":
         children = dtype.children
@@ -89,7 +89,7 @@ def convert_nested_type(dtype: DuckDBPyType) -> DataType:
     raise NotImplementedError
 
 
-def convert_type(dtype: DuckDBPyType) -> DataType:
+def convert_type(dtype: DuckDBPyType) -> DataType:  # noqa: D103
     id = dtype.id
     if id in ["list", "struct", "map", "array"]:
         return convert_nested_type(dtype)
@@ -102,6 +102,6 @@ def convert_type(dtype: DuckDBPyType) -> DataType:
     return spark_type()
 
 
-def duckdb_to_spark_schema(names: list[str], types: list[DuckDBPyType]) -> StructType:
+def duckdb_to_spark_schema(names: list[str], types: list[DuckDBPyType]) -> StructType:  # noqa: D103
     fields = [StructField(name, dtype) for name, dtype in zip(names, [convert_type(x) for x in types])]
     return StructType(fields)

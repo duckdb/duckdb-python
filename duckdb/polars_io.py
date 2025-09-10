@@ -1,4 +1,4 @@
-import datetime
+import datetime  # noqa: D100
 import json
 from collections.abc import Iterator
 from decimal import Decimal

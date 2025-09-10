@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional  # noqa: D100
 
 import duckdb
 from duckdb import DuckDBPyConnection
@@ -6,37 +6,37 @@ from duckdb.experimental.spark.conf import SparkConf
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 
-class SparkContext:
-    def __init__(self, master: str) -> None:
+class SparkContext:  # noqa: D101
+    def __init__(self, master: str) -> None:  # noqa: D107
         self._connection = duckdb.connect(":memory:")
         # This aligns the null ordering with Spark.
         self._connection.execute("set default_null_order='nulls_first_on_asc_last_on_desc'")
 
     @property
-    def connection(self) -> DuckDBPyConnection:
+    def connection(self) -> DuckDBPyConnection:  # noqa: D102
         return self._connection
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # noqa: D102
         self._connection.close()
 
     @classmethod
-    def getOrCreate(cls, conf: Optional[SparkConf] = None) -> "SparkContext":
+    def getOrCreate(cls, conf: Optional[SparkConf] = None) -> "SparkContext":  # noqa: D102
         raise ContributionsAcceptedError
 
     @classmethod
-    def setSystemProperty(cls, key: str, value: str) -> None:
+    def setSystemProperty(cls, key: str, value: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def applicationId(self) -> str:
+    def applicationId(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def defaultMinPartitions(self) -> int:
+    def defaultMinPartitions(self) -> int:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def defaultParallelism(self) -> int:
+    def defaultParallelism(self) -> int:  # noqa: D102
         raise ContributionsAcceptedError
 
     # @property
@@ -44,30 +44,30 @@ class SparkContext:
     # 	raise ContributionsAcceptedError
 
     @property
-    def startTime(self) -> str:
+    def startTime(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def uiWebUrl(self) -> str:
+    def uiWebUrl(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def version(self) -> str:
+    def version(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         raise ContributionsAcceptedError
 
     # def accumulator(self, value: ~T, accum_param: Optional[ForwardRef('AccumulatorParam[T]')] = None) -> 'Accumulator[T]':
     # 	pass
 
-    def addArchive(self, path: str) -> None:
+    def addArchive(self, path: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def addFile(self, path: str, recursive: bool = False) -> None:
+    def addFile(self, path: str, recursive: bool = False) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def addPyFile(self, path: str) -> None:
+    def addPyFile(self, path: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
     # def binaryFiles(self, path: str, minPartitions: Optional[int] = None) -> duckdb.experimental.spark.rdd.RDD[typing.Tuple[str, bytes]]:
@@ -79,25 +79,25 @@ class SparkContext:
     # def broadcast(self, value: ~T) -> 'Broadcast[T]':
     # 	pass
 
-    def cancelAllJobs(self) -> None:
+    def cancelAllJobs(self) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def cancelJobGroup(self, groupId: str) -> None:
+    def cancelJobGroup(self, groupId: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def dump_profiles(self, path: str) -> None:
+    def dump_profiles(self, path: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
     # def emptyRDD(self) -> duckdb.experimental.spark.rdd.RDD[typing.Any]:
     # 	pass
 
-    def getCheckpointDir(self) -> Optional[str]:
+    def getCheckpointDir(self) -> Optional[str]:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def getConf(self) -> SparkConf:
+    def getConf(self) -> SparkConf:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def getLocalProperty(self, key: str) -> Optional[str]:
+    def getLocalProperty(self, key: str) -> Optional[str]:  # noqa: D102
         raise ContributionsAcceptedError
 
     # def hadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
@@ -127,25 +127,25 @@ class SparkContext:
     # def sequenceFile(self, path: str, keyClass: Optional[str] = None, valueClass: Optional[str] = None, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, minSplits: Optional[int] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
-    def setCheckpointDir(self, dirName: str) -> None:
+    def setCheckpointDir(self, dirName: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setJobDescription(self, value: str) -> None:
+    def setJobDescription(self, value: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setJobGroup(self, groupId: str, description: str, interruptOnCancel: bool = False) -> None:
+    def setJobGroup(self, groupId: str, description: str, interruptOnCancel: bool = False) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setLocalProperty(self, key: str, value: str) -> None:
+    def setLocalProperty(self, key: str, value: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setLogLevel(self, logLevel: str) -> None:
+    def setLogLevel(self, logLevel: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def show_profiles(self) -> None:
+    def show_profiles(self) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def sparkUser(self) -> str:
+    def sparkUser(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
     # def statusTracker(self) -> duckdb.experimental.spark.status.StatusTracker:

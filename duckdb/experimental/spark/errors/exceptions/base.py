@@ -1,4 +1,4 @@
-from typing import Optional, cast
+from typing import Optional, cast  # noqa: D100
 
 from ..utils import ErrorClassesReader
 
@@ -6,7 +6,7 @@ from ..utils import ErrorClassesReader
 class PySparkException(Exception):
     """Base Exception for handling errors generated from PySpark."""
 
-    def __init__(
+    def __init__(  # noqa: D107
         self,
         message: Optional[str] = None,
         # The error class, decides the message format, must be one of the valid options listed in 'error_classes.py'
@@ -69,7 +69,7 @@ class PySparkException(Exception):
         """
         return None
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # noqa: D105
         if self.getErrorClass() is not None:
             return f"[{self.getErrorClass()}] {self.message}"
         else:

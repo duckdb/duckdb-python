@@ -1,4 +1,4 @@
-from _duckdb.typing import (
+from _duckdb.typing import (  # noqa: D104
     BIGINT,
     BIT,
     BLOB,

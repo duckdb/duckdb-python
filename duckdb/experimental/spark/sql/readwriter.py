@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union, cast  # noqa: D100
 
 from ..errors import PySparkNotImplementedError, PySparkTypeError
 from ..exception import ContributionsAcceptedError
@@ -12,15 +12,15 @@ if TYPE_CHECKING:
     from duckdb.experimental.spark.sql.session import SparkSession
 
 
-class DataFrameWriter:
-    def __init__(self, dataframe: "DataFrame") -> None:
+class DataFrameWriter:  # noqa: D101
+    def __init__(self, dataframe: "DataFrame") -> None:  # noqa: D107
         self.dataframe = dataframe
 
-    def saveAsTable(self, table_name: str) -> None:
+    def saveAsTable(self, table_name: str) -> None:  # noqa: D102
         relation = self.dataframe.relation
         relation.create(table_name)
 
-    def parquet(
+    def parquet(  # noqa: D102
         self,
         path: str,
         mode: Optional[str] = None,
@@ -35,7 +35,7 @@ class DataFrameWriter:
 
         relation.write_parquet(path, compression=compression)
 
-    def csv(
+    def csv(  # noqa: D102
         self,
         path: str,
         mode: Optional[str] = None,
@@ -86,11 +86,11 @@ class DataFrameWriter:
         )
 
 
-class DataFrameReader:
-    def __init__(self, session: "SparkSession") -> None:
+class DataFrameReader:  # noqa: D101
+    def __init__(self, session: "SparkSession") -> None:  # noqa: D107
         self.session = session
 
-    def load(
+    def load(  # noqa: D102
         self,
         path: Optional[Union[str, list[str]]] = None,
         format: Optional[str] = None,
@@ -127,7 +127,7 @@ class DataFrameReader:
             df = df.toDF(names)
         raise NotImplementedError
 
-    def csv(
+    def csv(  # noqa: D102
         self,
         path: Union[str, list[str]],
         schema: Optional[Union[StructType, str]] = None,
@@ -245,7 +245,7 @@ class DataFrameReader:
             df = df.toDF(*names)
         return df
 
-    def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":
+    def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":  # noqa: D102
         input = list(paths)
         if len(input) != 1:
             msg = "Only single paths are supported for now"

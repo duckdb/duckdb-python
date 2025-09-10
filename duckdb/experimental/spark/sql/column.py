@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Callable, Union, cast
+from typing import TYPE_CHECKING, Any, Callable, Union, cast  # noqa: D100
 
 from ..exception import ContributionsAcceptedError
 from .types import DataType
@@ -93,11 +93,11 @@ class Column:
     .. versionadded:: 1.3.0
     """
 
-    def __init__(self, expr: Expression) -> None:
+    def __init__(self, expr: Expression) -> None:  # noqa: D107
         self.expr = expr
 
     # arithmetic operators
-    def __neg__(self) -> "Column":
+    def __neg__(self) -> "Column":  # noqa: D105
         return Column(-self.expr)
 
     # `and`, `or`, `not` cannot be overloaded in Python,
@@ -205,10 +205,10 @@ class Column:
             raise AttributeError(msg)
         return self[item]
 
-    def alias(self, alias: str):
+    def alias(self, alias: str):  # noqa: D102
         return Column(self.expr.alias(alias))
 
-    def when(self, condition: "Column", value: Any):
+    def when(self, condition: "Column", value: Any):  # noqa: D102
         if not isinstance(condition, Column):
             msg = "condition should be a Column"
             raise TypeError(msg)
@@ -216,12 +216,12 @@ class Column:
         expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
-    def otherwise(self, value: Any):
+    def otherwise(self, value: Any):  # noqa: D102
         v = _get_expr(value)
         expr = self.expr.otherwise(v)
         return Column(expr)
 
-    def cast(self, dataType: Union[DataType, str]) -> "Column":
+    def cast(self, dataType: Union[DataType, str]) -> "Column":  # noqa: D102
         if isinstance(dataType, str):
             # Try to construct a default DuckDBPyType from it
             internal_type = DuckDBPyType(dataType)
@@ -229,7 +229,7 @@ class Column:
             internal_type = dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
 
-    def isin(self, *cols: Any) -> "Column":
+    def isin(self, *cols: Any) -> "Column":  # noqa: D102
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
             cols = cast("tuple", cols[0])
@@ -345,20 +345,20 @@ class Column:
     nulls_first = _unary_op("nulls_first")
     nulls_last = _unary_op("nulls_last")
 
-    def asc_nulls_first(self) -> "Column":
+    def asc_nulls_first(self) -> "Column":  # noqa: D102
         return self.asc().nulls_first()
 
-    def asc_nulls_last(self) -> "Column":
+    def asc_nulls_last(self) -> "Column":  # noqa: D102
         return self.asc().nulls_last()
 
-    def desc_nulls_first(self) -> "Column":
+    def desc_nulls_first(self) -> "Column":  # noqa: D102
         return self.desc().nulls_first()
 
-    def desc_nulls_last(self) -> "Column":
+    def desc_nulls_last(self) -> "Column":  # noqa: D102
         return self.desc().nulls_last()
 
-    def isNull(self) -> "Column":
+    def isNull(self) -> "Column":  # noqa: D102
         return Column(self.expr.isnull())
 
-    def isNotNull(self) -> "Column":
+    def isNotNull(self) -> "Column":  # noqa: D102
         return Column(self.expr.isnotnull())
