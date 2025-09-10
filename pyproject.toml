@@ -367,6 +367,10 @@ strict = true
     # No need for package, module, class, function, init etc docstrings in scripts
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205'
 ]
+"tests/spark_namespace/**.py" = [
+    # we need * imports for Spark
+    'F403'
+]
 
 [tool.ruff.format]
 docstring-code-format = true
