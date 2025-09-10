@@ -1,6 +1,6 @@
 """The support for scaning over numpy arrays reuses many codes for pandas.
 Therefore, we only test the new codes and exec paths.
-""" # noqa: D205
+"""  # noqa: D205
 
 from datetime import timedelta
 
