@@ -349,9 +349,6 @@ select = [
 ]
 ignore = []
 
-[tool.ruff.lint.pycodestyle]
-max-doc-length = 88
-
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -360,6 +357,12 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-type-checking]
 strict = true
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in tests
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107'
+]
 
 [tool.ruff.format]
 docstring-code-format = true
