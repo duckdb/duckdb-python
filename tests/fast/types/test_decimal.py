@@ -1,4 +1,4 @@
-from decimal import *
+from decimal import Decimal
 
 import numpy
 

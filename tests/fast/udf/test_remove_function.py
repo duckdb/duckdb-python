@@ -5,7 +5,7 @@ import duckdb
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 
-from duckdb.typing import *
+from duckdb.typing import BIGINT, VARCHAR
 
 
 class TestRemoveFunction:

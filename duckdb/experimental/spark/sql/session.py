@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 from ..conf import SparkConf
 from ..context import SparkContext
 from ..errors import PySparkTypeError
-from ..errors.error_classes import *
 from ..exception import ContributionsAcceptedError
 from .conf import RuntimeConfig
 from .dataframe import DataFrame

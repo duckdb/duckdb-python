@@ -8,7 +8,26 @@ import datetime
 import uuid
 from typing import Any, NamedTuple
 
-from duckdb.typing import *
+from duckdb.typing import (
+    BIGINT,
+    BLOB,
+    BOOLEAN,
+    DATE,
+    DOUBLE,
+    FLOAT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    TIME,
+    TIMESTAMP,
+    TINYINT,
+    UBIGINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
+    VARCHAR,
+)
 
 
 class Candidate(NamedTuple):

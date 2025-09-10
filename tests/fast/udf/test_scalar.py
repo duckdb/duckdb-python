@@ -11,7 +11,28 @@ from typing import Any
 
 import numpy as np
 
-from duckdb.typing import *
+from duckdb.typing import (
+    BIGINT,
+    BLOB,
+    BOOLEAN,
+    DATE,
+    DOUBLE,
+    FLOAT,
+    HUGEINT,
+    UHUGEINT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    TIME,
+    TIMESTAMP,
+    TINYINT,
+    UBIGINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
+    VARCHAR,
+)
 
 
 def make_annotated_function(type):
