@@ -147,7 +147,9 @@ def strip_post_from_version(version: str) -> str:
     return re.sub(r"[\.-]post[0-9]+", "", version)
 
 
-def get_git_describe(repo_path: Optional[pathlib.Path] = None, since_major=False, since_minor=False) -> Optional[str]:
+def get_git_describe(
+    repo_path: Optional[pathlib.Path] = None, since_major: bool = False, since_minor: bool = False
+) -> Optional[str]:
     """Get git describe output for version determination.
 
     Returns:

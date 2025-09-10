@@ -698,7 +698,7 @@ class DataFrame:  # noqa: D101
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
 
-            def map_to_recognized_jointype(how):
+            def map_to_recognized_jointype(how: str):
                 known_aliases = {
                     "inner": [],
                     "outer": ["full", "fullouter", "full_outer"],
@@ -1354,7 +1354,7 @@ class DataFrame:  # noqa: D101
         columns = self.relation.columns
         result = self.relation.fetchall()
 
-        def construct_row(values, names) -> Row:
+        def construct_row(values: list, names: list[str]) -> Row:
             row = tuple.__new__(Row, list(values))
             row.__fields__ = list(names)
             return row

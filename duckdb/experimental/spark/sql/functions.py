@@ -99,7 +99,7 @@ def when(condition: "Column", value: Any) -> Column:  # noqa: D103
     return Column(expr)
 
 
-def _inner_expr_or_val(val):
+def _inner_expr_or_val(val: Column | str) -> Column | str:
     return val.expr if isinstance(val, Column) else val
 
 

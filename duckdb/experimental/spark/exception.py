@@ -4,7 +4,7 @@ class ContributionsAcceptedError(NotImplementedError):  # noqa: D100
     feel free to open up a PR or a Discussion over on https://github.com/duckdb/duckdb.
     """  # noqa: D205
 
-    def __init__(self, message=None) -> None:  # noqa: D107
+    def __init__(self, message: str=None) -> None:  # noqa: D107
         doc = self.__class__.__doc__
         if message:
             doc = message + "\n" + doc

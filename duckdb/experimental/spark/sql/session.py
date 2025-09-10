@@ -1,6 +1,6 @@
 import uuid  # noqa: D100
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, Optional, Union, Sized
 
 if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
@@ -58,7 +58,7 @@ class SparkSession:  # noqa: D101
             self.conn.register(unique_name, data)
             return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
-        def verify_tuple_integrity(tuples):
+        def verify_tuple_integrity(tuples: list[tuple]):
             if len(tuples) <= 1:
                 return
             expected_length = len(tuples[0])
@@ -80,8 +80,8 @@ class SparkSession:  # noqa: D101
             data = list(data)
         verify_tuple_integrity(data)
 
-        def construct_query(tuples) -> str:
-            def construct_values_list(row, start_param_idx):
+        def construct_query(tuples: Iterable) -> str:
+            def construct_values_list(row: Sized, start_param_idx: int):
                 parameter_count = len(row)
                 parameters = [f"${x + start_param_idx}" for x in range(parameter_count)]
                 parameters = "(" + ", ".join(parameters) + ")"
@@ -98,7 +98,7 @@ class SparkSession:  # noqa: D101
 
         query = construct_query(data)
 
-        def construct_parameters(tuples):
+        def construct_parameters(tuples: Iterable):
             parameters = []
             for row in tuples:
                 parameters.extend(list(row))
@@ -109,7 +109,7 @@ class SparkSession:  # noqa: D101
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
-    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
+    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None) -> DataFrame:
         df = self._create_dataframe(data)
 
         # Cast to types

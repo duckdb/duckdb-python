@@ -66,7 +66,7 @@ __all__ = [
 class DataType:
     """Base class for data types."""
 
-    def __init__(self, duckdb_type) -> None:  # noqa: D107
+    def __init__(self, duckdb_type: DuckDBPyType) -> None:  # noqa: D107
         self.duckdb_type = duckdb_type
 
     def __repr__(self) -> str:  # noqa: D105

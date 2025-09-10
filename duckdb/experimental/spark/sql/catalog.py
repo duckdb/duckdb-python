@@ -40,7 +40,7 @@ class Catalog:  # noqa: D101
     def listDatabases(self) -> list[Database]:  # noqa: D102
         res = self._session.conn.sql("select database_name from duckdb_databases()").fetchall()
 
-        def transform_to_database(x) -> Database:
+        def transform_to_database(x: list[str]) -> Database:
             return Database(name=x[0], description=None, locationUri="")
 
         databases = [transform_to_database(x) for x in res]
@@ -49,7 +49,7 @@ class Catalog:  # noqa: D101
     def listTables(self) -> list[Table]:  # noqa: D102
         res = self._session.conn.sql("select table_name, database_name, sql, temporary from duckdb_tables()").fetchall()
 
-        def transform_to_table(x) -> Table:
+        def transform_to_table(x: list[str]) -> Table:
             return Table(name=x[0], database=x[1], description=x[2], tableType="", isTemporary=x[3])
 
         tables = [transform_to_table(x) for x in res]
@@ -63,7 +63,7 @@ class Catalog:  # noqa: D101
             query += f" and database_name = '{dbName}'"
         res = self._session.conn.sql(query).fetchall()
 
-        def transform_to_column(x) -> Column:
+        def transform_to_column(x: list[str|bool]) -> Column:
             return Column(name=x[0], description=None, dataType=x[1], nullable=x[2], isPartition=False, isBucket=False)
 
         columns = [transform_to_column(x) for x in res]

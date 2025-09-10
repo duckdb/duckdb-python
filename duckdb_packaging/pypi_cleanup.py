@@ -169,7 +169,7 @@ class CsrfParser(HTMLParser):
     Based on pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
     """
 
-    def __init__(self, target, contains_input=None) -> None:  # noqa: D107
+    def __init__(self, target: str, contains_input: bool | None = None) -> None:  # noqa: D107
         super().__init__()
         self._target = target
         self._contains_input = contains_input
@@ -178,7 +178,7 @@ class CsrfParser(HTMLParser):
         self._in_form = False  # Currently parsing a form with an action we're interested in
         self._input_contained = False  # Input field requested is contained in the current form
 
-    def handle_starttag(self, tag, attrs):  # noqa: D102
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]):  # noqa: D102
         if tag == "form":
             attrs = dict(attrs)
             action = attrs.get("action")  # Might be None.
@@ -196,7 +196,7 @@ class CsrfParser(HTMLParser):
 
             return
 
-    def handle_endtag(self, tag):  # noqa: D102
+    def handle_endtag(self, tag: str):  # noqa: D102
         if tag == "form":
             self._in_form = False
             # If we're in a right form that contains the requested input and csrf is not set

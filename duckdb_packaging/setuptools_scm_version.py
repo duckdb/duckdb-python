@@ -132,7 +132,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
     return pep440_version
 
 
-def _remove_unsupported_env_var(env_var):
+def _remove_unsupported_env_var(env_var: str):
     """Remove an unsupported environment variable with a warning."""
     print(f"[versioning] WARNING: We do not support {env_var}! Removing.")
     del os.environ[env_var]
