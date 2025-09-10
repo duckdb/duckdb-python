@@ -325,8 +325,17 @@ static LogicalType FromObject(const py::object &object) {
 void DuckDBPyType::Initialize(py::handle &m) {
 	auto type_module = py::class_<DuckDBPyType, shared_ptr<DuckDBPyType>>(m, "DuckDBPyType", py::module_local());
 
-	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object");
-	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"));
+	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object")
+        .def("__eq__", [](const DuckDBPyType &self, py::handle other) -> py::object {
+            if (py::isinstance<DuckDBPyType>(other)) {
+                return py::bool_(self.Equals(other.cast<shared_ptr<DuckDBPyType>>()));
+            } 
+            else if (py::isinstance<py::str>(other)) {
+                return py::bool_(self.EqualsString(other.cast<string>()));
+            }
+            // Return NotImplemented for unsupported types
+            return py::reinterpret_borrow<py::object>(Py_NotImplemented);
+        });
 	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"));
 	type_module.def_property_readonly("id", &DuckDBPyType::GetId);
 	type_module.def_property_readonly("children", &DuckDBPyType::Children);

@@ -579,7 +579,7 @@ py::list DuckDBPyResult::GetDescription(const vector<string> &names, const vecto
 
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		auto py_name = py::str(names[col_idx]);
-		auto py_type = GetTypeToPython(types[col_idx]);
+		auto py_type = DuckDBPyType(types[col_idx]);
 		desc.append(py::make_tuple(py_name, py_type, py::none(), py::none(), py::none(), py::none(), py::none()));
 	}
 	return desc;

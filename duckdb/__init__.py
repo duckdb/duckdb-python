@@ -18,6 +18,26 @@ _exported_symbols.extend([
     "functional"
 ])
 
+class DBAPITypeObject:
+    def __init__(self, name, types):
+        self.name = name
+        self.types = list(types)
+
+    def __eq__(self, other):
+        if isinstance(other, typing.DuckDBPyType):
+            return other in self.types
+        return False
+
+    def __repr__(self):
+        return f"<DBAPITypeObject {self.name}>"
+
+# Define the standard DBAPI sentinels
+STRING   = DBAPITypeObject("STRING", {"VARCHAR", "CHAR", "TEXT"})
+NUMBER   = DBAPITypeObject("NUMBER", {"INTEGER", "BIGINT", "DECIMAL", "DOUBLE"})
+DATETIME = DBAPITypeObject("DATETIME", {"DATE", "TIME", "TIMESTAMP"})
+BINARY   = DBAPITypeObject("BINARY", {"BLOB"})
+ROWID    = None
+
 # Classes
 from _duckdb import (
     DuckDBPyRelation,
