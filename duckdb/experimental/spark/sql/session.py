@@ -1,6 +1,6 @@
 import uuid  # noqa: D100
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Any, Optional, Union, Sized
+from collections.abc import Iterable, Sized
+from typing import TYPE_CHECKING, Any, Optional, Union
 
 if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
