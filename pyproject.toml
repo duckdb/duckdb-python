@@ -363,6 +363,10 @@ strict = true
     # No need for package, module, class, function, init etc docstrings in tests
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107'
 ]
+"scripts/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in scripts
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205'
+]
 
 [tool.ruff.format]
 docstring-code-format = true
