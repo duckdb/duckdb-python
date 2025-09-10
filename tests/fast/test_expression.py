@@ -36,7 +36,8 @@ def filter_rel():
         ) tbl(a, b)
     """
     )
-    return rel
+    yield rel
+    con.close()
 
 
 class TestExpression:
