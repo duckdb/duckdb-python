@@ -30,7 +30,7 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     return _invoke_function(name, *cols)
 
 
-def col(column: str):  # noqa: D103
+def col(column: str) -> Column:  # noqa: D103
     return Column(ColumnExpression(column))
 
 

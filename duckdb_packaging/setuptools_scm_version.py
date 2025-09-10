@@ -76,7 +76,7 @@ def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
     return f"{format_version(major, minor, patch + 1)}.dev{distance}"
 
 
-def forced_version_from_env():
+def forced_version_from_env() -> str:
     """Handle getting versions from environment variables.
 
     Only supports a single way of manually overriding the version through
@@ -132,7 +132,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
     return pep440_version
 
 
-def _remove_unsupported_env_var(env_var: str):
+def _remove_unsupported_env_var(env_var: str) -> None:
     """Remove an unsupported environment variable with a warning."""
     print(f"[versioning] WARNING: We do not support {env_var}! Removing.")
     del os.environ[env_var]

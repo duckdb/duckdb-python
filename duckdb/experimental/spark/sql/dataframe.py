@@ -989,7 +989,7 @@ class DataFrame:  # noqa: D101
     def write(self) -> DataFrameWriter:  # noqa: D102
         return DataFrameWriter(self)
 
-    def printSchema(self):  # noqa: D102
+    def printSchema(self) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
     def union(self, other: "DataFrame") -> "DataFrame":

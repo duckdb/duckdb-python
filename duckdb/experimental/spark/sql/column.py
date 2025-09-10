@@ -205,10 +205,10 @@ class Column:
             raise AttributeError(msg)
         return self[item]
 
-    def alias(self, alias: str):  # noqa: D102
+    def alias(self, alias: str) -> "Column":  # noqa: D102
         return Column(self.expr.alias(alias))
 
-    def when(self, condition: "Column", value: Any):  # noqa: D102
+    def when(self, condition: "Column", value: Any) -> "Column":  # noqa: D102
         if not isinstance(condition, Column):
             msg = "condition should be a Column"
             raise TypeError(msg)
@@ -216,7 +216,7 @@ class Column:
         expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
-    def otherwise(self, value: Any):  # noqa: D102
+    def otherwise(self, value: Any) -> "Column":  # noqa: D102
         v = _get_expr(value)
         expr = self.expr.otherwise(v)
         return Column(expr)

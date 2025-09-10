@@ -57,7 +57,7 @@ qgraph_css = """
   text-align: center;
   padding: 0px;
   border-radius: 1px;
-  
+
   /* Positioning */
   position: absolute;
   z-index: 1;
@@ -65,7 +65,7 @@ qgraph_css = """
   left: 50%;
   transform: translateX(-50%);
   margin-bottom: 8px;
-  
+
   /* Tooltip Arrow */
   width: 400px;
 }
@@ -77,7 +77,7 @@ qgraph_css = """
 
 
 class NodeTiming:  # noqa: D101
-    def __init__(self, phase: str, time: float) -> object:  # noqa: D107
+    def __init__(self, phase: str, time: float) -> None:  # noqa: D107
         self.phase = phase
         self.time = time
         # percentage is determined later.
@@ -86,7 +86,7 @@ class NodeTiming:  # noqa: D101
     def calculate_percentage(self, total_time: float) -> None:  # noqa: D102
         self.percentage = self.time / total_time
 
-    def combine_timing(l: object, r: object) -> object:  # noqa: D102
+    def combine_timing(l: "NodeTiming", r: "NodeTiming") -> "NodeTiming":  # noqa: D102
         # TODO: can only add timings for same-phase nodes
         total_time = l.time + r.time
         return NodeTiming(l.phase, total_time)
@@ -96,25 +96,25 @@ class AllTimings:  # noqa: D101
     def __init__(self) -> None:  # noqa: D107
         self.phase_to_timings = {}
 
-    def add_node_timing(self, node_timing: NodeTiming):  # noqa: D102
+    def add_node_timing(self, node_timing: NodeTiming) -> None:  # noqa: D102
         if node_timing.phase in self.phase_to_timings:
             self.phase_to_timings[node_timing.phase].append(node_timing)
-            return
-        self.phase_to_timings[node_timing.phase] = [node_timing]
+        else:
+            self.phase_to_timings[node_timing.phase] = [node_timing]
 
-    def get_phase_timings(self, phase: str):  # noqa: D102
+    def get_phase_timings(self, phase: str) -> list[NodeTiming]:  # noqa: D102
         return self.phase_to_timings[phase]
 
-    def get_summary_phase_timings(self, phase: str):  # noqa: D102
+    def get_summary_phase_timings(self, phase: str) -> NodeTiming:  # noqa: D102
         return reduce(NodeTiming.combine_timing, self.phase_to_timings[phase])
 
-    def get_phases(self):  # noqa: D102
+    def get_phases(self) -> list[NodeTiming]:  # noqa: D102
         phases = list(self.phase_to_timings.keys())
         phases.sort(key=lambda x: (self.get_summary_phase_timings(x)).time)
         phases.reverse()
         return phases
 
-    def get_sum_of_all_timings(self):  # noqa: D102
+    def get_sum_of_all_timings(self) -> float:  # noqa: D102
         total_timing_sum = 0
         for phase in self.phase_to_timings.keys():
             total_timing_sum += self.get_summary_phase_timings(phase).time
@@ -132,7 +132,7 @@ def get_child_timings(top_node: object, query_timings: object) -> str:  # noqa: 
         get_child_timings(child, query_timings)
 
 
-def get_pink_shade_hex(fraction: float):  # noqa: D103
+def get_pink_shade_hex(fraction: float) -> str:  # noqa: D103
     fraction = max(0, min(1, fraction))
 
     # Define the RGB values for very light pink (almost white) and dark pink
@@ -211,7 +211,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:  
     gather_timing_information(json_graph, query_timings)
     total_time = float(json_graph.get("operator_timing") or json_graph.get("latency"))
     table_head = """
-	<table class=\"styled-table\"> 
+	<table class=\"styled-table\">
 		<thead>
 			<tr>
 				<th>Phase</th>

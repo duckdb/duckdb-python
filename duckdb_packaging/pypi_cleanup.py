@@ -178,31 +178,25 @@ class CsrfParser(HTMLParser):
         self._in_form = False  # Currently parsing a form with an action we're interested in
         self._input_contained = False  # Input field requested is contained in the current form
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]):  # noqa: D102
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: D102
         if tag == "form":
             attrs = dict(attrs)
             action = attrs.get("action")  # Might be None.
             if action and (action == self._target or action.startswith(self._target)):
                 self._in_form = True
-            return
-
-        if self._in_form and tag == "input":
+        elif self._in_form and tag == "input":
             attrs = dict(attrs)
             if attrs.get("name") == "csrf_token":
                 self._csrf = attrs["value"]
-
             if self._contains_input and attrs.get("name") == self._contains_input:
                 self._input_contained = True
 
-            return
-
-    def handle_endtag(self, tag: str):  # noqa: D102
+    def handle_endtag(self, tag: str) -> None:  # noqa: D102
         if tag == "form":
             self._in_form = False
             # If we're in a right form that contains the requested input and csrf is not set
             if (not self._contains_input or self._input_contained) and not self.csrf:
                 self.csrf = self._csrf
-            return
 
 
 class PyPICleanup:

@@ -55,7 +55,7 @@ class DataFrameWriter:  # noqa: D101
         encoding: Optional[str] = None,
         emptyValue: Optional[str] = None,
         lineSep: Optional[str] = None,
-    ):
+    ) -> None:
         if mode not in (None, "overwrite"):
             raise NotImplementedError
         if escapeQuotes:
