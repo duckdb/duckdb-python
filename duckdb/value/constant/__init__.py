@@ -1,4 +1,4 @@
-from typing import Any, Dict  # noqa: D104
+from typing import Any  # noqa: D104
 
 from duckdb.typing import (
     BIGINT,

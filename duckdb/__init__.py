@@ -1,4 +1,4 @@
-# Modules  # noqa: D104
+# ruff: noqa: D104, F401
 from importlib.metadata import version
 
 from _duckdb import __version__ as duckdb_version
