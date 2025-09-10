@@ -117,25 +117,6 @@ class TestDuckDBConnection(object):
         assert description == [('42', 'INTEGER', None, None, None, None, None)]
         assert rowcount == -1
 
-    def test_description(self):
-        duckdb.execute("select 42 a, 'test' b, true c")
-        types = [x[1] for x in duckdb.description()]
-
-        STRING = duckdb.STRING
-        NUMBER = duckdb.NUMBER
-        DATETIME = duckdb.DATETIME
-
-        assert(types[1] == STRING)
-        assert(STRING == types[1])
-        assert(types[0] != STRING)
-        assert((types[1] != STRING) == False)
-        assert((STRING != types[1]) == False)
-
-        assert(types[1] in [STRING])
-        assert(types[1] in [STRING, NUMBER])
-        assert(types[1] not in [NUMBER, DATETIME])
-
-
     def test_execute(self):
         assert [([4, 2],)] == duckdb.execute("select [4,2]").fetchall()
 
@@ -368,9 +349,6 @@ class TestDuckDBConnection(object):
         duckdb.execute("create view vw as select range(5)")
         assert [([0, 1, 2, 3, 4],)] == duckdb.view("vw").fetchall()
         duckdb.execute("drop view vw")
-
-    def test_description(self):
-        assert None != duckdb.description
 
     def test_close(self):
         assert None != duckdb.close

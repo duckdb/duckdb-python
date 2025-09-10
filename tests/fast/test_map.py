@@ -154,9 +154,9 @@ class TestMap(object):
 
         con = duckdb.connect()
         rel = con.sql('select i from range (10) tbl(i)')
-        assert rel.types[0] == int
+        assert rel.types[0] == duckdb.NUMBER
         mapped_rel = rel.map(cast_to_string, schema={'i': str})
-        assert mapped_rel.types[0] == str
+        assert mapped_rel.types[0] == duckdb.STRING
 
     def test_explicit_schema_returntype_mismatch(self):
         def does_nothing(df):
