@@ -19,9 +19,9 @@ _exported_symbols.extend([
 ])
 
 class DBAPITypeObject:
-    def __init__(self, name, types):
+    def __init__(self, name: str, types: set[str]) -> None:
         self.name = name
-        self.types = list(types)
+        self.types = types
 
     def __eq__(self, other):
         if isinstance(other, typing.DuckDBPyType):
