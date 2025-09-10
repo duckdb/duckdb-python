@@ -172,7 +172,7 @@ class DataFrame:
         |  2|Alice|   4|   5|
         |  5|  Bob|   7|   8|
         +---+-----+----+----+
-        """
+        """  # noqa: D205
         # Below code is to help enable kwargs in future.
         assert len(colsMap) == 1
         colsMap = colsMap[0]  # type: ignore[assignment]
@@ -250,7 +250,7 @@ class DataFrame:
         |  2|Alice|   4|   5|
         |  5|  Bob|   7|   8|
         +---+-----+----+----+
-        """
+        """  # noqa: D205
         if not isinstance(colsMap, dict):
             raise PySparkTypeError(
                 error_class="NOT_DICT",
@@ -974,7 +974,7 @@ class DataFrame:
         |  Bob|  2|    2|
         |  Bob|  5|    1|
         +-----+---+-----+
-        """
+        """  # noqa: D205
         from .group import GroupedData, Grouping
 
         if len(cols) == 1 and isinstance(cols[0], list):
@@ -1034,7 +1034,7 @@ class DataFrame:
         |   1|   2|   3|
         |   1|   2|   3|
         +----+----+----+
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.union(other.relation), self.session)
 
     unionAll = union
@@ -1094,7 +1094,7 @@ class DataFrame:
         |   1|   2|   3|NULL|
         |NULL|   4|   5|   6|
         +----+----+----+----+
-        """
+        """  # noqa: D205
         if allowMissingColumns:
             cols = []
             for col in self.relation.columns:
@@ -1144,7 +1144,7 @@ class DataFrame:
         |  b|  3|
         |  a|  1|
         +---+---+
-        """
+        """  # noqa: D205
         return self.intersectAll(other).drop_duplicates()
 
     def intersectAll(self, other: "DataFrame") -> "DataFrame":
@@ -1181,7 +1181,7 @@ class DataFrame:
         |  a|  1|
         |  b|  3|
         +---+---+
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.intersect(other.relation), self.session)
 
     def exceptAll(self, other: "DataFrame") -> "DataFrame":
@@ -1221,7 +1221,7 @@ class DataFrame:
         |  c|  4|
         +---+---+
 
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.except_(other.relation), self.session)
 
     def dropDuplicates(self, subset: Optional[list[str]] = None) -> "DataFrame":
@@ -1275,7 +1275,7 @@ class DataFrame:
         +-----+---+------+
         |Alice|  5|    80|
         +-----+---+------+
-        """
+        """  # noqa: D205
         if subset:
             rn_col = f"tmp_col_{uuid.uuid1().hex}"
             subset_str = ", ".join([f'"{c}"' for c in subset])

@@ -129,7 +129,7 @@ def create_parameters_from_paths(paths, root_dir: pathlib.Path, config: pytest.C
 def scan_for_test_scripts(root_dir: pathlib.Path, config: pytest.Config) -> typing.Iterator[typing.Any]:
     """Scans for .test files in the given directory and its subdirectories.
     Returns an iterator of pytest parameters (argument, id and marks).
-    """
+    """  # noqa: D205
     # TODO: Add tests from extensions
     test_script_extensions = [".test", ".test_slow", ".test_coverage"]
     it = itertools.chain.from_iterable(root_dir.rglob(f"*{ext}") for ext in test_script_extensions)
@@ -169,7 +169,7 @@ def determine_test_offsets(config: pytest.Config, num_tests: int) -> tuple[int, 
     start_offset defaults to 0. end_offset defaults to and is capped to the last test index.
     start_offset_percentage and end_offset_percentage are used to calculate the start and end offsets based on the total number of tests.
     This is done in a way that a test run to 25% and another test run starting at 25% do not overlap by excluding the 25th percent test.
-    """
+    """  # noqa: D205
     start_offset = config.getoption("start_offset")
     end_offset = config.getoption("end_offset")
     start_offset_percentage = config.getoption("start_offset_percentage")

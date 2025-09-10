@@ -25,7 +25,7 @@ from .column import Column, _get_expr
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     """Invokes n-ary JVM function identified by name
     and wraps the result with :class:`~pyspark.sql.Column`.
-    """
+    """  # noqa: D205
     cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function(name, *cols)
 
@@ -211,7 +211,7 @@ def slice(x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["C
     >>> df = spark.createDataFrame([([1, 2, 3],), ([4, 5],)], ["x"])
     >>> df.select(slice(df.x, 2, 2).alias("sliced")).collect()
     [Row(sliced=[2, 3]), Row(sliced=[5])]
-    """
+    """  # noqa: D205
     start = ConstantExpression(start) if isinstance(start, int) else _to_column_expr(start)
     length = ConstantExpression(length) if isinstance(length, int) else _to_column_expr(length)
 
@@ -302,7 +302,7 @@ def asc_nulls_first(col: "ColumnOrName") -> Column:
     |  1|  Bob|
     +---+-----+
 
-    """
+    """  # noqa: D205
     return asc(col).nulls_first()
 
 
@@ -337,7 +337,7 @@ def asc_nulls_last(col: "ColumnOrName") -> Column:
     |  0| NULL|
     +---+-----+
 
-    """
+    """  # noqa: D205
     return asc(col).nulls_last()
 
 
@@ -408,7 +408,7 @@ def desc_nulls_first(col: "ColumnOrName") -> Column:
     |  2|Alice|
     +---+-----+
 
-    """
+    """  # noqa: D205
     return desc(col).nulls_first()
 
 
@@ -443,7 +443,7 @@ def desc_nulls_last(col: "ColumnOrName") -> Column:
     |  0| NULL|
     +---+-----+
 
-    """
+    """  # noqa: D205
     return desc(col).nulls_last()
 
 
@@ -473,7 +473,7 @@ def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     ... )
     >>> df.select(left(df.a, df.b).alias("r")).collect()
     [Row(r='Spa')]
-    """
+    """  # noqa: D205
     len = _to_column_expr(len)
     return Column(
         CaseExpression(len <= ConstantExpression(0), ConstantExpression("")).otherwise(
@@ -508,7 +508,7 @@ def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     ... )
     >>> df.select(right(df.a, df.b).alias("r")).collect()
     [Row(r='SQL')]
-    """
+    """  # noqa: D205
     len = _to_column_expr(len)
     return Column(
         CaseExpression(len <= ConstantExpression(0), ConstantExpression("")).otherwise(
@@ -741,7 +741,7 @@ def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Col
     ... )
     >>> df.select(like(df.a, df.b, lit("/")).alias("r")).collect()
     [Row(r=True)]
-    """
+    """  # noqa: D205
     if escapeChar is None:
         escapeChar = ConstantExpression("\\")
     else:
@@ -778,7 +778,7 @@ def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Co
     ... )
     >>> df.select(ilike(df.a, df.b, lit("/")).alias("r")).collect()
     [Row(r=True)]
-    """
+    """  # noqa: D205
     if escapeChar is None:
         escapeChar = ConstantExpression("\\")
     else:
@@ -872,7 +872,7 @@ def array_append(col: "ColumnOrName", value: Any) -> Column:
     [Row(array_append(c1, c2)=['b', 'a', 'c', 'c'])]
     >>> df.select(array_append(df.c1, "x")).collect()
     [Row(array_append(c1, x)=['b', 'a', 'c', 'x'])]
-    """
+    """  # noqa: D205
     return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
 
 
@@ -912,7 +912,7 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: An
     [Row(data=['a', 'd', 'b', 'c']), Row(data=['c', 'b', 'd', 'a'])]
     >>> df.select(array_insert(df.data, 5, "hello").alias("data")).collect()
     [Row(data=['a', 'b', 'c', None, 'hello']), Row(data=['c', 'b', 'a', None, 'hello'])]
-    """
+    """  # noqa: D205
     pos = _get_expr(pos)
     arr = _to_column_expr(arr)
     # Depending on if the position is positive or not, we need to interpret it differently.
@@ -992,7 +992,7 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
     >>> df.select(array_contains(df.data, lit("a"))).collect()
     [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
-    """
+    """  # noqa: D205
     value = _get_expr(value)
     return _invoke_function("array_contains", _to_column_expr(col), value)
 
@@ -1051,7 +1051,7 @@ def array_intersect(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
     >>> df.select(array_intersect(df.c1, df.c2)).collect()
     [Row(array_intersect(c1, c2)=['a', 'c'])]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("array_intersect", col1, col2)
 
 
@@ -1082,7 +1082,7 @@ def array_union(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([Row(c1=["b", "a", "c"], c2=["c", "d", "a", "f"])])
     >>> df.select(array_union(df.c1, df.c2)).collect()
     [Row(array_union(c1, c2)=['b', 'a', 'c', 'd', 'f'])]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("array_distinct", _invoke_function_over_columns("array_concat", col1, col2))
 
 
@@ -1265,7 +1265,7 @@ def mean(col: "ColumnOrName") -> Column:
     +-------+
     |    4.5|
     +-------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("mean", col)
 
 
@@ -1479,7 +1479,7 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
     +---------------+
     |              3|
     +---------------+
-    """
+    """  # noqa: D205
     if rsd is not None:
         msg = "rsd is not supported by DuckDB"
         raise ValueError(msg)
@@ -1588,7 +1588,7 @@ def concat_ws(sep: str, *cols: "ColumnOrName") -> "Column":
     >>> df = spark.createDataFrame([("abcd", "123")], ["s", "d"])
     >>> df.select(concat_ws("-", df.s, df.d).alias("s")).collect()
     [Row(s='abcd-123')]
-    """
+    """  # noqa: D205
     cols = [_to_column_expr(expr) for expr in cols]
     return _invoke_function("concat_ws", ConstantExpression(sep), *cols)
 
@@ -1854,7 +1854,7 @@ def equal_null(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     ... )
     >>> df.select(equal_null(df.a, df.b).alias("r")).collect()
     [Row(r=True), Row(r=False)]
-    """
+    """  # noqa: D205
     if isinstance(col1, str):
         col1 = col(col1)
 
@@ -1901,7 +1901,7 @@ def flatten(col: "ColumnOrName") -> Column:
     |[1, 2, 3, 4, 5, 6]|
     |              NULL|
     +------------------+
-    """
+    """  # noqa: D205
     col = _to_column_expr(col)
     contains_null = _list_contains_null(col)
     return Column(CaseExpression(contains_null, None).otherwise(FunctionExpression("flatten", col)))
@@ -2077,7 +2077,7 @@ def char(col: "ColumnOrName") -> Column:
     +--------+
     |       A|
     +--------+
-    """
+    """  # noqa: D205
     col = _to_column_expr(col)
     return Column(FunctionExpression("chr", CaseExpression(col > 256, col % 256).otherwise(col)))
 
@@ -2110,7 +2110,7 @@ def corr(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
     >>> df.agg(corr("a", "b").alias("c")).collect()
     [Row(c=1.0)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("corr", col1, col2)
 
 
@@ -2183,7 +2183,7 @@ def negative(col: "ColumnOrName") -> Column:
     |          -1|
     |          -2|
     +------------+
-    """
+    """  # noqa: D205
     return abs(col) * -1
 
 
@@ -2364,7 +2364,7 @@ def rand(seed: Optional[int] = None) -> Column:
     |  0|1.8575681106759028|
     |  1|1.5288056527339444|
     +---+------------------+
-    """
+    """  # noqa: D205
     if seed is not None:
         # Maybe call setseed just before but how do we know when it is executed?
         msg = "Seed is not yet implemented"
@@ -2451,7 +2451,7 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     [Row(d=0)]
     >>> df.select(regexp_count("str", col("regexp")).alias("d")).collect()
     [Row(d=3)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("len", _invoke_function_over_columns("regexp_extract_all", str, regexp))
 
 
@@ -2489,7 +2489,7 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
     >>> df = spark.createDataFrame([("aaaac",)], ["str"])
     >>> df.select(regexp_extract("str", "(a+)(b)?(c)", 2).alias("d")).collect()
     [Row(d='')]
-    """
+    """  # noqa: D205
     return _invoke_function(
         "regexp_extract", _to_column_expr(str), ConstantExpression(pattern), ConstantExpression(idx)
     )
@@ -2526,7 +2526,7 @@ def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optiona
     [Row(d=['200', '400'])]
     >>> df.select(regexp_extract_all("str", col("regexp")).alias("d")).collect()
     [Row(d=['100', '300'])]
-    """
+    """  # noqa: D205
     if idx is None:
         idx = 1
     return _invoke_function(
@@ -2613,7 +2613,7 @@ def regexp_substr(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     [Row(d=None)]
     >>> df.select(regexp_substr("str", col("regexp")).alias("d")).collect()
     [Row(d='1')]
-    """
+    """  # noqa: D205
     return Column(
         FunctionExpression(
             "nullif",
@@ -2689,7 +2689,7 @@ def sequence(start: "ColumnOrName", stop: "ColumnOrName", step: Optional["Column
     >>> df2 = spark.createDataFrame([(4, -4, -2)], ("C1", "C2", "C3"))
     >>> df2.select(sequence("C1", "C2", "C3").alias("r")).collect()
     [Row(r=[4, 2, 0, -2, -4])]
-    """
+    """  # noqa: D205
     if step is None:
         return _invoke_function_over_columns("generate_series", start, stop)
     else:
@@ -2843,7 +2843,7 @@ def encode(col: "ColumnOrName", charset: str) -> Column:
     +----------------+
     |   [61 62 63 64]|
     +----------------+
-    """
+    """  # noqa: D205
     if charset != "UTF-8":
         msg = "Only UTF-8 charset is supported right now"
         raise ContributionsAcceptedError(msg)
@@ -2869,7 +2869,7 @@ def find_in_set(str: "ColumnOrName", str_array: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([("ab", "abc,b,ab,c,def")], ["a", "b"])
     >>> df.select(find_in_set(df.a, df.b).alias("r")).collect()
     [Row(r=3)]
-    """
+    """  # noqa: D205
     str_array = _to_column_expr(str_array)
     str = _to_column_expr(str)
     return Column(
@@ -3019,7 +3019,7 @@ def greatest(*cols: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([(1, 4, 3)], ["a", "b", "c"])
     >>> df.select(greatest(df.a, df.b, df.c).alias("greatest")).collect()
     [Row(greatest=4)]
-    """
+    """  # noqa: D205
     if len(cols) < 2:
         msg = "greatest should take at least 2 columns"
         raise ValueError(msg)
@@ -3052,7 +3052,7 @@ def least(*cols: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([(1, 4, 3)], ["a", "b", "c"])
     >>> df.select(least(df.a, df.b, df.c).alias("least")).collect()
     [Row(least=1)]
-    """
+    """  # noqa: D205
     if len(cols) < 2:
         msg = "least should take at least 2 columns"
         raise ValueError(msg)
@@ -3244,7 +3244,7 @@ def endswith(str: "ColumnOrName", suffix: "ColumnOrName") -> Column:
     +--------------+--------------+
     |          true|         false|
     +--------------+--------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("suffix", str, suffix)
 
 
@@ -3296,7 +3296,7 @@ def startswith(str: "ColumnOrName", prefix: "ColumnOrName") -> Column:
     +----------------+----------------+
     |            true|           false|
     +----------------+----------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("starts_with", str, prefix)
 
 
@@ -3324,7 +3324,7 @@ def length(col: "ColumnOrName") -> Column:
     --------
     >>> spark.createDataFrame([("ABC ",)], ["a"]).select(length("a").alias("length")).collect()
     [Row(length=4)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("length", col)
 
 
@@ -3370,7 +3370,7 @@ def coalesce(*cols: "ColumnOrName") -> Column:
     |   1|NULL|             1.0|
     |NULL|   2|             0.0|
     +----+----+----------------+
-    """
+    """  # noqa: D205
     cols = [_to_column_expr(expr) for expr in cols]
     return Column(CoalesceOperator(*cols))
 
@@ -3400,7 +3400,7 @@ def nvl(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     ... )
     >>> df.select(nvl(df.a, df.b).alias("r")).collect()
     [Row(r=8), Row(r=1)]
-    """
+    """  # noqa: D205
     return coalesce(col1, col2)
 
 
@@ -3460,7 +3460,7 @@ def ifnull(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     |           8|
     |           1|
     +------------+
-    """
+    """  # noqa: D205
     return coalesce(col1, col2)
 
 
@@ -3554,7 +3554,7 @@ def sha2(col: "ColumnOrName", numBits: int) -> Column:
     |Alice|3bc51062973c458d5a6f2d8d64a023246354ad7e064b1e4e009ec8a0699a3043|
     |Bob  |cd9fb1e148ccd8442e5aa74904cc73bf6fb54d1d54d333bd596aa9bb4bb4e961|
     +-----+----------------------------------------------------------------+
-    """
+    """  # noqa: D205
     if numBits not in {224, 256, 384, 512, 0}:
         msg = "numBits should be one of {224, 256, 384, 512, 0}"
         raise ValueError(msg)
@@ -3586,7 +3586,7 @@ def curdate() -> Column:
     +--------------+
     |    2022-08-26|
     +--------------+
-    """
+    """  # noqa: D205
     return _invoke_function("today")
 
 
@@ -3613,7 +3613,7 @@ def current_date() -> Column:
     +--------------+
     |    2022-08-26|
     +--------------+
-    """
+    """  # noqa: D205
     return curdate()
 
 
@@ -4018,7 +4018,7 @@ def dayofweek(col: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(dayofweek("dt").alias("day")).collect()
     [Row(day=4)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("dayofweek", col) + lit(1)
 
 
@@ -4209,7 +4209,7 @@ def weekofyear(col: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([("2015-04-08",)], ["dt"])
     >>> df.select(weekofyear(df.dt).alias("week")).collect()
     [Row(week=15)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("weekofyear", col)
 
 
@@ -4367,7 +4367,7 @@ def covar_pop(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
     >>> df.agg(covar_pop("a", "b").alias("c")).collect()
     [Row(c=0.0)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("covar_pop", col1, col2)
 
 
@@ -4399,7 +4399,7 @@ def covar_samp(col1: "ColumnOrName", col2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame(zip(a, b), ["a", "b"])
     >>> df.agg(covar_samp("a", "b").alias("c")).collect()
     [Row(c=0.0)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("covar_samp", col1, col2)
 
 
@@ -4545,7 +4545,7 @@ def degrees(col: "ColumnOrName") -> Column:
     >>> df = spark.range(1)
     >>> df.select(degrees(lit(math.pi))).first()
     Row(DEGREES(3.14159...)=180.0)
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("degrees", col)
 
 
@@ -4573,7 +4573,7 @@ def radians(col: "ColumnOrName") -> Column:
     >>> df = spark.range(1)
     >>> df.select(radians(lit(180))).first()
     Row(RADIANS(180)=3.14159...)
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("radians", col)
 
 
@@ -4698,7 +4698,7 @@ def round(col: "ColumnOrName", scale: int = 0) -> Column:
     --------
     >>> spark.createDataFrame([(2.5,)], ["a"]).select(round("a", 0).alias("r")).collect()
     [Row(r=3.0)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("round", col, lit(scale))
 
 
@@ -4727,7 +4727,7 @@ def bround(col: "ColumnOrName", scale: int = 0) -> Column:
     --------
     >>> spark.createDataFrame([(2.5,)], ["a"]).select(bround("a", 0).alias("r")).collect()
     [Row(r=2.0)]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("round_even", col, lit(scale))
 
 
@@ -4796,7 +4796,7 @@ def get(col: "ColumnOrName", index: Union["ColumnOrName", int]) -> Column:
     +----------------------+
     |                     a|
     +----------------------+
-    """
+    """  # noqa: D205
     index = ConstantExpression(index) if isinstance(index, int) else _to_column_expr(index)
     # Spark uses 0-indexing, DuckDB 1-indexing
     index = index + 1
@@ -5029,7 +5029,7 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
     [Row(next_month=datetime.date(2015, 6, 8))]
     >>> df.select(add_months("dt", -2).alias("prev_month")).collect()
     [Row(prev_month=datetime.date(2015, 2, 8))]
-    """
+    """  # noqa: D205
     months = ConstantExpression(months) if isinstance(months, int) else _to_column_expr(months)
     return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months)).cast("date")
 
@@ -5064,7 +5064,7 @@ def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[s
     [Row(joined='a,b,c'), Row(joined='a')]
     >>> df.select(array_join(df.data, ",", "NULL").alias("joined")).collect()
     [Row(joined='a,b,c'), Row(joined='a,NULL')]
-    """
+    """  # noqa: D205
     col = _to_column_expr(col)
     if null_replacement is not None:
         col = FunctionExpression(
@@ -5111,7 +5111,7 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:
     >>> df = spark.createDataFrame([(["c", "b", "a"],), ([],)], ["data"])
     >>> df.select(array_position(df.data, "a")).collect()
     [Row(array_position(data, a)=3), Row(array_position(data, a)=0)]
-    """
+    """  # noqa: D205
     return Column(
         CoalesceOperator(
             _to_column_expr(_invoke_function_over_columns("list_position", col, lit(value))), ConstantExpression(0)
@@ -5143,7 +5143,7 @@ def array_prepend(col: "ColumnOrName", value: Any) -> Column:
     >>> df = spark.createDataFrame([([2, 3, 4],), ([],)], ["data"])
     >>> df.select(array_prepend(df.data, 1)).collect()
     [Row(array_prepend(data, 1)=[1, 2, 3, 4]), Row(array_prepend(data, 1)=[1])]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("list_prepend", lit(value), col)
 
 
@@ -5247,7 +5247,7 @@ def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Colum
     ...     ).alias("r")
     ... ).collect()
     [Row(r=['foobar', 'foo', None, 'bar']), Row(r=['foo']), Row(r=[])]
-    """
+    """  # noqa: D205
     if comparator is not None:
         msg = "comparator is not yet supported"
         raise ContributionsAcceptedError(msg)
@@ -5286,7 +5286,7 @@ def sort_array(col: "ColumnOrName", asc: bool = True) -> Column:
     [Row(r=[None, 1, 2, 3]), Row(r=[1]), Row(r=[])]
     >>> df.select(sort_array(df.data, asc=False).alias("r")).collect()
     [Row(r=[3, 2, 1, None]), Row(r=[1]), Row(r=[])]
-    """
+    """  # noqa: D205
     if asc:
         order = "ASC"
         null_order = "NULLS FIRST"
@@ -5381,7 +5381,7 @@ def split_part(src: "ColumnOrName", delimiter: "ColumnOrName", partNum: "ColumnO
     ... )
     >>> df.select(split_part(df.a, df.b, df.c).alias("r")).collect()
     [Row(r='13')]
-    """
+    """  # noqa: D205
     src = _to_column_expr(src)
     delimiter = _to_column_expr(delimiter)
     partNum = _to_column_expr(partNum)
@@ -5422,7 +5422,7 @@ def stddev_samp(col: "ColumnOrName") -> Column:
     +------------------+
     |1.8708286933869...|
     +------------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("stddev_samp", col)
 
 
@@ -5513,7 +5513,7 @@ def stddev_pop(col: "ColumnOrName") -> Column:
     +-----------------+
     |1.707825127659...|
     +-----------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("stddev_pop", col)
 
 
@@ -5572,7 +5572,7 @@ def var_samp(col: "ColumnOrName") -> Column:
     +------------+
     |         3.5|
     +------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("var_samp", col)
 
 
@@ -5701,7 +5701,7 @@ def to_date(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     >>> df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
     >>> df.select(to_date(df.t, "yyyy-MM-dd HH:mm:ss").alias("date")).collect()
     [Row(date=datetime.date(1997, 2, 28))]
-    """
+    """  # noqa: D205
     return _to_date_or_timestamp(col, _types.DateType(), format)
 
 
@@ -5739,7 +5739,7 @@ def to_timestamp(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     >>> df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
     >>> df.select(to_timestamp(df.t, "yyyy-MM-dd HH:mm:ss").alias("dt")).collect()
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
-    """
+    """  # noqa: D205
     return _to_date_or_timestamp(col, _types.TimestampNTZType(), format)
 
 
@@ -5770,7 +5770,7 @@ def to_timestamp_ltz(
     >>> df.select(to_timestamp_ltz(df.e).alias("r")).collect()
     ... # doctest: +SKIP
     [Row(r=datetime.datetime(2016, 12, 31, 0, 0))]
-    """
+    """  # noqa: D205
     return _to_date_or_timestamp(timestamp, _types.TimestampNTZType(), format)
 
 
@@ -5801,7 +5801,7 @@ def to_timestamp_ntz(
     >>> df.select(to_timestamp_ntz(df.e).alias("r")).collect()
     ... # doctest: +SKIP
     [Row(r=datetime.datetime(2016, 4, 8, 0, 0))]
-    """
+    """  # noqa: D205
     return _to_date_or_timestamp(timestamp, _types.TimestampNTZType(), format)
 
 
@@ -5824,7 +5824,7 @@ def try_to_timestamp(col: "ColumnOrName", format: Optional["ColumnOrName"] = Non
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
     >>> df.select(try_to_timestamp(df.t, lit("yyyy-MM-dd HH:mm:ss")).alias("dt")).collect()
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
-    """
+    """  # noqa: D205
     if format is None:
         format = lit(["%Y-%m-%d", "%Y-%m-%d %H:%M:%S"])
 
@@ -5881,7 +5881,7 @@ def substr(str: "ColumnOrName", pos: "ColumnOrName", len: Optional["ColumnOrName
     +------------------------+
     |                   k SQL|
     +------------------------+
-    """
+    """  # noqa: D205
     if len is not None:
         return _invoke_function_over_columns("substring", str, pos, len)
     else:
@@ -5939,7 +5939,7 @@ def unix_millis(col: "ColumnOrName") -> Column:
     >>> df.select(unix_millis(to_timestamp(df.t)).alias("n")).collect()
     [Row(n=1437584400000)]
     >>> spark.conf.unset("spark.sql.session.timeZone")
-    """
+    """  # noqa: D205
     return _unix_diff(col, "milliseconds")
 
 
@@ -5956,7 +5956,7 @@ def unix_seconds(col: "ColumnOrName") -> Column:
     >>> df.select(unix_seconds(to_timestamp(df.t)).alias("n")).collect()
     [Row(n=1437584400)]
     >>> spark.conf.unset("spark.sql.session.timeZone")
-    """
+    """  # noqa: D205
     return _unix_diff(col, "seconds")
 
 
@@ -5980,7 +5980,7 @@ def arrays_overlap(a1: "ColumnOrName", a2: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([(["a", "b"], ["b", "c"]), (["a"], ["b", "c"])], ["x", "y"])
     >>> df.select(arrays_overlap(df.x, df.y).alias("overlap")).collect()
     [Row(overlap=True), Row(overlap=False)]
-    """
+    """  # noqa: D205
     a1 = _to_column_expr(a1)
     a2 = _to_column_expr(a2)
 
@@ -6045,7 +6045,7 @@ def arrays_zip(*cols: "ColumnOrName") -> Column:
      |    |    |-- vals1: long (nullable = true)
      |    |    |-- vals2: long (nullable = true)
      |    |    |-- vals3: long (nullable = true)
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("list_zip", *cols)
 
 
@@ -6084,7 +6084,7 @@ def substring(str: "ColumnOrName", pos: int, len: int) -> Column:
     ... )
     >>> df.select(substring(df.s, 1, 2).alias("s")).collect()
     [Row(s='ab')]
-    """
+    """  # noqa: D205
     return _invoke_function(
         "substring",
         _to_column_expr(str),
@@ -6130,7 +6130,7 @@ def contains(left: "ColumnOrName", right: "ColumnOrName") -> Column:
     +--------------+--------------+
     |          true|         false|
     +--------------+--------------+
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("contains", left, right)
 
 
@@ -6157,7 +6157,7 @@ def reverse(col: "ColumnOrName") -> Column:
     >>> df = spark.createDataFrame([([2, 1, 3],), ([1],), ([],)], ["data"])
     >>> df.select(reverse(df.data).alias("r")).collect()
     [Row(r=[3, 1, 2]), Row(r=[1]), Row(r=[])]
-    """
+    """  # noqa: D205
     return _invoke_function("reverse", _to_column_expr(col))
 
 
@@ -6197,7 +6197,7 @@ def concat(*cols: "ColumnOrName") -> Column:
     [Row(arr=[1, 2, 3, 4, 5]), Row(arr=None)]
     >>> df
     DataFrame[arr: array<bigint>]
-    """
+    """  # noqa: D205
     return _invoke_function_over_columns("concat", *cols)
 
 
@@ -6237,7 +6237,7 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     ... )
     >>> df.select(instr(df.s, "b").alias("s")).collect()
     [Row(s=2)]
-    """
+    """  # noqa: D205
     return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
 
 
@@ -6278,5 +6278,5 @@ def broadcast(df: "DataFrame") -> "DataFrame":
     dataset to all the worker nodes. However, DuckDB operates on a single-node architecture .
     As a result, the function simply returns the input DataFrame without applying any modifications
     or optimizations, since broadcasting is not applicable in the DuckDB context.
-    """
+    """  # noqa: D205
     return df

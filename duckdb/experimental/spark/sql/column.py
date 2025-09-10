@@ -165,7 +165,7 @@ class Column:
         +------------------+------+
         |               abc| value|
         +------------------+------+
-        """
+        """  # noqa: D205
         if isinstance(k, slice):
             raise ContributionsAcceptedError
             # if k.step is not None:
@@ -199,7 +199,7 @@ class Column:
         +------+
         | value|
         +------+
-        """
+        """  # noqa: D205
         if item.startswith("__"):
             msg = "Can not access __ (dunder) method"
             raise AttributeError(msg)

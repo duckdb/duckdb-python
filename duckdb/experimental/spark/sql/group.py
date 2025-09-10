@@ -76,7 +76,7 @@ class GroupedData:
     """A set of methods for aggregations on a :class:`DataFrame`,
     created by :func:`DataFrame.groupBy`.
 
-    """
+    """  # noqa: D205
 
     def __init__(self, grouping: Grouping, df: DataFrame) -> None:
         self._grouping = grouping

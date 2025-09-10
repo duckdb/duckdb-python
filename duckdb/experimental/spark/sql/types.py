@@ -140,7 +140,7 @@ class NullType(DataType, metaclass=DataTypeSingleton):
 class AtomicType(DataType):
     """An internal type used to represent everything that is not
     null, UDTs, arrays, structs, and maps.
-    """
+    """  # noqa: D205
 
 
 class NumericType(AtomicType):
@@ -836,7 +836,7 @@ class StructType(DataType):
         >>> struct2 = StructType([StructField("f1", StringType(), True)])
         >>> struct1 == struct2
         True
-        """
+        """  # noqa: D205
         if isinstance(field, StructField):
             self.fields.append(field)
             self.names.append(field.name)
@@ -996,7 +996,7 @@ class UserDefinedType(DataType):
     def scalaUDT(cls) -> str:
         """The class name of the paired Scala UDT (could be '', if there
         is no corresponding one).
-        """
+        """  # noqa: D205
         return ""
 
     def needConversion(self) -> bool:
@@ -1125,7 +1125,7 @@ class Row(tuple):
     >>> row2 = Row(name="Alice", age=11)
     >>> row1 == row2
     True
-    """
+    """  # noqa: D205
 
     @overload
     def __new__(cls, *args: str) -> "Row": ...
