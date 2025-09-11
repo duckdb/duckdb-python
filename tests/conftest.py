@@ -147,7 +147,7 @@ def convert_to_numpy(df):
     if (
         pyarrow_dtypes_enabled
         and pyarrow_dtype is not None
-        and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)])
+        and any(True for x in df.dtypes if isinstance(x, pyarrow_dtype))
     ):
         return convert_arrow_to_numpy_backend(df)
     return df
