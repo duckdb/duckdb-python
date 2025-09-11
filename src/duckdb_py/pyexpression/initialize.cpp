@@ -61,9 +61,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '+' expr
 	)";
 
-	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
+	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs, py::is_operator());
 	m.def(
-	    "__radd__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Add(a); }, docs);
+	    "__radd__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Add(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Negate the expression.
@@ -71,7 +71,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: -self
 	)";
-	m.def("__neg__", &DuckDBPyExpression::Negate, docs);
+	m.def("__neg__", &DuckDBPyExpression::Negate, docs, py::is_operator());
 
 	docs = R"(
 		Subtract expr from self
@@ -82,9 +82,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '-' expr
 	)";
-	m.def("__sub__", &DuckDBPyExpression::Subtract, docs);
+	m.def("__sub__", &DuckDBPyExpression::Subtract, docs, py::is_operator());
 	m.def(
-	    "__rsub__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Subtract(a); }, docs);
+	    "__rsub__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Subtract(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Multiply self by expr
@@ -95,9 +95,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '*' expr
 	)";
-	m.def("__mul__", &DuckDBPyExpression::Multiply, docs);
+	m.def("__mul__", &DuckDBPyExpression::Multiply, docs, py::is_operator());
 	m.def(
-	    "__rmul__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Multiply(a); }, docs);
+	    "__rmul__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Multiply(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Divide self by expr
@@ -108,13 +108,13 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '/' expr
 	)";
-	m.def("__div__", &DuckDBPyExpression::Division, docs);
+	m.def("__div__", &DuckDBPyExpression::Division, docs, py::is_operator());
 	m.def(
-	    "__rdiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
+	    "__rdiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs, py::is_operator());
 
-	m.def("__truediv__", &DuckDBPyExpression::Division, docs);
+	m.def("__truediv__", &DuckDBPyExpression::Division, docs, py::is_operator());
 	m.def(
-	    "__rtruediv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
+	    "__rtruediv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs, py::is_operator());
 
 	docs = R"(
 		(Floor) Divide self by expr
@@ -125,10 +125,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '//' expr
 	)";
-	m.def("__floordiv__", &DuckDBPyExpression::FloorDivision, docs);
+	m.def("__floordiv__", &DuckDBPyExpression::FloorDivision, docs, py::is_operator());
 	m.def(
-	    "__rfloordiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.FloorDivision(a); },
-	    docs);
+	    "__rfloordiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.FloorDivision(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Modulo self by expr
@@ -139,9 +138,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '%' expr
 	)";
-	m.def("__mod__", &DuckDBPyExpression::Modulo, docs);
+	m.def("__mod__", &DuckDBPyExpression::Modulo, docs, py::is_operator());
 	m.def(
-	    "__rmod__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Modulo(a); }, docs);
+	    "__rmod__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Modulo(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Power self by expr
@@ -152,9 +151,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '**' expr
 	)";
-	m.def("__pow__", &DuckDBPyExpression::Power, docs);
+	m.def("__pow__", &DuckDBPyExpression::Power, docs, py::is_operator());
 	m.def(
-	    "__rpow__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Power(a); }, docs);
+	    "__rpow__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Power(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Create an equality expression between two expressions
@@ -165,7 +164,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '=' expr
 	)";
-	m.def("__eq__", &DuckDBPyExpression::Equality, docs);
+	m.def("__eq__", &DuckDBPyExpression::Equality, docs, py::is_operator());
 
 	docs = R"(
 		Create an inequality expression between two expressions
@@ -176,7 +175,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '!=' expr
 	)";
-	m.def("__ne__", &DuckDBPyExpression::Inequality, docs);
+	m.def("__ne__", &DuckDBPyExpression::Inequality, docs, py::is_operator());
 
 	docs = R"(
 		Create a greater than expression between two expressions
@@ -187,7 +186,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '>' expr
 	)";
-	m.def("__gt__", &DuckDBPyExpression::GreaterThan, docs);
+	m.def("__gt__", &DuckDBPyExpression::GreaterThan, docs, py::is_operator());
 
 	docs = R"(
 		Create a greater than or equal expression between two expressions
@@ -198,7 +197,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '>=' expr
 	)";
-	m.def("__ge__", &DuckDBPyExpression::GreaterThanOrEqual, docs);
+	m.def("__ge__", &DuckDBPyExpression::GreaterThanOrEqual, docs, py::is_operator());
 
 	docs = R"(
 		Create a less than expression between two expressions
@@ -209,7 +208,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '<' expr
 	)";
-	m.def("__lt__", &DuckDBPyExpression::LessThan, docs);
+	m.def("__lt__", &DuckDBPyExpression::LessThan, docs, py::is_operator());
 
 	docs = R"(
 		Create a less than or equal expression between two expressions
@@ -220,7 +219,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '<=' expr
 	)";
-	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs);
+	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs, py::is_operator());
 
 	// AND, NOT and OR
 
@@ -233,7 +232,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '&' expr
 	)";
-	m.def("__and__", &DuckDBPyExpression::And, docs);
+	m.def("__and__", &DuckDBPyExpression::And, docs, py::is_operator());
 
 	docs = R"(
 		Binary-or self together with expr
@@ -244,7 +243,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: self '|' expr
 	)";
-	m.def("__or__", &DuckDBPyExpression::Or, docs);
+	m.def("__or__", &DuckDBPyExpression::Or, docs, py::is_operator());
 
 	docs = R"(
 		Create a binary-not expression from self
@@ -252,7 +251,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: ~self
 	)";
-	m.def("__invert__", &DuckDBPyExpression::Not, docs);
+	m.def("__invert__", &DuckDBPyExpression::Not, docs, py::is_operator());
 
 	docs = R"(
 		Binary-and self together with expr
@@ -264,7 +263,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: expr '&' self
 	)";
 	m.def(
-	    "__rand__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.And(a); }, docs);
+	    "__rand__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.And(a); }, docs, py::is_operator());
 
 	docs = R"(
 		Binary-or self together with expr
@@ -276,7 +275,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: expr '|' self
 	)";
 	m.def(
-	    "__ror__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Or(a); }, docs);
+	    "__ror__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Or(a); }, docs, py::is_operator());
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
