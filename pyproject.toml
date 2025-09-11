@@ -365,6 +365,9 @@ strict = true
     # No need for type hinting in tests
     'ANN001', 'ANN201'
 ]
+"tests/fast/spark/**.py" = [
+    "E402"
+]
 "scripts/**.py" = [
     # No need for package, module, class, function, init etc docstrings in scripts
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205',
