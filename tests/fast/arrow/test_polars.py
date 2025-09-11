@@ -8,7 +8,7 @@ pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
 
-from duckdb.polars_io import _predicate_to_expression
+from duckdb.polars_io import _predicate_to_expression  # noqa: E402
 
 
 def valid_filter(filter):

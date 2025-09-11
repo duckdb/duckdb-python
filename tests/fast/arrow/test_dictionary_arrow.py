@@ -1,11 +1,11 @@
 import pytest
+import datetime
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
-import datetime
 
 Timestamp = pd.Timestamp
 

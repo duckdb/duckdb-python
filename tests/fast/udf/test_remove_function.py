@@ -1,11 +1,10 @@
 import pytest
 
 import duckdb
+from duckdb.typing import BIGINT, VARCHAR
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
-
-from duckdb.typing import BIGINT, VARCHAR
 
 
 class TestRemoveFunction:

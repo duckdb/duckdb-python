@@ -1,7 +1,7 @@
 import pytest
+import hashlib
 
 pa = pytest.importorskip("pyarrow")
-import hashlib
 
 
 def test_14344(duckdb_cursor):

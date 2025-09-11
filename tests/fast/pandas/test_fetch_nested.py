@@ -1,9 +1,8 @@
 import pytest
-
+import numpy as np
 import duckdb
 
 pd = pytest.importorskip("pandas")
-import numpy as np
 
 
 def compare_results(con, query, expected):

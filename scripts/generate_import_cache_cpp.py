@@ -1,7 +1,7 @@
 import os
+import json
 
 script_dir = os.path.dirname(__file__)
-import json
 
 # Load existing JSON data from a file if it exists
 json_data = {}

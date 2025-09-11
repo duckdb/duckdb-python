@@ -4,10 +4,10 @@ import os
 import pytest
 
 import duckdb
+from packaging.version import Version
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
-from packaging.version import Version
 
 filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "tz.parquet")
 

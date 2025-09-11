@@ -9,7 +9,7 @@ import pytest
 
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
-from duckdb_packaging._versioning import (
+from duckdb_packaging._versioning import (  # noqa: E402
     format_version,
     get_current_version,
     get_git_describe,
@@ -17,7 +17,7 @@ from duckdb_packaging._versioning import (
     parse_version,
     pep440_to_git_tag,
 )
-from duckdb_packaging.setuptools_scm_version import _bump_version, forced_version_from_env, version_scheme
+from duckdb_packaging.setuptools_scm_version import _bump_version, forced_version_from_env, version_scheme  # noqa: E402
 
 
 class TestVersionParsing(unittest.TestCase):

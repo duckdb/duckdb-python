@@ -13,7 +13,7 @@ from urllib3 import Retry
 
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
-from duckdb_packaging.pypi_cleanup import (
+from duckdb_packaging.pypi_cleanup import (  # noqa: E402
     AuthenticationError,
     CsrfParser,
     PyPICleanup,

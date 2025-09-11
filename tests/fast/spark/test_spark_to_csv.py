@@ -1,8 +1,14 @@
 import os
+import csv
+import datetime
 
 import pytest
 
-_ = pytest.importorskip("duckdb.experimental.spark")
+from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
+
+from duckdb import InvalidInputException, read_csv
+
+
 
 from spark_namespace import USE_ACTUAL_SPARK
 
@@ -14,13 +20,8 @@ if USE_ACTUAL_SPARK:
         allow_module_level=True,
     )
 
-import csv
-import datetime
+pytest.importorskip("duckdb.experimental.spark")
 
-from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
-from spark_namespace import USE_ACTUAL_SPARK
-
-from duckdb import InvalidInputException, read_csv
 
 
 @pytest.fixture

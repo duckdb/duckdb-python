@@ -3,11 +3,12 @@ import datetime
 import pytest
 from conftest import pandas_supports_arrow_backend
 
+import numpy as np
 import duckdb
 
 pd = pytest.importorskip("pandas", "2.0.0")
-import numpy as np
-from pandas.api.types import is_integer_dtype
+
+from pandas.api.types import is_integer_dtype  # noqa: E402
 
 
 @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
