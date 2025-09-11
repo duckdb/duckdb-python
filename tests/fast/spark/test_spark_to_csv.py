@@ -194,7 +194,8 @@ class TestSparkToCSV:
 
     @pytest.mark.skipif(
         USE_ACTUAL_SPARK,
-        reason="This test uses DuckDB to read the CSV. However, this does not work if Spark created it as Spark creates a folder instead of a single file.",
+        reason="This test uses DuckDB to read the CSV. However, this does not work if Spark created it as "
+        "Spark creates a folder instead of a single file.",
     )
     def test_compression_gzip(self, pandas_df_strings, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")

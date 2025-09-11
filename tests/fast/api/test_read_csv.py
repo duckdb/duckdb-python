@@ -352,7 +352,8 @@ class TestReadCSV:
         with pytest.raises(ValueError):
             duckdb_cursor.read_csv(obj).fetchall()
 
-        # For that same reason, this will not error, because the data is retrieved with 'read' and then SeekError is never used again
+        # For that same reason, this will not error, because the data is retrieved with 'read' and then
+        # SeekError is never used again
         obj = SeekError()
         duckdb_cursor.read_csv(obj).fetchall()
 

@@ -111,7 +111,7 @@ class TestDuckDBQuery:
 
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="Invalid Input Error: Values were not provided for the following prepared statement parameters: name3",
+            match="Invalid Input Error: Values were not provided for the following prepared statement parameters: name3",  # noqa: E501
         ):
             con.execute("select $name1, $name2, $name3", {"name1": 5, "name2": 3})
 
@@ -184,7 +184,7 @@ class TestDuckDBQuery:
         # we throw an error
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="Tried to create a STRUCT value from a tuple containing 3 elements, but the STRUCT consists of 2 children",
+            match="Tried to create a STRUCT value from a tuple containing 3 elements, but the STRUCT consists of 2 children",  # noqa: E501
         ):
             result = con.execute("select $1", [Value(("a", 21, True), {"a": str, "b": int})]).fetchall()
 

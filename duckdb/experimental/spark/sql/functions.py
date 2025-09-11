@@ -4879,7 +4879,9 @@ def octet_length(col: "ColumnOrName") -> Column:
 
 
 def hex(col: "ColumnOrName") -> Column:
-    """Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
+    """Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`,
+    :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or
+    :class:`~pyspark.sql.types.LongType`.
 
     .. versionadded:: 1.5.0
 
@@ -4905,7 +4907,8 @@ def hex(col: "ColumnOrName") -> Column:
 
 
 def unhex(col: "ColumnOrName") -> Column:
-    """Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number. column and returns it as a binary column.
+    """Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte
+    representation of number. column and returns it as a binary column.
 
     .. versionadded:: 1.5.0
 

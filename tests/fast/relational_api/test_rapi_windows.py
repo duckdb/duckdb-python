@@ -16,7 +16,7 @@ def setup_and_teardown_of_table(duckdb_cursor):
 		(2, 11, -1, 10.45, 'o'),
 		(3, -1, 0, 13.32, ','),
 		(3, 5, -2, 9.87, 'wor'),
-		(3, null, 10, 6.56, 'ld'); 
+		(3, null, 10, 6.56, 'ld');
 		"""
     )
     yield
@@ -348,7 +348,8 @@ class TestRAPIWindows:
             for r in (
                 table.avg(
                     "v",
-                    window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                    window_spec="over (partition by id order by t asc rows between unbounded preceding and "
+                    "current row)",
                     projected_columns="id",
                 )
                 .order("id")
@@ -407,16 +408,11 @@ class TestRAPIWindows:
 
     def test_bitstring_agg(self, table):
         with pytest.raises(duckdb.BinderException, match="Could not retrieve required statistics"):
-            result = (
-                table.bitstring_agg(
-                    "v",
-                    window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
-                    projected_columns="id",
-                )
-                .order("id")
-                .execute()
-                .fetchall()
-            )
+            table.bitstring_agg(
+                "v",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            ).order("id").execute().fetchall()
         result = (
             table.bitstring_agg(
                 "v",

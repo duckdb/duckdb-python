@@ -1,4 +1,5 @@
-# This code is based on code from Apache Spark under the license found in the LICENSE file located in the 'spark' folder.  # noqa: D100
+# This code is based on code from Apache Spark under the license found in the LICENSE  # noqa: D100
+# file located in the 'spark' folder.
 
 import calendar
 import datetime
@@ -456,8 +457,8 @@ class UnsignedLongType(IntegralType):
 class HugeIntegerType(IntegralType):
     """Huge integer data type, i.e. a signed 128-bit integer.
 
-    If the values are beyond the range of [-170141183460469231731687303715884105728, 170141183460469231731687303715884105727],
-    please use :class:`DecimalType`.
+    If the values are beyond the range of [-170141183460469231731687303715884105728,
+    170141183460469231731687303715884105727], please use :class:`DecimalType`.
     """
 
     def __init__(self) -> None:  # noqa: D107

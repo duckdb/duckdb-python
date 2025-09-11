@@ -32,7 +32,8 @@ class TestPandasMergeSameName:
         con.register("df2", df2)
         query = """SELECT * from df1
         LEFT  OUTER JOIN df2
-        ON (df1.id_1=df2.id_1 and df1.agedate=df2.agedate)  order by df1.id_1, df1.agedate, df1.age, df1.v, df2.id_1,df2.agedate,df2.v2"""
+        ON (df1.id_1=df2.id_1 and df1.agedate=df2.agedate)
+        order by df1.id_1, df1.agedate, df1.age, df1.v, df2.id_1,df2.agedate,df2.v2"""
 
         result_df = con.execute(query).fetchdf()
         expected_result = con.execute(query).fetchall()

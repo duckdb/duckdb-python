@@ -7,7 +7,8 @@ pa = pytest.importorskip("pyarrow")
 
 # Reconstruct filters when pushing down into arrow scan
 # arrow supports timestamp_tz with different units than US, we only support US
-# so we have to convert ConstantValues back to their native unit when pushing the filter expression containing them down to pyarrow
+# so we have to convert ConstantValues back to their native unit when pushing the filter
+# expression containing them down to pyarrow
 class Test8522:
     def test_8522(self, duckdb_cursor):
         t_us = pa.Table.from_arrays(  # noqa: F841

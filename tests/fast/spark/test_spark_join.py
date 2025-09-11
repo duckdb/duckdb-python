@@ -397,8 +397,13 @@ class TestDataFrameJoin:
         res = df.join(df2, df.name == df2.name).sort("df1.name")
         res = res.collect()
         assert (
-            str(res)
-            == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', name='Williams', year_joined='2010')]"
+            str(res) == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', "
+            "year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', "
+            "name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', "
+            "year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), "
+            "Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', "
+            "year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', "
+            "name='Williams', year_joined='2010')]"
         )
 
     @pytest.mark.xfail(condition=True, reason="Selecting from a duplicate binding causes an error")

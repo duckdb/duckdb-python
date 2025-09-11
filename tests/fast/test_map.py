@@ -206,7 +206,8 @@ class TestMap:
         with pytest.raises(
             duckdb.InvalidInputException,
             match=re.escape(
-                "Expected the UDF to return an object of type 'pandas.DataFrame', found '<class 'pandas.core.series.Series'>' instead"
+                "Expected the UDF to return an object of type 'pandas.DataFrame', found "
+                "'<class 'pandas.core.series.Series'>' instead"
             ),
         ):
             rel = rel.map(returns_series)

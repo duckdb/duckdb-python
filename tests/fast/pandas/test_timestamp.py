@@ -42,8 +42,8 @@ class TestPandasTimestamps:
         }
         df = pd.DataFrame(data=d)
 
-        # Our timezone aware type is in US (microseconds), when we scan a timestamp column that isn't US and has timezone info,
-        # we convert the time unit to US
+        # Our timezone aware type is in US (microseconds), when we scan a timestamp column that isn't US and has
+        # timezone info, we convert the time unit to US
         expected = pd.DataFrame(data=d, dtype=expected_dtype)
         df_from_duck = conn.from_df(df).df()
         assert df_from_duck.equals(expected)

@@ -40,7 +40,8 @@ class TestPandasEnum:
         duckdb_cursor.register("df", df)
         with pytest.raises(
             duckdb.ConversionException,
-            match="Type UINT8 with value 0 can't be cast because the value is out of range for the destination type UINT8",
+            match="Type UINT8 with value 0 can't be cast because the value is out of range for the destination "
+            "type UINT8",
         ):
             duckdb_cursor.execute("INSERT INTO tab SELECT * FROM df;")
 

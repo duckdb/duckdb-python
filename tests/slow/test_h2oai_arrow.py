@@ -57,7 +57,7 @@ def group_by_q5(con):
 
 def group_by_q6(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id4, id5, quantile_cont(v3, 0.5) AS median_v3, stddev(v3) AS sd_v3 FROM x GROUP BY id4, id5;"
+        "CREATE TABLE ans AS SELECT id4, id5, quantile_cont(v3, 0.5) AS median_v3, stddev(v3) AS sd_v3 FROM x GROUP BY id4, id5;"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), sum(median_v3) AS median_v3, sum(sd_v3) AS sd_v3 FROM ans").fetchall()
     assert res[0][0] == 9216
@@ -76,7 +76,7 @@ def group_by_q7(con):
 
 def group_by_q8(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2"
+        "CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2"  # noqa: E501
     )
     res = con.execute("SELECT count(*), sum(largest2_v3) AS largest2_v3 FROM ans").fetchall()
     assert res[0][0] == 190002
@@ -94,7 +94,7 @@ def group_by_q9(con):
 
 def group_by_q10(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x GROUP BY id1, id2, id3, id4, id5, id6;"
+        "CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x GROUP BY id1, id2, id3, id4, id5, id6;"  # noqa: E501
     )
     res = con.execute("SELECT sum(v3) AS v3, sum(count) AS count FROM ans;").fetchall()
     assert math.floor(res[0][0]) == 474969574
@@ -113,7 +113,7 @@ def join_by_q1(con):
 
 def join_by_q2(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 8998412
@@ -124,7 +124,7 @@ def join_by_q2(con):
 
 def join_by_q3(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 10000000
@@ -135,7 +135,7 @@ def join_by_q3(con):
 
 def join_by_q4(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 8998412
@@ -146,7 +146,7 @@ def join_by_q4(con):
 
 def join_by_q5(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);"
+        "CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 9000000

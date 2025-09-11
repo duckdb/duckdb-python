@@ -12,7 +12,8 @@ class TestRemoveFunction:
         con = duckdb.connect()
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="No function by the name of 'not_a_registered_function' was found in the list of registered functions",
+            match="No function by the name of 'not_a_registered_function' was found in the list of "
+            "registered functions",
         ):
             con.remove_function("not_a_registered_function")
 
@@ -84,7 +85,8 @@ class TestRemoveFunction:
 
         with pytest.raises(
             duckdb.NotImplementedException,
-            match="A function by the name of 'func' is already created, creating multiple functions with the same name is not supported yet, please remove it first",
+            match="A function by the name of 'func' is already created, creating multiple functions with the "
+            "same name is not supported yet, please remove it first",
         ):
             con.create_function("func", other_func, [VARCHAR], VARCHAR)
 

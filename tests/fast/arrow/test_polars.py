@@ -389,8 +389,8 @@ class TestPolars:
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
         ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
 
-        # These will require a cast, which we currently do not support, hence the filter won't be pushed down, but the results
-        # Should still be correct, and we check we can't really pushdown the filter yet.
+        # These will require a cast, which we currently do not support, hence the filter won't be pushed down, but
+        # the results should still be correct, and we check we can't really pushdown the filter yet.
 
         # ==
         assert lazy_df.filter(pl.col("a") == ts_2008).select(pl.len()).collect().item() == 1

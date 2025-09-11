@@ -198,7 +198,8 @@ class TestNativeUDF:
         )
         # added extra column to the struct
         assert len(res.fetchone()[0].keys()) == 3
-        # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction inside of 'create_function', which means the call would fail
+        # FIXME: this is needed, otherwise the old transaction is still active when we try to start a new transaction
+        #  inside of 'create_function', which means the call would fail
         res.fetchall()
 
         def swap_keys(dict):

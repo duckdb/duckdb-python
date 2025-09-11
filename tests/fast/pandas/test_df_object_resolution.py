@@ -90,7 +90,8 @@ class TestResolveObjectColumns:
     def test_integers(self, pandas, duckdb_cursor):
         data = [5, 0, 3]
         df_in = create_generic_dataframe(data, pandas)
-        # These are float64 because pandas would force these to be float64 even if we set them to int8, int16, int32, int64 respectively
+        # These are float64 because pandas would force these to be float64 even if we set them to int8, int16,
+        # int32, int64 respectively
         df_expected_res = pandas.DataFrame({"0": pandas.Series(data=data, dtype="int32")})
         df_out = duckdb_cursor.sql("SELECT * FROM df_in").df()
         print(df_out)
@@ -626,7 +627,8 @@ class TestResolveObjectColumns:
             ) tbl(a, b, c);
         """
         duckdb_cursor.execute(reference_query)
-        # Because of this we need to wrap these native floats as DECIMAL for this test, to avoid these decimals being "upgraded" to DOUBLE
+        # Because of this we need to wrap these native floats as DECIMAL for this test, to avoid these decimals being
+        # "upgraded" to DOUBLE
         x = pandas.DataFrame(
             {
                 "0": ConvertStringToDecimal([5, "12.0", "-123.0", "-234234.0", None, "1.234"], pandas),

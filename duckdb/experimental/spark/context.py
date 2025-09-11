@@ -58,7 +58,8 @@ class SparkContext:  # noqa: D101
     def __repr__(self) -> str:  # noqa: D105
         raise ContributionsAcceptedError
 
-    # def accumulator(self, value: ~T, accum_param: Optional[ForwardRef('AccumulatorParam[T]')] = None) -> 'Accumulator[T]':
+    # def accumulator(self, value: ~T, accum_param: Optional[ForwardRef('AccumulatorParam[T]')] = None
+    #     ) -> 'Accumulator[T]':
     # 	pass
 
     def addArchive(self, path: str) -> None:  # noqa: D102
@@ -70,7 +71,8 @@ class SparkContext:  # noqa: D101
     def addPyFile(self, path: str) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
-    # def binaryFiles(self, path: str, minPartitions: Optional[int] = None) -> duckdb.experimental.spark.rdd.RDD[typing.Tuple[str, bytes]]:
+    # def binaryFiles(self, path: str, minPartitions: Optional[int] = None
+    #     ) -> duckdb.experimental.spark.rdd.RDD[typing.Tuple[str, bytes]]:
     # 	pass
 
     # def binaryRecords(self, path: str, recordLength: int) -> duckdb.experimental.spark.rdd.RDD[bytes]:
@@ -100,16 +102,24 @@ class SparkContext:  # noqa: D101
     def getLocalProperty(self, key: str) -> Optional[str]:  # noqa: D102
         raise ContributionsAcceptedError
 
-    # def hadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
+    # def hadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str,
+    #     keyConverter: Optional[str] = None, valueConverter: Optional[str] = None,
+    #     conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
-    # def hadoopRDD(self, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
+    # def hadoopRDD(self, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None,
+    #     valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0
+    #     ) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
-    # def newAPIHadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
+    # def newAPIHadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str,
+    #     keyConverter: Optional[str] = None, valueConverter: Optional[str] = None,
+    #     conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
-    # def newAPIHadoopRDD(self, inputFormatClass: str, keyClass: str, valueClass: str, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
+    # def newAPIHadoopRDD(self, inputFormatClass: str, keyClass: str, valueClass: str,
+    #     keyConverter: Optional[str] = None, valueConverter: Optional[str] = None,
+    #     conf: Optional[Dict[str, str]] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
     # def parallelize(self, c: Iterable[~T], numSlices: Optional[int] = None) -> pyspark.rdd.RDD[~T]:
@@ -118,13 +128,17 @@ class SparkContext:  # noqa: D101
     # def pickleFile(self, name: str, minPartitions: Optional[int] = None) -> pyspark.rdd.RDD[typing.Any]:
     # 	pass
 
-    # def range(self, start: int, end: Optional[int] = None, step: int = 1, numSlices: Optional[int] = None) -> pyspark.rdd.RDD[int]:
+    # def range(self, start: int, end: Optional[int] = None, step: int = 1, numSlices: Optional[int] = None
+    #     ) -> pyspark.rdd.RDD[int]:
     # 	pass
 
-    # def runJob(self, rdd: pyspark.rdd.RDD[~T], partitionFunc: Callable[[Iterable[~T]], Iterable[~U]], partitions: Optional[Sequence[int]] = None, allowLocal: bool = False) -> List[~U]:
+    # def runJob(self, rdd: pyspark.rdd.RDD[~T], partitionFunc: Callable[[Iterable[~T]], Iterable[~U]],
+    #     partitions: Optional[Sequence[int]] = None, allowLocal: bool = False) -> List[~U]:
     # 	pass
 
-    # def sequenceFile(self, path: str, keyClass: Optional[str] = None, valueClass: Optional[str] = None, keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, minSplits: Optional[int] = None, batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
+    # def sequenceFile(self, path: str, keyClass: Optional[str] = None, valueClass: Optional[str] = None,
+    #     keyConverter: Optional[str] = None, valueConverter: Optional[str] = None, minSplits: Optional[int] = None,
+    #     batchSize: int = 0) -> pyspark.rdd.RDD[typing.Tuple[~T, ~U]]:
     # 	pass
 
     def setCheckpointDir(self, dirName: str) -> None:  # noqa: D102
@@ -151,13 +165,15 @@ class SparkContext:  # noqa: D101
     # def statusTracker(self) -> duckdb.experimental.spark.status.StatusTracker:
     # 	raise ContributionsAcceptedError
 
-    # def textFile(self, name: str, minPartitions: Optional[int] = None, use_unicode: bool = True) -> pyspark.rdd.RDD[str]:
+    # def textFile(self, name: str, minPartitions: Optional[int] = None, use_unicode: bool = True
+    #     ) -> pyspark.rdd.RDD[str]:
     # 	pass
 
     # def union(self, rdds: List[pyspark.rdd.RDD[~T]]) -> pyspark.rdd.RDD[~T]:
     # 	pass
 
-    # def wholeTextFiles(self, path: str, minPartitions: Optional[int] = None, use_unicode: bool = True) -> pyspark.rdd.RDD[typing.Tuple[str, str]]:
+    # def wholeTextFiles(self, path: str, minPartitions: Optional[int] = None, use_unicode: bool = True
+    #     ) -> pyspark.rdd.RDD[typing.Tuple[str, str]]:
     # 	pass
 
 

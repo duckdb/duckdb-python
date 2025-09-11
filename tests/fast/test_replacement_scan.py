@@ -145,7 +145,8 @@ class TestReplacementScan:
         def inner_func(duckdb_cursor):
             duckdb_cursor.execute("set python_enable_replacements=true")
             with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
-                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined in this function
+                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined
+                # in this function
                 duckdb_cursor.sql("select * from df")
             duckdb_cursor.execute("set python_scan_all_frames=true")
             # Now we can find 'df' because we also scan the previous frame(s)
@@ -199,7 +200,8 @@ class TestReplacementScan:
         duckdb_cursor.execute("drop table df")
         df = pd.DataFrame({"b": [1, 2, 3]})
         res = rel.fetchall()
-        # FIXME: this should error instead, the 'df' table we relied on has been removed and replaced with a replacement scan
+        # FIXME: this should error instead, the 'df' table we relied on has been removed and replaced with a
+        #  replacement scan
         assert res == [(1,), (2,), (3,)]
 
     def test_replacement_scan_caching(self, duckdb_cursor):

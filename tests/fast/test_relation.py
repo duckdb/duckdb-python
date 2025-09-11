@@ -51,9 +51,10 @@ class TestRelation:
             # The df_in object is no longer reachable
             rel1 = duckdb_cursor.query("select * from df_in")
         # But it **is** reachable through our 'my_view' VIEW
-        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an ExternalDependency on the dataframe object
-        # We then created a VIEW from that Relation, which in turn copied this 'df_in' TableRef into the ViewCatalogEntry
-        # Because of this, the df_in object will stay alive for as long as our 'my_view' entry exists.
+        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an
+        # ExternalDependency on the dataframe object. We then created a VIEW from that Relation, which in turn copied
+        # this 'df_in' TableRef into the ViewCatalogEntry. Because of this, the df_in object will stay alive for as
+        # long as our 'my_view' entry exists.
         rel2 = duckdb_cursor.query("select * from my_view")
         res = rel2.fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,)]
@@ -113,7 +114,7 @@ class TestRelation:
         assert len(df2) == duckdb.__standard_vector_size__ * 2
 
         duckdb_cursor.execute(
-            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"
+            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"  # noqa: E501
         )
 
         rel = duckdb_cursor.table("dates")
@@ -533,7 +534,8 @@ class TestRelation:
                 10000000,
                 marks=pytest.mark.skipif(
                     condition=platform.system() == "Emscripten",
-                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
+                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not "
+                    "thrown reliably",
                 ),
             ),
         ],
@@ -653,7 +655,8 @@ class TestRelation:
         # Create a VIEW that contains a ColumnDataRef
         rel.create_view("test", True)
         # Override the existing relation, the original MaterializedRelation has now gone out of scope
-        # The VIEW still works because the CDC that is being referenced is kept alive through the MaterializedDependency item
+        # The VIEW still works because the CDC that is being referenced is kept alive through the
+        # MaterializedDependency item
         rel = duckdb_cursor.sql("select * from test")
         res = rel.fetchall()
         assert res == [([2], ["Alice"])]

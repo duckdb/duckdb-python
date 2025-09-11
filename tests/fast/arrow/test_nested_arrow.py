@@ -127,18 +127,18 @@ class TestArrowNested:
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
             duckdb_cursor,
-            "SELECT list (lllle order by lllle) llllle from (SELECT list (llle order by llle) lllle from (SELECT list(lle order by lle) llle from (SELECT LIST(le order by le) lle FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3",
+            "SELECT list (lllle order by lllle) llllle from (SELECT list (llle order by llle) lllle from (SELECT list(lle order by lle) llle from (SELECT LIST(le order by le) lle FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3",  # noqa: E501
         )
 
         compare_results(
             duckdb_cursor,
             """SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
-                        from (SELECT a%4 as grp, list(a order by a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T order by all;""",
+                        from (SELECT a%4 as grp, list(a order by a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T order by all;""",  # noqa: E501
         )
         # Tests for converting multiple lists to/from Arrow with NULL values and/or strings
         compare_results(
             duckdb_cursor,
-            "SELECT list(st order by st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5 order by all",
+            "SELECT list(st order by st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5 order by all",  # noqa: E501
         )
 
     @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
@@ -171,7 +171,7 @@ class TestArrowNested:
         compare_results(duckdb_cursor, "SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t")
         compare_results(
             duckdb_cursor,
-            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",
+            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",  # noqa: E501
         )
         compare_results(
             duckdb_cursor,
@@ -182,7 +182,7 @@ class TestArrowNested:
         )
         compare_results(
             duckdb_cursor,
-            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5 order by all) as lst_tbl) as T",
+            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5 order by all) as lst_tbl) as T",  # noqa: E501
         )
 
     @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
@@ -214,7 +214,7 @@ class TestArrowNested:
         assert arrow_to_pandas(duckdb_cursor, "SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
         assert arrow_to_pandas(
             duckdb_cursor,
-            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",
+            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",  # noqa: E501
         ) == [[("Jon Lajoie", 10), ("Backstreet Boys", 9), ("Tenacious D", 10)]]
         assert arrow_to_pandas(
             duckdb_cursor, "SELECT a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(a)"
@@ -237,13 +237,13 @@ class TestArrowNested:
         # Maps embedded in a struct
         compare_results(
             duckdb_cursor,
-            "SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
+            "SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",  # noqa: E501
         )
 
         # List of maps
         compare_results(
             duckdb_cursor,
-            "SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
+            "SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",  # noqa: E501
         )
 
         # Map with list as key and/or value
@@ -263,5 +263,5 @@ class TestArrowNested:
         # MAP that is NULL entirely
         compare_results(
             duckdb_cursor,
-            "SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a",
+            "SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a",  # noqa: E501
         )

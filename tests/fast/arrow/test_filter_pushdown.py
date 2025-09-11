@@ -409,7 +409,7 @@ class TestArrowFilterPushdown:
         )
         assert (
             duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"
+                "SELECT count(*) from arrow_table where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
             ).fetchone()[0]
             == 1
         )
@@ -481,7 +481,7 @@ class TestArrowFilterPushdown:
         )
         assert (
             duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"
+                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
             ).fetchone()[0]
             == 1
         )
@@ -915,7 +915,7 @@ class TestArrowFilterPushdown:
 
         # Lets also experiment with multiple unpush-able filters
         con.execute(
-            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"
+            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"  # noqa: E501
         )
 
         arrow_tbl = con.execute("FROM T_2").fetch_arrow_table()
@@ -985,7 +985,8 @@ class TestArrowFilterPushdown:
             ("price", 100),
         ]
 
-    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the greatest value
+    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the
+    # greatest value
     def test_nan_filter_pushdown(self, duckdb_cursor):
         duckdb_cursor.execute(
             """

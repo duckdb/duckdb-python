@@ -22,7 +22,8 @@ from .udf import UDFRegistration
 # In spark:
 # SparkSession holds a SparkContext
 # SparkContext gets created from SparkConf
-# At this level the check is made to determine whether the instance already exists and just needs to be retrieved or it needs to be created
+# At this level the check is made to determine whether the instance already exists and just needs
+# to be retrieved or it needs to be created.
 
 # For us this is done inside of `duckdb.connect`, based on the passed in path + configuration
 # SparkContext can be compared to our Connection class, and SparkConf to our ClientContext class

@@ -327,7 +327,8 @@ def main() -> None:  # noqa: D103
         exit(1)
     parser = argparse.ArgumentParser(
         prog="Query Graph Generator",
-        description="Given a json profile output, generate a html file showing the query graph and timings of operators",
+        description="""Given a json profile output, generate a html file showing the query graph and
+        timings of operators""",
     )
     parser.add_argument("profile_input", help="profile input in json")
     parser.add_argument("--out", required=False, default=False)

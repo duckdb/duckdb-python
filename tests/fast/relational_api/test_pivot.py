@@ -5,7 +5,7 @@ import tempfile
 class TestPivot:
     def test_pivot_issue_14600(self, duckdb_cursor):
         duckdb_cursor.sql(
-            "create table input_data as select unnest(['u','v','w']) as a, unnest(['x','y','z']) as b, unnest([1,2,3]) as c;"
+            "create table input_data as select unnest(['u','v','w']) as a, unnest(['x','y','z']) as b, unnest([1,2,3]) as c;"  # noqa: E501
         )
         pivot_1 = duckdb_cursor.query("pivot input_data on a using max(c) group by b;")
         pivot_2 = duckdb_cursor.query("pivot input_data on b using max(c) group by a;")
@@ -18,7 +18,7 @@ class TestPivot:
 
     def test_pivot_issue_14601(self, duckdb_cursor):
         duckdb_cursor.sql(
-            "create table input_data as select unnest(['u','v','w']) as a, unnest(['x','y','z']) as b, unnest([1,2,3]) as c;"
+            "create table input_data as select unnest(['u','v','w']) as a, unnest(['x','y','z']) as b, unnest([1,2,3]) as c;"  # noqa: E501
         )
         pivot_1 = duckdb_cursor.query("pivot input_data on a using max(c) group by b;")
         pivot_1.create("pivot_1")

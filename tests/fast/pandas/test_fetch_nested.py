@@ -242,7 +242,7 @@ class TestFetchNested:
                 }
             ]
         }, ""),
-        ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {
+        ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {  # noqa: E501
             'a': [
                 {
                     '0':0,
@@ -278,7 +278,7 @@ class TestFetchNested:
                 }
             ]
         }, "Map keys must be unique"),
-        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'],
@@ -286,7 +286,7 @@ class TestFetchNested:
                 }
             ]
         }, "Map keys must be unique"),
-        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': ['Jon Lajoie', None, 'Tenacious D', None, None],
@@ -302,7 +302,7 @@ class TestFetchNested:
                 }
             ]
         }, "Map keys can not be NULL"),
-        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': [None, None, None, None, None],
@@ -359,7 +359,7 @@ class TestFetchNested:
         }),
         ("""
             SELECT {'i':mp,'j':mp2} as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
+        """, {  # noqa: E501
             'a': [
                 {
                     'i': {
@@ -379,7 +379,7 @@ class TestFetchNested:
         }),
         ("""
             SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
+        """, {  # noqa: E501
             'a': [
                 [
                     {

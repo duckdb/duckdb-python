@@ -70,7 +70,10 @@ class TestDataFrame:
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "DE")]
         df = spark.createDataFrame(address, ["id", "address", "id"])
         res = df.collect()
-        exptected_res_str = "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
+        exptected_res_str = (
+            "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 "
+            "Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
+        )
         if USE_ACTUAL_SPARK:
             # Spark uses string for both ID columns. DuckDB correctly infers the types.
             exptected_res_str = (

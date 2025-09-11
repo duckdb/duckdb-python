@@ -39,9 +39,11 @@ class TestHTTPFS:
     def test_httpfs(self, require, pandas):
         connection = require("httpfs")
         try:
-            connection.execute(
-                "SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet') LIMIT 3;"
-            )
+            connection.execute("""
+                SELECT id, first_name, last_name FROM PARQUET_SCAN(
+                    'https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet'
+                ) LIMIT 3;
+            """)
         except RuntimeError as e:
             # Test will ignore result if it fails due to networking issues while running the test.
             if str(e).startswith("HTTP HEAD error") or str(e).startswith("Unable to connect"):

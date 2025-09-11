@@ -15,8 +15,10 @@ def test_10795():
         con = duckdb.connect(database=":memory:")
         con.execute("SET TimeZone='UTC';")
         con.register("taxi_fhvhv", taxi_fhvhv_arrow)
-        res = con.execute(
-            "SELECT PULocationID, pickup_datetime FROM taxi_fhvhv WHERE pickup_datetime >= '2023-01-01T00:00:00-05:00' AND PULocationID = 244"
-        ).fetchall()
+        res = con.execute("""
+            SELECT PULocationID, pickup_datetime
+            FROM taxi_fhvhv
+            WHERE pickup_datetime >= '2023-01-01T00:00:00-05:00' AND PULocationID = 244
+        """).fetchall()
 
         assert len(res) == 3685

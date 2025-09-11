@@ -22,7 +22,7 @@ class TestRAPIDescription:
 
         # now with more values
         res = duckdb_cursor.query(
-            "select CASE WHEN i%2=0 THEN i ELSE NULL END AS i, i * 10 AS j, (i * 23 // 27)::DOUBLE AS k FROM range(10000) t(i)"
+            "select CASE WHEN i%2=0 THEN i ELSE NULL END AS i, i * 10 AS j, (i * 23 // 27)::DOUBLE AS k FROM range(10000) t(i)"  # noqa: E501
         )
         duck_describe = res.describe().df()
         np.testing.assert_allclose(duck_describe["i"], [5000.0, 4999.0, 2887.0400066504103, 0.0, 9998.0, 4999.0])
