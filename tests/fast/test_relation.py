@@ -31,7 +31,7 @@ class TestRelation:
     def test_csv_auto(self):
         conn = duckdb.connect()
         df_rel = get_relation(conn)
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         test_df.to_csv(temp_file_name, index=False)
 
@@ -309,7 +309,7 @@ class TestRelation:
     def test_write_csv_operator(self):
         conn = duckdb.connect()
         df_rel = get_relation(conn)
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df_rel.write_csv(temp_file_name)
 
         csv_rel = duckdb.from_csv_auto(temp_file_name)
@@ -443,7 +443,7 @@ class TestRelation:
 
     def test_df_write_csv(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         duckdb.write_csv(test_df, temp_file_name)
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert csv_rel.execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]

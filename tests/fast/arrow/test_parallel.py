@@ -33,7 +33,7 @@ class TestArrowParallel:
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         userdata_parquet_table = pyarrow.parquet.read_table(parquet_filename)
         for i in [7, 51, 99, 100, 101, 500, 1000, 2000]:
             data = pyarrow.array(np.arange(3, 7), type=pyarrow.int32())

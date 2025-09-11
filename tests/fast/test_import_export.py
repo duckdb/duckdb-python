@@ -35,7 +35,7 @@ def move_database(export_location, import_location):
     assert path.exists(import_location)
 
     for file in ["schema.sql", "load.sql", "tbl.csv"]:
-        shutil.move(path.join(export_location, file), import_location)
+        shutil.move(path.join(export_location, file), import_location)  # noqa: PTH118
 
 
 def export_move_and_import(export_path, import_path):

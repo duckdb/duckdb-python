@@ -1,10 +1,11 @@
 import json
 import os
+from pathlib import Path
 
 os.chdir(os.path.dirname(__file__))
 
-JSON_PATH = os.path.join("connection_methods.json")
-PYCONNECTION_SOURCE = os.path.join("..", "src", "pyconnection.cpp")
+JSON_PATH = "connection_methods.json"
+PYCONNECTION_SOURCE = Path("..")  / "src" / "duckdb_py" / "pyconnection.cpp"
 
 INITIALIZE_METHOD = (
     "static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {"

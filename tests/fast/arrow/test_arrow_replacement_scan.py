@@ -11,7 +11,7 @@ ds = pytest.importorskip("pyarrow.dataset")
 
 class TestArrowReplacementScan:
     def test_arrow_table_replacement_scan(self, duckdb_cursor):
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         userdata_parquet_table = pq.read_table(parquet_filename)
         df = userdata_parquet_table.to_pandas()  # noqa: F841
 
@@ -53,7 +53,7 @@ class TestArrowReplacementScan:
             duckdb_cursor.sql("select b, d from schema_capsule")
 
     def test_arrow_table_replacement_scan_view(self, duckdb_cursor):
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         userdata_parquet_table = pq.read_table(parquet_filename)
 
         con = duckdb.connect()
@@ -64,7 +64,7 @@ class TestArrowReplacementScan:
             assert con.execute("select count(*) from x").fetchone()
 
     def test_arrow_dataset_replacement_scan(self, duckdb_cursor):
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         pq.read_table(parquet_filename)
         userdata_parquet_dataset = ds.dataset(parquet_filename)  # noqa: F841
 

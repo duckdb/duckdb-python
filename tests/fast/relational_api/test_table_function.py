@@ -9,7 +9,7 @@ script_path = os.path.dirname(__file__)
 
 class TestTableFunction:
     def test_table_function(self, duckdb_cursor):
-        path = os.path.join(script_path, "..", "data/integers.csv")
+        path = os.path.join(script_path, "..", "data/integers.csv")  # noqa: PTH118
         rel = duckdb_cursor.table_function("read_csv", [path])
         res = rel.fetchall()
         assert res == [(1, 10, 0), (2, 50, 30)]

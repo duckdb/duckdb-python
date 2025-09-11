@@ -19,7 +19,7 @@ class TestArrowUnregister:
     def test_arrow_unregister1(self, duckdb_cursor):
         if not can_run:
             return
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         arrow_table_obj = pyarrow.parquet.read_table(parquet_filename)
         connection = duckdb.connect(":memory:")
         connection.register("arrow_table", arrow_table_obj)
@@ -40,7 +40,7 @@ class TestArrowUnregister:
         os.remove(db)
 
         connection = duckdb.connect(db)
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
+        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
         arrow_table_obj = pyarrow.parquet.read_table(parquet_filename)
         connection.register("arrow_table", arrow_table_obj)
         connection.unregister("arrow_table")  # Attempting to unregister.

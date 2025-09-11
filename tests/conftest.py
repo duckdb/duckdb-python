@@ -4,6 +4,7 @@ import shutil
 import warnings
 from importlib import import_module
 from os.path import abspath, dirname, join, normpath
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -192,12 +193,12 @@ def require():
     def _require(extension_name, db_name="") -> duckdb.DuckDBPyConnection | None:
         # Paths to search for extensions
 
-        build = normpath(join(dirname(__file__), "../../../build/"))
+        build = Path(__file__).parent.parent / "build"
         extension = "extension/*/*.duckdb_extension"
 
         extension_search_patterns = [
-            join(build, "release", extension),
-            join(build, "debug", extension),
+            build / "release" / extension,
+            build / "debug" / extension,
         ]
 
         # DUCKDB_PYTHON_TEST_EXTENSION_PATH can be used to add a path for the extension test to search for extensions

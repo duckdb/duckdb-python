@@ -1,5 +1,6 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
 import os
+from pathlib import Path
 from typing import Callable
 
 import cxxheaderparser.parser
@@ -51,16 +52,8 @@ class Visitor:
 
 def get_methods(class_name: str) -> dict[str, ConnectionMethod]:
     CLASSES = {
-        "DuckDBPyConnection": os.path.join(
-            scripts_folder,
-            "..",
-            "src",
-            "include",
-            "duckdb_python",
-            "pyconnection",
-            "pyconnection.hpp",
-        ),
-        "DuckDBPyRelation": os.path.join(scripts_folder, "..", "src", "include", "duckdb_python", "pyrelation.hpp"),
+        "DuckDBPyConnection": Path(scripts_folder) / ".." / "src" / "duckdb_py" / "include" / "duckdb_python" / "pyconnection" / "pyconnection.hpp",  # noqa: E501
+        "DuckDBPyRelation": Path(scripts_folder) / ".." / "src" / "duckdb_py" / "include" / "duckdb_python" / "pyrelation.hpp",  # noqa: E501
     }
 
     path = CLASSES[class_name]

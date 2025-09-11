@@ -12,7 +12,7 @@ import duckdb
 class TestToCSV:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_basic_to_csv(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
@@ -23,7 +23,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_sep(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
@@ -34,7 +34,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_na_rep(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": [5, None, 23, 2], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
@@ -45,7 +45,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_header(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": [5, None, 23, 2], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
@@ -56,7 +56,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quotechar(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["'a,b,c'", None, "hello", "bye"], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
 
@@ -67,7 +67,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_escapechar(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_bool": [True, False],
@@ -83,7 +83,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_date_format(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(getTimeSeriesData())
         dt_index = df.index
         df = pandas.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
@@ -96,7 +96,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_timestamp_format(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
         df = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
         rel = duckdb.from_df(df)
@@ -108,7 +108,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quoting_off(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, quoting=None)
@@ -118,7 +118,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quoting_on(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, quoting="force")
@@ -128,7 +128,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quoting_quote_all(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, quoting=csv.QUOTE_ALL)
@@ -138,7 +138,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_encoding_incorrect(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         with pytest.raises(
@@ -148,7 +148,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_encoding_correct(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, encoding="UTF-8")
@@ -157,7 +157,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_compression_gzip(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, compression="gzip")
@@ -166,7 +166,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_partition(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category": ["a", "a", "b", "b"],
@@ -192,7 +192,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_partition_with_columns_written(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category": ["a", "a", "b", "b"],
@@ -212,7 +212,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_overwrite(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category_1": ["a", "a", "b", "b"],
@@ -240,7 +240,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_overwrite_with_columns_written(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category_1": ["a", "a", "b", "b"],
@@ -266,7 +266,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_overwrite_not_enabled(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category_1": ["a", "a", "b", "b"],
@@ -284,7 +284,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_per_thread_output(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
         print("num_threads:", num_threads)
         df = pandas.DataFrame(
@@ -303,7 +303,7 @@ class TestToCSV:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_use_tmp_file(self, pandas):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pandas.DataFrame(
             {
                 "c_category_1": ["a", "a", "b", "b"],

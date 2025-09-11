@@ -7,7 +7,7 @@ import duckdb
 VARCHAR = duckdb.typing.VARCHAR
 BIGINT = duckdb.typing.BIGINT
 
-filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")
+filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")  # noqa: PTH118
 
 
 @pytest.fixture(scope="session")

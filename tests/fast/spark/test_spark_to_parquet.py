@@ -21,7 +21,7 @@ def df(spark):
 
 class TestSparkToParquet:
     def test_basic_to_parquet(self, df, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")
+        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")  # noqa: PTH118
 
         df.write.parquet(temp_file_name)
 
@@ -30,7 +30,7 @@ class TestSparkToParquet:
         assert sorted(df.collect()) == sorted(csv_rel.collect())
 
     def test_compressed_to_parquet(self, df, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")
+        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")  # noqa: PTH118
 
         df.write.parquet(temp_file_name, compression="ZSTD")
 

@@ -20,7 +20,7 @@ class TestNonDefaultConn:
         assert duckdb_cursor.from_query("select count(*) from t").execute().fetchall()[0] == (1,)
 
     def test_from_csv(self, duckdb_cursor):
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         duckdb_cursor.execute("create table t (a integer)")
         duckdb_cursor.execute("insert into t values (1)")
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4]})
@@ -31,7 +31,7 @@ class TestNonDefaultConn:
     def test_from_parquet(self, duckdb_cursor):
         if not importlib.util.find_spec("pyarrow"):
             return
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         duckdb_cursor.execute("create table t (a integer)")
         duckdb_cursor.execute("insert into t values (1)")
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4]})

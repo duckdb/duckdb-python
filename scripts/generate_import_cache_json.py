@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 from typing import Union
 
 script_dir = os.path.dirname(__file__)
@@ -155,7 +156,7 @@ for line in lines:
 
 # Load existing JSON data from a file if it exists
 existing_json_data = {}
-json_cache_path = os.path.join(script_dir, "cache_data.json")
+json_cache_path = Path(script_dir) / "cache_data.json"
 try:
     with open(json_cache_path) as file:
         existing_json_data = json.load(file)

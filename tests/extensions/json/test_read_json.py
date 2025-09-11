@@ -8,7 +8,7 @@ import duckdb
 def TestFile(name):
     import os
 
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", name)
+    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", name)  # noqa: PTH118
     return filename
 
 

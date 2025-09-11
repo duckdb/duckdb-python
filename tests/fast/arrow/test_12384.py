@@ -8,7 +8,7 @@ pa = pytest.importorskip("pyarrow")
 
 
 def test_10795():
-    arrow_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "arrow_table")
+    arrow_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "arrow_table")  # noqa: PTH118
     with pa.memory_map(arrow_filename, "r") as source:
         reader = pa.ipc.RecordBatchFileReader(source)
         taxi_fhvhv_arrow = reader.read_all()

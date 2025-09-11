@@ -9,7 +9,7 @@ import duckdb
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 
-filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "tz.parquet")
+filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "tz.parquet")  # noqa: PTH118
 
 
 class TestNativeTimeZone:

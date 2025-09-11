@@ -1,11 +1,12 @@
 import json
 import os
+from pathlib import Path
 
 os.chdir(os.path.dirname(__file__))
 
-JSON_PATH = os.path.join("connection_methods.json")
-WRAPPER_JSON_PATH = os.path.join("connection_wrapper_methods.json")
-DUCKDB_STUBS_FILE = os.path.join("..", "duckdb-stubs", "__init__.pyi")
+JSON_PATH = "connection_methods.json"
+WRAPPER_JSON_PATH = "connection_wrapper_methods.json"
+DUCKDB_STUBS_FILE = Path("..") / "duckdb" / "__init__.pyi"
 
 START_MARKER = "# START OF CONNECTION WRAPPER"
 END_MARKER = "# END OF CONNECTION WRAPPER"

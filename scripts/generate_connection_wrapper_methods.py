@@ -1,13 +1,14 @@
 import json
 import os
+from pathlib import Path
 
 # Requires `python3 -m pip install cxxheaderparser pcpp`
 from get_cpp_methods import ConnectionMethod, get_methods
 
 os.chdir(os.path.dirname(__file__))
 
-JSON_PATH = os.path.join("connection_methods.json")
-DUCKDB_PYTHON_SOURCE = os.path.join("..", "duckdb_python.cpp")
+JSON_PATH = "connection_methods.json"
+DUCKDB_PYTHON_SOURCE = Path("..")  / "src" / "duckdb_py" / "duckdb_python.cpp"
 
 START_MARKER = "\t// START_OF_CONNECTION_METHODS"
 END_MARKER = "\t// END_OF_CONNECTION_METHODS"
@@ -31,9 +32,9 @@ _exported_symbols.extend([
 ])
 """
 
-WRAPPER_JSON_PATH = os.path.join("connection_wrapper_methods.json")
+WRAPPER_JSON_PATH = "connection_wrapper_methods.json"
 
-DUCKDB_INIT_FILE = os.path.join("..", "duckdb", "__init__.py")
+DUCKDB_INIT_FILE = Path("..") / "duckdb" / "__init__.py"
 INIT_PY_START = "# START OF CONNECTION WRAPPER"
 INIT_PY_END = "# END OF CONNECTION WRAPPER"
 

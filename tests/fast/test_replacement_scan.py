@@ -81,13 +81,13 @@ def create_relation(conn, query: str) -> duckdb.DuckDBPyRelation:
 class TestReplacementScan:
     def test_csv_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")  # noqa: PTH118
         res = con.execute("select count(*) from '%s'" % (filename))
         assert res.fetchone()[0] == 2
 
     def test_parquet_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")  # noqa: PTH118
         res = con.execute("select count(*) from '%s'" % (filename))
         assert res.fetchone()[0] == 3
 

@@ -9,13 +9,13 @@ class TestWindowsAbsPath:
         if os.name != "nt":
             return
         current_directory = os.getcwd()
-        test_dir = os.path.join(current_directory, "tést")
+        test_dir = os.path.join(current_directory, "tést")  # noqa: PTH118
         if os.path.isdir(test_dir):
             shutil.rmtree(test_dir)
         os.mkdir(test_dir)
 
         dbname = "test.db"
-        dbpath = os.path.join(test_dir, dbname)
+        dbpath = os.path.join(test_dir, dbname)  # noqa: PTH118
         con = duckdb.connect(dbpath)
         con.execute("CREATE OR REPLACE TABLE int AS SELECT * FROM range(10) t(i)")
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
@@ -24,7 +24,7 @@ class TestWindowsAbsPath:
         del con
 
         os.chdir("tést")
-        dbpath = os.path.join("..", dbpath)
+        dbpath = os.path.join("..", dbpath)  # noqa: PTH118
         con = duckdb.connect(dbpath)
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
         assert res[0][0] == 10
@@ -43,7 +43,7 @@ class TestWindowsAbsPath:
         if os.name != "nt":
             return
         current_directory = os.getcwd()
-        dbpath = os.path.join(current_directory, "test.db")
+        dbpath = os.path.join(current_directory, "test.db")  # noqa: PTH118
         con = duckdb.connect(dbpath)
         con.execute("CREATE OR REPLACE TABLE int AS SELECT * FROM range(10) t(i)")
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
