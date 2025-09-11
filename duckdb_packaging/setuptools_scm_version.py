@@ -19,7 +19,7 @@ SCM_GLOBAL_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION"
 OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
 
 
-def _main_branch_versioning():
+def _main_branch_versioning() -> bool:
     from_env = os.getenv("MAIN_BRANCH_VERSIONING")
     return from_env == "1" if from_env is not None else MAIN_BRANCH_VERSIONING
 

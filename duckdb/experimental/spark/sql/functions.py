@@ -147,7 +147,7 @@ def lit(col: Any) -> Column:  # noqa: D103
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
 
 
-def _invoke_function(function: str, *arguments):
+def _invoke_function(function: str, *arguments) -> Column:
     return Column(FunctionExpression(function, *arguments))
 
 

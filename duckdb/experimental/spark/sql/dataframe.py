@@ -698,7 +698,7 @@ class DataFrame:  # noqa: D101
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
 
-            def map_to_recognized_jointype(how: str):
+            def map_to_recognized_jointype(how: str) -> str:
                 known_aliases = {
                     "inner": [],
                     "outer": ["full", "fullouter", "full_outer"],
@@ -707,15 +707,10 @@ class DataFrame:  # noqa: D101
                     "anti": ["leftanti", "left_anti"],
                     "semi": ["leftsemi", "left_semi"],
                 }
-                mapped_type = None
                 for type, aliases in known_aliases.items():
                     if how == type or how in aliases:
-                        mapped_type = type
-                        break
-
-                if not mapped_type:
-                    mapped_type = how
-                return mapped_type
+                        return type
+                return how
 
             how = map_to_recognized_jointype(how)
             result = self.relation.join(other.relation, on, how)

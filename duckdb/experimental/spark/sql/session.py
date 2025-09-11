@@ -31,7 +31,7 @@ from .udf import UDFRegistration
 
 # data is a List of rows
 # every value in each row needs to be turned into a Value
-def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
+def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list['duckdb.Value']:
     from duckdb import Value
 
     new_data = []
@@ -82,7 +82,7 @@ class SparkSession:  # noqa: D101
         verify_tuple_integrity(data)
 
         def construct_query(tuples: Iterable) -> str:
-            def construct_values_list(row: Sized, start_param_idx: int):
+            def construct_values_list(row: Sized, start_param_idx: int) -> str:
                 parameter_count = len(row)
                 parameters = [f"${x + start_param_idx}" for x in range(parameter_count)]
                 parameters = "(" + ", ".join(parameters) + ")"
@@ -99,7 +99,7 @@ class SparkSession:  # noqa: D101
 
         query = construct_query(data)
 
-        def construct_parameters(tuples: Iterable):
+        def construct_parameters(tuples: Iterable) -> list[list]:
             parameters = []
             for row in tuples:
                 parameters.extend(list(row))

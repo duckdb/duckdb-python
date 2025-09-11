@@ -189,7 +189,7 @@ class ArrowPandas:
 
 @pytest.fixture(scope="function")
 def require():
-    def _require(extension_name, db_name=""):
+    def _require(extension_name, db_name="") -> duckdb.DuckDBPyConnection | None:
         # Paths to search for extensions
 
         build = normpath(join(dirname(__file__), "../../../build/"))

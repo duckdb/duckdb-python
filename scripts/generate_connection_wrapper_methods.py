@@ -124,7 +124,7 @@ def generate():
         "FunctionNullHandling.DEFAULT": "FunctionNullHandling::DEFAULT_NULL_HANDLING",
     }
 
-    def map_default(val):
+    def map_default(val) -> str:
         if val in DEFAULT_ARGUMENT_MAP:
             return DEFAULT_ARGUMENT_MAP[val]
         return val
