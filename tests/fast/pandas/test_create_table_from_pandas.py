@@ -8,7 +8,7 @@ import duckdb
 
 def assert_create(internal_data, expected_result, data_type, pandas):
     conn = duckdb.connect()
-    df_in = pandas.DataFrame(data=internal_data, dtype=data_type)
+    df_in = pandas.DataFrame(data=internal_data, dtype=data_type)  # noqa: F841
 
     conn.execute("CREATE TABLE t AS SELECT * FROM df_in")
 

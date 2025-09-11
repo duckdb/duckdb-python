@@ -60,7 +60,7 @@ class DuckDBThreaded:
 
 def execute_query_same_connection(duckdb_conn, queue, pandas):
     try:
-        out = duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)")
+        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)")
         queue.put(False)
     except:
         queue.put(True)
@@ -267,7 +267,7 @@ def table(duckdb_conn, queue, pandas):
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
     try:
-        out = duckdb_conn.table("T")
+        duckdb_conn.table("T")
         queue.put(True)
     except:
         queue.put(False)
@@ -279,7 +279,7 @@ def view(duckdb_conn, queue, pandas):
     duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
     duckdb_conn.execute("CREATE VIEW V as (SELECT * FROM T)")
     try:
-        out = duckdb_conn.values([5, "five"])
+        duckdb_conn.values([5, "five"])
         queue.put(True)
     except:
         queue.put(False)
@@ -289,7 +289,7 @@ def values(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        out = duckdb_conn.values([5, "five"])
+        duckdb_conn.values([5, "five"])
         queue.put(True)
     except:
         queue.put(False)
@@ -299,7 +299,7 @@ def from_query(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        out = duckdb_conn.from_query("select i from (values (42), (84), (NULL), (128)) tbl(i)")
+        duckdb_conn.from_query("select i from (values (42), (84), (NULL), (128)) tbl(i)")
         queue.put(True)
     except:
         queue.put(False)
@@ -308,9 +308,9 @@ def from_query(duckdb_conn, queue, pandas):
 def from_df(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    df = pandas.DataFrame(["bla", "blabla"] * 10, columns=["A"])
+    df = pandas.DataFrame(["bla", "blabla"] * 10, columns=["A"])  # noqa: F841
     try:
-        out = duckdb_conn.execute("select * from df").fetchall()
+        duckdb_conn.execute("select * from df").fetchall()
         queue.put(True)
     except:
         queue.put(False)
@@ -322,7 +322,7 @@ def from_arrow(duckdb_conn, queue, pandas):
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({"my_column": pa.array([1, 2, 3, 4, 5], type=pa.int64())})
     try:
-        out = duckdb_conn.from_arrow(arrow_tbl)
+        duckdb_conn.from_arrow(arrow_tbl)
         queue.put(True)
     except:
         queue.put(False)
@@ -333,7 +333,7 @@ def from_csv_auto(duckdb_conn, queue, pandas):
     duckdb_conn = duckdb.connect()
     filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")
     try:
-        out = duckdb_conn.from_csv_auto(filename)
+        duckdb_conn.from_csv_auto(filename)
         queue.put(True)
     except:
         queue.put(False)
@@ -344,7 +344,7 @@ def from_parquet(duckdb_conn, queue, pandas):
     duckdb_conn = duckdb.connect()
     filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")
     try:
-        out = duckdb_conn.from_parquet(filename)
+        duckdb_conn.from_parquet(filename)
         queue.put(True)
     except:
         queue.put(False)

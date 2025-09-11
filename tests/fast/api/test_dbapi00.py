@@ -20,8 +20,6 @@ class TestSimpleDBAPI:
         truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
 
         duckdb_cursor.execute("Select * from integers")
-        # by default 'size' is 1
-        arraysize = 1
         list_of_results = []
         while True:
             res = duckdb_cursor.fetchmany()

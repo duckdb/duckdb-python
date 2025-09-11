@@ -38,7 +38,7 @@ def test_unions_with_struct(duckdb_cursor):
     )
 
     rel = duckdb_cursor.table("tbl")
-    arrow = rel.fetch_arrow_table()
+    arrow = rel.fetch_arrow_table()  # noqa: F841
 
     duckdb_cursor.execute("create table other as select * from arrow")
     rel2 = duckdb_cursor.table("other")

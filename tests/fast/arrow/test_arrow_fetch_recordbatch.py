@@ -226,9 +226,9 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor.execute("CREATE table t as select range a from range(5000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
         with pytest.raises(RuntimeError, match="Approximate Batch Size of Record Batch MUST be higher than 0"):
-            record_batch_reader = query.fetch_record_batch(0)
+            query.fetch_record_batch(0)
         with pytest.raises(TypeError, match="incompatible function arguments"):
-            record_batch_reader = query.fetch_record_batch(-1)
+            query.fetch_record_batch(-1)
 
     def test_record_batch_reader_from_relation(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()

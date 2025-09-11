@@ -55,7 +55,7 @@ class TestResolveObjectColumns:
         df = create_generic_dataframe(data, pandas)
         # Sample size is too low to detect the mismatch, exception is raised when trying to convert
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
-            roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
+            duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
 
     def test_reset_analyze_sample_setting(self, duckdb_cursor):
         duckdb_cursor.execute("SET pandas_analyze_sample=5")

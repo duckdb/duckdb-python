@@ -139,7 +139,7 @@ class TestRAPIQuery:
 
         duckdb_cursor.execute(f"SET max_expression_depth TO {depth_limit}")
         rel = duckdb_cursor.sql("select 42 a, 21 b")
-        rel = duckdb_cursor.sql("select a+a a, b+b b from rel")
+        rel = duckdb_cursor.sql("select a+a a, b+b b from rel")  # noqa: F841
         other_rel = duckdb_cursor.sql("select a from rel")
         res = other_rel.fetchall()
         assert res == [(84,)]

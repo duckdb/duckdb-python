@@ -10,13 +10,13 @@ class TestPandasObject:
     def test_object_lotof_nulls(self):
         # Test mostly null column
         data = [None] + [1] + [None] * 10000  # Last element is 1, others are None
-        pandas_df = pd.DataFrame(data, columns=["c"], dtype=object)
+        pandas_df = pd.DataFrame(data, columns=["c"], dtype=object)  # noqa: F841
         con = duckdb.connect()
         assert con.execute("FROM pandas_df where c is not null").fetchall() == [(1.0,)]
 
         # Test all nulls, should return varchar
         data = [None] * 10000  # Last element is 1, others are None
-        pandas_df_2 = pd.DataFrame(data, columns=["c"], dtype=object)
+        pandas_df_2 = pd.DataFrame(data, columns=["c"], dtype=object)  # noqa: F841
         assert con.execute("FROM pandas_df_2 limit 1").fetchall() == [(None,)]
         assert con.execute("select typeof(c) FROM pandas_df_2 limit 1").fetchall() == [('"NULL"',)]
 
@@ -29,7 +29,7 @@ class TestPandasObject:
         assert df == [(1, None, 2), (1, 1.1, 2), (1, 1.1, 2), (1, 1.1, 2)]
 
     def test_tuple_to_list(self, duckdb_cursor):
-        tuple_df = pd.DataFrame.from_dict(
+        tuple_df = pd.DataFrame.from_dict(  # noqa: F841
             dict(
                 nums=[
                     (
@@ -50,7 +50,7 @@ class TestPandasObject:
         assert res == [([1, 2, 3],), ([4, 5, 6],)]
 
     def test_2273(self, duckdb_cursor):
-        df_in = pd.DataFrame([[datetime.date(1992, 7, 30)]])
+        df_in = pd.DataFrame([[datetime.date(1992, 7, 30)]])  # noqa: F841
         assert duckdb_cursor.query("Select * from df_in").fetchall() == [(datetime.date(1992, 7, 30),)]
 
     def test_object_to_string_with_stride(self, duckdb_cursor):

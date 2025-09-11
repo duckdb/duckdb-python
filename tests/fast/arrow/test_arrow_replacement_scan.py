@@ -13,7 +13,7 @@ class TestArrowReplacementScan:
     def test_arrow_table_replacement_scan(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
         userdata_parquet_table = pq.read_table(parquet_filename)
-        df = userdata_parquet_table.to_pandas()
+        df = userdata_parquet_table.to_pandas()  # noqa: F841
 
         con = duckdb.connect()
 
@@ -27,34 +27,34 @@ class TestArrowReplacementScan:
     )
     def test_arrow_pycapsule_replacement_scan(self, duckdb_cursor):
         tbl = pa.Table.from_pydict({"a": [1, 2, 3, 4, 5, 6, 7, 8, 9]})
-        capsule = tbl.__arrow_c_stream__()
+        capsule = tbl.__arrow_c_stream__()  # noqa: F841
 
         rel = duckdb_cursor.sql("select * from capsule")
         assert rel.fetchall() == [(i,) for i in range(1, 10)]
 
-        capsule = tbl.__arrow_c_stream__()
+        capsule = tbl.__arrow_c_stream__()  # noqa: F841
         rel = duckdb_cursor.sql("select * from capsule where a > 3 and a < 5")
         assert rel.fetchall() == [(4,)]
 
         tbl = pa.Table.from_pydict({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9], "d": [10, 11, 12]})
-        capsule = tbl.__arrow_c_stream__()
+        capsule = tbl.__arrow_c_stream__()  # noqa: F841
 
         rel = duckdb_cursor.sql("select b, d from capsule")
         assert rel.fetchall() == [(i, i + 6) for i in range(4, 7)]
 
         with pytest.raises(duckdb.InvalidInputException, match="The ArrowArrayStream was already released"):
-            rel = duckdb_cursor.sql("select b, d from capsule")
+            duckdb_cursor.sql("select b, d from capsule")
 
         schema_obj = tbl.schema
-        schema_capsule = schema_obj.__arrow_c_schema__()
+        schema_capsule = schema_obj.__arrow_c_schema__()  # noqa: F841
         with pytest.raises(
             duckdb.InvalidInputException, match="""Expected a 'arrow_array_stream' PyCapsule, got: arrow_schema"""
         ):
-            rel = duckdb_cursor.sql("select b, d from schema_capsule")
+            duckdb_cursor.sql("select b, d from schema_capsule")
 
     def test_arrow_table_replacement_scan_view(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
-        userdata_parquet_table = pq.read_table(parquet_filename)
+        userdata_parquet_table = pq.read_table(parquet_filename)  # noqa: F841
 
         con = duckdb.connect()
 
@@ -65,8 +65,8 @@ class TestArrowReplacementScan:
 
     def test_arrow_dataset_replacement_scan(self, duckdb_cursor):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")
-        userdata_parquet_table = pq.read_table(parquet_filename)
-        userdata_parquet_dataset = ds.dataset(parquet_filename)
+        pq.read_table(parquet_filename)
+        userdata_parquet_dataset = ds.dataset(parquet_filename)  # noqa: F841
 
         con = duckdb.connect()
         assert con.execute("select count(*) from userdata_parquet_dataset").fetchone() == (1000,)

@@ -53,7 +53,7 @@ class TestArrowRecordBatchReader:
         )
 
         batches = [r for r in userdata_parquet_dataset.to_batches()]
-        reader = pyarrow.dataset.Scanner.from_batches(batches, schema=userdata_parquet_dataset.schema).to_reader()
+        reader = pyarrow.dataset.Scanner.from_batches(batches, schema=userdata_parquet_dataset.schema).to_reader()  # noqa: F841
 
         assert (
             duckdb_conn.execute(

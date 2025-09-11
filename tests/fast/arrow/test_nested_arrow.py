@@ -196,12 +196,12 @@ class TestArrowNested:
             duckdb.InvalidInputException,
             match="Arrow map contains duplicate key, which isn't supported by DuckDB map type",
         ):
-            rel = duckdb_cursor.from_arrow(arrow_table).fetchall()
+            duckdb_cursor.from_arrow(arrow_table).fetchall()
 
     def test_null_map_arrow_to_duckdb(self, duckdb_cursor):
         map_type = pa.map_(pa.int32(), pa.int32())
         values = [None, [(5, 42)]]
-        arrow_table = pa.table({"detail": pa.array(values, map_type)})
+        arrow_table = pa.table({"detail": pa.array(values, map_type)})  # noqa: F841
         res = duckdb_cursor.sql("select * from arrow_table").fetchall()
         assert res == [(None,), ({5: 42},)]
 

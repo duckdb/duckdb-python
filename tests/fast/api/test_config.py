@@ -1,5 +1,4 @@
-# simple DB API testcase
-
+# ruff: noqa: F841
 import os
 import re
 
@@ -57,7 +56,7 @@ class TestDBConfig:
     def test_unrecognized_option(self, duckdb_cursor):
         success = True
         try:
-            con_regular = duckdb.connect(":memory:", config={"thisoptionisprobablynotthere": "42"})
+            duckdb.connect(":memory:", config={"thisoptionisprobablynotthere": "42"})
         except:
             success = False
         assert success == False
@@ -65,7 +64,7 @@ class TestDBConfig:
     def test_incorrect_parameter(self, duckdb_cursor):
         success = True
         try:
-            con_regular = duckdb.connect(":memory:", config={"default_null_order": "42"})
+            duckdb.connect(":memory:", config={"default_null_order": "42"})
         except:
             success = False
         assert success == False

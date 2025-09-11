@@ -142,8 +142,8 @@ class TestArrowListType:
     def test_list_view(self, duckdb_cursor, child_size):
         res = generate_list(child_size)
 
-        list_tbl = pa.Table.from_arrays([res.list], ["x"])
-        list_view_tbl = pa.Table.from_arrays([res.list_view], ["x"])
+        list_tbl = pa.Table.from_arrays([res.list], ["x"])  # noqa: F841
+        list_view_tbl = pa.Table.from_arrays([res.list_view], ["x"])  # noqa: F841
 
         assert res.list_view.to_pylist() == res.list.to_pylist()
         original = duckdb_cursor.query("select * from list_tbl").fetchall()

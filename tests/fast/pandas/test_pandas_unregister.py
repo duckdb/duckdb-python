@@ -15,7 +15,7 @@ class TestPandasUnregister:
         connection = duckdb.connect(":memory:")
         connection.register("dataframe", df)
 
-        df2 = connection.execute("SELECT * FROM dataframe;").fetchdf()
+        df2 = connection.execute("SELECT * FROM dataframe;").fetchdf()  # noqa: F841
         connection.unregister("dataframe")
         with pytest.raises(duckdb.CatalogException, match="Table with name dataframe does not exist"):
             connection.execute("SELECT * FROM dataframe;").fetchdf()

@@ -340,7 +340,7 @@ class TestDataFrame:
 
     def test_array_and_map_type(self, spark):
         """Array & Map."""
-        arrayStructureSchema = StructType(
+        StructType(
             [
                 StructField(
                     "name",

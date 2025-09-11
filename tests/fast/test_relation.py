@@ -1,3 +1,4 @@
+# ruff: noqa: F841
 import datetime
 import gc
 import os

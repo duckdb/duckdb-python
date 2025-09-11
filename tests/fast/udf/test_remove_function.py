@@ -45,8 +45,10 @@ class TestRemoveFunction:
         """
             Error: Catalog Error: Scalar Function with name func does not exist!
         """
-        with pytest.raises(duckdb.CatalogException, match="Scalar Function with name func does not exist!"):
-            res = rel.fetchall()
+        with pytest.raises(
+            duckdb.CatalogException, match="Scalar Function with name func does not exist!"
+        ):
+            rel.fetchall()
 
     def test_use_after_remove_and_recreation(self):
         def func(x: str) -> str:
@@ -56,8 +58,8 @@ class TestRemoveFunction:
         con.create_function("func", func)
 
         with pytest.raises(duckdb.BinderException, match="No function matches the given name"):
-            rel1 = con.sql("select func(42)")
-        rel2 = con.sql("select func('test'::VARCHAR)")
+            con.sql("select func(42)")
+        con.sql("select func('test'::VARCHAR)")
         con.remove_function("func")
 
         def also_func(x: int) -> int:
@@ -65,7 +67,7 @@ class TestRemoveFunction:
 
         con.create_function("func", also_func)
         with pytest.raises(duckdb.BinderException, match="No function matches the given name"):
-            res = rel2.fetchall()
+            rel2.fetchall()
 
     def test_overwrite_name(self):
         def func(x):

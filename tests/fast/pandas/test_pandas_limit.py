@@ -4,7 +4,7 @@ import duckdb
 class TestPandasLimit:
     def test_pandas_limit(self, duckdb_cursor):
         con = duckdb.connect()
-        df = con.execute("select * from range(10000000) tbl(i)").df()
+        df = con.execute("select * from range(10000000) tbl(i)").df()  # noqa: F841
 
         con.execute("SET threads=8")
 

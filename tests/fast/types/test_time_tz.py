@@ -8,7 +8,7 @@ pandas = pytest.importorskip("pandas")
 
 class TestTimeTz:
     def test_time_tz(self, duckdb_cursor):
-        df = pandas.DataFrame({"col1": [time(1, 2, 3, tzinfo=timezone.utc)]})
+        df = pandas.DataFrame({"col1": [time(1, 2, 3, tzinfo=timezone.utc)]})  # noqa: F841
 
         sql = "SELECT * FROM df"
 

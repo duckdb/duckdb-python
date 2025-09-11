@@ -78,7 +78,7 @@ class TestDuckDBExecute:
 
     def test_execute_multiple_statements(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
-        df = pd.DataFrame({"a": [5, 6, 7, 8]})
+        df = pd.DataFrame({"a": [5, 6, 7, 8]})  # noqa: F841
         sql = """
             select * from df;
             select * from VALUES (1),(2),(3),(4) t(a);

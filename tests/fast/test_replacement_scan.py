@@ -1,3 +1,4 @@
+# ruff: noqa: F841
 import os
 
 import pytest
@@ -290,15 +291,15 @@ class TestReplacementScan:
                 WHERE a < 3
             )
             SELECT * FROM (
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
                 JOIN cte2 ON cte1.a = cte2.a
                 JOIN (
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM df
                     JOIN cte3 ON df.a = cte3.a
@@ -419,8 +420,8 @@ class TestReplacementScan:
                 WITH cte1 AS (
                     SELECT * FROM df
                 )
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
@@ -436,8 +437,8 @@ class TestReplacementScan:
                         SELECT * FROM df
                         WHERE a < 3
                     )
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM (
                         SELECT * FROM df

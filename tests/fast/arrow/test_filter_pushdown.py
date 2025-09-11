@@ -1,3 +1,4 @@
+# ruff: noqa: F841
 import sys
 
 import pytest
@@ -745,10 +746,10 @@ class TestArrowFilterPushdown:
         duckdb_cursor.execute(
             """
             INSERT INTO test_structs VALUES
-                ({'a': 1, 'b': true}), 
-                ({'a': 2, 'b': false}), 
+                ({'a': 1, 'b': true}),
+                ({'a': 2, 'b': false}),
                 (NULL),
-                ({'a': 3, 'b': true}), 
+                ({'a': 3, 'b': true}),
                 ({'a': NULL, 'b': NULL});
         """
         )
@@ -775,7 +776,7 @@ class TestArrowFilterPushdown:
 
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true 
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true
         """
         ).fetchall()
 
@@ -848,7 +849,7 @@ class TestArrowFilterPushdown:
 
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5 
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5
         """
         ).fetchall()
 

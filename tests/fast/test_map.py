@@ -31,9 +31,9 @@ class TestMap:
         conn.execute("CREATE TABLE t (a integer)")
         empty_rel = conn.table("t")
 
-        newdf1 = testrel.map(lambda df: df["col0"].add(42).to_frame())
-        newdf2 = testrel.map(lambda df: df["col0"].astype("string").to_frame())
-        newdf3 = testrel.map(lambda df: df)
+        testrel.map(lambda df: df["col0"].add(42).to_frame())
+        testrel.map(lambda df: df["col0"].astype("string").to_frame())
+        testrel.map(lambda df: df)
 
         # column type differs from bind
         def evil2(df):
@@ -227,7 +227,7 @@ class TestMap:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_pyarrow_df(self, pandas):
         # PyArrow backed dataframes only exist on pandas >= 2.0.0
-        _ = pytest.importorskip("pandas", "2.0.0")
+        pytest.importorskip("pandas", "2.0.0")
 
         def basic_function(df):
             # Create a pyarrow backed dataframe
@@ -236,4 +236,4 @@ class TestMap:
 
         con = duckdb.connect()
         with pytest.raises(duckdb.InvalidInputException):
-            rel = con.sql("select 42").map(basic_function)
+            con.sql("select 42").map(basic_function)

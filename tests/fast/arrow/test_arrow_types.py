@@ -25,7 +25,7 @@ class TestArrowTypes:
 
         # Create an empty array with the defined struct type
         empty_array = pa.array([], type=empty_struct_type)
-        arrow_table = pa.Table.from_arrays([empty_array], schema=pa.schema([("data", empty_struct_type)]))
+        arrow_table = pa.Table.from_arrays([empty_array], schema=pa.schema([("data", empty_struct_type)]))  # noqa: F841
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Attempted to convert a STRUCT with no fields to DuckDB which is not supported",

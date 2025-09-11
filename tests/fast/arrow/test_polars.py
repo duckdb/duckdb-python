@@ -36,7 +36,7 @@ class TestPolars:
         pl_testing.assert_frame_equal(df, polars_result)
 
         # now do the same for a lazy dataframe
-        lazy_df = df.lazy()
+        lazy_df = df.lazy()  # noqa: F841
         lazy_result = duckdb_cursor.sql("SELECT * FROM lazy_df").pl()
         pl_testing.assert_frame_equal(df, lazy_result)
 
@@ -71,7 +71,7 @@ class TestPolars:
         pl_testing.assert_frame_equal(df, polars_result)
 
     def test_empty_polars_dataframe(self, duckdb_cursor):
-        polars_empty_df = pl.DataFrame()
+        polars_empty_df = pl.DataFrame()  # noqa: F841
         with pytest.raises(
             duckdb.InvalidInputException, match="Provided table/dataframe must have at least one column"
         ):
@@ -93,12 +93,12 @@ class TestPolars:
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
-        res = duckdb_cursor.read_json(string).pl()
+        duckdb_cursor.read_json(string).pl()
         assert duckdb_cursor.execute("FROM res").fetchall() == [([{"content": {"ManagedSystem": {"test": None}}}],)]
 
     def test_polars_from_json_error(self, duckdb_cursor):
         conn = duckdb.connect()
-        my_table = conn.query("select 'x' my_str").pl()
+        my_table = conn.query("select 'x' my_str").pl()  # noqa: F841
         my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
         assert my_res.fetchall() == [("x",)]
 
@@ -134,28 +134,28 @@ class TestPolars:
 
     def test_polars_column_with_tricky_name(self, duckdb_cursor):
         # Test that a polars DataFrame with a column name that is non standard still works
-        df_colon = pl.DataFrame({"x:y": [1, 2]})
+        df_colon = pl.DataFrame({"x:y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_colon").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x:y": 1}, {"x:y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x:y") == 1).collect()
         assert result.to_dicts() == [{"x:y": 1}]
 
-        df_space = pl.DataFrame({"x y": [1, 2]})
+        df_space = pl.DataFrame({"x y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_space").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x y": 1}, {"x y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x y") == 1).collect()
         assert result.to_dicts() == [{"x y": 1}]
 
-        df_dot = pl.DataFrame({"x.y": [1, 2]})
+        df_dot = pl.DataFrame({"x.y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_dot").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x.y": 1}, {"x.y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x.y") == 1).collect()
         assert result.to_dicts() == [{"x.y": 1}]
 
-        df_quote = pl.DataFrame({'"xy"': [1, 2]})
+        df_quote = pl.DataFrame({'"xy"': [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_quote").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{'"xy"': 1}, {'"xy"': 2}]

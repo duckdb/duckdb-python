@@ -62,8 +62,6 @@ def get_methods(class_name: str) -> dict[str, ConnectionMethod]:
         ),
         "DuckDBPyRelation": os.path.join(scripts_folder, "..", "src", "include", "duckdb_python", "pyrelation.hpp"),
     }
-    # Create a dictionary to store method names and prototypes
-    methods_dict = {}
 
     path = CLASSES[class_name]
 

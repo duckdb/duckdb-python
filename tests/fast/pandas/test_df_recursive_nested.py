@@ -11,7 +11,6 @@ def check_equal(conn, df, reference_query, data):
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute(reference_query, parameters=[data])
     res = duckdb_conn.query("SELECT * FROM tbl").fetchall()
-    df_res = duckdb_conn.query("SELECT * FROM tbl").df()
     out = conn.sql("SELECT * FROM df").fetchall()
     assert res == out
 

@@ -26,8 +26,8 @@ def RoundTripStringView(query, array):
     schema = pa.schema([field])
 
     # Create a table using the schema and the array
-    gt_table = pa.Table.from_arrays([array], schema=schema)
-    arrow_table = con.execute("select * from gt_table").fetch_arrow_table()
+    gt_table = pa.Table.from_arrays([array], schema=schema)  # noqa: F841
+    arrow_table = con.execute("select * from gt_table").fetch_arrow_table()  # noqa: F841
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
 
 

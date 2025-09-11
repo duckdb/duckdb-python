@@ -48,7 +48,7 @@ class TestWithColumnRenamed:
         assert "DateOfBirth" in df2.columns
         assert "salary_amount" in df2.columns
 
-        schema2 = StructType(
+        StructType(
             [
                 StructField(
                     "full name",

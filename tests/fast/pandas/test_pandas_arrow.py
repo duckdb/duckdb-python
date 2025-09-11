@@ -14,7 +14,7 @@ from pandas.api.types import is_integer_dtype
 class TestPandasArrow:
     def test_pandas_arrow(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
-        df = pd.DataFrame({"a": pd.Series([5, 4, 3])}).convert_dtypes()
+        df = pd.DataFrame({"a": pd.Series([5, 4, 3])}).convert_dtypes()  # noqa: F841
         con = duckdb.connect()
         res = con.sql("select * from df").fetchall()
         assert res == [(5,), (4,), (3,)]
@@ -35,12 +35,12 @@ class TestPandasArrow:
                 "integers": np.ndarray((4,), buffer=np.array([1, 2, 3, 4, 5]), offset=np.int_().itemsize, dtype=int),
             }
         )
-        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")
+        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
         con = duckdb.connect()
         with pytest.raises(
             duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow.lib.Table"
         ):
-            res = con.sql("select * from pyarrow_df").fetchall()
+            res = con.sql("select * from pyarrow_df").fetchall()  # noqa: F841
 
         numpy_df = pd.DataFrame(
             {"a": np.ndarray((2,), buffer=np.array([1, 2, 3]), offset=np.int_().itemsize, dtype=int)}
@@ -67,7 +67,7 @@ class TestPandasArrow:
         with pytest.raises(
             duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow.lib.Table"
         ):
-            res = con.sql("select * from df").fetchall()
+            con.sql("select * from df").fetchall()
 
     def test_empty_df(self):
         df = pd.DataFrame(
@@ -85,7 +85,7 @@ class TestPandasArrow:
                 "timedelta64[ns]": pd.Series(data=[], dtype="timedelta64[ns]"),
             }
         )
-        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")
+        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
 
         con = duckdb.connect()
         res = con.sql("select * from pyarrow_df").fetchall()
@@ -103,7 +103,7 @@ class TestPandasArrow:
                 )
             }
         )
-        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")
+        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
 
         con = duckdb.connect()
         res = con.sql("select * from pyarrow_df").fetchall()
@@ -123,7 +123,7 @@ class TestPandasArrow:
                 "date": pd.Series(data=[datetime.date(2008, 5, 28), datetime.date(2013, 7, 14), None]),
             }
         )
-        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")
+        pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
         con = duckdb.connect()
         res = con.sql("select * from pyarrow_df").fetchone()
         assert res == (

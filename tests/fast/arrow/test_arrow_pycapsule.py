@@ -40,7 +40,7 @@ class TestArrowPyCapsule:
         assert obj.count == 2
 
         # Ensure __arrow_c_stream__ accepts a requested_schema argument as noop
-        capsule = obj.__arrow_c_stream__(requested_schema="foo")
+        capsule = obj.__arrow_c_stream__(requested_schema="foo")  # noqa: F841
         res = duckdb_cursor.sql("select * from capsule")
         assert res.fetchall() == [(1, 5), (2, 6), (3, 7), (4, 8)]
         assert obj.count == 3
@@ -53,7 +53,7 @@ class TestArrowPyCapsule:
             capsule = rel.__arrow_c_stream__()
             return capsule
 
-        capsule = create_capsule()
+        capsule = create_capsule()  # noqa: F841
         rel2 = duckdb_cursor.sql("select * from capsule")
         assert rel2.fetchall() == [(i, i + 1, -i) for i in range(100)]
 
@@ -61,9 +61,9 @@ class TestArrowPyCapsule:
         other_con = duckdb_cursor.cursor()
         rel = duckdb_cursor.sql("select i, i+1, -i from range(100) t(i)")
 
-        capsule_one = rel.__arrow_c_stream__()
+        capsule_one = rel.__arrow_c_stream__()  # noqa: F841
         res1 = other_con.sql("select * from capsule_one").fetchall()
-        capsule_two = rel.__arrow_c_stream__()
+        capsule_two = rel.__arrow_c_stream__()  # noqa: F841
         res2 = other_con.sql("select * from capsule_two").fetchall()
         assert len(res1) == 100
         assert res1 == res2
@@ -82,6 +82,6 @@ class TestArrowPyCapsule:
             rel = conn.sql("select i, i+1, -i from range(100) t(i)")
             return MyTable(rel, conn)
 
-        tbl = create_table()
+        tbl = create_table()  # noqa: F841
         rel2 = duckdb_cursor.sql("select * from tbl")
         assert rel2.fetchall() == [(i, i + 1, -i) for i in range(100)]

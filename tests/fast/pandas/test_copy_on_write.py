@@ -36,7 +36,7 @@ class TestCopyOnWrite:
     def test_copy_on_write(self, col):
         assert pandas.options.mode.copy_on_write == True
         con = duckdb.connect()
-        df_in = pandas.DataFrame(
+        df_in = pandas.DataFrame(  # noqa: F841
             {
                 "numbers": col,
             }

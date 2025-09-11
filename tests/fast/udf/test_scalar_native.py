@@ -35,7 +35,7 @@ class TestNativeUDF:
         con.create_function("plus_one", plus_one, [BIGINT], BIGINT)
         assert con.sql("select plus_one(5)").fetchall() == [(6,)]
 
-        range_table = con.table_function("range", [5000])
+        range_table = con.table_function("range", [5000])  # noqa: F841
         res = con.sql("select plus_one(i) from range_table tbl(i)").fetchall()
         assert len(res) == 5000
 
@@ -124,7 +124,7 @@ class TestNativeUDF:
         with pytest.raises(
             duckdb.InvalidInputException, match="Failed to cast value: Could not convert string 'duckdb' to INT64"
         ):
-            res = con.sql("select fastest_database_in_the_west()").fetchall()
+            con.sql("select fastest_database_in_the_west()").fetchall()
 
     def test_nulls(self):
         def five_if_null(x):
@@ -183,7 +183,7 @@ class TestNativeUDF:
             return original
 
         con = duckdb.connect()
-        range_table = con.table_function("range", [5000])
+        range_table = con.table_function("range", [5000])  # noqa: F841
         con.create_function(
             "append_field",
             add_extra_column,

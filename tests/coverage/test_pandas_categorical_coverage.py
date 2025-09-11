@@ -23,7 +23,7 @@ def check_create_table(category, pandas):
 
     category.append("bla")
 
-    df_in_diff = pandas.DataFrame(
+    df_in_diff = pandas.DataFrame(  # noqa: F841
         {
             "k": pandas.Categorical(category, ordered=True),
         }

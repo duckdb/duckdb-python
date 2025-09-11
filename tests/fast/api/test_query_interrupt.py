@@ -26,7 +26,7 @@ class TestQueryInterruption:
         # Start the thread
         thread.start()
         try:
-            res = con.execute("select count(*) from range(100000000000)").fetchall()
+            con.execute("select count(*) from range(100000000000)").fetchall()
         except RuntimeError:
             # If this is not reached, we could not cancel the query before it completed
             # indicating that the query interruption functionality is broken

@@ -13,7 +13,7 @@ class TestRAPIDescription:
 
     def test_rapi_describe(self, duckdb_cursor):
         np = pytest.importorskip("numpy")
-        pd = pytest.importorskip("pandas")
+        pytest.importorskip("pandas")
         res = duckdb_cursor.query("select 42::INT AS a, 84::BIGINT AS b")
         duck_describe = res.describe().df()
         np.testing.assert_array_equal(duck_describe["aggr"], ["count", "mean", "stddev", "min", "max", "median"])

@@ -11,7 +11,7 @@ class TestArrowDecimalTypes:
     def test_decimal_v1_5(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_output_version = 1.5")
-        decimal_32 = pa.Table.from_pylist(
+        decimal_32 = pa.Table.from_pylist(  # noqa: F841
             [
                 {"data": Decimal("100.20")},
                 {"data": Decimal("110.21")},
@@ -23,7 +23,7 @@ class TestArrowDecimalTypes:
         col_type = duckdb_cursor.execute("FROM decimal_32").fetch_arrow_table().schema.field("data").type
         assert col_type.bit_width == 32 and pa.types.is_decimal(col_type)
 
-        decimal_64 = pa.Table.from_pylist(
+        decimal_64 = pa.Table.from_pylist(  # noqa: F841
             [
                 {"data": Decimal("1000.231")},
                 {"data": Decimal("1100.231")},

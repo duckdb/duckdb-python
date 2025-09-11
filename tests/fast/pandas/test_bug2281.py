@@ -11,5 +11,5 @@ foo,1,0"""
         df = pd.read_csv(io.StringIO(csv))
         duckdb_cursor.register("c", df)
         duckdb_cursor.execute("select what, count(*) from c group by what")
-        df_result = duckdb_cursor.fetchdf()
+        duckdb_cursor.fetchdf()
         assert True  # Should not crash ^^

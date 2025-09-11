@@ -5,8 +5,8 @@ import hashlib
 
 
 def test_14344(duckdb_cursor):
-    my_table = pa.Table.from_pydict({"foo": pa.array([hashlib.sha256(b"foo").digest()], type=pa.binary())})
-    my_table2 = pa.Table.from_pydict(
+    my_table = pa.Table.from_pydict({"foo": pa.array([hashlib.sha256(b"foo").digest()], type=pa.binary())})  # noqa: F841
+    my_table2 = pa.Table.from_pydict(  # noqa: F841
         {"foo": pa.array([hashlib.sha256(b"foo").digest()], type=pa.binary()), "a": ["123"]}
     )
 

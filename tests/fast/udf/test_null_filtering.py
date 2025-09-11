@@ -227,11 +227,11 @@ class TestUDFNullFiltering:
         def returns_null(x):
             return None
 
-        df = pd.DataFrame({"a": table_data})
+        df = pd.DataFrame({"a": table_data})  # noqa: F841
         duckdb_cursor.execute("create table tbl as select * from df")
         duckdb_cursor.create_function("test", returns_null, [str], int, type="native")
         with pytest.raises(duckdb.InvalidInputException, match="The UDF is not expected to return NULL values"):
-            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
+            duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
 
     @pytest.mark.parametrize(
         "table_data",
@@ -245,7 +245,7 @@ class TestUDFNullFiltering:
             l = x.to_pylist()
             return pa.array([None for _ in l], type=pa.int64())
 
-        df = pd.DataFrame({"a": table_data})
+        df = pd.DataFrame({"a": table_data})  # noqa: F841
         duckdb_cursor.execute("create table tbl as select * from df")
         duckdb_cursor.create_function("test", returns_null, [str], int, type="arrow")
         with pytest.raises(duckdb.InvalidInputException, match="The UDF is not expected to return NULL values"):

@@ -199,8 +199,8 @@ class TestArrowIntegration:
 
     def test_duplicate_column_names(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
-        df_a = pd.DataFrame({"join_key": [1, 2, 3], "col_a": ["a", "b", "c"]})
-        df_b = pd.DataFrame({"join_key": [1, 3, 4], "col_a": ["x", "y", "z"]})
+        df_a = pd.DataFrame({"join_key": [1, 2, 3], "col_a": ["a", "b", "c"]})  # noqa: F841
+        df_b = pd.DataFrame({"join_key": [1, 3, 4], "col_a": ["x", "y", "z"]})  # noqa: F841
 
         res = duckdb_cursor.execute(
             """

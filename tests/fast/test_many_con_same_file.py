@@ -72,7 +72,7 @@ def test_diff_config():
         duckdb.ConnectionException,
         match="Can't open a connection to same database file with a different configuration than existing connections",
     ):
-        con2 = duckdb.connect("test.db", True)
+        duckdb.connect("test.db", True)
     con1.close()
     del con1
 
@@ -83,6 +83,6 @@ def test_diff_config_extended():
         duckdb.ConnectionException,
         match="Can't open a connection to same database file with a different configuration than existing connections",
     ):
-        con2 = duckdb.connect("test.db")
+        duckdb.connect("test.db")
     con1.close()
     del con1

@@ -23,7 +23,7 @@ class TestDuckDBQuery:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_duckdb_from_query_multiple_statements(self, pandas):
-        tst_df = pandas.DataFrame({"a": [1, 23, 3, 5]})
+        tst_df = pandas.DataFrame({"a": [1, 23, 3, 5]})  # noqa: F841
 
         res = duckdb.sql(
             """

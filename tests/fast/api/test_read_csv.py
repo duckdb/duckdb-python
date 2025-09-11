@@ -84,7 +84,7 @@ class TestReadCSV:
 
     def test_delimiter_and_sep(self, duckdb_cursor):
         with pytest.raises(duckdb.InvalidInputException, match="read_csv takes either 'delimiter' or 'sep', not both"):
-            rel = duckdb_cursor.read_csv(TestFile("category.csv"), delimiter=" ", sep=" ")
+            duckdb_cursor.read_csv(TestFile("category.csv"), delimiter=" ", sep=" ")
 
     def test_header_true(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"))
@@ -94,7 +94,7 @@ class TestReadCSV:
 
     @pytest.mark.skip(reason="Issue #6011 needs to be fixed first, header=False doesn't work correctly")
     def test_header_false(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile("category.csv"), header=False)
+        duckdb_cursor.read_csv(TestFile("category.csv"), header=False)
 
     def test_na_values(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), na_values="Action")
@@ -118,7 +118,7 @@ class TestReadCSV:
     # We want to detect this at bind time
     def test_compression_wrong(self, duckdb_cursor):
         with pytest.raises(duckdb.Error, match="Input is not a GZIP stream"):
-            rel = duckdb_cursor.read_csv(TestFile("category.csv"), compression="gzip")
+            duckdb_cursor.read_csv(TestFile("category.csv"), compression="gzip")
 
     def test_quotechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("unquote_without_delimiter.csv"), quotechar="", header=False)
@@ -130,7 +130,7 @@ class TestReadCSV:
         with pytest.raises(
             duckdb.Error, match='The methods read_csv and read_csv_auto do not have the "quote" argument.'
         ):
-            rel = duckdb_cursor.read_csv(TestFile("unquote_without_delimiter.csv"), quote="", header=False)
+            duckdb_cursor.read_csv(TestFile("unquote_without_delimiter.csv"), quote="", header=False)
 
     def test_escapechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("quote_escape.csv"), escapechar=";", header=False)
@@ -142,7 +142,7 @@ class TestReadCSV:
         with pytest.raises(
             duckdb.BinderException, match="Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'"
         ):
-            rel = duckdb_cursor.read_csv(TestFile("quote_escape.csv"), encoding=";")
+            duckdb_cursor.read_csv(TestFile("quote_escape.csv"), encoding=";")
 
     def test_encoding_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("quote_escape.csv"), encoding="UTF-8")
@@ -350,11 +350,11 @@ class TestReadCSV:
         # The MemoryFileSystem reads the content into another object, so this fails instantly
         obj = ReadError()
         with pytest.raises(ValueError):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+            duckdb_cursor.read_csv(obj).fetchall()
 
         # For that same reason, this will not error, because the data is retrieved with 'read' and then SeekError is never used again
         obj = SeekError()
-        res = duckdb_cursor.read_csv(obj).fetchall()
+        duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_custom(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
@@ -383,13 +383,13 @@ class TestReadCSV:
         _ = pytest.importorskip("fsspec")
         obj = 5
         with pytest.raises(ValueError, match="Can not read from a non file-like object"):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+            duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_none(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
         obj = None
         with pytest.raises(ValueError, match="Can not read from a non file-like object"):
-            res = duckdb_cursor.read_csv(obj).fetchall()
+            duckdb_cursor.read_csv(obj).fetchall()
 
     @pytest.mark.skip(reason="depends on garbage collector behaviour, and sporadically breaks in CI")
     def test_internal_object_filesystem_cleanup(self, duckdb_cursor):
@@ -448,7 +448,7 @@ class TestReadCSV:
 
         # Use the temporary file paths to read CSV files
         con = duckdb.connect()
-        rel = con.read_csv(f"{tmp_path}/file*.csv")
+        rel = con.read_csv(f"{tmp_path}/file*.csv")  # noqa: F841
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
@@ -565,7 +565,7 @@ class TestReadCSV:
             duckdb.InvalidInputException, match="Please provide a non-empty list of paths or file-like objects"
         ):
             rel = con.read_csv(files)
-            res = rel.fetchall()
+            rel.fetchall()
 
     def test_read_auto_detect(self, tmp_path):
         file1 = tmp_path / "file1.csv"
@@ -587,7 +587,7 @@ class TestReadCSV:
         files = [str(file1), "not_valid_path", str(file3)]
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
             rel = con.read_csv(files)
-            res = rel.fetchall()
+            rel.fetchall()
 
     @pytest.mark.parametrize(
         "options",
@@ -631,7 +631,7 @@ class TestReadCSV:
                 rel = duckdb_cursor.read_csv(file, **options)
         else:
             rel = duckdb_cursor.read_csv(file, **options)
-            res = rel.fetchall()
+            rel.fetchall()
 
     def test_read_comment(self, tmp_path):
         file1 = tmp_path / "file1.csv"

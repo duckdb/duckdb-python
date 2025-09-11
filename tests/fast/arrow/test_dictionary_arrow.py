@@ -126,7 +126,7 @@ class TestArrowDictionary:
         query = query.format(element, count)
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
-        arrow_res = original_rel.fetch_arrow_table()
+        arrow_res = original_rel.fetch_arrow_table()  # noqa: F841
 
         roundtrip_rel = duckdb_cursor.sql("select * from arrow_res")
         actual = roundtrip_rel.fetchall()
@@ -171,7 +171,7 @@ class TestArrowDictionary:
             tables.append(pa.table([array], names=["x"]))
         # All of the tables with different dictionaries are getting merged into one dataset
         # This is testing that our cache is being evicted correctly
-        x = ds.dataset(tables)
+        x = ds.dataset(tables)  # noqa: F841
         res = duckdb_cursor.sql("select * from x").fetchall()
         expected = [(x,) for x in expected]
         assert res == expected

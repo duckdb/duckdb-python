@@ -52,7 +52,7 @@ class TestDBAPICursor:
         cursor.close()
         with pytest.raises(duckdb.CatalogException):
             # This table does not exist in this cursor
-            res = other_cursor.execute("select * from tbl").fetchall()
+            other_cursor.execute("select * from tbl").fetchall()
 
     def test_cursor_temp_schema_open(self):
         con = duckdb.connect(":memory:")
@@ -63,7 +63,7 @@ class TestDBAPICursor:
         # cursor.close()
         with pytest.raises(duckdb.CatalogException):
             # This table does not exist in this cursor
-            res = other_cursor.execute("select * from tbl").fetchall()
+            other_cursor.execute("select * from tbl").fetchall()
 
     def test_cursor_temp_schema_both(self):
         con = duckdb.connect(":memory:")
@@ -99,7 +99,7 @@ class TestDBAPICursor:
         con = duckdb.connect(":memory:")
         con.close()
         with pytest.raises(duckdb.ConnectionException):
-            cursor = con.cursor()
+            con.cursor()
 
     def test_cursor_used_after_connection_closed(self):
         con = duckdb.connect(":memory:")

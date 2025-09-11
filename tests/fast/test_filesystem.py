@@ -261,7 +261,7 @@ class TestPythonFilesystem:
     def test_parallel_union_by_name(self, tmp_path):
         pa = importorskip("pyarrow")
         pq = importorskip("pyarrow.parquet")
-        fsspec = importorskip("fsspec")
+        importorskip("fsspec")
 
         table1 = pa.Table.from_pylist(
             [

@@ -12,7 +12,7 @@ class TestArrowFixedBinary:
         ]
 
         id_array = pa.array(ids, type=pa.binary(12))
-        arrow_table = pa.Table.from_arrays([id_array], names=["id"])
+        arrow_table = pa.Table.from_arrays([id_array], names=["id"])  # noqa: F841
         res = duckdb_cursor.sql(
             """
 			SELECT lower(hex(id)) as id FROM arrow_table

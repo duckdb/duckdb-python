@@ -122,4 +122,4 @@ class TestReadJSON:
                 rel = duckdb_cursor.read_json(TestFile("example.json"), **keyword_arguments)
         else:
             rel = duckdb_cursor.read_json(TestFile("example.json"), **keyword_arguments)
-            res = rel.fetchall()
+            rel.fetchall()

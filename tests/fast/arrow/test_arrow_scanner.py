@@ -61,7 +61,7 @@ class TestArrowScanner:
 
         scanner_filter = (pc.field("first_name") == pc.scalar("Jose")) & (pc.field("salary") > pc.scalar(134708.82))
 
-        arrow_scanner = Scanner.from_dataset(arrow_dataset, filter=scanner_filter)
+        arrow_scanner = Scanner.from_dataset(arrow_dataset, filter=scanner_filter)  # noqa: F841
 
         assert duckdb_conn.execute("select count(*) from arrow_scanner").fetchone()[0] == 12
 

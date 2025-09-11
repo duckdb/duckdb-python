@@ -52,15 +52,15 @@ class TestDuckDBConnection:
             con = duckdb.connect(":default:", read_only=True)
 
     def test_arrow(self):
-        pyarrow = pytest.importorskip("pyarrow")
+        pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")
-        result = duckdb.fetch_arrow_table()
+        duckdb.fetch_arrow_table()
 
     def test_begin_commit(self):
         duckdb.begin()
         duckdb.execute("create table tbl as select 1")
         duckdb.commit()
-        res = duckdb.table("tbl")
+        duckdb.table("tbl")
         duckdb.execute("drop table tbl")
 
     def test_begin_rollback(self):
@@ -69,7 +69,7 @@ class TestDuckDBConnection:
         duckdb.rollback()
         with pytest.raises(duckdb.CatalogException):
             # Table does not exist
-            res = duckdb.table("tbl")
+            duckdb.table("tbl")
 
     def test_cursor(self):
         duckdb.execute("create table tbl as select 3")
@@ -99,7 +99,7 @@ class TestDuckDBConnection:
     def test_df(self):
         ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
-        res_df = duckdb.fetch_df()
+        res_df = duckdb.fetch_df()  # noqa: F841
         res = duckdb.query("select * from res_df").fetchall()
         assert res == ref
 
@@ -149,10 +149,10 @@ class TestDuckDBConnection:
             duckdb.InvalidInputException,
             match="Please provide either a DuckDBPyStatement or a string representing the query",
         ):
-            rel = duckdb.query(statements)
+            duckdb.query(statements)
 
         with pytest.raises(duckdb.BinderException, match="This type of statement can't be prepared!"):
-            rel = duckdb.query(statements[0])
+            duckdb.query(statements[0])
 
         assert duckdb.query(statements[1]).fetchall() == [(21,)]
         assert duckdb.execute(statements[1]).fetchall() == [(21,)]
@@ -180,7 +180,7 @@ class TestDuckDBConnection:
 
     def test_fetch_arrow_table(self):
         # Needed for 'fetch_arrow_table'
-        pyarrow = pytest.importorskip("pyarrow")
+        pytest.importorskip("pyarrow")
 
         duckdb.execute("Create Table test (a integer)")
 
@@ -206,7 +206,7 @@ class TestDuckDBConnection:
     def test_fetch_df(self):
         ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
-        res_df = duckdb.fetch_df()
+        res_df = duckdb.fetch_df()  # noqa: F841
         res = duckdb.query("select * from res_df").fetchall()
         assert res == ref
 
@@ -223,7 +223,7 @@ class TestDuckDBConnection:
 
     def test_fetch_record_batch(self):
         # Needed for 'fetch_arrow_table'
-        pyarrow = pytest.importorskip("pyarrow")
+        pytest.importorskip("pyarrow")
 
         duckdb.execute("CREATE table t as select range a from range(3000);")
         duckdb.execute("SELECT a FROM t")
@@ -237,7 +237,7 @@ class TestDuckDBConnection:
     def test_fetchdf(self):
         ref = [([1, 2, 3],)]
         duckdb.execute("select [1,2,3]")
-        res_df = duckdb.fetchdf()
+        res_df = duckdb.fetchdf()  # noqa: F841
         res = duckdb.query("select * from res_df").fetchall()
         assert res == ref
 
@@ -361,7 +361,7 @@ class TestDuckDBConnection:
         pd = NumpyPandas()
         import duckdb
 
-        df = pd.DataFrame({"a": [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})  # noqa: F841
         res = duckdb.sql("from df").fetchall()
         assert res == [(1,), (2,), (3,)]
 

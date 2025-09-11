@@ -589,11 +589,11 @@ class TestAllTypes:
         warnings.simplefilter(action="ignore", category=RuntimeWarning)
         with suppress(TypeError):
             if cur_type in replacement_values:
-                dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+                dataframe = conn.execute("select " + replacement_values[cur_type]).df()  # noqa: F841
             elif cur_type in adjusted_values:
-                dataframe = conn.execute(f"select {adjusted_values[cur_type]} from test_all_types()").df()
+                dataframe = conn.execute(f"select {adjusted_values[cur_type]} from test_all_types()").df()  # noqa: F841
             else:
-                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()  # noqa: F841
             print(cur_type)
             round_trip_dataframe = conn.execute("select * from dataframe").df()
             result_dataframe = conn.execute("select * from dataframe").fetchall()

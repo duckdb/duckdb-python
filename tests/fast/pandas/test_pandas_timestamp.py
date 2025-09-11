@@ -26,7 +26,7 @@ def test_run_pandas_with_tz(timezone):
 
 def test_timestamp_conversion(duckdb_cursor):
     tzinfo = pandas.Timestamp("2024-01-01 00:00:00+0100", tz="Europe/Copenhagen").tzinfo
-    ts_df = pandas.DataFrame(
+    ts_df = pandas.DataFrame(  # noqa: F841
         {
             "ts": [
                 pandas.Timestamp("2024-01-01 00:00:00+0100", tz=tzinfo),

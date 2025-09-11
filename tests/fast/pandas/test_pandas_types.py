@@ -59,7 +59,7 @@ class TestNumpyNullableTypes:
         for letter, dtype in zip(string.ascii_lowercase, data_types):
             data[letter] = base_df.a.astype(dtype)
 
-        df = pd.DataFrame.from_dict(data)
+        df = pd.DataFrame.from_dict(data)  # noqa: F841
         conn = duckdb.connect()
         out_df = conn.execute("select * from df").df()
 
@@ -94,7 +94,7 @@ class TestNumpyNullableTypes:
         pq.write_table(pa.Table.from_pandas(testdf), parquet_path)
 
         # Read the Parquet file back into a DataFrame
-        testdf2 = pd.read_parquet(parquet_path)
+        testdf2 = pd.read_parquet(parquet_path)  # noqa: F841
 
         # Use duckdb_cursor to query the parquet data
         result = duckdb_cursor.execute("SELECT MIN(value) FROM testdf2").fetchall()

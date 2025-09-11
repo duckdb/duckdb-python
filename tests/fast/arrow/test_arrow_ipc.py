@@ -25,11 +25,10 @@ class TestArrowIPCExtension:
 
         buffer = sink.getvalue()
 
-        buffers = []
         with pa.BufferReader(buffer) as buf_reader:  # Use pyarrow.BufferReader
             stream = ipc.MessageReader.open_stream(buf_reader)
             # This fails
             with pytest.raises(
                 duckdb.Error, match="The nanoarrow community extension is needed to read the Arrow IPC protocol."
             ):
-                result = duckdb_cursor.from_arrow(stream).fetchall()
+                duckdb_cursor.from_arrow(stream).fetchall()

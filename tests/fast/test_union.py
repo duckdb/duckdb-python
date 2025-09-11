@@ -43,8 +43,8 @@ class TestUnion:
             (13, 14, 15, 16, 17),
         ]
 
-        df_1 = connection.execute("FROM tbl1").df()
-        df_2 = connection.execute("FROM tbl2").df()
+        df_1 = connection.execute("FROM tbl1").df()  # noqa: F841
+        df_2 = connection.execute("FROM tbl2").df()  # noqa: F841
 
         query = """
 			select

@@ -20,9 +20,9 @@ def test_6796(pandas):
 
     # fetching directly into Pandas works
     res_df = conn.execute(query).fetch_df()
-    res_arrow = conn.execute(query).fetch_arrow_table()
+    res_arrow = conn.execute(query).fetch_arrow_table()  # noqa: F841
 
-    df_arrow_table = pyarrow.Table.from_pandas(res_df)
+    df_arrow_table = pyarrow.Table.from_pandas(res_df)  # noqa: F841
 
     result_1 = conn.execute("select * from df_arrow_table order by all").fetchall()
 

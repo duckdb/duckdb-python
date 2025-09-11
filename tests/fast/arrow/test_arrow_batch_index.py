@@ -9,7 +9,7 @@ class TestArrowBatchIndex:
     def test_arrow_batch_index(self, duckdb_cursor):
         con = duckdb.connect()
         df = con.execute("SELECT * FROM range(10000000) t(i)").df()
-        arrow_tbl = pa.Table.from_pandas(df)
+        arrow_tbl = pa.Table.from_pandas(df)  # noqa: F841
 
         con.execute("CREATE TABLE tbl AS SELECT * FROM arrow_tbl")
 
