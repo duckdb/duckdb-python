@@ -59,7 +59,7 @@ class SparkSession:  # noqa: D101
             self.conn.register(unique_name, data)
             return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
-        def verify_tuple_integrity(tuples: list[tuple]):
+        def verify_tuple_integrity(tuples: list[tuple]) -> None:
             if len(tuples) <= 1:
                 return
             expected_length = len(tuples[0])

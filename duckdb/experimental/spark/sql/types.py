@@ -764,7 +764,7 @@ class StructType(DataType):
     False
     """
 
-    def _update_internal_duckdb_type(self):
+    def _update_internal_duckdb_type(self) -> None:
         self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
     def __init__(self, fields: Optional[list[StructField]] = None) -> None:  # noqa: D107

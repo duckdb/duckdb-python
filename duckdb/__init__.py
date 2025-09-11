@@ -11,7 +11,7 @@ __version__ = version("duckdb")
 
 
 # version() is a more human friendly formatted version string of both the distribution package and the bundled duckdb
-def version():
+def version() -> str:
     return f"{__version__} (with duckdb {duckdb_version})"
 
 

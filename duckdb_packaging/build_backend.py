@@ -136,7 +136,7 @@ def _read_duckdb_long_version() -> str:
 
 def _skbuild_config_add(
     key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]], fail_if_exists: bool = False
-):
+) -> None:
     """Add or modify a configuration setting for scikit-build-core.
 
     This function handles adding values to scikit-build-core configuration settings,
