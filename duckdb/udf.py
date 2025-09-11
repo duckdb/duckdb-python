@@ -14,7 +14,6 @@ def vectorized(func: Callable) -> Callable:
 
     new_annotations = {}
     sig = signature(func)
-    sig.parameters
     for param in sig.parameters:
         new_annotations[param] = pa.lib.ChunkedArray
 

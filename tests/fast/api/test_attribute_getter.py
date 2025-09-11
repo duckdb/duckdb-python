@@ -24,7 +24,7 @@ class TestGetAttribute:
     def test_getattr_nonexistant(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)")
         with pytest.raises(AttributeError):
-            rel.d
+            rel.d  # noqa: B018
 
     def test_getattr_collision(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as df from range(100) tbl(i)")

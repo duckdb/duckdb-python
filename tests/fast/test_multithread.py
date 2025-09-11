@@ -350,7 +350,7 @@ def from_parquet(duckdb_conn, queue, pandas):
         queue.put(False)
 
 
-def description(duckdb_conn, queue, pandas):
+def description(_, queue, __):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute("CREATE TABLE test (i bool, j TIME, k VARCHAR)")
@@ -358,7 +358,7 @@ def description(duckdb_conn, queue, pandas):
     rel = duckdb_conn.table("test")
     rel.execute()
     try:
-        rel.description
+        rel.description  # noqa: B018
         queue.put(True)
     except:
         queue.put(False)

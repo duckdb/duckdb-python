@@ -76,4 +76,4 @@ class TestPythonResult:
     def test_description_uuid(self):
         connection = duckdb.connect()
         connection.execute("select uuid();")
-        connection.description
+        connection.description  # noqa: B018

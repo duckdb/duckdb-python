@@ -8,7 +8,7 @@ from spark_namespace import USE_ACTUAL_SPARK
 class TestSparkRuntimeConfig:
     def test_spark_runtime_config(self, spark):
         # This fetches the internal runtime config from the session
-        spark.conf
+        spark.conf  # noqa: B018
 
     @pytest.mark.skipif(
         USE_ACTUAL_SPARK, reason="Getting an error with our local PySpark setup. Unclear why but not a priority."
