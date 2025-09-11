@@ -5,6 +5,7 @@ import pytest
 from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
+from typing import NoReturn
 
 
 # column count differs from bind
@@ -49,11 +50,11 @@ class TestMap:
             return df
 
         # does not return a df
-        def evil4(df):
+        def evil4(df) -> int:
             return 42
 
         # straight up throws exception
-        def evil5(df):
+        def evil5(df) -> NoReturn:
             raise TypeError
 
         def return_dataframe(df):
@@ -62,7 +63,7 @@ class TestMap:
         def return_big_dataframe(df):
             return pandas.DataFrame({"A": [1] * 5000})
 
-        def return_none(df):
+        def return_none(df) -> None:
             return None
 
         def return_empty_df(df):

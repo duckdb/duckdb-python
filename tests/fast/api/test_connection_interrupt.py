@@ -15,7 +15,7 @@ class TestConnectionInterrupt:
     def test_connection_interrupt(self):
         conn = duckdb.connect()
 
-        def interrupt():
+        def interrupt() -> None:
             # Wait for query to start running before interrupting
             time.sleep(0.1)
             conn.interrupt()

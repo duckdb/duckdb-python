@@ -48,7 +48,7 @@ def layout(index: int):
 
 
 def get_table_data():
-    def add_variations(data, index: int):
+    def add_variations(data, index: int) -> None:
         data.extend(
             [
                 {
@@ -224,7 +224,7 @@ class TestUDFNullFiltering:
         ],
     )
     def test_nulls_from_default_null_handling_native(self, duckdb_cursor, table_data):
-        def returns_null(x):
+        def returns_null(x) -> None:
             return None
 
         df = pd.DataFrame({"a": table_data})  # noqa: F841

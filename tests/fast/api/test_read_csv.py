@@ -7,6 +7,7 @@ import pytest
 
 import duckdb
 from duckdb import CSVLineTerminator
+from typing import NoReturn
 
 
 def TestFile(name):
@@ -331,20 +332,20 @@ class TestReadCSV:
             def __init__(self) -> None:
                 pass
 
-            def read(self, amount=-1):
+            def read(self, amount=-1) -> NoReturn:
                 raise ValueError(amount)
 
-            def seek(self, loc):
+            def seek(self, loc) -> int:
                 return 0
 
         class SeekError:
             def __init__(self) -> None:
                 pass
 
-            def read(self, amount=-1):
+            def read(self, amount=-1) -> bytes:
                 return b"test"
 
-            def seek(self, loc):
+            def seek(self, loc) -> NoReturn:
                 raise ValueError(loc)
 
         # The MemoryFileSystem reads the content into another object, so this fails instantly
@@ -406,7 +407,7 @@ class TestReadCSV:
             def __del__(self) -> None:
                 CountedObject.instance_count -= 1
 
-        def scoped_objects(duckdb_cursor):
+        def scoped_objects(duckdb_cursor) -> None:
             obj = CountedObject("a,b,c")
             rel1 = duckdb_cursor.read_csv(obj)
             assert rel1.fetchall() == [

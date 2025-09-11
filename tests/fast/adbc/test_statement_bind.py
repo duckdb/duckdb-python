@@ -25,7 +25,7 @@ def _import(handle):
     raise NotImplementedError(msg)
 
 
-def _bind(stmt, batch):
+def _bind(stmt, batch) -> None:
     array = adbc_driver_manager.ArrowArrayHandle()
     schema = adbc_driver_manager.ArrowSchemaHandle()
     batch._export_to_c(array.address, schema.address)

@@ -1,7 +1,7 @@
 import cmath
 import datetime
 import uuid
-from typing import Any
+from typing import Any, NoReturn
 
 import numpy as np
 import pytest
@@ -152,7 +152,7 @@ class TestScalarUDF:
 
     @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_exceptions(self, udf_type):
-        def raises_exception(x):
+        def raises_exception(x) -> NoReturn:
             msg = "error"
             raise AttributeError(msg)
 

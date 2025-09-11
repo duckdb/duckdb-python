@@ -281,7 +281,7 @@ def timestamps(duckdb_cursor):
 def duckdb_cursor_autocommit(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 
-    def finalizer():
+    def finalizer() -> None:
         duckdb.shutdown()
         if tmp_path.is_dir():
             shutil.rmtree(test_dbfarm)
@@ -298,7 +298,7 @@ def duckdb_cursor_autocommit(request, tmp_path):
 def initialize_duckdb(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 
-    def finalizer():
+    def finalizer() -> None:
         duckdb.shutdown()
         if tmp_path.is_dir():
             shutil.rmtree(test_dbfarm)

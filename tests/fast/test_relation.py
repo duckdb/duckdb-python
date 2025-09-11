@@ -41,7 +41,7 @@ class TestRelation:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_view(self, duckdb_cursor, pandas):
-        def create_view(duckdb_cursor):
+        def create_view(duckdb_cursor) -> None:
             df_in = pandas.DataFrame({"numbers": [1, 2, 3, 4, 5]})
             rel = duckdb_cursor.query("select * from df_in")
             rel.to_view("my_view")
@@ -490,7 +490,7 @@ class TestRelation:
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
     def test_close(self):
-        def counter():
+        def counter() -> int:
             counter.count += 1
             return 42
 
@@ -633,7 +633,7 @@ class TestRelation:
         assert res == [("0",), ("1",), ("2",), ("3",), ("4",), ("5",), ("6",), ("7",), ("8",), ("9",)]
 
     def test_materialized_relation_view(self, duckdb_cursor):
-        def create_view(duckdb_cursor):
+        def create_view(duckdb_cursor) -> None:
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
@@ -664,7 +664,7 @@ class TestRelation:
     def test_serialized_materialized_relation(self, tmp_database):
         con = duckdb.connect(tmp_database)
 
-        def create_view(con, view_name: str):
+        def create_view(con, view_name: str) -> None:
             rel = con.sql("select 'this is not a small string ' || range::varchar from range(?)", params=[10])
             rel.to_view(view_name)
 

@@ -18,7 +18,7 @@ class TestQueryProgress:
         conn.sql("set progress_bar_time=0")
         conn.sql("create table t as (select range as n from range(10000000))")
 
-        def thread_target():
+        def thread_target() -> None:
             # run a very slow query which hopefully isn't too memory intensive.
             with reraise:
                 try:

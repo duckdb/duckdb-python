@@ -7,7 +7,7 @@ class TestRelationApi:
     def test_readonly(self, duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "j": ["one", "two", "three"]})
 
-        def test_rel(rel, duckdb_cursor):
+        def test_rel(rel, duckdb_cursor) -> None:
             res = (
                 rel.filter("i < 3")
                 .order("j")

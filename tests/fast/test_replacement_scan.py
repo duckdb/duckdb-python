@@ -120,7 +120,7 @@ class TestReplacementScan:
     def test_scan_local(self, duckdb_cursor):
         df = pd.DataFrame({"a": [1, 2, 3]})
 
-        def inner_func(duckdb_cursor):
+        def inner_func(duckdb_cursor) -> None:
             duckdb_cursor.execute("set python_enable_replacements=false")
             with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
                 # We set the depth to look for local variables to 0 so it's never found
@@ -142,7 +142,7 @@ class TestReplacementScan:
     def test_scan_local_unlimited(self, duckdb_cursor):
         df = pd.DataFrame({"a": [1, 2, 3]})
 
-        def inner_func(duckdb_cursor):
+        def inner_func(duckdb_cursor) -> None:
             duckdb_cursor.execute("set python_enable_replacements=true")
             with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
                 # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined
@@ -345,7 +345,7 @@ class TestReplacementScan:
         assert res == [(1,), (2,), (3,)]
         duckdb_cursor.execute("drop view v1")
 
-        def create_view_in_func(con):
+        def create_view_in_func(con) -> None:
             df = pd.DataFrame({"a": [1, 2, 3]})
             con.execute("CREATE VIEW v1 AS SELECT * FROM df")
 

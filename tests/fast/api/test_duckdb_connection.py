@@ -84,7 +84,7 @@ class TestDuckDBConnection:
     def test_cursor_lifetime(self):
         con = duckdb.connect()
 
-        def use_cursors():
+        def use_cursors() -> None:
             cursors = []
             for _ in range(10):
                 cursors.append(con.cursor())

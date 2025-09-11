@@ -216,7 +216,7 @@ def arrow_dataset_register():
     session.mount("https://", requests_adapters.HTTPAdapter(max_retries=retries))
     saved_filenames = set()
 
-    def _register(url, filename, con, tablename):
+    def _register(url, filename, con, tablename) -> None:
         r = session.get(url)
         with open(filename, "wb") as f:
             f.write(r.content)

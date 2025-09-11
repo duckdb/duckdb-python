@@ -18,7 +18,7 @@ class TestReadParquet:
             protocol = "deadlock"
 
             @property
-            def fsid(self):
+            def fsid(self) -> str:
                 return "deadlock"
 
             def ls(self, path, detail=True, **kwargs):

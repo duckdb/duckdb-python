@@ -1000,7 +1000,7 @@ class TestArrowFilterPushdown:
         """
         )
 
-        def assert_equal_results(con, arrow_table, query):
+        def assert_equal_results(con, arrow_table, query) -> None:
             duckdb_res = con.sql(query.format(table="test")).fetchall()
             arrow_res = con.sql(query.format(table="arrow_table")).fetchall()
             assert len(duckdb_res) == len(arrow_res)

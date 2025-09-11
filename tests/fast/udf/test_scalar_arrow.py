@@ -92,7 +92,7 @@ class TestPyArrowUDF:
             con.sql("""select two_columns(5)""").fetchall()
 
     def test_return_none(self):
-        def returns_none(col):
+        def returns_none(col) -> None:
             return None
 
         con = duckdb.connect()

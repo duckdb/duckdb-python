@@ -4,7 +4,7 @@ import pytest
 
 
 def make_annotated_function(type: str):
-    def test_base():
+    def test_base() -> None:
         return None
 
     import types
