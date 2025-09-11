@@ -1,5 +1,6 @@
-import pytest
 import datetime
+
+import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")

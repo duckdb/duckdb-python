@@ -1,10 +1,10 @@
-import pytest
-
-import duckdb
 import datetime
 import uuid
 from typing import Any, NamedTuple
 
+import pytest
+
+import duckdb
 from duckdb.typing import (
     BIGINT,
     BLOB,
@@ -28,7 +28,6 @@ from duckdb.typing import (
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow", "18.0.0")
-
 
 
 class Candidate(NamedTuple):

@@ -1,16 +1,12 @@
-import os
 import csv
 import datetime
+import os
 
 import pytest
-
 from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
+from spark_namespace import USE_ACTUAL_SPARK
 
 from duckdb import InvalidInputException, read_csv
-
-
-
-from spark_namespace import USE_ACTUAL_SPARK
 
 if USE_ACTUAL_SPARK:
     pytest.skip(
@@ -21,7 +17,6 @@ if USE_ACTUAL_SPARK:
     )
 
 pytest.importorskip("duckdb.experimental.spark")
-
 
 
 @pytest.fixture

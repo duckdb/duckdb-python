@@ -2,9 +2,9 @@ import datetime
 import os
 
 import pytest
+from packaging.version import Version
 
 import duckdb
-from packaging.version import Version
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")

@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from typing import Union
 
 script_dir = os.path.dirname(__file__)

@@ -1,5 +1,5 @@
-import os
 import json
+import os
 
 script_dir = os.path.dirname(__file__)
 

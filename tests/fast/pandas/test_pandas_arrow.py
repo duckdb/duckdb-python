@@ -1,9 +1,9 @@
 import datetime
 
+import numpy as np
 import pytest
 from conftest import pandas_supports_arrow_backend
 
-import numpy as np
 import duckdb
 
 pd = pytest.importorskip("pandas", "2.0.0")

@@ -133,11 +133,14 @@ def test_commit(tmp_path):
             cur.adbc_ingest("ingest", table, "create")
 
     # This now works because we enabled autocommit
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-    ) as conn, conn.cursor() as cur:
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
         cur.execute("SELECT count(*) from ingest")
         assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [4]}
 
@@ -302,12 +305,15 @@ def test_large_chunk(tmp_path):
     if os.path.exists(db):
         os.remove(db)
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn, conn.cursor() as cur:
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("SELECT count(*) from ingest")
         assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [30_000]}
@@ -325,12 +331,15 @@ def test_dictionary_data(tmp_path):
     if os.path.exists(db):
         os.remove(db)
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn, conn.cursor() as cur:
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("from ingest")
         assert cur.fetch_arrow_table().to_pydict() == {
@@ -350,12 +359,15 @@ def test_ree_data(tmp_path):
     if os.path.exists(db):
         os.remove(db)
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn, conn.cursor() as cur:
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("from ingest")
         assert cur.fetch_arrow_table().to_pydict() == {

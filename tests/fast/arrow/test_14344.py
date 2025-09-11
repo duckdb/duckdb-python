@@ -1,5 +1,6 @@
-import pytest
 import hashlib
+
+import pytest
 
 pa = pytest.importorskip("pyarrow")
 

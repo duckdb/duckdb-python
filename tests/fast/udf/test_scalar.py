@@ -1,14 +1,12 @@
-import pytest
-
-import duckdb
-
 import cmath
 import datetime
 import uuid
 from typing import Any
 
 import numpy as np
+import pytest
 
+import duckdb
 from duckdb.typing import (
     BIGINT,
     BLOB,

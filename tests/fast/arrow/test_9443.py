@@ -1,10 +1,11 @@
-import pytest
-
 from datetime import time
 from pathlib import PurePosixPath
 
+import pytest
+
 pq = pytest.importorskip("pyarrow.parquet")
 pa = pytest.importorskip("pyarrow")
+
 
 class Test9443:
     def test_9443(self, tmp_path, duckdb_cursor):
