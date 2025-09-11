@@ -1,11 +1,11 @@
 import re
 from datetime import date, timedelta
+from typing import NoReturn
 
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
-from typing import NoReturn
 
 
 # column count differs from bind

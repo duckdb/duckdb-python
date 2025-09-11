@@ -2,12 +2,12 @@ import datetime
 import platform
 import sys
 from io import BytesIO, StringIO
+from typing import NoReturn
 
 import pytest
 
 import duckdb
 from duckdb import CSVLineTerminator
-from typing import NoReturn
 
 
 def TestFile(name):
