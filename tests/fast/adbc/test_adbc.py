@@ -137,10 +137,9 @@ def test_commit(tmp_path):
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT count(*) from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [4]}
+    ) as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*) from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [4]}
 
 
 def test_connection_get_table_schema(duck_conn):
@@ -308,11 +307,10 @@ def test_large_chunk(tmp_path):
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
         autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("SELECT count(*) from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [30_000]}
+    ) as conn, conn.cursor() as cur:
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("SELECT count(*) from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [30_000]}
 
 
 def test_dictionary_data(tmp_path):
@@ -332,13 +330,12 @@ def test_dictionary_data(tmp_path):
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
         autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {
-                "fruits": ["apple", "banana", "apple", "orange", "banana", "banana"]
-            }
+    ) as conn, conn.cursor() as cur:
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {
+            "fruits": ["apple", "banana", "apple", "orange", "banana", "banana"]
+        }
 
 
 def test_ree_data(tmp_path):
@@ -358,13 +355,12 @@ def test_ree_data(tmp_path):
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
         autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {
-                "fruits": ["apple", "apple", "apple", "banana", "banana", "orange"]
-            }
+    ) as conn, conn.cursor() as cur:
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {
+            "fruits": ["apple", "apple", "apple", "banana", "banana", "orange"]
+        }
 
 
 def sorted_get_objects(catalogs):
