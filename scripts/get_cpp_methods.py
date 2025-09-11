@@ -52,8 +52,21 @@ class Visitor:
 
 def get_methods(class_name: str) -> dict[str, ConnectionMethod]:
     CLASSES = {
-        "DuckDBPyConnection": Path(scripts_folder) / ".." / "src" / "duckdb_py" / "include" / "duckdb_python" / "pyconnection" / "pyconnection.hpp",  # noqa: E501
-        "DuckDBPyRelation": Path(scripts_folder) / ".." / "src" / "duckdb_py" / "include" / "duckdb_python" / "pyrelation.hpp",  # noqa: E501
+        "DuckDBPyConnection": Path(scripts_folder)
+        / ".."
+        / "src"
+        / "duckdb_py"
+        / "include"
+        / "duckdb_python"
+        / "pyconnection"
+        / "pyconnection.hpp",
+        "DuckDBPyRelation": Path(scripts_folder)
+        / ".."
+        / "src"
+        / "duckdb_py"
+        / "include"
+        / "duckdb_python"
+        / "pyrelation.hpp",
     }
 
     path = CLASSES[class_name]

@@ -251,8 +251,9 @@ def get_module_file_path_includes(files: list[ModuleFile]):
 
 module_includes = get_module_file_path_includes(files)
 
-modules_header = Path(script_dir) / ".." / ("src/duckdb_py/include/duckdb_python/"
-                                            "import_cache/python_import_cache_modules.hpp")
+modules_header = (
+    Path(script_dir) / ".." / ("src/duckdb_py/include/duckdb_python/import_cache/python_import_cache_modules.hpp")
+)
 with open(modules_header, "w") as f:
     f.write(module_includes)
 

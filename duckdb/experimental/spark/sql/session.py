@@ -31,7 +31,7 @@ from .udf import UDFRegistration
 
 # data is a List of rows
 # every value in each row needs to be turned into a Value
-def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list['duckdb.Value']:
+def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list["duckdb.Value"]:
     from duckdb import Value
 
     new_data = []

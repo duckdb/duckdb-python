@@ -8,7 +8,7 @@ from get_cpp_methods import ConnectionMethod, get_methods
 os.chdir(os.path.dirname(__file__))
 
 JSON_PATH = "connection_methods.json"
-DUCKDB_PYTHON_SOURCE = Path("..")  / "src" / "duckdb_py" / "duckdb_python.cpp"
+DUCKDB_PYTHON_SOURCE = Path("..") / "src" / "duckdb_py" / "duckdb_python.cpp"
 
 START_MARKER = "\t// START_OF_CONNECTION_METHODS"
 END_MARKER = "\t// END_OF_CONNECTION_METHODS"
