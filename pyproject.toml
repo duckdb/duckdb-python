@@ -359,6 +359,10 @@ ban-relative-imports = "all"
 strict = true
 
 [tool.ruff.lint.per-file-ignores]
+"duckdb/experimental/spark/**.py" = [
+    # Ignore boolean positional args in the Spark API
+    'FBT001'
+]
 "tests/**.py" = [
     # No need for package, module, class, function, init etc docstrings in tests
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107',
@@ -368,15 +372,15 @@ strict = true
 "tests/fast/spark/**.py" = [
     "E402"
 ]
+"tests/spark_namespace/**.py" = [
+    # we need * imports for Spark
+    'F403'
+]
 "scripts/**.py" = [
     # No need for package, module, class, function, init etc docstrings in scripts
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205',
     # No need for type hinting in scripts
     'ANN001', 'ANN201'
-]
-"tests/spark_namespace/**.py" = [
-    # we need * imports for Spark
-    'F403'
 ]
 
 [tool.ruff.format]
