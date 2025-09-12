@@ -111,7 +111,7 @@ class SparkSession:  # noqa: D101
         return DataFrame(rel, self)
 
     def _createDataFrameFromPandas(
-        self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None
+        self, data: "PandasDataFrame", types: Union[list[str], None], names: Union[list[str], None]
     ) -> DataFrame:
         df = self._create_dataframe(data)
 

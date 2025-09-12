@@ -17,6 +17,7 @@ import sys
 import time
 from collections import defaultdict
 from collections.abc import Generator
+from enum import Enum
 from html.parser import HTMLParser
 from typing import Optional
 from urllib.parse import urlparse
@@ -86,9 +87,8 @@ class ValidationError(PyPICleanupError):
     """Raised when input validation fails."""
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging with appropriate level and format."""
-    level = logging.DEBUG if verbose else logging.INFO
     logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
 
@@ -134,11 +134,8 @@ def session_with_retries() -> Generator[Session, None, None]:
         yield session
 
 
-def load_credentials(dry_run: bool) -> tuple[Optional[str], Optional[str]]:
+def load_credentials() -> tuple[Optional[str], Optional[str]]:
     """Load credentials from environment variables."""
-    if dry_run:
-        return None, None
-
     password = os.getenv("PYPI_CLEANUP_PASSWORD")
     otp = os.getenv("PYPI_CLEANUP_OTP")
 
@@ -169,35 +166,32 @@ class CsrfParser(HTMLParser):
     Based on pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
     """
 
-    def __init__(self, target: str, contains_input: bool | None = None) -> None:  # noqa: D107
+    def __init__(self, target: str) -> None:  # noqa: D107
         super().__init__()
         self._target = target
-        self._contains_input = contains_input
         self.csrf = None  # Result value from all forms on page
-        self._csrf = None  # Temp value from current form
         self._in_form = False  # Currently parsing a form with an action we're interested in
-        self._input_contained = False  # Input field requested is contained in the current form
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: D102
-        if tag == "form":
-            attrs = dict(attrs)
-            action = attrs.get("action")  # Might be None.
-            if action and (action == self._target or action.startswith(self._target)):
-                self._in_form = True
-        elif self._in_form and tag == "input":
-            attrs = dict(attrs)
-            if attrs.get("name") == "csrf_token":
-                self._csrf = attrs["value"]
-            if self._contains_input and attrs.get("name") == self._contains_input:
-                self._input_contained = True
+        if not self.csrf:
+            if tag == "form":
+                attrs = dict(attrs)
+                action = attrs.get("action")  # Might be None.
+                if action and (action == self._target or action.startswith(self._target)):
+                    self._in_form = True
+            elif self._in_form and tag == "input":
+                attrs = dict(attrs)
+                if attrs.get("name") == "csrf_token" and not self.csrf:
+                    self.csrf = attrs["value"]
 
     def handle_endtag(self, tag: str) -> None:  # noqa: D102
-        if tag == "form":
+        if tag == "form" and self._in_form:
             self._in_form = False
-            # If we're in a right form that contains the requested input and csrf is not set
-            if (not self._contains_input or self._input_contained) and not self.csrf:
-                self.csrf = self._csrf
 
+
+class CleanMode(Enum):
+    LIST_ONLY = 1
+    DELETE = 2
 
 class PyPICleanup:
     """Main class for performing PyPI package cleanup operations."""
@@ -205,7 +199,7 @@ class PyPICleanup:
     def __init__(  # noqa: D107
         self,
         index_url: str,
-        do_delete: bool,
+        mode: CleanMode,
         max_dev_releases: int = _DEFAULT_MAX_NIGHTLIES,
         username: Optional[str] = None,
         password: Optional[str] = None,
@@ -214,7 +208,7 @@ class PyPICleanup:
         parsed_url = urlparse(index_url)
         self._index_url = parsed_url.geturl().rstrip("/")
         self._index_host = parsed_url.hostname
-        self._do_delete = do_delete
+        self._mode = mode
         self._max_dev_releases = max_dev_releases
         self._username = username
         self._password = password
@@ -230,10 +224,12 @@ class PyPICleanup:
         Returns:
             int: Exit code (0 for success, non-zero for failure)
         """
-        if self._do_delete:
+        if self._mode == CleanMode.DELETE:
             logging.warning("NOT A DRILL: WILL DELETE PACKAGES")
-        else:
+        elif self._mode == CleanMode.LIST_ONLY:
             logging.info("Running in DRY RUN mode, nothing will be deleted")
+        else:
+            raise RuntimeError("Unexpected mode")
 
         logging.info(f"Max development releases to keep per unreleased version: {self._max_dev_releases}")
 
@@ -265,7 +261,7 @@ class PyPICleanup:
         for version in sorted(versions_to_delete):
             logging.warning(version)
 
-        if not self._do_delete:
+        if self._mode != CleanMode.DELETE:
             logging.info("Dry run complete - no packages were deleted")
             return 0
 
@@ -532,22 +528,23 @@ def main() -> int:
     args = parser.parse_args()
 
     # Setup logging
-    setup_logging(args.verbose)
+    setup_logging((args.verbose and logging.DEBUG) or logging.INFO)
 
     try:
         # Validate arguments
         validate_arguments(args)
 
-        # Load credentials
-        password, otp = load_credentials(args.dry_run)
+        # Dry run vs delete
+        password, otp, mode = None, None, CleanMode.LIST_ONLY
+        if args.dry_run:
+            password, otp = load_credentials()
+            mode = CleanMode.DELETE
 
         # Determine PyPI URL
         pypi_url = _PYPI_URL_PROD if args.prod else _PYPI_URL_TEST
 
         # Create and run cleanup
-        cleanup = PyPICleanup(
-            pypi_url, not args.dry_run, args.max_nightlies, username=args.username, password=password, otp=otp
-        )
+        cleanup = PyPICleanup(pypi_url, mode, args.max_nightlies, username=args.username, password=password, otp=otp)
 
         return cleanup.run()
 

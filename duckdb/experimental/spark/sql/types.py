@@ -1181,7 +1181,7 @@ class Row(tuple):
 
         if recursive:
 
-            def conv(obj: Row | list | dict | object) -> list | dict | object:
+            def conv(obj: Union[Row, list, dict, object]) -> Union[list, dict, object]:
                 if isinstance(obj, Row):
                     return obj.asDict(True)
                 elif isinstance(obj, list):

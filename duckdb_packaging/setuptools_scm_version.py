@@ -49,28 +49,26 @@ def version_scheme(version: _VersionObject) -> str:
         msg = "Need a valid version. Did you set a fallback_version in pyproject.toml?"
         raise ValueError(msg)
 
+    distance = int(version.distance or 0)
     try:
-        return _bump_version(str(version.tag), version.distance, version.dirty)
+        if distance == 0 and not version.dirty:
+            return _tag_to_version(str(version.tag))
+        return _bump_dev_version(str(version.tag), distance)
     except Exception as e:
         msg = f"Failed to bump version: {e}"
         raise RuntimeError(msg)
 
+def _tag_to_version(tag: str) -> str:
+    """Bump the version when we're on a tag."""
+    major, minor, patch, post, rc = parse_version(tag)
+    return format_version(major, minor, patch, post=post, rc=rc)
 
-def _bump_version(base_version: str, distance: int, dirty: bool = False) -> str:
-    """Bump the version if needed."""
-    # Validate the base version (this should never include anything else than X.Y.Z or X.Y.Z.[rc|post]N)
-    try:
-        major, minor, patch, post, rc = parse_version(base_version)
-    except ValueError:
-        msg = f"Incorrect version format: {base_version} (expected X.Y.Z or X.Y.Z.postN)"
-        raise ValueError(msg)
+def _bump_dev_version(base_version: str, distance: int) -> str:
+    """Bump the given version."""
+    if distance == 0:
+        raise ValueError("Dev distance is 0, cannot bump version.")
+    major, minor, patch, post, rc = parse_version(base_version)
 
-    # If we're exactly on a tag (distance = 0, dirty=False)
-    distance = int(distance or 0)
-    if distance == 0 and not dirty:
-        return format_version(major, minor, patch, post=post, rc=rc)
-
-    # Otherwise we're at a distance and / or dirty, and need to bump
     if post != 0:
         # We're developing on top of a post-release
         return f"{format_version(major, minor, patch, post=post + 1)}.dev{distance}"
@@ -131,7 +129,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
         version = version.replace("-rc", "rc")
 
     # Bump version and format according to PEP440
-    pep440_version = _bump_version(version, int(distance or 0))
+    pep440_version = _bump_dev_version(version, int(distance or 0))
     if commit_hash:
         pep440_version += f"+g{commit_hash.lower()}"
 

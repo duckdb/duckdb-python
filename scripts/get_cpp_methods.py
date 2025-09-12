@@ -1,5 +1,6 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Callable
 
@@ -16,11 +17,16 @@ class FunctionParam:
         self.name = name
 
 
+class ReturnType(Enum):
+    VOID = 0
+    OTHER = 1
+
+
 class ConnectionMethod:
-    def __init__(self, name: str, params: list[FunctionParam], is_void: bool) -> None:
+    def __init__(self, name: str, params: list[FunctionParam], return_type: ReturnType) -> None:
         self.name = name
         self.params = params
-        self.is_void = is_void
+        self.return_type = return_type
 
 
 class Visitor:
@@ -37,8 +43,9 @@ class Visitor:
 
     def on_class_method(self, state, node):
         name = node.name.format()
-        return_type = node.return_type
-        is_void = return_type and return_type.format() == "void"
+        return_type = ReturnType.VOID
+        if node.return_type and node.return_type.format() == "void":
+            return_type = ReturnType.OTHER
         params = [
             FunctionParam(
                 x.name,
@@ -47,7 +54,7 @@ class Visitor:
             for x in node.parameters
         ]
 
-        self.methods_dict[name] = ConnectionMethod(name, params, is_void)
+        self.methods_dict[name] = ConnectionMethod(name, params, return_type)
 
 
 def get_methods(class_name: str) -> dict[str, ConnectionMethod]:

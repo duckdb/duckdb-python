@@ -44,14 +44,13 @@ _SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
 _FORCED_PEP440_VERSION = forced_version_from_env()
 
 
-def _log(msg: str, is_error: bool = False) -> None:
+def _log(msg: str) -> None:
     """Log a message with build backend prefix.
 
     Args:
         msg: The message to log.
-        is_error: If True, log to stderr; otherwise log to stdout.
     """
-    print(_LOGGING_FORMAT.format(msg), flush=True, file=sys.stderr if is_error else sys.stdout)
+    print(_LOGGING_FORMAT.format(msg), flush=True, file=sys.stderr)
 
 
 def _in_git_repository() -> bool:
@@ -135,7 +134,7 @@ def _read_duckdb_long_version() -> str:
 
 
 def _skbuild_config_add(
-    key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]], fail_if_exists: bool = False
+    key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]]
 ) -> None:
     """Add or modify a configuration setting for scikit-build-core.
 
@@ -146,10 +145,9 @@ def _skbuild_config_add(
         key: The configuration key to set (will be prefixed with 'skbuild.' if needed).
         value: The value to add (string or list).
         config_settings: The configuration dictionary to modify.
-        fail_if_exists: If True, raise an error if the key already exists.
 
     Raises:
-        RuntimeError: If fail_if_exists is True and key exists, or on type mismatches.
+        RuntimeError: If this would overwrite an existing value, or on type mismatches.
         AssertionError: If config_settings is None.
 
     Behavior Rules:
@@ -172,16 +170,13 @@ def _skbuild_config_add(
     val_is_list = isinstance(value, list)
     if not key_exists:
         config_settings[store_key] = value
-    elif fail_if_exists:
-        msg = f"{key} already present in config and may not be overridden"
-        raise RuntimeError(msg)
     elif key_exists_as_list and val_is_list:
         config_settings[store_key].extend(value)
     elif key_exists_as_list and val_is_str:
         config_settings[store_key].append(value)
     elif key_exists_as_str and val_is_str:
-        _log(f"WARNING: overriding existing value in {store_key}")
-        config_settings[store_key] = value
+        msg = f"{key} already present in config and may not be overridden"
+        raise RuntimeError(msg)
     else:
         msg = f"Type mismatch: cannot set {store_key} ({type(config_settings[store_key])}) to `{value}` ({type(value)})"
         raise RuntimeError(msg)

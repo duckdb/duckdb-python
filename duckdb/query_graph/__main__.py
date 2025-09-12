@@ -268,7 +268,7 @@ def generate_ipython(json_input: str) -> str:  # noqa: D103
     )
 
 
-def generate_style_html(graph_json: str, include_meta_info: bool) -> None:  # noqa: D103
+def generate_style_html(graph_json: str, include_meta_info: bool) -> None:  # noqa: D103, FBT001
     treeflex_css = '<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">\n'
     css = "<style>\n"
     css += qgraph_css + "\n"

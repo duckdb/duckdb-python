@@ -90,7 +90,7 @@ def ucase(str: "ColumnOrName") -> Column:
     return upper(str)
 
 
-def when(condition: "Column", value: Column | str) -> Column:  # noqa: D103
+def when(condition: "Column", value: Union[Column, str]) -> Column:  # noqa: D103
     if not isinstance(condition, Column):
         msg = "condition should be a Column"
         raise TypeError(msg)
@@ -99,7 +99,7 @@ def when(condition: "Column", value: Column | str) -> Column:  # noqa: D103
     return Column(expr)
 
 
-def _inner_expr_or_val(val: Column | str) -> Column | str:
+def _inner_expr_or_val(val: Union[Column, str]) -> Union[Column, str]:
     return val.expr if isinstance(val, Column) else val
 
 
@@ -842,7 +842,7 @@ def collect_list(col: "ColumnOrName") -> Column:
     return array_agg(col)
 
 
-def array_append(col: "ColumnOrName", value: Column | str) -> Column:
+def array_append(col: "ColumnOrName", value: Union[Column, str]) -> Column:
     """Collection function: returns an array of the elements in col1 along
     with the added element in col2 at the last of the array.
 
@@ -876,7 +876,7 @@ def array_append(col: "ColumnOrName", value: Column | str) -> Column:
     return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
 
 
-def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Column | str) -> Column:
+def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Union[Column, str]) -> Column:
     """Collection function: adds an item into a given array at a specified array index.
     Array indices start at 1, or start from the end if index is negative.
     Index above array size appends the array, or prepends the array if index is negative,
@@ -969,7 +969,7 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Co
     )
 
 
-def array_contains(col: "ColumnOrName", value: Column | str) -> Column:
+def array_contains(col: "ColumnOrName", value: Union[Column, str]) -> Column:
     """Collection function: returns null if the array is null, true if the array contains the
     given value, and false otherwise.
 

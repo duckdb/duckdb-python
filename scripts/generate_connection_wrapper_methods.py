@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 # Requires `python3 -m pip install cxxheaderparser pcpp`
-from get_cpp_methods import ConnectionMethod, get_methods
+from get_cpp_methods import ConnectionMethod, get_methods, ReturnType
 
 os.chdir(os.path.dirname(__file__))
 
@@ -167,7 +167,7 @@ def generate():
         format_dict = {
             "param_definitions": param_definitions,
             "opt_retrieval": "",
-            "opt_return": "" if definition.is_void else "return ",
+            "opt_return": "" if definition.return_type == ReturnType.VOID else "return",
             "function_name": function_name,
             "parameter_names": param_names,
         }

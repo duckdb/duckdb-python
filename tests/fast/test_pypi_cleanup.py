@@ -3,7 +3,7 @@
 
 Run with: python -m pytest test_pypi_cleanup.py -v
 """
-
+import logging
 import os
 from unittest.mock import Mock, patch
 
@@ -25,7 +25,7 @@ from duckdb_packaging.pypi_cleanup import (  # noqa: E402
     session_with_retries,
     setup_logging,
     validate_arguments,
-    validate_username,
+    validate_username, CleanMode,
 )
 
 
@@ -79,16 +79,10 @@ class TestValidation:
 class TestCredentials:
     """Test credential loading."""
 
-    def test_load_credentials_dry_run(self):
-        """Test credential loading in dry run mode."""
-        password, otp = load_credentials(dry_run=True)
-        assert password is None
-        assert otp is None
-
     @patch.dict(os.environ, {"PYPI_CLEANUP_PASSWORD": "test_pass", "PYPI_CLEANUP_OTP": "test_otp"})
     def test_load_credentials_live_mode_success(self):
         """Test successful credential loading in live mode."""
-        password, otp = load_credentials(dry_run=False)
+        password, otp = load_credentials()
         assert password == "test_pass"
         assert otp == "test_otp"
 
@@ -96,13 +90,13 @@ class TestCredentials:
     def test_load_credentials_missing_password(self):
         """Test credential loading with missing password."""
         with pytest.raises(ValidationError, match="PYPI_CLEANUP_PASSWORD"):
-            load_credentials(dry_run=False)
+            load_credentials()
 
     @patch.dict(os.environ, {"PYPI_CLEANUP_PASSWORD": "test_pass"})
     def test_load_credentials_missing_otp(self):
         """Test credential loading with missing OTP."""
         with pytest.raises(ValidationError, match="PYPI_CLEANUP_OTP"):
-            load_credentials(dry_run=False)
+            load_credentials()
 
 
 class TestUtilities:
@@ -121,7 +115,7 @@ class TestUtilities:
     @patch("duckdb_packaging.pypi_cleanup.logging.basicConfig")
     def test_setup_logging_normal(self, mock_basicConfig):
         """Test logging setup in normal mode."""
-        setup_logging(verbose=False)
+        setup_logging()
         mock_basicConfig.assert_called_once()
         call_args = mock_basicConfig.call_args[1]
         assert call_args["level"] == 20  # INFO level
@@ -129,7 +123,7 @@ class TestUtilities:
     @patch("duckdb_packaging.pypi_cleanup.logging.basicConfig")
     def test_setup_logging_verbose(self, mock_basicConfig):
         """Test logging setup in verbose mode."""
-        setup_logging(verbose=True)
+        setup_logging(level=logging.DEBUG)
         mock_basicConfig.assert_called_once()
         call_args = mock_basicConfig.call_args[1]
         assert call_args["level"] == 10  # DEBUG level
@@ -177,15 +171,15 @@ class TestPyPICleanup:
 
     @pytest.fixture
     def cleanup_dryrun_max_2(self) -> PyPICleanup:
-        return PyPICleanup("https://test.pypi.org/", False, 2)
+        return PyPICleanup("https://test.pypi.org/", CleanMode.LIST_ONLY, 2)
 
     @pytest.fixture
     def cleanup_dryrun_max_0(self) -> PyPICleanup:
-        return PyPICleanup("https://test.pypi.org/", False, 0)
+        return PyPICleanup("https://test.pypi.org/", CleanMode.LIST_ONLY, 0)
 
     @pytest.fixture
     def cleanup_max_2(self) -> PyPICleanup:
-        return PyPICleanup("https://test.pypi.org/", True, 2, username="<USERNAME>", password="<PASSWORD>", otp="<OTP>")
+        return PyPICleanup("https://test.pypi.org/", CleanMode.DELETE, 2, username="<USERNAME>", password="<PASSWORD>", otp="<OTP>")
 
     def test_determine_versions_to_delete_max_2(self, cleanup_dryrun_max_2):
         start_state = {

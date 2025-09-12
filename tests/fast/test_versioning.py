@@ -17,7 +17,9 @@ from duckdb_packaging._versioning import (  # noqa: E402
     parse_version,
     pep440_to_git_tag,
 )
-from duckdb_packaging.setuptools_scm_version import _bump_version, forced_version_from_env, version_scheme  # noqa: E402
+from duckdb_packaging.setuptools_scm_version import (  # noqa: E402
+    _bump_dev_version, _tag_to_version, forced_version_from_env, version_scheme
+)
 
 
 class TestVersionParsing(unittest.TestCase):
@@ -105,27 +107,27 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
 
     def test_bump_version_exact_tag(self):
         """Test bump_version with exact tag (distance=0, dirty=False)."""
-        assert _bump_version("1.2.3", 0, False) == "1.2.3"
-        assert _bump_version("1.2.3.post1", 0, False) == "1.2.3.post1"
+        assert _tag_to_version("1.2.3") == "1.2.3"
+        assert _tag_to_version("1.2.3.post1") == "1.2.3.post1"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_with_distance(self):
         """Test bump_version with distance from tag."""
-        assert _bump_version("1.2.3", 5, False) == "1.3.0.dev5"
+        assert _bump_dev_version("1.2.3", 5) == "1.3.0.dev5"
 
         # Post-release development
-        assert _bump_version("1.2.3.post1", 3, False) == "1.2.3.post2.dev3"
+        assert _bump_dev_version("1.2.3.post1", 3) == "1.2.3.post2.dev3"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "0"})
     def test_bump_version_release_branch(self):
         """Test bump_version on bugfix branch."""
-        assert _bump_version("1.2.3", 5, False) == "1.2.4.dev5"
+        assert _bump_dev_version("1.2.3", 5) == "1.2.4.dev5"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_dirty(self):
         """Test bump_version with dirty working directory."""
-        assert _bump_version("1.2.3", 0, True) == "1.3.0.dev0"
-        assert _bump_version("1.2.3.post1", 0, True) == "1.2.3.post2.dev0"
+        with pytest.raises(ValueError, match="Dev distance is 0, cannot bump version."):
+            _bump_dev_version("1.2.3", 0)
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_version_scheme_function(self):
@@ -141,8 +143,10 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
 
     def test_bump_version_invalid_format(self):
         """Test bump_version with invalid version format."""
-        with pytest.raises(ValueError, match="Incorrect version format"):
-            _bump_version("invalid", 0, False)
+        with pytest.raises(ValueError, match="Invalid version format"):
+            _tag_to_version("invalid")
+        with pytest.raises(ValueError, match="Invalid version format"):
+            _bump_dev_version("invalid", 1)
 
 
 class TestGitOperations(unittest.TestCase):
