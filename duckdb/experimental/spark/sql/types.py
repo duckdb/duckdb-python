@@ -1,4 +1,5 @@
-# This code is based on code from Apache Spark under the license found in the LICENSE  # noqa: D100
+# ruff: noqa: D100
+# This code is based on code from Apache Spark under the license found in the LICENSE
 # file located in the 'spark' folder.
 
 import calendar
@@ -11,6 +12,7 @@ from collections.abc import Iterator
 from typing import (
     Any,
     ClassVar,
+    NoReturn,
     Optional,
     TypeVar,
     Union,
@@ -102,11 +104,11 @@ class DataType:
         """
         return False
 
-    def toInternal(self, obj: Any) -> Any:
+    def toInternal(self, obj: Any) -> Any:  # noqa: ANN401
         """Converts a Python object into an internal SQL object."""
         return obj
 
-    def fromInternal(self, obj: Any) -> Any:
+    def fromInternal(self, obj: Any) -> Any:  # noqa: ANN401
         """Converts an internal SQL object into a native Python object."""
         return obj
 
@@ -889,7 +891,7 @@ class StructType(DataType):
     def __repr__(self) -> str:  # noqa: D105
         return "StructType([%s])" % ", ".join(str(field) for field in self)
 
-    def __contains__(self, item: Any) -> bool:  # noqa: D105
+    def __contains__(self, item: str) -> bool:  # noqa: D105
         return item in self.names
 
     def extract_types_and_names(self) -> tuple[list[str], list[str]]:  # noqa: D102
@@ -1010,21 +1012,21 @@ class UserDefinedType(DataType):
             cls._cached_sql_type = cls.sqlType()  # type: ignore[attr-defined]
         return cls._cached_sql_type  # type: ignore[attr-defined]
 
-    def toInternal(self, obj: Any) -> Any:
+    def toInternal(self, obj: Any) -> Any:  # noqa: ANN401
         if obj is not None:
             return self._cachedSqlType().toInternal(self.serialize(obj))
 
-    def fromInternal(self, obj: Any) -> Any:
+    def fromInternal(self, obj: Any) -> Any:  # noqa: ANN401
         v = self._cachedSqlType().fromInternal(obj)
         if v is not None:
             return self.deserialize(v)
 
-    def serialize(self, obj: Any) -> Any:
+    def serialize(self, obj: Any) -> NoReturn:  # noqa: ANN401
         """Converts a user-type object into a SQL datum."""
         msg = "UDT must implement toInternal()."
         raise NotImplementedError(msg)
 
-    def deserialize(self, datum: Any) -> Any:
+    def deserialize(self, datum: Any) -> NoReturn:  # noqa: ANN401
         """Converts a SQL datum into a user-type object."""
         msg = "UDT must implement fromInternal()."
         raise NotImplementedError(msg)
@@ -1132,7 +1134,7 @@ class Row(tuple):
     def __new__(cls, *args: str) -> "Row": ...
 
     @overload
-    def __new__(cls, **kwargs: Any) -> "Row": ...
+    def __new__(cls, **kwargs: Any) -> "Row": ...  # noqa: ANN401
 
     def __new__(cls, *args: Optional[str], **kwargs: Optional[Any]) -> "Row":  # noqa: D102
         if args and kwargs:
@@ -1179,7 +1181,7 @@ class Row(tuple):
 
         if recursive:
 
-            def conv(obj: Any) -> Any:
+            def conv(obj: Row | list | dict | object) -> list | dict | object:
                 if isinstance(obj, Row):
                     return obj.asDict(True)
                 elif isinstance(obj, list):
@@ -1193,14 +1195,14 @@ class Row(tuple):
         else:
             return dict(zip(self.__fields__, self))
 
-    def __contains__(self, item: Any) -> bool:  # noqa: D105
+    def __contains__(self, item: Any) -> bool:  # noqa: D105, ANN401
         if hasattr(self, "__fields__"):
             return item in self.__fields__
         else:
             return super(Row, self).__contains__(item)
 
     # let object acts like class
-    def __call__(self, *args: Any) -> "Row":
+    def __call__(self, *args: Any) -> "Row":  # noqa: ANN401
         """Create new Row object."""
         if len(args) > len(self):
             raise ValueError(
@@ -1208,7 +1210,7 @@ class Row(tuple):
             )
         return _create_row(self, args)
 
-    def __getitem__(self, item: Any) -> Any:  # noqa: D105
+    def __getitem__(self, item: Any) -> Any:  # noqa: D105, ANN401
         if isinstance(item, (int, slice)):
             return super(Row, self).__getitem__(item)
         try:
@@ -1221,7 +1223,7 @@ class Row(tuple):
         except ValueError:
             raise ValueError(item)
 
-    def __getattr__(self, item: str) -> Any:  # noqa: D105
+    def __getattr__(self, item: str) -> Any:  # noqa: D105, ANN401
         if item.startswith("__"):
             raise AttributeError(item)
         try:
@@ -1234,7 +1236,7 @@ class Row(tuple):
         except ValueError:
             raise AttributeError(item)
 
-    def __setattr__(self, key: Any, value: Any) -> None:  # noqa: D105
+    def __setattr__(self, key: Any, value: Any) -> None:  # noqa: D105, ANN401
         if key != "__fields__":
             msg = "Row is read-only"
             raise RuntimeError(msg)

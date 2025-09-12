@@ -1,4 +1,5 @@
-from typing import Any  # noqa: D104
+# ruff: noqa: D101, D104, D105, D107, ANN401
+from typing import Any
 
 from duckdb.typing import (
     BIGINT,
@@ -32,99 +33,99 @@ from duckdb.typing import (
 )
 
 
-class Value:  # noqa: D101
-    def __init__(self, object: Any, type: DuckDBPyType) -> None:  # noqa: D107
+class Value:
+    def __init__(self, object: Any, type: DuckDBPyType) -> None:
         self.object = object
         self.type = type
 
-    def __repr__(self) -> str:  # noqa: D105
+    def __repr__(self) -> str:
         return str(self.object)
 
 
 # Miscellaneous
 
 
-class NullValue(Value):  # noqa: D101
-    def __init__(self) -> None:  # noqa: D107
+class NullValue(Value):
+    def __init__(self) -> None:
         super().__init__(None, SQLNULL)
 
 
-class BooleanValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class BooleanValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BOOLEAN)
 
 
 # Unsigned numerics
 
 
-class UnsignedBinaryValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UnsignedBinaryValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UTINYINT)
 
 
-class UnsignedShortValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UnsignedShortValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, USMALLINT)
 
 
-class UnsignedIntegerValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UnsignedIntegerValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UINTEGER)
 
 
-class UnsignedLongValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UnsignedLongValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UBIGINT)
 
 
 # Signed numerics
 
 
-class BinaryValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class BinaryValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TINYINT)
 
 
-class ShortValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class ShortValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, SMALLINT)
 
 
-class IntegerValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class IntegerValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, INTEGER)
 
 
-class LongValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class LongValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BIGINT)
 
 
-class HugeIntegerValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class HugeIntegerValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, HUGEINT)
 
 
-class UnsignedHugeIntegerValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UnsignedHugeIntegerValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UHUGEINT)
 
 
 # Fractional
 
 
-class FloatValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class FloatValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, FLOAT)
 
 
-class DoubleValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class DoubleValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, DOUBLE)
 
 
-class DecimalValue(Value):  # noqa: D101
-    def __init__(self, object: Any, width: int, scale: int) -> None:  # noqa: D107
+class DecimalValue(Value):
+    def __init__(self, object: Any, width: int, scale: int) -> None:
         import duckdb
 
         decimal_type = duckdb.decimal_type(width, scale)
@@ -134,71 +135,71 @@ class DecimalValue(Value):  # noqa: D101
 # String
 
 
-class StringValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class StringValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, VARCHAR)
 
 
-class UUIDValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class UUIDValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, UUID)
 
 
-class BitValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class BitValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BIT)
 
 
-class BlobValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class BlobValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, BLOB)
 
 
 # Temporal
 
 
-class DateValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class DateValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, DATE)
 
 
-class IntervalValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class IntervalValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, INTERVAL)
 
 
-class TimestampValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimestampValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP)
 
 
-class TimestampSecondValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimestampSecondValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_S)
 
 
-class TimestampMilisecondValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimestampMilisecondValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_MS)
 
 
-class TimestampNanosecondValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimestampNanosecondValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_NS)
 
 
-class TimestampTimeZoneValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimestampTimeZoneValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_TZ)
 
 
-class TimeValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimeValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIME)
 
 
-class TimeTimeZoneValue(Value):  # noqa: D101
-    def __init__(self, object: Any) -> None:  # noqa: D107
+class TimeTimeZoneValue(Value):
+    def __init__(self, object: Any) -> None:
         super().__init__(object, TIME_TZ)
 
 

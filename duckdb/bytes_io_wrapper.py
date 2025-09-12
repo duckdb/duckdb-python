@@ -48,7 +48,7 @@ class BytesIOWrapper:  # noqa: D101
         # overflow to the front of the bytestring the next time reading is performed
         self.overflow = b""
 
-    def __getattr__(self, attr: str) -> Any:  # noqa: D105
+    def __getattr__(self, attr: str) -> Any:  # noqa: D105, ANN401
         return getattr(self.buffer, attr)
 
     def read(self, n: Union[int, None] = -1) -> bytes:  # noqa: D102

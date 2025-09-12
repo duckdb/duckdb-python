@@ -6,7 +6,7 @@ to match the exact behavior of the original DuckDB Python package.
 
 import os
 import re
-from typing import Any
+from typing import Protocol
 
 # Import from our own versioning module to avoid duplication
 from ._versioning import format_version, parse_version
@@ -19,12 +19,18 @@ SCM_GLOBAL_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION"
 OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
 
 
+class _VersionObject(Protocol):
+    tag: object
+    distance: int
+    dirty: bool
+
+
 def _main_branch_versioning() -> bool:
     from_env = os.getenv("MAIN_BRANCH_VERSIONING")
     return from_env == "1" if from_env is not None else MAIN_BRANCH_VERSIONING
 
 
-def version_scheme(version: Any) -> str:
+def version_scheme(version: _VersionObject) -> str:
     """setuptools_scm version scheme that matches DuckDB's original behavior.
 
     Args:

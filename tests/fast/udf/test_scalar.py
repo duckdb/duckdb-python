@@ -180,7 +180,7 @@ class TestScalarUDF:
             def __init__(self) -> None:
                 pass
 
-            def __call__(self, x) -> Any:
+            def __call__(self, x: Any) -> Any:  # noqa: ANN401
                 return x
 
         my_callable = MyCallable()

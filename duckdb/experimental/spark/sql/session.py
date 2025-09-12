@@ -1,6 +1,6 @@
 import uuid  # noqa: D100
 from collections.abc import Iterable, Sized
-from typing import TYPE_CHECKING, Any, Optional, Union
+from typing import TYPE_CHECKING, Any, NoReturn, Optional, Union
 
 if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
@@ -205,7 +205,7 @@ class SparkSession:  # noqa: D101
 
         return DataFrame(self.conn.table_function("range", parameters=[start, end, step]), self)
 
-    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:  # noqa: D102
+    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:  # noqa: D102, ANN401
         if kwargs:
             raise NotImplementedError
         relation = self.conn.sql(sqlQuery)
@@ -246,7 +246,7 @@ class SparkSession:  # noqa: D101
         return self._context
 
     @property
-    def streams(self) -> Any:  # noqa: D102
+    def streams(self) -> NoReturn:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
@@ -278,7 +278,10 @@ class SparkSession:  # noqa: D101
             return SparkSession(context)
 
         def config(  # noqa: D102
-            self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None
+            self,
+            key: Optional[str] = None,
+            value: Optional[Any] = None,  # noqa: ANN401
+            conf: Optional[SparkConf] = None,
         ) -> "SparkSession.Builder":
             return self
 

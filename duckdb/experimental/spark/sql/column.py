@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Any, Callable, Union, cast  # noqa: D100
+from collections.abc import Iterable  # noqa: D100
+from typing import TYPE_CHECKING, Any, Callable, Union, cast
 
 from ..exception import ContributionsAcceptedError
 from .types import DataType
@@ -136,7 +137,7 @@ class Column:
 
     __rpow__ = _bin_op("__rpow__")
 
-    def __getitem__(self, k: Any) -> "Column":
+    def __getitem__(self, k: Any) -> "Column":  # noqa: ANN401
         """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
@@ -176,7 +177,7 @@ class Column:
             expr_str = str(self.expr) + "." + str(k)
             return Column(ColumnExpression(expr_str))
 
-    def __getattr__(self, item: Any) -> "Column":
+    def __getattr__(self, item: Any) -> "Column":  # noqa: ANN401
         """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
@@ -208,7 +209,7 @@ class Column:
     def alias(self, alias: str) -> "Column":  # noqa: D102
         return Column(self.expr.alias(alias))
 
-    def when(self, condition: "Column", value: Any) -> "Column":  # noqa: D102
+    def when(self, condition: "Column", value: Union["Column", str]) -> "Column":  # noqa: D102
         if not isinstance(condition, Column):
             msg = "condition should be a Column"
             raise TypeError(msg)
@@ -216,7 +217,7 @@ class Column:
         expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
-    def otherwise(self, value: Any) -> "Column":  # noqa: D102
+    def otherwise(self, value: Union["Column", str]) -> "Column":  # noqa: D102
         v = _get_expr(value)
         expr = self.expr.otherwise(v)
         return Column(expr)
@@ -229,7 +230,7 @@ class Column:
             internal_type = dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
 
-    def isin(self, *cols: Any) -> "Column":  # noqa: D102
+    def isin(self, *cols: Union[Iterable[Union["Column", str]], Union["Column", str]]) -> "Column":  # noqa: D102
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
             cols = cast("tuple", cols[0])

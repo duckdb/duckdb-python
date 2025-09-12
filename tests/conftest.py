@@ -131,7 +131,7 @@ class NumpyPandas:
         self.DataFrame = numpy_pandas_df
         self.pandas = import_pandas()
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         return getattr(self.pandas, name)
 
 
@@ -165,7 +165,7 @@ class ArrowMockTesting:
         self.testing = import_pandas().testing
         self.assert_frame_equal = convert_and_equal
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         return getattr(self.testing, name)
 
 
@@ -184,7 +184,7 @@ class ArrowPandas:
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
         return getattr(self.pandas, name)
 
 

@@ -90,7 +90,7 @@ def ucase(str: "ColumnOrName") -> Column:
     return upper(str)
 
 
-def when(condition: "Column", value: Any) -> Column:  # noqa: D103
+def when(condition: "Column", value: Column | str) -> Column:  # noqa: D103
     if not isinstance(condition, Column):
         msg = "condition should be a Column"
         raise TypeError(msg)
@@ -143,7 +143,7 @@ def array(*cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["Column
     return _invoke_function_over_columns("list_value", *cols)
 
 
-def lit(col: Any) -> Column:  # noqa: D103
+def lit(col: Any) -> Column:  # noqa: D103, ANN401
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
 
 
@@ -842,7 +842,7 @@ def collect_list(col: "ColumnOrName") -> Column:
     return array_agg(col)
 
 
-def array_append(col: "ColumnOrName", value: Any) -> Column:
+def array_append(col: "ColumnOrName", value: Column | str) -> Column:
     """Collection function: returns an array of the elements in col1 along
     with the added element in col2 at the last of the array.
 
@@ -876,7 +876,7 @@ def array_append(col: "ColumnOrName", value: Any) -> Column:
     return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
 
 
-def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Any) -> Column:
+def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Column | str) -> Column:
     """Collection function: adds an item into a given array at a specified array index.
     Array indices start at 1, or start from the end if index is negative.
     Index above array size appends the array, or prepends the array if index is negative,
@@ -969,7 +969,7 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: An
     )
 
 
-def array_contains(col: "ColumnOrName", value: Any) -> Column:
+def array_contains(col: "ColumnOrName", value: Column | str) -> Column:
     """Collection function: returns null if the array is null, true if the array contains the
     given value, and false otherwise.
 
@@ -1937,7 +1937,7 @@ def array_compact(col: "ColumnOrName") -> Column:
     )
 
 
-def array_remove(col: "ColumnOrName", element: Any) -> Column:
+def array_remove(col: "ColumnOrName", element: Any) -> Column:  # noqa: ANN401
     """Collection function: Remove all elements that equal to element from the given array.
 
     .. versionadded:: 2.4.0
@@ -5083,7 +5083,7 @@ def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[s
     return _invoke_function("array_to_string", col, ConstantExpression(delimiter))
 
 
-def array_position(col: "ColumnOrName", value: Any) -> Column:
+def array_position(col: "ColumnOrName", value: Any) -> Column:  # noqa: ANN401
     """Collection function: Locates the position of the first occurrence of the given value
     in the given array. Returns null if either of the arguments are null.
 
@@ -5122,7 +5122,7 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:
     )
 
 
-def array_prepend(col: "ColumnOrName", value: Any) -> Column:
+def array_prepend(col: "ColumnOrName", value: Any) -> Column:  # noqa: ANN401
     """Collection function: Returns an array containing element as
     well as all elements from array. The new element is positioned
     at the beginning of the array.

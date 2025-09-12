@@ -282,7 +282,7 @@ class DataFrame:  # noqa: D101
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":
+    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":  # noqa: ANN401
         """Returns a new :class:`DataFrame`. Concise syntax for chaining custom transformations.
 
         .. versionadded:: 3.0.0
@@ -342,7 +342,7 @@ class DataFrame:  # noqa: D101
         )
         return result
 
-    def sort(self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
+    def sort(self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any) -> "DataFrame":  # noqa: ANN401
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
