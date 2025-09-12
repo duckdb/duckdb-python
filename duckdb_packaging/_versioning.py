@@ -148,7 +148,9 @@ def strip_post_from_version(version: str) -> str:
 
 
 def get_git_describe(
-    repo_path: Optional[pathlib.Path] = None, since_major: bool = False, since_minor: bool = False  # noqa: FBT001
+    repo_path: Optional[pathlib.Path] = None,
+    since_major: bool = False,
+    since_minor: bool = False,  # noqa: FBT001
 ) -> Optional[str]:
     """Get git describe output for version determination.
 

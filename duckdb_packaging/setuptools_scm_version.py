@@ -58,10 +58,12 @@ def version_scheme(version: _VersionObject) -> str:
         msg = f"Failed to bump version: {e}"
         raise RuntimeError(msg)
 
+
 def _tag_to_version(tag: str) -> str:
     """Bump the version when we're on a tag."""
     major, minor, patch, post, rc = parse_version(tag)
     return format_version(major, minor, patch, post=post, rc=rc)
+
 
 def _bump_dev_version(base_version: str, distance: int) -> str:
     """Bump the given version."""

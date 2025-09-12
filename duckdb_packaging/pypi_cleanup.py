@@ -193,6 +193,7 @@ class CleanMode(Enum):
     LIST_ONLY = 1
     DELETE = 2
 
+
 class PyPICleanup:
     """Main class for performing PyPI package cleanup operations."""
 

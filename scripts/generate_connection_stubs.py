@@ -55,7 +55,6 @@ def generate():
             result.append(argument)
         return result
 
-
     def create_definition(name, method) -> str:
         definition = f"def {name}("
         arguments = ["self"]

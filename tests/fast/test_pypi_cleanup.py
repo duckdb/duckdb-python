@@ -3,6 +3,7 @@
 
 Run with: python -m pytest test_pypi_cleanup.py -v
 """
+
 import logging
 import os
 from unittest.mock import Mock, patch
@@ -180,7 +181,9 @@ class TestPyPICleanup:
 
     @pytest.fixture
     def cleanup_max_2(self) -> PyPICleanup:
-        return PyPICleanup("https://test.pypi.org/", CleanMode.DELETE, 2, username="<USERNAME>", password="<PASSWORD>", otp="<OTP>")
+        return PyPICleanup(
+            "https://test.pypi.org/", CleanMode.DELETE, 2, username="<USERNAME>", password="<PASSWORD>", otp="<OTP>"
+        )
 
     def test_determine_versions_to_delete_max_2(self, cleanup_dryrun_max_2):
         start_state = {
