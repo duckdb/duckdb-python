@@ -15,6 +15,7 @@ duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging.pypi_cleanup import (  # noqa: E402
     AuthenticationError,
+    CleanMode,
     CsrfParser,
     PyPICleanup,
     PyPICleanupError,
@@ -25,7 +26,7 @@ from duckdb_packaging.pypi_cleanup import (  # noqa: E402
     session_with_retries,
     setup_logging,
     validate_arguments,
-    validate_username, CleanMode,
+    validate_username,
 )
 
 

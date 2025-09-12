@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 # Requires `python3 -m pip install cxxheaderparser pcpp`
-from get_cpp_methods import ConnectionMethod, get_methods, ReturnType
+from get_cpp_methods import ConnectionMethod, ReturnType, get_methods
 
 os.chdir(os.path.dirname(__file__))
 

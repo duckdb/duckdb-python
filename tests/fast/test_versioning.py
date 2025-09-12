@@ -18,7 +18,10 @@ from duckdb_packaging._versioning import (  # noqa: E402
     pep440_to_git_tag,
 )
 from duckdb_packaging.setuptools_scm_version import (  # noqa: E402
-    _bump_dev_version, _tag_to_version, forced_version_from_env, version_scheme
+    _bump_dev_version,
+    _tag_to_version,
+    forced_version_from_env,
+    version_scheme,
 )
 
 

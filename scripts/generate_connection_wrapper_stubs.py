@@ -87,7 +87,7 @@ def generate():
         return definition
 
     def create_overloaded_definition(name, method) -> str:
-        return "@overload\n{}".format(create_definition(name, method))
+        return f"@overload\n{create_definition(name, method)}"
 
     # We have "duplicate" methods, which are overloaded.
     # We keep note of them to add the @overload decorator.
