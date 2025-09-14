@@ -6,6 +6,7 @@ import numpy as np
 import duckdb
 from datetime import timedelta
 import pytest
+import pandas  # https://github.com/duckdb/duckdb-python/issues/48
 
 
 class TestScanNumpy(object):

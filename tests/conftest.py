@@ -6,24 +6,37 @@ import glob
 import duckdb
 import warnings
 from importlib import import_module
+import sys
 
 try:
     # need to ignore warnings that might be thrown deep inside pandas's import tree (from dateutil in this case)
-    warnings.simplefilter(action='ignore', category=DeprecationWarning)
-    pandas = import_module('pandas')
+    warnings.simplefilter(action="ignore", category=DeprecationWarning)
+    pandas = import_module("pandas")
     warnings.resetwarnings()
 
-    pyarrow_dtype = getattr(pandas, 'ArrowDtype', None)
+    pyarrow_dtype = getattr(pandas, "ArrowDtype", None)
 except ImportError:
     pandas = None
     pyarrow_dtype = None
 
-# Check if pandas has arrow dtypes enabled
-try:
-    from pandas.compat import pa_version_under7p0
+    # Only install mock after we've failed to import pandas for conftest.py
+    class MockPandas:
+        def __getattr__(self, name):
+            pytest.skip("pandas not available", allow_module_level=True)
 
-    pyarrow_dtypes_enabled = not pa_version_under7p0
-except ImportError:
+    sys.modules["pandas"] = MockPandas()
+    sys.modules["pandas.testing"] = MockPandas()
+    sys.modules["pandas._testing"] = MockPandas()
+
+# Check if pandas has arrow dtypes enabled
+if pandas is not None:
+    try:
+        from pandas.compat import pa_version_under7p0
+
+        pyarrow_dtypes_enabled = not pa_version_under7p0
+    except (ImportError, AttributeError):
+        pyarrow_dtypes_enabled = False
+else:
     pyarrow_dtypes_enabled = False
 
 
@@ -31,13 +44,24 @@ def import_pandas():
     if pandas:
         return pandas
     else:
-        pytest.skip("Couldn't import pandas")
+        pytest.skip("Couldn't import pandas", allow_module_level=True)
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
 # https://stackoverflow.com/a/47700320
 def pytest_addoption(parser):
     parser.addoption("--skiplist", action="append", nargs="+", type=str, help="skip listed tests")
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    """Convert pandas requirement exceptions to skips"""
+    outcome = yield
+    try:
+        outcome.get_result()
+    except Exception as e:
+        if "'pandas' is required for this operation but it was not installed" in str(e):
+            pytest.skip("pandas not available - test requires pandas functionality")
+
 
 
 def pytest_collection_modifyitems(config, items):
