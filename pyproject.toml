@@ -47,8 +47,8 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "fsspec",  # used in duckdb.filesystem
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
     "pandas",  # used for pandas dataframes all over the place
-    "pyarrow", # used for pyarrow support
-    "adbc_driver_manager", # for the adbc driver (TODO: this should live under the duckdb package)
+    "pyarrow; python_version < '3.14'", # used for pyarrow support
+    "adbc_driver_manager; python_version < '3.14'", # for the adbc driver (TODO: this should live under the duckdb package)
 ]
 
 ######################################################################################################
@@ -123,6 +123,13 @@ if.env.COVERAGE = false
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 
+[[tool.scikit-build.overrides]]
+# Windows Free-Threading 
+if.platform-system = "^win32"
+if.abi-flags = "t"
+inherit.cmake.define = "append"
+cmake.define.CMAKE_C_FLAGS="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
+cmake.define.CMAKE_CXX_FLAGS="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
 
 [tool.scikit-build.sdist]
 include = [
@@ -204,6 +211,7 @@ required-environments = [ # ... but do always resolve for all of them
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
+prerelease = "allow" # for 3.14
 
 # We just need pytorch for tests, wihtout GPU acceleration. PyPI doesn't host a cpu-only version for Linux, so we have
 # to configure the index url for cpu-only pytorch manually
@@ -220,8 +228,8 @@ torchvision = [ { index = "pytorch-cpu" } ]
 stubdeps = [ # dependencies used for typehints in the stubs
     "fsspec",
     "pandas",
-    "polars",
-    "pyarrow",
+    "polars; python_version < '3.14'",
+    "pyarrow; python_version < '3.14'",
 ]
 test = [ # dependencies used for running tests
     "pytest",
@@ -229,21 +237,21 @@ test = [ # dependencies used for running tests
     "pytest-timeout",
     "mypy",
     "coverage",
-    "gcovr",
+    "gcovr; python_version < '3.14'",
     "gcsfs",
     "packaging",
-    "polars",
+    "polars; python_version < '3.14'",
     "psutil",
     "py4j",
     "pyotp",
-    "pyspark",
+    "pyspark; python_version < '3.14'",
     "pytz",
     "requests",
     "urllib3",
     "fsspec>=2022.11.0",
     "pandas>=2.0.0",
-    "pyarrow>=18.0.0",
-    "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13'",
+    "pyarrow>=18.0.0; python_version < '3.14'",
+    "torch>=2.2.2; python_version < '3.14' and (sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13')",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and python_version < '3.12'",
@@ -258,8 +266,8 @@ scripts = [ # dependencies used for running scripts
     "numpy",
     "pandas",
     "pcpp",
-    "polars",
-    "pyarrow",
+    "polars; python_version < '3.14'",
+    "pyarrow; python_version < '3.14'",
     "pytz"
 ]
 pypi = [ # dependencies used by the pypi cleanup script
@@ -305,6 +313,7 @@ filterwarnings = [
     # Pyspark is throwing these warnings
     "ignore:distutils Version classes are deprecated:DeprecationWarning",
     "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
+    "ignore:ChainedAssignmentError.*:FutureWarning"
 ]
 
 [tool.coverage.run]
@@ -379,6 +388,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 manylinux-pypy_x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 manylinux-pypy_aarch64-image = "manylinux_2_28"
+enable = ["cpython-freethreading", "cpython-prerelease"]
 
 [tool.cibuildwheel.linux]
 before-build = ["yum install -y ccache"]
