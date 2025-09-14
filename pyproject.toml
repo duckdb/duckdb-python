@@ -46,7 +46,7 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "ipython", # used in duckdb.query_graph
     "fsspec",  # used in duckdb.filesystem
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
-    "pandas",  # used for pandas dataframes all over the place
+    "pandas; python_version < '3.14'",  # used for pandas dataframes all over the place
     "pyarrow; python_version < '3.14'", # used for pyarrow support
     "adbc_driver_manager; python_version < '3.14'", # for the adbc driver (TODO: this should live under the duckdb package)
 ]
@@ -227,7 +227,7 @@ torchvision = [ { index = "pytorch-cpu" } ]
 [dependency-groups] # used for development only, requires pip >=25.1.0
 stubdeps = [ # dependencies used for typehints in the stubs
     "fsspec",
-    "pandas",
+    "pandas; python_version < '3.14'",
     "polars; python_version < '3.14'",
     "pyarrow; python_version < '3.14'",
 ]
@@ -249,7 +249,7 @@ test = [ # dependencies used for running tests
     "requests",
     "urllib3",
     "fsspec>=2022.11.0",
-    "pandas>=2.0.0",
+    "pandas>=2.0.0; python_version < '3.14'",
     "pyarrow>=18.0.0; python_version < '3.14'",
     "torch>=2.2.2; python_version < '3.14' and (sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13')",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
@@ -264,7 +264,7 @@ scripts = [ # dependencies used for running scripts
     "ipython",
     "ipywidgets",
     "numpy",
-    "pandas",
+    "pandas; python_version < '3.14'",
     "pcpp",
     "polars; python_version < '3.14'",
     "pyarrow; python_version < '3.14'",
