@@ -45,6 +45,8 @@ jobs:
           - { minimal: true, python: cp311 }
           - { minimal: true, python: cp312 }
           - { minimal: true, platform: { arch: universal2 } }
+          - { python: cp314t, platform: { os: windows-2025 } }
+
     runs-on: ${{ matrix.platform.os }}
     env:
       CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
