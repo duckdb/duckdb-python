@@ -9,7 +9,8 @@ class TestRAPIDescription(object):
         names = [x[0] for x in desc]
         types = [x[1] for x in desc]
         assert names == ['a', 'b']
-        assert types == ['NUMBER', 'NUMBER']
+        assert types == ['INTEGER', 'BIGINT']
+        assert (all([x == duckdb.NUMBER for x in types]))
 
     def test_rapi_describe(self, duckdb_cursor):
         np = pytest.importorskip("numpy")
