@@ -2,14 +2,15 @@
 Therefore, we only test the new codes and exec paths.
 """
 
+import sys
 import numpy as np
 import duckdb
 from datetime import timedelta
 import pytest
-import pandas  # https://github.com/duckdb/duckdb-python/issues/48
 
 
 class TestScanNumpy(object):
+    @pytest.mark.skipif(sys.version_info[:2] == (3, 14), reason="Fails when testing without pandas https://github.com/duckdb/duckdb-python/issues/48")
     def test_scan_numpy(self, duckdb_cursor):
         z = np.array([1, 2, 3])
         res = duckdb_cursor.sql("select * from z").fetchall()
