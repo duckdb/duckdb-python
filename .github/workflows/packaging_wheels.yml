@@ -45,7 +45,9 @@ jobs:
           - { minimal: true, python: cp311 }
           - { minimal: true, python: cp312 }
           - { minimal: true, platform: { arch: universal2 } }
-          - { python: cp314t, platform: { os: windows-2025 } }
+          # Windows+cp314t disabled due to test failures in CI. 
+          # TODO: Diagnose why tests fail (access violations) in some configurations
+          - { python: cp314t, platform: { os: windows-2025 } }  
 
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -91,6 +93,8 @@ jobs:
         env:
           CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
+          # PYTHON_GIL=1: Suppresses the RuntimeWarning that the GIL is enabled on free-threaded builds. 
+          # TODO: Remove PYTHON_GIL=1 when free-threaded is supported. 
           CIBW_ENVIRONMENT: PYTHON_GIL=1
       - name: Upload wheel
         uses: actions/upload-artifact@v4
