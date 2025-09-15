@@ -123,14 +123,6 @@ if.env.COVERAGE = false
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 
-[[tool.scikit-build.overrides]]
-# Windows Free-Threading 
-if.platform-system = "^win32"
-if.abi-flags = "t"
-inherit.cmake.define = "append"
-cmake.define.CMAKE_C_FLAGS="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
-cmake.define.CMAKE_CXX_FLAGS="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
-
 [tool.scikit-build.sdist]
 include = [
     "README.md",
