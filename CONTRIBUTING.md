@@ -1,128 +1,242 @@
-# Contributing
+# Contributing to duckdb-python
 
-## Code of Conduct
+Start by <a href="https://github.com/duckdb/duckdb-python/fork"><svg height="16" viewBox="0 0 16 16" version="1.1" width="16">
+    <path fill-rule="evenodd" d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v.878A2.25 2.25 0 005.75 8.5h1.5v2.128a2.251 2.251 0 101.5 0V8.5h1.5a2.25 2.25 0 002.25-2.25v-.878a2.25 2.25 0 10-1.5 0v.878a.75.75 0 01-.75.75h-4.5A.75.75 0 015 6.25v-.878z"></path>
+</svg>forking duckdb-python</a>.
 
-This project and everyone participating in it is governed by a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [quack@duckdb.org](mailto:quack@duckdb.org).
+### Cloning
+
+After forking the duckdb-python repo we recommend you clone your fork as follows:
+```shell
+git clone --recurse-submodules $REPO_URL
+git remote add upstream https://github.com/duckdb/duckdb-python.git
+git fetch --all
+```
+
+... or, if you have already cloned your fork:
+```shell
+git submodule update --init --recursive
+git remote add upstream https://github.com/duckdb/duckdb-python.git
+git fetch --all
+```
+
+### Submodule update hook
+
+If you'll be switching between branches that are have the submodule set to different refs, then make your life 
+easier and add the git hooks in the .githooks directory to your local config: 
+```shell
+git config --local core.hooksPath .githooks/
+```
 
 
-## **Did you find a bug?**
+### Editable installs (general)
 
-* **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/duckdb/duckdb/issues).
-* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/duckdb/issues/new/choose). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
+  It's good to be aware of the following when performing an editable install:
+- `uv sync` or `uv run [tool]` perform an editable install by default. We have 
+  configured the project so that scikit-build-core will use a persistent build-dir, but since the build itself 
+  happens in an isolated, ephemeral environment, cmake's paths will point to non-existing directories. CMake itself 
+  will be missing.
+- You should install all development dependencies, and then build the project without build isolation, in two separate 
+  steps. After this you can happily keep building and running, as long as you don't forget to pass in the 
+  `--no-build-isolation` flag.
 
-## **Did you write a patch that fixes a bug?**
+```bash
+# install all dev dependencies without building the project (needed once)
+uv sync -p 3.11 --no-install-project
+# build and install without build isolation
+uv sync --no-build-isolation
+```
 
-* Great!
-* If possible, add a unit test case to make sure the issue does not occur again.
-* Make sure you run the code formatter (`make format-fix`).
-* Open a new GitHub pull request with the patch.
-* Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
+### Editable installs (IDEs)
 
-## Outside Contributors
+  If you're using an IDE then life is a little simpler. You install build dependencies and the project in the two 
+  steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
+  compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
+  management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
 
-* Discuss your intended changes with the core team on Github
-* Announce that you are working or want to work on a specific issue
-* Avoid large pull requests - they are much less likely to be merged as they are incredibly hard to review
 
-## Pull Requests
+### Cleaning
 
-* Do not commit/push directly to the main branch. Instead, create a fork and file a pull request.
-* When maintaining a branch, merge frequently with the main.
-* When maintaining a branch, submit pull requests to the main frequently.
-* If you are working on a bigger issue try to split it up into several smaller issues.
-* Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
-* We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+```shell
+uv cache clean
+rm -rf build .venv uv.lock
+```
 
-## CI for pull requests
 
-* Pull requests will need to pass all continuous integration checks before merging.
-* For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
-* Submitting changes to an open pull request will move it to 'draft' state.
-* Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
+### Building wheels and sdists
 
-## Nightly CI
+To build a wheel and sdist for your system and the default Python version:
+```bash
+uv build
+````
 
-* Packages creation and long running tests will be performed during a nightly run
-* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
+To build a wheel for a different Python version:
+```bash
+# E.g. for Python 3.9
+uv build -p 3.9
+```
 
-## Building
+### Running tests
 
-* To build the project, run `make`.
-* To build the project for debugging, run `make debug`.
-* For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
-  * The default number of parallel processes can lock up the system depending on the CPU-to-memory ratio. If this happens, restrict the maximum number of build processes: `CMAKE_BUILD_PARALLEL_LEVEL=4 GEN=ninja make`.
-  * Without using Ninja, build times can still be reduced by setting `CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)`.
+  Run all pytests:
+```bash
+uv run --no-build-isolation pytest ./tests --verbose
+```
 
-## Testing
+  Exclude the test/slow directory:
+```bash
+uv run --no-build-isolation pytest ./tests --verbose --ignore=./tests/slow
+```
 
-* Unit tests can be written either using the sqllogictest framework (`.test` files) or in C++ directly. We **strongly** prefer tests to be written using the sqllogictest framework. Only write tests in C++ if you absolutely need to (e.g. when testing concurrent connections or other exotic behavior).
-* Documentation for the testing framework can be found [here](https://duckdb.org/dev/testing).
-* Write many tests.
-* Test with different types, especially numerics, strings and complex nested types.
-* Try to test unexpected/incorrect usage as well, instead of only the happy path.
-* `make unit` runs the **fast** unit tests (~one minute), `make allunit` runs **all** unit tests (~one hour).
-* Make sure **all** unit tests pass before sending a PR.
-* Slower tests should be added to the **all** unit tests. You can do this by naming the test file `.test_slow` in the sqllogictests, or by adding `[.]` after the test group in the C++ tests.
-* Look at the code coverage report of your branch and attempt to cover all code paths in the fast unit tests. Attempt to trigger exceptions as well. It is acceptable to have some exceptions not triggered (e.g. out of memory exceptions or type switch exceptions), but large branches of code should always be either covered or removed.
-* DuckDB uses GitHub Actions as its continuous integration (CI) tool. You also have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository). Before running GitHub Actions, please ensure that you have all the Git tags from the duckdb/duckdb repository. To accomplish this, execute the following commands `git fetch <your-duckdb/duckdb-repo-remote-name> --tags` and then 
-`git push --tags` These commands will fetch all the git tags from the duckdb/duckdb repository and push them to your forked repository. This ensures that you have all the necessary tags available for your GitHub Actions workflow. 
+### Test coverage
 
-## Formatting
+  Run with coverage (during development you probably want to specify which tests to run):
+```bash
+COVERAGE=1 uv run --no-build-isolation coverage run -m pytest ./tests --verbose
+```
 
-* Use tabs for indentation, spaces for alignment.
-* Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 11.0.1, installable through `python3 -m pip install clang-format==11.0.1` or `pipx install clang-format==11.0.1`.
-* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
-* The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
+  The `COVERAGE` env var will compile the extension with `--coverage`, allowing us to collect coverage stats of C++ 
+  code as well as Python code.
 
-## C++ Guidelines
+  Check coverage for Python code:
+```bash
+uvx coverage html -d htmlcov-python
+uvx coverage report --format=markdown
+```
 
-* Do not use `malloc`, prefer the use of smart pointers. Keywords `new` and `delete` are a code smell.
-* Strongly prefer the use of `unique_ptr` over `shared_ptr`, only use `shared_ptr` if you **absolutely** have to.
-* Use `const` whenever possible.
-* Do **not** import namespaces (e.g. `using std`).
-* All functions in source files in the core (`src` directory) should be part of the `duckdb` namespace.
-* When overriding a virtual method, avoid repeating virtual and always use `override` or `final`.
-* Use `[u]int(8|16|32|64)_t` instead of `int`, `long`, `uint` etc. Use `idx_t` instead of `size_t` for offsets/indices/counts of any kind.
-* Prefer using references over pointers as arguments.
-* Use `const` references for arguments of non-trivial objects (e.g. `std::vector`, ...).
-* Use C++11 for loops when possible: `for (const auto& item : items) {...}`
-* Use braces for indenting `if` statements and loops. Avoid single-line if statements and loops, especially nested ones.
-* **Class Layout:** Start out with a `public` block containing the constructor and public variables, followed by a `public` block containing public methods of the class. After that follow any private functions and private variables. For example:
-    ```cpp
-    class MyClass {
-    public:
-    	MyClass();
+  Check coverage for C++ code (note: this will clutter your project dir with html files, consider saving them in some 
+  other place):
+```bash
+uvx gcovr \
+  --gcov-ignore-errors all \
+  --root "$PWD" \
+  --filter "${PWD}/src/duckdb_py" \
+  --exclude '.*/\.cache/.*' \
+  --gcov-exclude '.*/\.cache/.*' \
+  --gcov-exclude '.*/external/.*' \
+  --gcov-exclude '.*/site-packages/.*' \
+  --exclude-unreachable-branches \
+  --exclude-throw-branches \
+  --html --html-details -o coverage-cpp.html \
+  build/coverage/src/duckdb_py \
+  --print-summary
+```
 
-    	int my_public_variable;
+### Typechecking and linting
 
-    public:
-    	void MyFunction();
+- We're not running any mypy typechecking tests at the moment
+- We're not running any Ruff / linting / formatting at the moment
 
-    private:
-    	void MyPrivateFunction();
+### Cibuildwheel
 
-    private:
-    	int my_private_variable;
-    };
-    ```
-* Avoid [unnamed magic numbers](https://en.wikipedia.org/wiki/Magic_number_(programming)). Instead, use named variables that are stored in a `constexpr`.
-* [Return early](https://medium.com/swlh/return-early-pattern-3d18a41bba8). Avoid deep nested branches.
-* Do not include commented out code blocks in pull requests.
+You can run cibuildwheel locally for Linux. E.g. limited to Python 3.9:
+```bash
+CIBW_BUILD='cp39-*' uvx cibuildwheel --platform linux .
+```
 
-## Error Handling
+### Code conventions
 
-* Use exceptions **only** when an error is encountered that terminates a query (e.g. parser error, table not found). Exceptions should only be used for **exceptional** situations. For regular errors that do not break the execution flow (e.g. errors you **expect** might occur) use a return value instead.
-* Try to add test cases that trigger exceptions. If an exception cannot be easily triggered using a test case then it should probably be an assertion. This is not always true (e.g. out of memory errors are exceptions, but are very hard to trigger).
-* Use `D_ASSERT` to assert. Use **assert** only when failing the assert means a programmer error. Assert should never be triggered by user input. Avoid code like `D_ASSERT(a > b + 3);` without comments or context.
-* Assert liberally, but make it clear with comments next to the assert what went wrong when the assert is triggered.
+* Follow the [Google Python styleguide](https://google.github.io/styleguide/pyguide.html)
+* See the section on [Comments and Docstrings](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings)
 
-## Naming Conventions
+### Tooling
 
-* Choose descriptive names. Avoid single-letter variable names.
-* Files: lowercase separated by underscores, e.g., abstract_operator.cpp
-* Types (classes, structs, enums, typedefs, using): CamelCase starting with uppercase letter, e.g., BaseColumn
-* Variables: lowercase separated by underscores, e.g., chunk_size
-* Functions: CamelCase starting with uppercase letter, e.g., GetChunk
-* Avoid `i`, `j`, etc. in **nested** loops. Prefer to use e.g. **column_idx**, **check_idx**. In a **non-nested** loop it is permissible to use **i** as iterator index.
-* These rules are partially enforced by `clang-tidy`.
+This codebase is developed with the following tools:
+- [Astral uv](https://docs.astral.sh/uv/) - for dependency management across all platforms we provide wheels for,
+  and for Python environment management. It will be hard to work on this codebase without having UV installed.
+- [Scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/index.html) - the build backend for
+  building the extension. On the background, scikit-build-core uses cmake and ninja for compilation.
+- [pybind11](https://pybind11.readthedocs.io/en/stable/index.html) - a bridge between C++ and Python.
+- [CMake](https://cmake.org/) - the build system for both DuckDB itself and the DuckDB Python module.
+- Cibuildwheel
+
+### Merging changes to pythonpkg from duckdb main
+
+1. Checkout main
+2Identify the merge commits that brought in tags to main:
+```bash
+git log --graph --oneline --decorate main --simplify-by-decoration
+```
+
+3. Get the log of commits
+```bash
+git log --oneline 71c5c07cdd..c9254ecff2 -- tools/pythonpkg/
+```
+
+4. Checkout v1.3-ossivalis
+5. Get the log of commits
+```bash
+git log --oneline v1.3.0..v1.3.1 -- tools/pythonpkg/
+```
+git diff --name-status 71c5c07cdd c9254ecff2 -- tools/pythonpkg/
+
+```bash
+git log --oneline 71c5c07cdd..c9254ecff2 -- tools/pythonpkg/
+git diff --name-status <HASH_A> <HASH_B> -- tools/pythonpkg/
+```
+
+
+## Versioning and Releases
+
+The DuckDB Python package versioning and release scheme follows that of DuckDB itself. This means that a `X.Y.Z[.
+postN]` release of the Python package ships the DuckDB stable release `X.Y.Z`. The optional `.postN` releases ship the same stable release of DuckDB as their predecessors plus Python package-specific fixes and / or features.
+
+| Types                                                                  | DuckDB Version | Resulting Python Extension Version |
+|------------------------------------------------------------------------|----------------|------------------------------------|
+| Stable release: DuckDB stable release                                  | `1.3.1`        | `1.3.1`                            |
+| Stable post release: DuckDB stable release + Python fixes and features | `1.3.1`        | `1.3.1.postX`                      |
+| Nightly micro: DuckDB next micro nightly + Python next micro nightly   | `1.3.2.devM`   | `1.3.2.devN`                       |
+| Nightly minor: DuckDB next minor nightly + Python next minor nightly   | `1.4.0.devM`   | `1.4.0.devN`                       |
+
+Note that we do not ship nightly post releases (e.g. we don't ship `1.3.1.post2.dev3`).
+
+### Branch and Tag Strategy
+
+We cut releases as follows:
+
+| Type                 | Tag          | How                                                                             |
+|----------------------|--------------|---------------------------------------------------------------------------------|
+| Stable minor release | vX.Y.0       | Adding a tag on `main`                                                          |
+| Stable micro release | vX.Y.Z       | Adding a tag on a minor release branch (e.g. `v1.3-ossivalis`)                  |
+| Stable post release  | vX.Y.Z-postN | Adding a tag on a post release branch (e.g. `v1.3.1-post`)                      |
+| Nightly micro        | _not tagged_ | Combining HEAD of the _micro_ release branches of DuckDB and the Python package |
+| Nightly minor        | _not tagged_ | Combining HEAD of the _minor_ release branches of DuckDB and the Python package |
+
+### Release Runbooks
+
+We cut a new **stable minor release** with the following steps:
+1. Create a PR on `main` to pin the DuckDB submodule to the tag of its current release.
+1. Iff all tests pass in CI, merge the PR.
+1. Manually start the release workflow with the hash of this commit, and the tag name.
+1. Iff all goes well, create a new PR to let the submodule track DuckDB main.
+
+We cut a new **stable micro release** with the following steps:
+1. Create a PR on the minor release branch to pin the DuckDB submodule to the tag of its current release.
+1. Iff all tests pass in CI, merge the PR.
+1. Manually start the release workflow with the hash of this commit, and the tag name.
+1. Iff all goes well, create a new PR to let the submodule track DuckDB's minor release branch.
+
+We cut a new **stable post release** with the following steps:
+1. Create a PR on the post release branch to pin the DuckDB submodule to the tag of its current release.
+1. Iff all tests pass in CI, merge the PR.
+1. Manually start the release workflow with the hash of this commit, and the tag name.
+1. Iff all goes well, create a new PR to let the submodule track DuckDB's minor release branch.
+
+### Dynamic Versioning Integration
+
+The package uses `setuptools_scm` with `scikit-build` for automatic version determination, and implements a custom
+versioning scheme.
+
+- **pyproject.toml configuration**:
+  ```toml
+  [tool.scikit-build]
+  metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+  
+  [tool.setuptools_scm]
+  version_scheme = "duckdb_packaging._setuptools_scm_version:version_scheme"
+  ```
+
+- **Environment variables**:
+  - `MAIN_BRANCH_VERSIONING=0`: Use release branch versioning (patch increments)
+  - `MAIN_BRANCH_VERSIONING=1`: Use main branch versioning (minor increments)
+  - `OVERRIDE_GIT_DESCRIBE`: Override version detection
