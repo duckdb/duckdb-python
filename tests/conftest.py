@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 import shutil
 from os.path import abspath, join, dirname, normpath
@@ -52,16 +53,22 @@ def import_pandas():
 def pytest_addoption(parser):
     parser.addoption("--skiplist", action="append", nargs="+", type=str, help="skip listed tests")
 
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
     """Convert pandas requirement exceptions to skips"""
+    
     outcome = yield
-    try:
-        outcome.get_result()
-    except Exception as e:
-        if "'pandas' is required for this operation but it was not installed" in str(e):
-            pytest.skip("pandas not available - test requires pandas functionality")
 
+    # TODO: Remove skip when Pandas releases for 3.14. After, consider bumping to 3.15
+    if sys.version_info[:2] == (3, 14): 
+        try:
+            outcome.get_result()
+        except Exception as e:
+            if "'pandas' is required for this operation but it was not installed" in str(e):
+                pytest.skip("pandas not available - test requires pandas functionality")
+            else:
+                raise e
 
 
 def pytest_collection_modifyitems(config, items):
