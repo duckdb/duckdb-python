@@ -7,7 +7,7 @@ import pytest
 
 
 class TestConnectionInterrupt(object):
-    @pytest.mark.xfail(sys.platform == "win32" and sys.version_info[:2] == (3, 14) and __import__('sysconfig').get_config_var("Py_GIL_DISABLED") == 1, reason="known issue on Windows 3.14t (free-threaded)", strict=False)
+    @pytest.mark.skipif(sys.platform == "win32" and sys.version_info[:2] == (3, 14) and __import__('sysconfig').get_config_var("Py_GIL_DISABLED") == 1, reason="known issue on Windows 3.14t (free-threaded)")
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="threads not allowed on Emscripten",
