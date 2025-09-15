@@ -1,10 +1,50 @@
 # Contributing to duckdb-python
 
-Start by <a href="https://github.com/duckdb/duckdb-python/fork"><svg height="16" viewBox="0 0 16 16" version="1.1" width="16">
-    <path fill-rule="evenodd" d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v.878A2.25 2.25 0 005.75 8.5h1.5v2.128a2.251 2.251 0 101.5 0V8.5h1.5a2.25 2.25 0 002.25-2.25v-.878a2.25 2.25 0 10-1.5 0v.878a.75.75 0 01-.75.75h-4.5A.75.75 0 015 6.25v-.878z"></path>
-</svg>forking duckdb-python</a>.
+## General Guidelines
 
-### Cloning
+### **Did you find a bug?**
+
+* **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/duckdb/duckdb-python/issues).
+* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/duckdb-python/issues/new/choose). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
+
+### **Did you write a patch that fixes a bug?**
+
+* Great!
+* If possible, add a unit test case to make sure the issue does not occur again.
+* Open a new GitHub pull request with the patch.
+* Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
+
+### Outside Contributors
+
+* Discuss your intended changes with the core team on Github
+* Announce that you are working or want to work on a specific issue
+* Avoid large pull requests - they are much less likely to be merged as they are incredibly hard to review
+
+### Pull Requests
+
+* Do not commit/push directly to the main branch. Instead, create a fork and file a pull request.
+* When maintaining a branch, merge frequently with the main.
+* When maintaining a branch, submit pull requests to the main frequently.
+* If you are working on a bigger issue try to split it up into several smaller issues.
+* Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
+* We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+
+### CI for pull requests
+
+* Pull requests will need to pass all continuous integration checks before merging.
+* For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
+* Submitting changes to an open pull request will move it to 'draft' state.
+* Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
+
+### Nightly CI
+
+* Packages creation and long running tests will be performed during a nightly run
+* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
+
+## Setting up a development environment
+
+Start by [forking duckdb-python](https://github.com/duckdb/duckdb-python/fork) into
+a personal repository.
 
 After forking the duckdb-python repo we recommend you clone your fork as follows:
 ```shell
@@ -20,6 +60,9 @@ git remote add upstream https://github.com/duckdb/duckdb-python.git
 git fetch --all
 ```
 
+The submodule stuff is needed because we vendor the core DuckDB repository as a git submodule,
+and to build the python package we also need to build DuckDB itself.
+
 ### Submodule update hook
 
 If you'll be switching between branches that are have the submodule set to different refs, then make your life 
@@ -28,10 +71,10 @@ easier and add the git hooks in the .githooks directory to your local config:
 git config --local core.hooksPath .githooks/
 ```
 
-
 ### Editable installs (general)
 
-  It's good to be aware of the following when performing an editable install:
+It's good to be aware of the following when performing an editable install:
+
 - `uv sync` or `uv run [tool]` perform an editable install by default. We have 
   configured the project so that scikit-build-core will use a persistent build-dir, but since the build itself 
   happens in an isolated, ephemeral environment, cmake's paths will point to non-existing directories. CMake itself 
@@ -49,31 +92,29 @@ uv sync --no-build-isolation
 
 ### Editable installs (IDEs)
 
-  If you're using an IDE then life is a little simpler. You install build dependencies and the project in the two 
-  steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
-  compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
-  management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
+If you're using an IDE then life is a little simpler. You install build dependencies and the project in the two 
+steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
+compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
+management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
 
+## Day to day development
+
+After setting up the development environment, these are the most common tasks you'll be performing.
+
+### Tooling
+This codebase is developed with the following tools:
+- [Astral uv](https://docs.astral.sh/uv/) - for dependency management across all platforms we provide wheels for,
+  and for Python environment management. It will be hard to work on this codebase without having UV installed.
+- [Scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/index.html) - the build backend for
+  building the extension. On the background, scikit-build-core uses cmake and ninja for compilation.
+- [pybind11](https://pybind11.readthedocs.io/en/stable/index.html) - a bridge between C++ and Python.
+- [CMake](https://cmake.org/) - the build system for both DuckDB itself and the DuckDB Python module.
+- Cibuildwheel
 
 ### Cleaning
-
 ```shell
 uv cache clean
 rm -rf build .venv uv.lock
-```
-
-
-### Building wheels and sdists
-
-To build a wheel and sdist for your system and the default Python version:
-```bash
-uv build
-````
-
-To build a wheel for a different Python version:
-```bash
-# E.g. for Python 3.9
-uv build -p 3.9
 ```
 
 ### Running tests
@@ -122,10 +163,25 @@ uvx gcovr \
   --print-summary
 ```
 
-### Typechecking and linting
+### Typechecking, linting, style, and formatting
 
 - We're not running any mypy typechecking tests at the moment
 - We're not running any Ruff / linting / formatting at the moment
+- Follow the [Google Python styleguide](https://google.github.io/styleguide/pyguide.html)
+- See the section on [Comments and Docstrings](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings)
+
+### Building wheels and sdists
+
+To build a wheel and sdist for your system and the default Python version:
+```bash
+uv build
+````
+
+To build a wheel for a different Python version:
+```bash
+# E.g. for Python 3.9
+uv build -p 3.9
+```
 
 ### Cibuildwheel
 
@@ -133,22 +189,6 @@ You can run cibuildwheel locally for Linux. E.g. limited to Python 3.9:
 ```bash
 CIBW_BUILD='cp39-*' uvx cibuildwheel --platform linux .
 ```
-
-### Code conventions
-
-* Follow the [Google Python styleguide](https://google.github.io/styleguide/pyguide.html)
-* See the section on [Comments and Docstrings](https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings)
-
-### Tooling
-
-This codebase is developed with the following tools:
-- [Astral uv](https://docs.astral.sh/uv/) - for dependency management across all platforms we provide wheels for,
-  and for Python environment management. It will be hard to work on this codebase without having UV installed.
-- [Scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/index.html) - the build backend for
-  building the extension. On the background, scikit-build-core uses cmake and ninja for compilation.
-- [pybind11](https://pybind11.readthedocs.io/en/stable/index.html) - a bridge between C++ and Python.
-- [CMake](https://cmake.org/) - the build system for both DuckDB itself and the DuckDB Python module.
-- Cibuildwheel
 
 ### Merging changes to pythonpkg from duckdb main
 
@@ -174,7 +214,6 @@ git diff --name-status 71c5c07cdd c9254ecff2 -- tools/pythonpkg/
 git log --oneline 71c5c07cdd..c9254ecff2 -- tools/pythonpkg/
 git diff --name-status <HASH_A> <HASH_B> -- tools/pythonpkg/
 ```
-
 
 ## Versioning and Releases
 
