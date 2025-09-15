@@ -78,7 +78,7 @@ jobs:
           if [[ test == "${{ inputs.pypi-index }}" ]]; then
             ci_env=pypi-test
           elif [[ prod == "${{ inputs.pypi-index }}" ]]; then
-            ci_env=pypi-prod${{ inputs.stable-version && '' || '-nightly' }}
+            ci_env=pypi-prod${{ inputs.stable-version == '' && '-nightly' || '' }}
           else
             echo "::error::Invalid value for inputs.pypi-index: ${{ inputs.pypi-index }}"
             exit 1
@@ -146,6 +146,7 @@ jobs:
   publish_pypi:
     name: Publish Artifacts to PyPI
     runs-on: ubuntu-latest
+    if: ${{ !always() }}
     needs: [workflow_state, build_sdist, build_wheels]
     environment:
       name: ${{ needs.workflow_state.outputs.ci_env }}

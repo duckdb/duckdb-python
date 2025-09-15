@@ -412,7 +412,7 @@
 			"fetch_record_batch",
 			"arrow"
 		],
-		
+
 		"function": "FetchRecordBatchReader",
 		"docs": "Fetch an Arrow RecordBatchReader following execute()",
 		"args": [
@@ -992,7 +992,7 @@
 		"args": [
 			{
 				"name": "file_globs",
-				"type": "str"
+				"type": "List[str]"
 			},
 			{
 				"name": "binary_as_string",
