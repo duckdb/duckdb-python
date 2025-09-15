@@ -64,7 +64,7 @@ def pytest_runtest_call(item):
     if sys.version_info[:2] == (3, 14): 
         try:
             outcome.get_result()
-        except Exception as e:
+        except duckdb.InvalidInputException as e:
             if "'pandas' is required for this operation but it was not installed" in str(e):
                 pytest.skip("pandas not available - test requires pandas functionality")
             else:
