@@ -1,7 +1,6 @@
 import platform
 import threading
 import time
-import sys
 import duckdb
 import pytest
 
