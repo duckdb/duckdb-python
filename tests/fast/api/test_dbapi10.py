@@ -12,7 +12,12 @@ class TestCursorDescription(object):
             ["SELECT * FROM timestamps", "t", "TIMESTAMP", datetime],
             ["SELECT DATE '1992-09-20' AS date_col;", "date_col", "DATE", date],
             ["SELECT '\\xAA'::BLOB AS blob_col;", "blob_col", "BLOB", bytes],
-            ["SELECT {'x': 1, 'y': 2, 'z': 3} AS struct_col", "struct_col", "STRUCT(x INTEGER, y INTEGER, z INTEGER)", dict],
+            [
+                "SELECT {'x': 1, 'y': 2, 'z': 3} AS struct_col",
+                "struct_col",
+                "STRUCT(x INTEGER, y INTEGER, z INTEGER)",
+                dict,
+            ],
             ["SELECT [1, 2, 3] AS list_col", "list_col", "INTEGER[]", list],
             ["SELECT 'Frank' AS str_col", "str_col", "VARCHAR", str],
             ["SELECT [1, 2, 3]::JSON AS json_col", "json_col", "JSON", str],
@@ -32,15 +37,15 @@ class TestCursorDescription(object):
         NUMBER = duckdb.NUMBER
         DATETIME = duckdb.DATETIME
 
-        assert(types[1] == STRING)
-        assert(STRING == types[1])
-        assert(types[0] != STRING)
-        assert((types[1] != STRING) == False)
-        assert((STRING != types[1]) == False)
+        assert types[1] == STRING
+        assert STRING == types[1]
+        assert types[0] != STRING
+        assert (types[1] != STRING) == False
+        assert (STRING != types[1]) == False
 
-        assert(types[1] in [STRING])
-        assert(types[1] in [STRING, NUMBER])
-        assert(types[1] not in [NUMBER, DATETIME])
+        assert types[1] in [STRING]
+        assert types[1] in [STRING, NUMBER]
+        assert types[1] not in [NUMBER, DATETIME]
 
     def test_none_description(self, duckdb_empty_cursor):
         assert duckdb_empty_cursor.description is None

@@ -51,9 +51,7 @@ class TestRemoveFunction(object):
         """
             Error: Catalog Error: Scalar Function with name func does not exist!
         """
-        with pytest.raises(
-            duckdb.CatalogException, match='Scalar Function with name func does not exist!'
-        ):
+        with pytest.raises(duckdb.CatalogException, match='Scalar Function with name func does not exist!'):
             res = rel.fetchall()
 
     def test_use_after_remove_and_recreation(self):
