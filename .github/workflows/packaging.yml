@@ -68,7 +68,7 @@ jobs:
       testsuite: all
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
-      set-version: ${{ inputs.stable-version }}
+      set-version: ${{ inputs.set-version }}
 
   build_wheels:
     name: Build and test releases
@@ -78,4 +78,4 @@ jobs:
       testsuite: all
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
-      set-version: ${{ inputs.stable-version }}
+      set-version: ${{ inputs.set-version }}
