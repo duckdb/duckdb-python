@@ -52,7 +52,7 @@ class TestRemoveFunction(object):
             Error: Catalog Error: Scalar Function with name func does not exist!
         """
         with pytest.raises(
-            duckdb.InvalidInputException, match='Attempting to execute an unsuccessful or closed pending query result'
+            duckdb.CatalogException, match='Scalar Function with name func does not exist!'
         ):
             res = rel.fetchall()
 
@@ -72,7 +72,7 @@ class TestRemoveFunction(object):
             return x
 
         con.create_function('func', also_func)
-        with pytest.raises(duckdb.InvalidInputException, match='No function matches the given name'):
+        with pytest.raises(duckdb.BinderException, match='No function matches the given name'):
             res = rel2.fetchall()
 
     def test_overwrite_name(self):
@@ -98,7 +98,7 @@ class TestRemoveFunction(object):
         con.remove_function('func')
 
         with pytest.raises(
-            duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'
+            duckdb.CatalogException, match='Catalog Error: Scalar Function with name func does not exist!'
         ):
             # Attempted to execute the relation using the 'func' function, but it was deleted
             rel1.fetchall()
