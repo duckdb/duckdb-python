@@ -10,7 +10,6 @@ import pytest
 
 
 class TestScanNumpy(object):
-    @pytest.mark.xfail(sys.version_info[:2] == (3, 14), reason="Fails when testing without pandas https://github.com/duckdb/duckdb-python/issues/48")
     def test_scan_numpy(self, duckdb_cursor):
         z = np.array([1, 2, 3])
         res = duckdb_cursor.sql("select * from z").fetchall()
