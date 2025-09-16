@@ -1,4 +1,5 @@
 import duckdb
+import duckdb.typing
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 
@@ -113,7 +114,7 @@ class TestDuckDBConnection(object):
         duckdb.execute("select 42")
         description = duckdb.description()
         rowcount = duckdb.rowcount()
-        assert description == [('42', 'NUMBER', None, None, None, None, None)]
+        assert description == [('42', 'INTEGER', None, None, None, None, None)]
         assert rowcount == -1
 
     def test_execute(self):
@@ -348,9 +349,6 @@ class TestDuckDBConnection(object):
         duckdb.execute("create view vw as select range(5)")
         assert [([0, 1, 2, 3, 4],)] == duckdb.view("vw").fetchall()
         duckdb.execute("drop view vw")
-
-    def test_description(self):
-        assert None != duckdb.description
 
     def test_close(self):
         assert None != duckdb.close

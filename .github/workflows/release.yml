@@ -146,7 +146,6 @@ jobs:
   publish_pypi:
     name: Publish Artifacts to PyPI
     runs-on: ubuntu-latest
-    if: ${{ !always() }}
     needs: [workflow_state, build_sdist, build_wheels]
     environment:
       name: ${{ needs.workflow_state.outputs.ci_env }}

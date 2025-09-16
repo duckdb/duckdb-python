@@ -31,9 +31,9 @@ class TestPythonResult(object):
         rel = connection.table("test")
         res = rel.execute()
         assert res.description == [
-            ('i', 'bool', None, None, None, None, None),
-            ('j', 'Time', None, None, None, None, None),
-            ('k', 'STRING', None, None, None, None, None),
+            ('i', 'BOOLEAN', None, None, None, None, None),
+            ('j', 'TIME', None, None, None, None, None),
+            ('k', 'VARCHAR', None, None, None, None, None),
         ]
 
     def test_result_timestamps(self, duckdb_cursor):
@@ -64,7 +64,7 @@ class TestPythonResult(object):
 
         rel = connection.table("intervals")
         res = rel.execute()
-        assert res.description == [('ivals', 'TIMEDELTA', None, None, None, None, None)]
+        assert res.description == [('ivals', 'INTERVAL', None, None, None, None, None)]
         assert res.fetchall() == [
             (datetime.timedelta(days=1.0),),
             (datetime.timedelta(seconds=2.0),),
