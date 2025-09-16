@@ -502,12 +502,6 @@ bool PandasAnalyzer::Analyze(py::object column) {
 	if (sample_size == 0) {
 		return false;
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto pandas = import_cache.pandas();
-	if (!pandas) {
-		//! Pandas is not installed, no need to analyze
-		return false;
-	}
 
 	bool can_convert = true;
 	idx_t increment = GetSampleIncrement(py::len(column));
