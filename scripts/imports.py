@@ -6,6 +6,22 @@ pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
 pyarrow.ipc.MessageReader
+pyarrow.scalar
+pyarrow.date32
+pyarrow.time64
+pyarrow.timestamp
+pyarrow.timestamp
+pyarrow.timestamp
+pyarrow.timestamp
+pyarrow.timestamp
+pyarrow.uint8
+pyarrow.uint16
+pyarrow.uint32
+pyarrow.uint64
+pyarrow.binary_view
+pyarrow.decimal32
+pyarrow.decimal64
+pyarrow.decimal128
 
 import pandas
 

@@ -330,8 +330,10 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	auto type_module = py::class_<DuckDBPyType, shared_ptr<DuckDBPyType>>(m, "DuckDBPyType", py::module_local());
 
 	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object");
-	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"), py::is_operator());
-	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"), py::is_operator());
+	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"),
+	                py::is_operator());
+	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"),
+	                py::is_operator());
 	type_module.def("__hash__", &DuckDBPyType::Hash, "Hashes the type, equal to stringifying+hashing");
 	type_module.def_property_readonly("id", &DuckDBPyType::GetId);
 	type_module.def_property_readonly("children", &DuckDBPyType::Children);
@@ -352,7 +354,8 @@ void DuckDBPyType::Initialize(py::handle &m) {
 		return make_shared_ptr<DuckDBPyType>(ltype);
 	}));
 	type_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
-	type_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"), py::is_operator());
+	type_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"),
+	                py::is_operator());
 
 	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<py::str, DuckDBPyType>();

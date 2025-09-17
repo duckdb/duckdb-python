@@ -170,7 +170,6 @@ def update_json(existing: dict, new: dict) -> dict:
 
         # If both values are dictionaries, update recursively.
         if isinstance(new_value, dict) and isinstance(old_value, dict):
-            print(key)
             updated = update_json(old_value, new_value)
             existing[key] = updated
         else:
