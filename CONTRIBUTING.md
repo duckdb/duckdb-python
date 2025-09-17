@@ -36,10 +36,9 @@
 * Submitting changes to an open pull request will move it to 'draft' state.
 * Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
 
-### Nightly CI
+### Testing cross-platform and cross-Python
 
-* Packages creation and long running tests will be performed during a nightly run
-* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
+* On your fork you can [run](https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow) the Packaging workflow manually for any branch. You can choose whether to build for all platforms or a subset, and to either run the full testsuite, the fast tests only, or no tests at all.
 
 ## Setting up a development environment
 
@@ -60,8 +59,11 @@ git remote add upstream https://github.com/duckdb/duckdb-python.git
 git fetch --all
 ```
 
-The submodule stuff is needed because we vendor the core DuckDB repository as a git submodule,
-and to build the python package we also need to build DuckDB itself.
+Two things to be aware of when cloning this repository:
+* DuckDB is vendored as a git submodule and needs to be initialized during or after cloning duckdb-python.
+* Currently, for DuckDB to determine its version while building, it depends on the local availability of its tags.
+
+After forking the duckdb-python repo we recommend you clone your fork as follows:
 
 ### Submodule update hook
 

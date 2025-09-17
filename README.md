@@ -19,7 +19,7 @@
   <a href="https://duckdb.org/docs/stable/clients/python/overview">API Docs (Python)</a>
 </p>
 
-# The Official Python bindings to [DuckDB](https://github.com/duckdb/duckdb)
+# The [DuckDB](https://github.com/duckdb/duckdb) Python Package
 
 ## Installation
 
