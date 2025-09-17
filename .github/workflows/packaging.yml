@@ -74,7 +74,7 @@ jobs:
     name: Build and test releases
     uses: ./.github/workflows/packaging_wheels.yml
     with:
-      minimal: false
+      minimal: ${{ inputs.minimal }}
       testsuite: all
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
