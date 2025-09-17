@@ -214,6 +214,20 @@ class TestType(object):
         res = duckdb.list_type({'a': VARCHAR, 'b': VARCHAR})
         assert res == 'STRUCT(a VARCHAR, b VARCHAR)[]'
 
+    def test_hash_method(self):
+        type1 = duckdb.list_type({'a': VARCHAR, 'b': VARCHAR})
+        type2 = duckdb.list_type({'b': VARCHAR, 'a': VARCHAR})
+        type3 = VARCHAR
+
+        type_set = set()
+        type_set.add(type1)
+        type_set.add(type2)
+        type_set.add(type3)
+
+        type_set.add(type1)
+        expected = ['STRUCT(a VARCHAR, b VARCHAR)[]', 'STRUCT(b VARCHAR, a VARCHAR)[]', 'VARCHAR']
+        assert sorted([str(x) for x in list(type_set)]) == expected
+
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):

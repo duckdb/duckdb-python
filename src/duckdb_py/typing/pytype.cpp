@@ -46,6 +46,10 @@ bool DuckDBPyType::Equals(const shared_ptr<DuckDBPyType> &other) const {
 	return type == other->type;
 }
 
+ssize_t DuckDBPyType::Hash() const {
+	return py::hash(py::str(ToString()));
+}
+
 bool DuckDBPyType::EqualsString(const string &type_str) const {
 	return StringUtil::CIEquals(type.ToString(), type_str);
 }
@@ -328,6 +332,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object");
 	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"), py::is_operator());
 	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"), py::is_operator());
+	type_module.def("__hash__", &DuckDBPyType::Hash, "Hashes the type, equal to stringifying+hashing");
 	type_module.def_property_readonly("id", &DuckDBPyType::GetId);
 	type_module.def_property_readonly("children", &DuckDBPyType::Children);
 	type_module.def(py::init<>([](const string &type_str, shared_ptr<DuckDBPyConnection> connection = nullptr) {
