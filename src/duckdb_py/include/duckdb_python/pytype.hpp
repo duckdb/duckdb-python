@@ -30,7 +30,7 @@ public:
 
 public:
 	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
-	ssize_t Hash() const;
+	ssize_t HashType() const;
 	bool EqualsString(const string &type_str) const;
 	shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
 	py::list Children() const;
