@@ -70,7 +70,7 @@ jobs:
       - name: Install Astral UV and enable the cache
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.7.14"
+          version: "0.8.16"
           python-version: 3.9
           enable-cache: true
           cache-suffix: -${{ github.workflow }}

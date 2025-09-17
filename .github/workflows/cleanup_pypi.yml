@@ -52,7 +52,7 @@ jobs:
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v6
         with:
-          version: "0.7.14"
+          version: "0.8.16"
 
       - name: Run Cleanup
         env:

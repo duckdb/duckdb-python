@@ -2,6 +2,7 @@
 Therefore, we only test the new codes and exec paths.
 """
 
+import sys
 import numpy as np
 import duckdb
 from datetime import timedelta
