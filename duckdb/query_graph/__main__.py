@@ -250,7 +250,7 @@ def generate_tree_html(graph_json: object) -> str:  # noqa: D103
     tree_prefix = '<div class="tf-tree tf-gap-sm"> \n <ul>'
     tree_suffix = "</ul> </div>"
     # first level of json is general overview
-    # FIXME: make sure json output first level always has only 1 level
+    # TODO: make sure json output first level always has only 1 level
     tree_body = generate_tree_recursive(json_graph["children"][0], cpu_time)
     return tree_prefix + tree_body + tree_suffix
 

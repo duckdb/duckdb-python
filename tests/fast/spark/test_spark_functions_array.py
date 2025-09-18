@@ -222,7 +222,7 @@ class TestSparkFunctionsArray:
         df = spark.createDataFrame([([1, 2, 3], [2, 4, 6], [3, 6])], ["vals1", "vals2", "vals3"])
 
         res = df.select(sf.arrays_zip(df.vals1, df.vals2, df.vals3).alias("zipped")).collect()
-        # FIXME: The structure of the results should be the same
+        # TODO: The structure of the results should be the same
         if USE_ACTUAL_SPARK:
             assert res == [
                 Row(

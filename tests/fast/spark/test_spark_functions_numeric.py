@@ -291,7 +291,7 @@ class TestSparkFunctionsNumeric:
         if USE_ACTUAL_SPARK:
             assert np.isnan(res[1].asin_value)
         else:
-            # FIXME: DuckDB should return NaN here. Reason is that
+            # TODO: DuckDB should return NaN here. Reason is that
             # ConstantExpression(float("nan")) gives NULL and not NaN
             assert res[1].asin_value is None
 

@@ -31,7 +31,7 @@ class TestCreateTableFromPandas:
     def test_integer_create_table(self, duckdb_cursor, pandas):
         if sys.version_info.major < 3:
             return
-        # FIXME: This should work with other data types e.g., int8...
+        # TODO: This should work with other data types e.g., int8...
         data_types = ["Int8", "Int16", "Int32", "Int64"]
         internal_data = [1, 2, 3, 4]
         expected_result = [(1,), (2,), (3,), (4,)]
@@ -40,4 +40,4 @@ class TestCreateTableFromPandas:
             assert_create_register(internal_data, expected_result, data_type, pandas)
             assert_create(internal_data, expected_result, data_type, pandas)
 
-    # FIXME: Also test other data types
+    # TODO: Also test other data types

@@ -519,7 +519,7 @@ class TestReadCSV:
         assert rel.types == ["BIGINT", "BOOLEAN", "VARCHAR", "BIGINT"]
 
         # dtypes and names dont match
-        # FIXME: seems the order columns are named in this error is non-deterministic
+        # TODO: seems the order columns are named in this error is non-deterministic
         # so for now I'm excluding the list of columns from the expected error
         expected_error = """do not exist in the CSV File"""
         with pytest.raises(duckdb.BinderException, match=expected_error):

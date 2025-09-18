@@ -83,7 +83,7 @@ class TestType:
         type = duckdb.struct_type({"a": BIGINT, "b": BOOLEAN})
         assert str(type) == "STRUCT(a BIGINT, b BOOLEAN)"
 
-        # FIXME: create an unnamed struct when fields are provided as a list
+        # TODO: create an unnamed struct when fields are provided as a list
         type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == "STRUCT(v1 BIGINT, v2 BOOLEAN)"
 

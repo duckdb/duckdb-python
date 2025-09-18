@@ -299,7 +299,7 @@ class TestDataFrameGroupBy:
     def test_group_by_skewness(self, spark):
         df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
         res = df.groupBy("group").agg(skewness(df.c).alias("v")).collect()
-        # FIXME: Why is this different?
+        # TODO: Why is this different?
         if USE_ACTUAL_SPARK:
             assert pytest.approx(res[0].v) == 0.7071067811865475
         else:

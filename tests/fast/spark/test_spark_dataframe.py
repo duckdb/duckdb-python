@@ -61,7 +61,7 @@ class TestDataFrame:
 
         # Empty list
         if not USE_ACTUAL_SPARK:
-            # FIXME: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
+            # TODO: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
             df = spark.createDataFrame([], ["id", "address", "test"])
             res = df.collect()
             assert res == []
@@ -83,7 +83,7 @@ class TestDataFrame:
 
         # Not enough column names
         if not USE_ACTUAL_SPARK:
-            # FIXME: Spark does not raise this error
+            # TODO: Spark does not raise this error
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
                 df = spark.createDataFrame(address, ["id", "address"])
 

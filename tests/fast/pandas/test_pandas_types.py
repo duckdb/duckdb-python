@@ -64,7 +64,7 @@ class TestNumpyNullableTypes:
         out_df = conn.execute("select * from df").df()
 
         # Verify that the types in the out_df are correct
-        # FIXME: we don't support outputting pandas specific types (i.e UInt64)
+        # TODO: we don't support outputting pandas specific types (i.e UInt64)
         for letter, item in zip(string.ascii_lowercase, data_types):
             column_name = letter
             assert str(out_df[column_name].dtype) == item.lower()

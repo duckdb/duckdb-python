@@ -704,7 +704,7 @@ def asin(col: "ColumnOrName") -> Column:
     +--------+
     """
     col = _to_column_expr(col)
-    # FIXME: ConstantExpression(float("nan")) gives NULL and not NaN
+    # TODO: ConstantExpression(float("nan")) gives NULL and not NaN
     return Column(
         CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(
             FunctionExpression("asin", col)
