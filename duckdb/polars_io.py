@@ -32,7 +32,7 @@ def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
         # Convert the tree to SQL
         sql_filter = _pl_tree_to_sql(tree)
         return SQLExpression(sql_filter)
-    except:
+    except Exception:
         # If the conversion fails, we return None
         return None
 

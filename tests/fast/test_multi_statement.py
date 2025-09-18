@@ -26,7 +26,7 @@ class TestMultiStatement:
         export_location = os.path.join(os.getcwd(), "duckdb_pytest_dir_export")  # noqa: PTH118
         try:
             shutil.rmtree(export_location)
-        except:
+        except Exception:
             pass
         con.execute("CREATE TABLE integers2(i INTEGER)")
         con.execute("INSERT INTO integers2 VALUES (1), (5), (7), (1928)")

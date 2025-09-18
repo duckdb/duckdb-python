@@ -10,7 +10,7 @@ try:
     from pyarrow.dataset import Scanner
 
     can_run = True
-except:
+except Exception:
     can_run = False
 
 

@@ -2,7 +2,7 @@ import duckdb
 
 try:
     can_run = True
-except:
+except Exception:
     can_run = False
 
 

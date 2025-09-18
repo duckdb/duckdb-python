@@ -15,7 +15,7 @@ def get_tables(con):
 def test_multiple_writes():
     try:
         os.remove("test.db")
-    except:
+    except Exception:
         pass
     con1 = duckdb.connect("test.db")
     con2 = duckdb.connect("test.db")
@@ -32,7 +32,7 @@ def test_multiple_writes():
 
     try:
         os.remove("test.db")
-    except:
+    except Exception:
         pass
 
 

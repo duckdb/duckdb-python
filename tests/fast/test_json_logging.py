@@ -14,7 +14,7 @@ def _parse_json_func(error_prefix: str):
         json_str = msg.split(error_prefix, 1)[1]
         try:
             json.loads(json_str)
-        except:
+        except Exception:
             return False
         return True
 

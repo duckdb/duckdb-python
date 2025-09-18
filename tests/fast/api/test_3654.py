@@ -6,7 +6,7 @@ try:
     import pyarrow as pa
 
     can_run = True
-except:
+except Exception:
     can_run = False
 from conftest import ArrowPandas, NumpyPandas
 

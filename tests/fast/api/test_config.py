@@ -42,7 +42,7 @@ class TestDBConfig:
         query_failed = False
         try:
             con.execute("select * from df").fetchall()
-        except:
+        except Exception:
             query_failed = True
         assert query_failed == True
 
@@ -57,7 +57,7 @@ class TestDBConfig:
         success = True
         try:
             duckdb.connect(":memory:", config={"thisoptionisprobablynotthere": "42"})
-        except:
+        except Exception:
             success = False
         assert success == False
 
@@ -65,7 +65,7 @@ class TestDBConfig:
         success = True
         try:
             duckdb.connect(":memory:", config={"default_null_order": "42"})
-        except:
+        except Exception:
             success = False
         assert success == False
 

@@ -40,7 +40,7 @@ def recursive_equality(o1, o2):
             if not recursive_equality(o1[i], o2[i]):
                 return False
         return True
-    except:
+    except Exception:
         return o1 == o2
 
 
@@ -539,7 +539,7 @@ class TestAllTypes:
     def test_arrow(self, cur_type):
         try:
             pass
-        except:
+        except Exception:
             return
         # We skip those since the extreme ranges are not supported in arrow.
         replacement_values = {"interval": "INTERVAL '2 years'"}

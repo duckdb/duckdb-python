@@ -13,7 +13,7 @@ try:
     from pandas.compat import pa_version_under7p0
 
     pyarrow_dtypes_enabled = not pa_version_under7p0
-except:
+except Exception:
     pyarrow_dtypes_enabled = False
 
 if Version(pd.__version__) >= Version("2.0.0") and pyarrow_dtypes_enabled:

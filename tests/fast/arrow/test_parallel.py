@@ -8,7 +8,7 @@ try:
     import pyarrow.parquet
 
     can_run = True
-except:
+except Exception:
     can_run = False
 
 

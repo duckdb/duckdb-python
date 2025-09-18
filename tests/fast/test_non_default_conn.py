@@ -51,7 +51,7 @@ class TestNonDefaultConn:
     def test_from_arrow(self, duckdb_cursor):
         try:
             import pyarrow as pa
-        except:
+        except Exception:
             return
 
         duckdb_cursor.execute("create table t (a integer)")
