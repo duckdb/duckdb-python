@@ -1,5 +1,5 @@
-import os
 import shutil
+from pathlib import Path
 
 import duckdb
 
@@ -23,7 +23,7 @@ class TestMultiStatement:
         assert results == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
         # test export/import
-        export_location = os.path.join(os.getcwd(), "duckdb_pytest_dir_export")  # noqa: PTH118
+        export_location = Path.cwd() / "duckdb_pytest_dir_export"
         try:
             shutil.rmtree(export_location)
         except Exception:

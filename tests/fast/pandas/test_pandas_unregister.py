@@ -1,5 +1,4 @@
 import gc
-import os
 import tempfile
 
 import pytest
@@ -25,9 +24,8 @@ class TestPandasUnregister:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_unregister2(self, duckdb_cursor, pandas):
-        fd, db = tempfile.mkstemp()
-        os.close(fd)
-        os.remove(db)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            db = tmp.name
 
         connection = duckdb.connect(db)
         df = pandas.DataFrame([[1, 2, 3], [4, 5, 6]])

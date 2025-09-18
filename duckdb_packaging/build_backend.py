@@ -13,7 +13,6 @@ This module wraps the scikit-build-core build backend because:
 Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 """
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -91,7 +90,7 @@ def _duckdb_submodule_path() -> Path:
             elif line.strip().startswith("path"):
                 cur_module_path = line.split("=")[-1].strip()
             elif line.strip().startswith("url"):
-                basename = os.path.basename(line.split("=")[-1].strip())
+                basename = Path(line.split("=")[-1].strip()).name
                 cur_module_reponame = basename[:-4] if basename.endswith(".git") else basename
         if cur_module_reponame is not None and cur_module_path is not None:
             modules[cur_module_reponame] = cur_module_path

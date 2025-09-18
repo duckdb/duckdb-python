@@ -30,8 +30,7 @@ def is_py_args(method):
 
 def generate():
     # Read the PYCONNECTION_SOURCE file
-    with open(PYCONNECTION_SOURCE) as source_file:
-        source_code = source_file.readlines()
+    source_code = Path(PYCONNECTION_SOURCE).read_text().splitlines()
 
     start_index = -1
     end_index = -1
@@ -56,8 +55,7 @@ def generate():
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH) as json_file:
-        connection_methods = json.load(json_file)
+    connection_methods = json.loads(Path(JSON_PATH).read_text())
 
     DEFAULT_ARGUMENT_MAP = {
         "True": "true",
@@ -127,8 +125,7 @@ def generate():
     new_content = start_section + with_newlines + end_section
 
     # Write out the modified PYCONNECTION_SOURCE file
-    with open(PYCONNECTION_SOURCE, "w") as source_file:
-        source_file.write("".join(new_content))
+    Path(PYCONNECTION_SOURCE).write_text("".join(new_content))
 
 
 if __name__ == "__main__":

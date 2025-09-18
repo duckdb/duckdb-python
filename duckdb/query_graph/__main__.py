@@ -1,10 +1,10 @@
 import argparse  # noqa: D100
 import json
-import os
 import re
 import sys
 import webbrowser
 from functools import reduce
+from pathlib import Path
 
 qgraph_css = """
 .styled-table {
@@ -122,7 +122,7 @@ class AllTimings:  # noqa: D101
 
 
 def open_utf8(fpath: str, flags: str) -> object:  # noqa: D103
-    return open(fpath, flags, encoding="utf8")
+    return Path(fpath).open(mode=flags, encoding="utf8")
 
 
 def get_child_timings(top_node: object, query_timings: object) -> str:  # noqa: D103
@@ -355,7 +355,7 @@ def main() -> None:  # noqa: D103
     translate_json_to_html(input, output)
 
     if open_output:
-        webbrowser.open("file://" + os.path.abspath(output), new=2)
+        webbrowser.open(f"file://{Path(output).resolve()}", new=2)
 
 
 if __name__ == "__main__":

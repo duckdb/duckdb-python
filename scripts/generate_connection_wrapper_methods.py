@@ -39,8 +39,7 @@ INIT_PY_START = "# START OF CONNECTION WRAPPER"
 INIT_PY_END = "# END OF CONNECTION WRAPPER"
 
 # Read the JSON file
-with open(WRAPPER_JSON_PATH) as json_file:
-    wrapper_methods = json.load(json_file)
+wrapper_methods = json.loads(Path(WRAPPER_JSON_PATH).read_text())
 
 # On DuckDBPyConnection these are read_only_properties, they're basically functions without requiring () to invoke
 # that's not possible on 'duckdb' so it becomes a function call with no arguments (i.e duckdb.description())
@@ -96,20 +95,17 @@ def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[s
 
 def generate():
     # Read the DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE) as source_file:
-        source_code = source_file.readlines()
+    source_code = Path(DUCKDB_PYTHON_SOURCE).read_text().splitlines()
     start_section, end_section = remove_section(source_code, START_MARKER, END_MARKER)
 
     # Read the DUCKDB_INIT_FILE file
-    with open(DUCKDB_INIT_FILE) as source_file:
-        source_code = source_file.readlines()
+    source_code = Path(DUCKDB_INIT_FILE).read_text().splitlines()
     py_start, py_end = remove_section(source_code, INIT_PY_START, INIT_PY_END)
 
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH) as json_file:
-        connection_methods = json.load(json_file)
+    connection_methods = json.loads(Path(JSON_PATH).read_text())
 
     # Collect the definitions from the pyconnection.hpp header
 
@@ -241,8 +237,7 @@ def generate():
     # Recreate the file content by concatenating all the pieces together
     new_content = start_section + with_newlines + end_section
     # Write out the modified DUCKDB_PYTHON_SOURCE file
-    with open(DUCKDB_PYTHON_SOURCE, "w") as source_file:
-        source_file.write("".join(new_content))
+    Path(DUCKDB_PYTHON_SOURCE).write_text("".join(new_content))
 
     item_list = "\n".join([f"\t{name}," for name in all_names])
     str_item_list = "\n".join([f"\t'{name}'," for name in all_names])
@@ -251,8 +246,7 @@ def generate():
 
     init_py_content = py_start + imports + py_end
     # Write out the modified DUCKDB_INIT_FILE file
-    with open(DUCKDB_INIT_FILE, "w") as source_file:
-        source_file.write("".join(init_py_content))
+    Path(DUCKDB_INIT_FILE).write_text("".join(init_py_content))
 
 
 if __name__ == "__main__":

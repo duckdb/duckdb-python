@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pytest
 
@@ -14,7 +14,7 @@ def get_tables(con):
 
 def test_multiple_writes():
     try:
-        os.remove("test.db")
+        Path("test.db").unlink()
     except Exception:
         pass
     con1 = duckdb.connect("test.db")
@@ -31,7 +31,7 @@ def test_multiple_writes():
     del con3
 
     try:
-        os.remove("test.db")
+        Path("test.db").unlink()
     except Exception:
         pass
 

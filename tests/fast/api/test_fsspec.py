@@ -11,8 +11,7 @@ class TestReadParquet:
         # Create test parquet data
         file_path = tmp_path / "data.parquet"
         duckdb_cursor.sql(f"COPY (FROM range(50_000)) TO '{file_path!s}' (FORMAT parquet)")
-        with open(file_path, "rb") as f:
-            parquet_data = f.read()
+        parquet_data = file_path.read_bytes()
 
         class TestFileSystem(fsspec.AbstractFileSystem):
             protocol = "deadlock"

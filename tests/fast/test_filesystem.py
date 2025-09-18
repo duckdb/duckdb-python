@@ -1,6 +1,5 @@
 import logging
 import sys
-from os.path import exists
 from pathlib import Path, PurePosixPath
 from shutil import copyfileobj
 from typing import Callable
@@ -159,10 +158,10 @@ class TestPythonFilesystem:
         assert duckdb_cursor.fetchall() == [(1, 2, 3), (4, 5, 6)]
 
     def test_database_attach(self, tmp_path: Path, monkeypatch: MonkeyPatch):
-        db_path = str(tmp_path / "hello.db")
+        db_path = tmp_path / "hello.db"
 
         # setup a database to attach later
-        with duckdb.connect(db_path) as conn:
+        with duckdb.connect(str(db_path)) as conn:
             conn.execute(
                 """
                 CREATE TABLE t (id int);
@@ -170,7 +169,7 @@ class TestPythonFilesystem:
             """
             )
 
-        assert exists(db_path)
+        assert db_path.exists()
 
         with duckdb.connect() as conn:
             fs = filesystem("file", skip_instance_cache=True)

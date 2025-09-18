@@ -1182,9 +1182,7 @@ class Row(tuple):
     def __call__(self, *args: Any) -> "Row":  # noqa: ANN401
         """Create new Row object."""
         if len(args) > len(self):
-            raise ValueError(
-                f"Can not create Row with fields {self}, expected {len(self):d} values but got {args}"
-            )
+            raise ValueError(f"Can not create Row with fields {self}, expected {len(self):d} values but got {args}")
         return _create_row(self, args)
 
     def __getitem__(self, item: Any) -> Any:  # noqa: D105, ANN401

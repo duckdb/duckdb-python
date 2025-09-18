@@ -7,8 +7,7 @@ script_dir = Path(__file__).parent
 json_data = {}
 json_cache_path = Path(script_dir) / "cache_data.json"
 try:
-    with open(json_cache_path) as file:
-        json_data = json.load(file)
+    json_data = json.loads(Path(json_cache_path).read_text())
 except FileNotFoundError:
     print("Please first use 'generate_import_cache_json.py' first to generate json")
 
@@ -183,8 +182,7 @@ for file in files:
     content = file.to_string()
     path = f"src/duckdb_py/include/duckdb_python/import_cache/modules/{file.file_name}"
     import_cache_path = Path(script_dir) / ".." / path
-    with open(import_cache_path, "w") as f:
-        f.write(content)
+    import_cache_path.write_text(content)
 
 
 def get_root_modules(files: list[ModuleFile]):
@@ -237,8 +235,7 @@ private:
 """
 
 import_cache_path = Path(script_dir) / ".." / "src/duckdb_py/include/duckdb_python/import_cache/python_import_cache.hpp"
-with open(import_cache_path, "w") as f:
-    f.write(import_cache_file)
+import_cache_path.write_text(import_cache_file)
 
 
 def get_module_file_path_includes(files: list[ModuleFile]):
@@ -253,8 +250,7 @@ module_includes = get_module_file_path_includes(files)
 modules_header = (
     Path(script_dir) / ".." / ("src/duckdb_py/include/duckdb_python/import_cache/python_import_cache_modules.hpp")
 )
-with open(modules_header, "w") as f:
-    f.write(module_includes)
+modules_header.write_text(module_includes)
 
 # Generate the python_import_cache_modules.hpp file
 # listing all the generated header files

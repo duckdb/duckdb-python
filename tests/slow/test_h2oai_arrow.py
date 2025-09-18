@@ -1,5 +1,5 @@
 import math
-import os
+from pathlib import Path
 
 from pytest import fixture, importorskip, mark
 
@@ -214,19 +214,19 @@ def arrow_dataset_register():
         respect_retry_after_header=True,  # respect Retry-After headers
     )
     session.mount("https://", requests_adapters.HTTPAdapter(max_retries=retries))
-    saved_filenames = set()
+    saved_filepaths = set()
 
     def _register(url, filename, con, tablename) -> None:
         r = session.get(url)
-        with open(filename, "wb") as f:
-            f.write(r.content)
+        filepath = Path(filename)
+        filepath.write_bytes(r.content)
         con.register(tablename, read_csv(filename))
-        saved_filenames.add(filename)
+        saved_filepaths.add(filepath)
 
     yield _register
 
-    for filename in saved_filenames:
-        os.remove(filename)
+    for filepath in saved_filepaths:
+        filepath.unlink()
     session.close()
 
 

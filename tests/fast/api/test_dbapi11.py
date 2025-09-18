@@ -1,6 +1,5 @@
 # cursor description
 
-import os
 import tempfile
 
 import duckdb
@@ -17,9 +16,8 @@ def check_exception(f):
 
 class TestReadOnly:
     def test_readonly(self, duckdb_cursor):
-        fd, db = tempfile.mkstemp()
-        os.close(fd)
-        os.remove(db)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            db = tmp.name
 
         # this is forbidden
         check_exception(lambda: duckdb.connect(":memory:", True))

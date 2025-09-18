@@ -13,8 +13,7 @@ END_MARKER = "    # END OF CONNECTION METHODS"
 
 def generate():
     # Read the DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE) as source_file:
-        source_code = source_file.readlines()
+    source_code = Path(DUCKDB_STUBS_FILE).read_text().splitlines()
 
     start_index = -1
     end_index = -1
@@ -39,8 +38,7 @@ def generate():
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH) as json_file:
-        connection_methods = json.load(json_file)
+    connection_methods = json.loads(Path(JSON_PATH).read_text())
 
     body = []
 
@@ -95,8 +93,7 @@ def generate():
     new_content = start_section + with_newlines + end_section
 
     # Write out the modified DUCKDB_STUBS_FILE file
-    with open(DUCKDB_STUBS_FILE, "w") as source_file:
-        source_file.write("".join(new_content))
+    Path(DUCKDB_STUBS_FILE).write_text("".join(new_content))
 
 
 if __name__ == "__main__":

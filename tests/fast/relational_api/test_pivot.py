@@ -1,5 +1,5 @@
-import os
 import tempfile
+from pathlib import Path
 
 
 class TestPivot:
@@ -24,5 +24,4 @@ class TestPivot:
         pivot_1.create("pivot_1")
         export_dir = tempfile.mkdtemp()
         duckdb_cursor.query(f"EXPORT DATABASE '{export_dir}'")
-        with open(os.path.join(export_dir, "schema.sql")) as f:  # noqa: PTH118
-            assert "CREATE TYPE" not in f.read()
+        assert "CREATE TYPE" not in (Path(export_dir) / "schema.sql").read_text()

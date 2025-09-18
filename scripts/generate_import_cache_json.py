@@ -3,8 +3,7 @@ from pathlib import Path
 from typing import Union
 
 script_dir = Path(__file__).parent
-
-lines: list[str] = [file for file in open(f"{script_dir}/imports.py").read().split("\n") if file != ""]
+lines = [line for line in (script_dir / "imports.py").read_text().splitlines() if line]
 
 
 class ImportCacheAttribute:
@@ -157,8 +156,7 @@ for line in lines:
 existing_json_data = {}
 json_cache_path = Path(script_dir) / "cache_data.json"
 try:
-    with open(json_cache_path) as file:
-        existing_json_data = json.load(file)
+    existing_json_data = json.loads(json_cache_path.read_text())
 except FileNotFoundError:
     pass
 
@@ -184,5 +182,4 @@ json_data = generator.to_json()
 json_data = update_json(existing_json_data, json_data)
 
 # Save the merged JSON data back to the file
-with open(json_cache_path, "w") as file:
-    json.dump(json_data, file, indent=4)
+json_cache_path.write_text(json.dumps(json_data, indent=4))

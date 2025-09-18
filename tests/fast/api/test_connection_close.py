@@ -1,6 +1,4 @@
 # cursor description
-
-import os
 import tempfile
 
 import pytest
@@ -19,9 +17,8 @@ def check_exception(f):
 
 class TestConnectionClose:
     def test_connection_close(self, duckdb_cursor):
-        fd, db = tempfile.mkstemp()
-        os.close(fd)
-        os.remove(db)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            db = tmp.name
         con = duckdb.connect(db)
         cursor = con.cursor()
         cursor.execute("create table a (i integer)")
@@ -36,9 +33,8 @@ class TestConnectionClose:
             raise TypeError()
 
     def test_reopen_connection(self, duckdb_cursor):
-        fd, db = tempfile.mkstemp()
-        os.close(fd)
-        os.remove(db)
+        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+            db = tmp.name
         con = duckdb.connect(db)
         cursor = con.cursor()
         cursor.execute("create table a (i integer)")
