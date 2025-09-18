@@ -29,7 +29,7 @@ def replace_with_ndarray(obj):
 def recursive_equality(o1, o2):
     if type(o1) is not type(o2):
         return False
-    if type(o1) is not float and math.isnan(o1) and math.isnan(o2):
+    if type(o1) == float and math.isnan(o1) and math.isnan(o2):  # noqa: E721
         return True
     if o1 is np.ma.masked and o2 is np.ma.masked:
         return True
