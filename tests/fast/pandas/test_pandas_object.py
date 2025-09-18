@@ -30,8 +30,8 @@ class TestPandasObject:
 
     def test_tuple_to_list(self, duckdb_cursor):
         tuple_df = pd.DataFrame.from_dict(  # noqa: F841
-            dict(
-                nums=[
+            {
+                "nums": [
                     (
                         1,
                         2,
@@ -43,7 +43,7 @@ class TestPandasObject:
                         6,
                     ),
                 ]
-            )
+            }
         )
         duckdb_cursor.execute("CREATE TABLE test as SELECT * FROM tuple_df")
         res = duckdb_cursor.table("test").fetchall()

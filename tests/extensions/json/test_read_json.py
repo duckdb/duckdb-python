@@ -113,7 +113,7 @@ class TestReadJSON:
         ],
     )
     def test_read_json_options(self, duckdb_cursor, option):
-        keyword_arguments = dict()
+        keyword_arguments = {}
         option_name, option_value = option
         keyword_arguments[option_name] = option_value
         if option_name == "hive_types":

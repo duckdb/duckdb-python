@@ -184,4 +184,4 @@ class TestDataFrameFilter:
         df = spark.createDataFrame([(1, "A")], ["A", "B"])
 
         with pytest.raises(PySparkTypeError):
-            df = df.filter(dict(a=1))
+            df = df.filter({"a": 1})

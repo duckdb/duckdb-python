@@ -77,7 +77,7 @@ def _duckdb_submodule_path() -> Path:
         raise RuntimeError(msg)
     # search the duckdb submodule
     gitmodules_path = Path(".gitmodules")
-    modules = dict()
+    modules = {}
     with gitmodules_path.open("r") as f:
         cur_module_path = None
         cur_module_reponame = None

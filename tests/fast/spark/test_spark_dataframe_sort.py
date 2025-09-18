@@ -84,7 +84,7 @@ class TestDataFrameSort:
         df = spark.createDataFrame(self.data, ["age", "name"])
 
         with pytest.raises(PySparkTypeError):
-            df = df.sort(dict(a=1))
+            df = df.sort({"a": 1})
 
     def test_sort_with_desc(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])

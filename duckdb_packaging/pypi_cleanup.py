@@ -482,7 +482,7 @@ class PyPICleanup:
         """Delete the specified package versions."""
         logging.info(f"Starting deletion of {len(versions_to_delete)} development versions")
 
-        failed_deletions = list()
+        failed_deletions = []
         for version in sorted(versions_to_delete):
             try:
                 self._delete_single_version(http_session, version)

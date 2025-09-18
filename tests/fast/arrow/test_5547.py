@@ -13,12 +13,12 @@ def test_5547():
     tbl = pa.Table.from_pandas(
         pd.DataFrame.from_records(
             [
-                dict(
-                    id=i,
-                    nested=dict(
-                        a=i,
-                    ),
-                )
+                {
+                    "id": i,
+                    "nested": {
+                        "a": i,
+                    },
+                }
                 for i in range(num_rows)
             ]
         )
