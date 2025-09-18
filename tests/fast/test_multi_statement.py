@@ -30,10 +30,10 @@ class TestMultiStatement:
             pass
         con.execute("CREATE TABLE integers2(i INTEGER)")
         con.execute("INSERT INTO integers2 VALUES (1), (5), (7), (1928)")
-        con.execute("EXPORT DATABASE '{}'".format(export_location))
+        con.execute(f"EXPORT DATABASE '{export_location}'")
         # reset connection
         con = duckdb.connect(":memory:")
-        con.execute("IMPORT DATABASE '{}'".format(export_location))
+        con.execute(f"IMPORT DATABASE '{export_location}'")
         integers = [x[0] for x in con.execute("SELECT * FROM integers").fetchall()]
         integers2 = [x[0] for x in con.execute("SELECT * FROM integers2").fetchall()]
         assert integers == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

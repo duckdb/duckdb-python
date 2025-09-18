@@ -338,7 +338,7 @@ class DataFrame:  # noqa: D101
         """
         result = func(self, *args, **kwargs)
         assert isinstance(result, DataFrame), (
-            "Func returned an instance of type [{}], should have been DataFrame.".format(type(result))
+            f"Func returned an instance of type [{type(result)}], should have been DataFrame."
         )
         return result
 
@@ -896,7 +896,7 @@ class DataFrame:  # noqa: D101
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError("'{}' object has no attribute '{}'".format(self.__class__.__name__, name))
+            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
         return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
