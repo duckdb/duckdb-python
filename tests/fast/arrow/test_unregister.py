@@ -6,19 +6,11 @@ import pytest
 
 import duckdb
 
-try:
-    import pyarrow
-    import pyarrow.parquet
-
-    can_run = True
-except Exception:
-    can_run = False
-
+pyarrow = pytest.importorskip("pyarrow")
+pytest.importorskip("pyarrow.parquet")
 
 class TestArrowUnregister:
     def test_arrow_unregister1(self, duckdb_cursor):
-        if not can_run:
-            return
         parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
         arrow_table_obj = pyarrow.parquet.read_table(parquet_filename)
         connection = duckdb.connect(":memory:")
@@ -33,11 +25,8 @@ class TestArrowUnregister:
         connection.execute("DROP VIEW IF EXISTS arrow_table;")
 
     def test_arrow_unregister2(self, duckdb_cursor):
-        if not can_run:
-            return
-        fd, db = tempfile.mkstemp()
-        os.close(fd)
-        os.remove(db)
+        with tempfile.NamedTemporaryFile() as tmp:
+            db = tmp.name
 
         connection = duckdb.connect(db)
         parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")

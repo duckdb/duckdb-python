@@ -57,7 +57,8 @@ class TestRemoveFunction:
 
         with pytest.raises(duckdb.BinderException, match="No function matches the given name"):
             con.sql("select func(42)")
-        con.sql("select func('test'::VARCHAR)")
+
+        rel2 = con.sql("select func('test'::VARCHAR)")
         con.remove_function("func")
 
         def also_func(x: int) -> int:

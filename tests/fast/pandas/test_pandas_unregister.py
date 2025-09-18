@@ -24,7 +24,7 @@ class TestPandasUnregister:
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_unregister2(self, duckdb_cursor, pandas):
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        with tempfile.NamedTemporaryFile() as tmp:
             db = tmp.name
 
         connection = duckdb.connect(db)

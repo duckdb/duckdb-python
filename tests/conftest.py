@@ -3,7 +3,7 @@ import shutil
 import warnings
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import pytest
 
@@ -188,7 +188,7 @@ class ArrowPandas:
 
 @pytest.fixture
 def require():
-    def _require(extension_name, db_name="") -> duckdb.DuckDBPyConnection | None:
+    def _require(extension_name, db_name="") -> Union[duckdb.DuckDBPyConnection, None]:
         # Paths to search for extensions
 
         build = Path(__file__).parent.parent / "build"

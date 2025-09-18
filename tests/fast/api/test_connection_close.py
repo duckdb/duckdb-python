@@ -17,7 +17,7 @@ def check_exception(f):
 
 class TestConnectionClose:
     def test_connection_close(self, duckdb_cursor):
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        with tempfile.NamedTemporaryFile() as tmp:
             db = tmp.name
         con = duckdb.connect(db)
         cursor = con.cursor()
@@ -32,7 +32,7 @@ class TestConnectionClose:
             raise TypeError()
 
     def test_reopen_connection(self, duckdb_cursor):
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        with tempfile.NamedTemporaryFile() as tmp:
             db = tmp.name
         con = duckdb.connect(db)
         cursor = con.cursor()

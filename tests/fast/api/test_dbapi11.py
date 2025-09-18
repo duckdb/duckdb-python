@@ -16,7 +16,7 @@ def check_exception(f):
 
 class TestReadOnly:
     def test_readonly(self, duckdb_cursor):
-        with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        with tempfile.NamedTemporaryFile() as tmp:
             db = tmp.name
 
         # this is forbidden

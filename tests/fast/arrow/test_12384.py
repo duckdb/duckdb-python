@@ -9,7 +9,7 @@ pa = pytest.importorskip("pyarrow")
 
 def test_10795():
     arrow_filename = Path(__file__).parent / "data" / "arrow_table"
-    with pa.memory_map(arrow_filename, "r") as source:
+    with pa.memory_map(str(arrow_filename), "r") as source:
         reader = pa.ipc.RecordBatchFileReader(source)
         taxi_fhvhv_arrow = reader.read_all()
         con = duckdb.connect(database=":memory:")
