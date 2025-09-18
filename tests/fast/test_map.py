@@ -20,10 +20,9 @@ class TestMap:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_evil_map(self, duckdb_cursor, pandas):
         testrel = duckdb.values([1, 2])
+        rel = testrel.map(evil1, schema={"i": str})
         with pytest.raises(duckdb.InvalidInputException, match="Expected 1 columns from UDF, got 2"):
-            rel = testrel.map(evil1, schema={"i": str})
-            df = rel.df()
-            print(df)
+            rel.df()
 
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_map(self, duckdb_cursor, pandas):

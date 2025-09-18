@@ -18,10 +18,7 @@ class TestStreamingResult:
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         with pytest.raises(duckdb.ConversionException):
-            while True:
-                tpl = res.fetchone()
-                if tpl is None:
-                    break
+            res.fetchone()
 
     def test_fetch_many(self, duckdb_cursor):
         # fetch many
@@ -37,10 +34,7 @@ class TestStreamingResult:
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         with pytest.raises(duckdb.ConversionException):
-            while True:
-                tpl = res.fetchmany(10)
-                if tpl is None:
-                    break
+            res.fetchmany(10)
 
     def test_record_batch_reader(self, duckdb_cursor):
         pytest.importorskip("pyarrow")

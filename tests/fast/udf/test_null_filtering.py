@@ -249,5 +249,4 @@ class TestUDFNullFiltering:
         duckdb_cursor.execute("create table tbl as select * from df")
         duckdb_cursor.create_function("test", returns_null, [str], int, type="arrow")
         with pytest.raises(duckdb.InvalidInputException, match="The UDF is not expected to return NULL values"):
-            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
-            print(result)
+            duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()

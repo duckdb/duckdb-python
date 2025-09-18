@@ -170,11 +170,9 @@ class TestNativeUDF:
 
         con = duckdb.connect()
         con.create_function("return_overflow", return_overflow, None, duckdb_type)
+        rel = con.sql("select return_overflow()")
         with pytest.raises(duckdb.InvalidInputException):
-            rel = con.sql("select return_overflow()")
-            res = rel.fetchall()
-            print(duckdb_type)
-            print(res)
+            rel.fetchall()
 
     def test_structs(self):
         def add_extra_column(original):

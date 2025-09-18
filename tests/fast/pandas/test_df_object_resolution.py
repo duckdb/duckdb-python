@@ -418,7 +418,6 @@ class TestResolveObjectColumns:
             ),
         ):
             res = duckdb_cursor.execute("select $1", [malformed_struct])
-            print(res)
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_key_conversion(self, pandas, duckdb_cursor):

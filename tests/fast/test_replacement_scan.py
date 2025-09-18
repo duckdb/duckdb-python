@@ -465,8 +465,7 @@ class TestReplacementScan:
         ## disable external access
         con.execute("set enable_external_access=false")
         with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist!"):
-            rel = create_relation(con, "select * from df")
-            res = rel.fetchall()
+            create_relation(con, "select * from df")
         with pytest.raises(
             duckdb.InvalidInputException, match="Cannot change enable_external_access setting while database is running"
         ):
@@ -475,8 +474,7 @@ class TestReplacementScan:
         # Create connection with external access disabled
         con = duckdb.connect(config={"enable_external_access": False})
         with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist!"):
-            rel = create_relation(con, "select * from df")
-            res = rel.fetchall()
+            create_relation(con, "select * from df")
 
         # Create regular connection, disable inbetween creation and execution
         con = duckdb.connect()

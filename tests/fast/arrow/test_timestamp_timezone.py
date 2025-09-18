@@ -33,8 +33,8 @@ class TestArrowTimestampsTimezone:
         precisions = ["s", "ms"]
         current_time = 9223372036854775807
         for precision in precisions:
+            arrow_table = generate_table(current_time, precision, "UTC")
             with pytest.raises(duckdb.ConversionException, match="Could not convert"):
-                arrow_table = generate_table(current_time, precision, "UTC")
                 duckdb.from_arrow(arrow_table).execute().fetchall()
 
     def test_timestamp_tz_to_arrow(self, duckdb_cursor):

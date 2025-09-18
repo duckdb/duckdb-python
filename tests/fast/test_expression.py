@@ -799,16 +799,16 @@ class TestExpression:
     def test_numeric_overflow(self):
         con = duckdb.connect()
         rel = con.sql("select 3000::SHORT salary")
+        expr = ColumnExpression("salary") * 100
+        rel2 = rel.select(expr)
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
-            expr = ColumnExpression("salary") * 100
-            rel2 = rel.select(expr)
-            res = rel2.fetchall()  # noqa: F841
-
-        with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
-            val = duckdb.Value(100, duckdb.typing.TINYINT)
-            expr = ColumnExpression("salary") * val
-            rel2 = rel.select(expr)
             rel2.fetchall()
+
+        val = duckdb.Value(100, duckdb.typing.TINYINT)
+        expr2 = ColumnExpression("salary") * val
+        rel3 = rel.select(expr2)
+        with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
+            rel3.fetchall()
 
     def test_struct_column_expression(self):
         con = duckdb.connect()
@@ -983,19 +983,18 @@ class TestExpression:
         res = rel.aggregate([5]).execute().fetchone()[0]
         assert res == 5
 
+        class MyClass:
+            def __init__(self) -> None:
+                pass
+
         # Providing something that can not be converted into an expression is an error:
         with pytest.raises(
             duckdb.InvalidInputException, match="Invalid Input Error: Please provide arguments of type Expression!"
         ):
-
-            class MyClass:
-                def __init__(self) -> None:
-                    pass
-
-            res = rel.aggregate([MyClass()]).fetchone()[0]
+            rel.aggregate([MyClass()]).fetchone()[0]
 
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Please provide either a string or list of Expression objects, not <class 'int'>",
         ):
-            res = rel.aggregate(5).execute().fetchone()
+            rel.aggregate(5).execute().fetchone()

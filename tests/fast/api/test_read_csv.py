@@ -491,15 +491,14 @@ class TestReadCSV:
         assert rel.columns == ["a", "b", "c", "four"]
 
         with pytest.raises(duckdb.InvalidInputException, match="read_csv only accepts 'names' as a list of strings"):
-            rel = con.read_csv(file, names=True)
+            con.read_csv(file, names=True)
 
         with pytest.raises(duckdb.InvalidInputException, match="not possible to detect the CSV Header"):
-            rel = con.read_csv(file, names=["a", "b", "c", "d", "e"])
+            con.read_csv(file, names=["a", "b", "c", "d", "e"])
 
         # Duplicates are not okay
         with pytest.raises(duckdb.BinderException, match="names must have unique values"):
-            rel = con.read_csv(file, names=["a", "b", "a", "b"])
-            assert rel.columns == ["a", "b", "a", "b"]
+            con.read_csv(file, names=["a", "b", "a", "b"])
 
     def test_read_csv_names_mixed_with_dtypes(self, tmp_path):
         file = tmp_path / "file.csv"
@@ -565,8 +564,7 @@ class TestReadCSV:
         with pytest.raises(
             duckdb.InvalidInputException, match="Please provide a non-empty list of paths or file-like objects"
         ):
-            rel = con.read_csv(files)
-            rel.fetchall()
+            con.read_csv(files)
 
     def test_read_auto_detect(self, tmp_path):
         file1 = tmp_path / "file1.csv"
@@ -587,8 +585,7 @@ class TestReadCSV:
 
         files = [str(file1), "not_valid_path", str(file3)]
         with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
-            rel = con.read_csv(files)
-            rel.fetchall()
+            con.read_csv(files)
 
     @pytest.mark.parametrize(
         "options",
@@ -672,15 +669,16 @@ class TestReadCSV:
         file1.write_text("one|two|three|four\n1|2|3|4\n1|2|3|4|5\n1|2|3|4\n")
 
         con = duckdb.connect()
+        rel = con.read_csv(
+            str(file1),
+            header=True,
+            delimiter="|",
+            columns={"a": "INTEGER", "b": "INTEGER", "c": "INTEGER", "d": "INTEGER"},
+            auto_detect=False,
+        )
         with pytest.raises(duckdb.InvalidInputException, match="CSV Error on Line"):
-            rel = con.read_csv(
-                str(file1),
-                header=True,
-                delimiter="|",
-                columns={"a": "INTEGER", "b": "INTEGER", "c": "INTEGER", "d": "INTEGER"},
-                auto_detect=False,
-            )
             rel.fetchall()
+
         rel = con.read_csv(
             str(file1),
             header=True,
@@ -734,8 +732,8 @@ class TestReadCSV:
 
         file_path = tmp_path / "file*.csv"
         con = duckdb.connect()
+        rel = con.read_csv(file_path, files_to_sniff=1)
         with pytest.raises(duckdb.ConversionException, match="Conversion Error"):
-            rel = con.read_csv(file_path, files_to_sniff=1)
             rel.fetchall()
         rel = con.read_csv(file_path, files_to_sniff=-1)
         assert rel.fetchall() == [("2025-05-12", "baz"), ("bar", "baz")]

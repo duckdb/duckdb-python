@@ -27,10 +27,10 @@ class TestConnectionClose:
         check_exception(lambda: cursor.execute("select * from a"))
 
     def test_open_and_exit(self):
-        with pytest.raises(TypeError), duckdb.connect() as connection:
-            connection.execute("select 42")
-            # This exception does not get swallowed by __exit__
+        with pytest.raises(TypeError), duckdb.connect():
+            # This exception does not get swallowed by DuckDBPyConnection's __exit__
             raise TypeError()
+
 
     def test_reopen_connection(self, duckdb_cursor):
         with tempfile.NamedTemporaryFile(delete=False) as tmp:

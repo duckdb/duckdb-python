@@ -43,6 +43,3 @@ class TestArrowTypes:
             match="Attempted to convert a UNION with no fields to DuckDB which is not supported",
         ):
             duckdb_cursor.register("invalid_union", arrow_table)
-
-            res = duckdb_cursor.sql("select * from invalid_union").fetchall()
-            print(res)

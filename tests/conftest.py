@@ -274,35 +274,3 @@ def timestamps(duckdb_cursor):
     cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
     yield
     cursor.execute("drop table timestamps")
-
-
-@pytest.fixture
-def duckdb_cursor_autocommit(request, tmp_path):
-    test_dbfarm = tmp_path.resolve().as_posix()
-
-    def finalizer() -> None:
-        duckdb.shutdown()
-        if tmp_path.is_dir():
-            shutil.rmtree(test_dbfarm)
-
-    request.addfinalizer(finalizer)
-
-    connection = duckdb.connect(test_dbfarm)
-    connection.set_autocommit(True)
-    cursor = connection.cursor()
-    return (cursor, connection, test_dbfarm)
-
-
-@pytest.fixture
-def initialize_duckdb(request, tmp_path):
-    test_dbfarm = tmp_path.resolve().as_posix()
-
-    def finalizer() -> None:
-        duckdb.shutdown()
-        if tmp_path.is_dir():
-            shutil.rmtree(test_dbfarm)
-
-    request.addfinalizer(finalizer)
-
-    duckdb.connect(test_dbfarm)
-    return test_dbfarm

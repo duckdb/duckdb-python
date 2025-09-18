@@ -45,19 +45,18 @@ class TestDataFrame:
             from py4j.protocol import Py4JJavaError
 
             with pytest.raises(Py4JJavaError):
-                df = spark.createDataFrame(address, ["id", "address", "state"])
-                df.collect()
+                spark.createDataFrame(address, ["id", "address", "state"])
         else:
             with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
-                df = spark.createDataFrame(address, ["id", "address", "state"])
+                spark.createDataFrame(address, ["id", "address", "state"])
 
         # Dataframe instead of list
         with pytest.raises(PySparkTypeError, match="SHOULD_NOT_DATAFRAME"):
-            df = spark.createDataFrame(df, ["id", "address", "state"])
+            spark.createDataFrame(df, ["id", "address", "state"])
 
         # Not a list
         with pytest.raises(TypeError, match="not iterable"):
-            df = spark.createDataFrame(5, ["id", "address", "test"])
+            spark.createDataFrame(5, ["id", "address", "test"])
 
         # Empty list
         if not USE_ACTUAL_SPARK:
@@ -85,7 +84,7 @@ class TestDataFrame:
         if not USE_ACTUAL_SPARK:
             # TODO: Spark does not raise this error  # noqa: TD002, TD003
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                df = spark.createDataFrame(address, ["id", "address"])
+                spark.createDataFrame(address, ["id", "address"])
 
         # Empty column names list
         # Columns are filled in with default names
@@ -102,7 +101,7 @@ class TestDataFrame:
         if not USE_ACTUAL_SPARK:
             # In Spark, this leads to an IndexError
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                df = spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
+                spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
 
         # Column names is not a list (but is iterable)
         if not USE_ACTUAL_SPARK:
@@ -117,10 +116,10 @@ class TestDataFrame:
 
             # Column names is not a list (string, becomes a single column name)
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                df = spark.createDataFrame(address, "a")
+                spark.createDataFrame(address, "a")
 
             with pytest.raises(TypeError, match="must be an iterable, not int"):
-                df = spark.createDataFrame(address, 5)
+                spark.createDataFrame(address, 5)
 
     def test_dataframe(self, spark):
         # Create DataFrame
