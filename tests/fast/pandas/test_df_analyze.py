@@ -68,7 +68,7 @@ class TestResolveObjectColumns:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_10750(self, duckdb_cursor, pandas):
         max_row_number = 2000
-        data = {"id": [i for i in range(max_row_number + 1)], "content": [None for _ in range(max_row_number + 1)]}
+        data = {"id": list(range(max_row_number + 1)), "content": [None for _ in range(max_row_number + 1)]}
 
         pdf = pandas.DataFrame(data=data)
         duckdb_cursor.register("content", pdf)

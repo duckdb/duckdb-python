@@ -307,7 +307,7 @@ class TestArrowREE:
         iterables = [x.iterchunks() for x in columns]
         zipped = zip(*iterables)
 
-        structured_chunks = [pa.StructArray.from_arrays([y for y in x], names=names) for x in zipped]
+        structured_chunks = [pa.StructArray.from_arrays(list(x), names=names) for x in zipped]
         structured = pa.chunked_array(structured_chunks)
 
         arrow_tbl = pa.Table.from_arrays([structured], names=["ree"])  # noqa: F841
@@ -453,7 +453,7 @@ class TestArrowREE:
         for chunk in columns[0].iterchunks():
             ree = chunk
             chunk_length = len(ree)
-            offsets = [i for i in reversed(range(chunk_length))]
+            offsets = list(reversed(range(chunk_length)))
 
             new_array = pa.DictionaryArray.from_arrays(indices=offsets, dictionary=ree)
             structured_chunks.append(new_array)

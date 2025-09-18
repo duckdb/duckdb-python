@@ -41,7 +41,7 @@ class TestPandasNA:
         null_index = 3
         df = pd.DataFrame(pd.Series([3, 1, 2, pd.NA, 8, 6]))  # noqa: F841
         res = duckdb_cursor.execute("select * from df").fetchall()
-        items = [x[0] for x in [y for y in res]]
+        items = [x[0] for x in list(res)]
         assert_nullness(items, [null_index])
 
         # Test if pd.NA behaves the same as np.nan once converted
@@ -84,5 +84,5 @@ class TestPandasNA:
         na_string_df = pd.DataFrame({"a": [str(pd.NA), str(pd.NA), pd.NA, str(pd.NA), pd.NA, pd.NA, pd.NA, str(pd.NA)]})  # noqa: F841
         null_indices = [2, 4, 5, 6]
         res = duckdb_cursor.execute("select * from na_string_df").fetchall()
-        items = [x[0] for x in [y for y in res]]
+        items = [x[0] for x in list(res)]
         assert_nullness(items, null_indices)

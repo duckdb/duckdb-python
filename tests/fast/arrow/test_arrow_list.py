@@ -46,7 +46,7 @@ class ListGenerationResult:
 
 
 def generate_list(child_size) -> ListGenerationResult:
-    input = [i for i in range(child_size)]
+    input = list(range(child_size))
     offsets = []
     sizes = []
     lists = []

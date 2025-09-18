@@ -206,7 +206,7 @@ def arrow_dataset_register():
         connect=3,  # try 3 times before giving up on connection errors
         read=3,  # try 3 times before giving up on read errors
         status=3,  # try 3 times before giving up on status errors (see forcelist below)
-        status_forcelist=[429] + [status for status in range(500, 512)],
+        status_forcelist=[429] + list(range(500, 512)),
         other=0,  # whatever else may cause an error should break
         backoff_factor=0.1,  # [0.0s, 0.2s, 0.4s]
         raise_on_redirect=True,  # raise exception when redirect error retries are exhausted

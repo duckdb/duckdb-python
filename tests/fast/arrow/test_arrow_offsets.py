@@ -140,7 +140,7 @@ class TestArrowOffsets:
     )
     @null_test_parameters()
     def test_struct_of_dates(self, duckdb_cursor, constructor, expected, col1_null, col2_null):
-        tuples = [i for i in range(MAGIC_ARRAY_SIZE)]
+        tuples = list(range(MAGIC_ARRAY_SIZE))
 
         col1 = tuples
         if col1_null:
@@ -230,7 +230,7 @@ class TestArrowOffsets:
             # TODO: We limit the size because we don't support time values > 24 hours  # noqa: TD002, TD003
             size = 86400  # The amount of seconds in a day
 
-        col1 = [i for i in range(size)]
+        col1 = list(range(size))
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -300,7 +300,7 @@ class TestArrowOffsets:
     def test_struct_of_duration(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
         size = MAGIC_ARRAY_SIZE
 
-        col1 = [i for i in range(size)]
+        col1 = list(range(size))
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -336,7 +336,7 @@ class TestArrowOffsets:
         size = MAGIC_ARRAY_SIZE
 
         duckdb_cursor.execute("set timezone='UTC'")
-        col1 = [i for i in range(size)]
+        col1 = list(range(size))
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
@@ -549,7 +549,7 @@ class TestArrowOffsets:
 
     @null_test_parameters()
     def test_struct_of_list_of_list(self, duckdb_cursor, col1_null, col2_null):
-        col1 = [i for i in range(MAGIC_ARRAY_SIZE)]
+        col1 = list(range(MAGIC_ARRAY_SIZE))
         if col1_null:
             col1[-1] = None
         # "a" in the struct matches the value for col1
