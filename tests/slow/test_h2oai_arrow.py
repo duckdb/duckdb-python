@@ -1,15 +1,15 @@
 import math
 from pathlib import Path
 
-from pytest import fixture, importorskip, mark
+import pytest
 
 import duckdb
 
-read_csv = importorskip("pyarrow.csv").read_csv
-requests = importorskip("requests")
-requests_adapters = importorskip("requests.adapters")
-urllib3_util = importorskip("urllib3.util")
-np = importorskip("numpy")
+read_csv = pytest.importorskip("pyarrow.csv").read_csv
+requests = pytest.importorskip("requests")
+requests_adapters = pytest.importorskip("requests.adapters")
+urllib3_util = pytest.importorskip("urllib3.util")
+np = pytest.importorskip("numpy")
 
 
 def group_by_q1(con):
@@ -156,7 +156,7 @@ def join_by_q5(con):
 
 
 class TestH2OAIArrow:
-    @mark.parametrize(
+    @pytest.mark.parametrize(
         "function",
         [
             group_by_q1,
@@ -171,14 +171,14 @@ class TestH2OAIArrow:
             group_by_q10,
         ],
     )
-    @mark.parametrize("threads", [1, 4])
-    @mark.usefixtures("group_by_data")
+    @pytest.mark.parametrize("threads", [1, 4])
+    @pytest.mark.usefixtures("group_by_data")
     def test_group_by(self, threads, function, group_by_data):
         group_by_data.execute(f"PRAGMA threads={threads}")
         function(group_by_data)
 
-    @mark.parametrize("threads", [1, 4])
-    @mark.parametrize(
+    @pytest.mark.parametrize("threads", [1, 4])
+    @pytest.mark.parametrize(
         "function",
         [
             join_by_q1,
@@ -188,14 +188,14 @@ class TestH2OAIArrow:
             join_by_q5,
         ],
     )
-    @mark.usefixtures("large_data")
+    @pytest.mark.usefixtures("large_data")
     def test_join(self, threads, function, large_data):
         large_data.execute(f"PRAGMA threads={threads}")
 
         function(large_data)
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def arrow_dataset_register():
     """Single fixture to download files and register them on the given connection."""
     session = requests.Session()
@@ -230,7 +230,7 @@ def arrow_dataset_register():
     session.close()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def large_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(
@@ -261,7 +261,7 @@ def large_data(arrow_dataset_register):
     con.close()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def group_by_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(

@@ -3,7 +3,6 @@ import decimal
 import uuid
 
 import pytest
-from pytest import raises
 
 import duckdb
 from duckdb import InvalidInputException, NotImplementedException
@@ -187,5 +186,5 @@ class TestValue:
             res = work()
             assert str(target_type) == res[0][0]
         else:
-            with raises((NotImplementedException, InvalidInputException)):
+            with pytest.raises((NotImplementedException, InvalidInputException)):
                 work()

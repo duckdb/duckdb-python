@@ -3,14 +3,13 @@ import os
 
 import pytest
 from conftest import ArrowPandas, NumpyPandas
-from pytest import mark, raises
 
 import duckdb
 
 # We only run this test if this env var is set
 # TODO: we can add a custom command line argument to pytest to provide an extension directory  # noqa: TD002, TD003
 # We can use that instead of checking this environment variable inside of conftest.py's 'require' method
-pytestmark = mark.skipif(
+pytestmark = pytest.mark.skipif(
     not os.getenv("DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED", False),
     reason="DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED is not set",
 )
@@ -65,7 +64,7 @@ class TestHTTPFS:
         connection = require("httpfs")
 
         # Read from a bogus HTTPS url, assert that it errors with a non-successful status code
-        with raises(duckdb.HTTPException) as exc:
+        with pytest.raises(duckdb.HTTPException) as exc:
             connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
 
         value = exc.value

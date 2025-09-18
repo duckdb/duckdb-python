@@ -1,13 +1,13 @@
 # cursor description
 from datetime import date, datetime
 
-from pytest import mark
+import pytest
 
 import duckdb
 
 
 class TestCursorDescription:
-    @mark.parametrize(
+    @pytest.mark.parametrize(
         "query,column_name,string_type,real_type",
         [
             ["SELECT * FROM integers", "i", "INTEGER", int],

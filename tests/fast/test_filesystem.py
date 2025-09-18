@@ -4,22 +4,19 @@ from pathlib import Path, PurePosixPath
 from shutil import copyfileobj
 from typing import Callable
 
-from pytest import MonkeyPatch, fixture, importorskip, mark, raises
+import pytest
 
 import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
 
-importorskip("fsspec", "2022.11.0")
-from fsspec import AbstractFileSystem, filesystem
-from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
-from fsspec.implementations.memory import MemoryFileSystem
+fsspec = pytest.importorskip("fsspec", "2022.11.0")
 
 FILENAME = "integers.csv"
 
 logging.basicConfig(level=logging.DEBUG)
 
 
-def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> list[str]:
+def intercept(monkeypatch: pytest.MonkeyPatch, obj: object, name: str) -> list[str]:
     error_occurred = []
     orig = getattr(obj, name)
 
@@ -34,15 +31,15 @@ def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> list[str]:
     return error_occurred
 
 
-@fixture
+@pytest.fixture
 def duckdb_cursor():
     with duckdb.connect() as conn:
         yield conn
 
 
-@fixture
+@pytest.fixture
 def memory():
-    fs = filesystem("memory", skip_instance_cache=True)
+    fs = fsspec.filesystem("memory", skip_instance_cache=True)
 
     # ensure each instance is independent (to work around a weird quirk in fsspec)
     fs.store = {}
@@ -60,10 +57,10 @@ def add_file(fs, filename=FILENAME):
 
 class TestPythonFilesystem:
     def test_unregister_non_existent_filesystem(self, duckdb_cursor: DuckDBPyConnection):
-        with raises(InvalidInputException):
+        with pytest.raises(InvalidInputException):
             duckdb_cursor.unregister_filesystem("fake")
 
-    def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
         assert memory.protocol == "memory"
@@ -75,8 +72,8 @@ class TestPythonFilesystem:
         duckdb_cursor.unregister_filesystem("memory")
 
     def test_reject_abstract_filesystem(self, duckdb_cursor: DuckDBPyConnection):
-        with raises(InvalidInputException):
-            duckdb_cursor.register_filesystem(AbstractFileSystem())
+        with pytest.raises(InvalidInputException):
+            duckdb_cursor.register_filesystem(fsspec.AbstractFileSystem())
 
     def test_unregister_builtin(self, require: Callable[[str], DuckDBPyConnection]):
         duckdb_cursor = require("httpfs")
@@ -85,10 +82,10 @@ class TestPythonFilesystem:
         assert not duckdb_cursor.filesystem_is_registered("S3FileSystem")
 
     def test_multiple_protocol_filesystems(self, duckdb_cursor: DuckDBPyConnection):
-        class ExtendedMemoryFileSystem(MemoryFileSystem):
+        class ExtendedMemoryFileSystem(fsspec.implementations.memory.MemoryFileSystem):
             protocol = ("file", "local")
             # defer to the original implementation that doesn't hardcode the protocol
-            _strip_protocol = classmethod(AbstractFileSystem._strip_protocol.__func__)
+            _strip_protocol = classmethod(fsspec.AbstractFileSystem._strip_protocol.__func__)
 
         memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
         add_file(memory)
@@ -98,14 +95,14 @@ class TestPythonFilesystem:
 
             assert duckdb_cursor.fetchall() == [(1, 10, 0), (2, 50, 30)]
 
-    def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_write(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
         duckdb_cursor.execute("copy (select 1) to 'memory://01.csv' (FORMAT CSV, HEADER 0)")
 
         assert memory.open("01.csv").read() == b"1\n"
 
-    def test_null_bytes(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_null_bytes(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         with memory.open("test.csv", "wb") as fh:
             fh.write(b"hello\n\0world\0")
         duckdb_cursor.register_filesystem(memory)
@@ -114,7 +111,7 @@ class TestPythonFilesystem:
 
         assert duckdb_cursor.fetchall() == [("hello",), ("\0world\0",)]
 
-    def test_read_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_read_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         filename = "binary_string.parquet"
         add_file(memory, filename)
 
@@ -124,7 +121,7 @@ class TestPythonFilesystem:
 
         assert duckdb_cursor.fetchall() == [(b"foo",), (b"bar",), (b"baz",)]
 
-    def test_write_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_write_parquet(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
         filename = "output.parquet"
 
@@ -132,15 +129,15 @@ class TestPythonFilesystem:
 
         assert memory.open(filename).read().startswith(b"PAR1")
 
-    def test_when_fsspec_not_installed(self, duckdb_cursor: DuckDBPyConnection, monkeypatch: MonkeyPatch):
+    def test_when_fsspec_not_installed(self, duckdb_cursor: DuckDBPyConnection, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setitem(sys.modules, "fsspec", None)
 
-        with raises(ModuleNotFoundError):
+        with pytest.raises(ModuleNotFoundError):
             duckdb_cursor.register_filesystem(None)
 
-    @mark.skipif(sys.version_info < (3, 8), reason="ArrowFSWrapper requires python 3.8 or higher")
+    @pytest.mark.skipif(sys.version_info < (3, 8), reason="ArrowFSWrapper requires python 3.8 or higher")
     def test_arrow_fs_wrapper(self, tmp_path: Path, duckdb_cursor: DuckDBPyConnection):
-        fs = importorskip("pyarrow.fs")
+        fs = pytest.importorskip("pyarrow.fs")
         from fsspec.implementations.arrow import ArrowFSWrapper
 
         local = fs.LocalFileSystem()
@@ -157,7 +154,7 @@ class TestPythonFilesystem:
 
         assert duckdb_cursor.fetchall() == [(1, 2, 3), (4, 5, 6)]
 
-    def test_database_attach(self, tmp_path: Path, monkeypatch: MonkeyPatch):
+    def test_database_attach(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         db_path = tmp_path / "hello.db"
 
         # setup a database to attach later
@@ -172,8 +169,8 @@ class TestPythonFilesystem:
         assert db_path.exists()
 
         with duckdb.connect() as conn:
-            fs = filesystem("file", skip_instance_cache=True)
-            write_errors = intercept(monkeypatch, LocalFileOpener, "write")
+            fs = fsspec.filesystem("file", skip_instance_cache=True)
+            write_errors = intercept(monkeypatch, fsspec.implementations.local.LocalFileOpener, "write")
             conn.register_filesystem(fs)
             db_path_posix = str(PurePosixPath(tmp_path.as_posix()) / "hello.db")
             conn.execute(f"ATTACH 'file://{db_path_posix}'")
@@ -187,14 +184,14 @@ class TestPythonFilesystem:
         # isn't happening
         assert not write_errors
 
-    def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_copy_partition(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
         duckdb_cursor.execute("copy (select 1 as a, 2 as b) to 'memory://root' (partition_by (a), HEADER 0)")
 
         assert memory.open("/root/a=1/data_0.csv").read() == b"2\n"
 
-    def test_copy_partition_with_columns_written(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_copy_partition_with_columns_written(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
         duckdb_cursor.execute(
@@ -203,7 +200,7 @@ class TestPythonFilesystem:
 
         assert memory.open("/root/a=1/data_0.csv").read() == b"1\n"
 
-    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
         duckdb_cursor.execute(
             "copy (select 2 as a, 3 as b, 4 as c) to 'memory://partition' (partition_by (a), HEADER 0)"
@@ -230,7 +227,7 @@ class TestPythonFilesystem:
         assert duckdb_cursor.fetchall() == [(3, 4, "2")]
 
     def test_read_hive_partition_with_columns_written(
-        self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem
+        self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem
     ):
         duckdb_cursor.register_filesystem(memory)
         duckdb_cursor.execute(
@@ -258,9 +255,9 @@ class TestPythonFilesystem:
         assert duckdb_cursor.fetchall() == [(2, "2")]
 
     def test_parallel_union_by_name(self, tmp_path):
-        pa = importorskip("pyarrow")
-        pq = importorskip("pyarrow.parquet")
-        importorskip("fsspec")
+        pa = pytest.importorskip("pyarrow")
+        pq = pytest.importorskip("pyarrow.parquet")
+        pytest.importorskip("fsspec")
 
         table1 = pa.Table.from_pylist(
             [
@@ -279,7 +276,7 @@ class TestPythonFilesystem:
         pq.write_table(table2, table2_path)
 
         c = duckdb.connect()
-        c.register_filesystem(LocalFileSystem())
+        c.register_filesystem(fsspec.implementations.local.LocalFileSystem())
 
         q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"  # noqa: E501
 

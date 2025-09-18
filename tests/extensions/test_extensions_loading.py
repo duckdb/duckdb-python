@@ -2,7 +2,6 @@ import os
 import platform
 
 import pytest
-from pytest import raises
 
 import duckdb
 
@@ -25,7 +24,7 @@ def test_install_non_existent_extension():
     conn = duckdb.connect()
     conn.execute("set custom_extension_repository = 'http://example.com'")
 
-    with raises(duckdb.IOException) as exc:
+    with pytest.raises(duckdb.IOException) as exc:
         conn.install_extension("non-existent")
 
         if not isinstance(exc, duckdb.HTTPException):
