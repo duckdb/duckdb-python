@@ -15,8 +15,7 @@
 # limitations under the License.
 #
 
-"""
-Module defining global singleton classes.
+"""Module defining global singleton classes.
 
 This module raises a RuntimeError if an attempt to reload it is made. In that
 way the identities of the classes defined here are fixed and will remain so
@@ -38,7 +37,8 @@ __ALL__ = ["_NoValue"]
 # Disallow reloading this module so as to preserve the identities of the
 # classes defined here.
 if "_is_loaded" in globals():
-    raise RuntimeError("Reloading duckdb.experimental.spark._globals is not allowed")
+    msg = "Reloading duckdb.experimental.spark._globals is not allowed"
+    raise RuntimeError(msg)
 _is_loaded = True
 
 
@@ -54,23 +54,23 @@ class _NoValueType:
 
     __instance = None
 
-    def __new__(cls):
+    def __new__(cls) -> "_NoValueType":
         # ensure that only one instance exists
         if not cls.__instance:
-            cls.__instance = super(_NoValueType, cls).__new__(cls)
+            cls.__instance = super().__new__(cls)
         return cls.__instance
 
     # Make the _NoValue instance falsey
-    def __nonzero__(self):
+    def __nonzero__(self) -> bool:
         return False
 
     __bool__ = __nonzero__
 
     # needed for python 2 to preserve identity through a pickle
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[type, tuple]:
         return (self.__class__, ())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "<no value>"
 
 

@@ -1,6 +1,6 @@
-import duckdb
-
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -16,23 +16,23 @@ def compare_results(duckdb_cursor, query):
 
 
 def arrow_to_pandas(duckdb_cursor, query):
-    return duckdb_cursor.query(query).fetch_arrow_table().to_pandas()['a'].values.tolist()
+    return duckdb_cursor.query(query).fetch_arrow_table().to_pandas()["a"].values.tolist()
 
 
 def get_use_list_view_options():
     result = []
     result.append(False)
-    if hasattr(pa, 'ListViewArray'):
+    if hasattr(pa, "ListViewArray"):
         result.append(True)
     return result
 
 
-class TestArrowNested(object):
+class TestArrowNested:
     def test_lists_basic(self, duckdb_cursor):
         # Test Constant List
         query = (
             duckdb_cursor.query("SELECT a from (select list_value(3,5,10) as a) as t")
-            .fetch_arrow_table()['a']
+            .fetch_arrow_table()["a"]
             .to_numpy()
         )
         assert query[0][0] == 3
@@ -40,32 +40,32 @@ class TestArrowNested(object):
         assert query[0][2] == 10
 
         # Empty List
-        query = duckdb_cursor.query("SELECT a from (select list_value() as a) as t").fetch_arrow_table()['a'].to_numpy()
+        query = duckdb_cursor.query("SELECT a from (select list_value() as a) as t").fetch_arrow_table()["a"].to_numpy()
         assert len(query[0]) == 0
 
         # Test Constant List With Null
         query = (
             duckdb_cursor.query("SELECT a from (select list_value(3,NULL) as a) as t")
-            .fetch_arrow_table()['a']
+            .fetch_arrow_table()["a"]
             .to_numpy()
         )
         assert query[0][0] == 3
         assert np.isnan(query[0][1])
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_list_types(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
 
         # Large Lists
         data = pa.array([[1], None, [2]], type=pa.large_list(pa.int64()))
-        arrow_table = pa.Table.from_arrays([data], ['a'])
+        arrow_table = pa.Table.from_arrays([data], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
 
         # Fixed Size Lists
         data = pa.array([[1], None, [2]], type=pa.list_(pa.int64(), 1))
-        arrow_table = pa.Table.from_arrays([data], ['a'])
+        arrow_table = pa.Table.from_arrays([data], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [((1,),), (None,), ((2,),)]
@@ -76,27 +76,27 @@ class TestArrowNested(object):
             pa.array([[1], None, [2]], type=pa.large_list(pa.int64())),
             pa.array([[1, 2, 3], None, [2, 1]], type=pa.list_(pa.int64())),
         ]
-        arrow_table = pa.Table.from_arrays([data[0], data[1], data[2]], ['a', 'b', 'c'])
+        arrow_table = pa.Table.from_arrays([data[0], data[1], data[2]], ["a", "b", "c"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        res = rel.project('a').execute().fetchall()
+        res = rel.project("a").execute().fetchall()
         assert res == [((1,),), (None,), ((2,),)]
-        res = rel.project('b').execute().fetchall()
+        res = rel.project("b").execute().fetchall()
         assert res == [([1],), (None,), ([2],)]
-        res = rel.project('c').execute().fetchall()
+        res = rel.project("c").execute().fetchall()
         assert res == [([1, 2, 3],), (None,), ([2, 1],)]
 
         # Struct Holding different List Types
-        struct = [pa.StructArray.from_arrays(data, ['fixed', 'large', 'normal'])]
-        arrow_table = pa.Table.from_arrays(struct, ['a'])
+        struct = [pa.StructArray.from_arrays(data, ["fixed", "large", "normal"])]
+        arrow_table = pa.Table.from_arrays(struct, ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         res = rel.execute().fetchall()
         assert res == [
-            ({'fixed': (1,), 'large': [1], 'normal': [1, 2, 3]},),
-            ({'fixed': None, 'large': None, 'normal': None},),
-            ({'fixed': (2,), 'large': [2], 'normal': [2, 1]},),
+            ({"fixed": (1,), "large": [1], "normal": [1, 2, 3]},),
+            ({"fixed": None, "large": None, "normal": None},),
+            ({"fixed": (2,), "large": [2], "normal": [2, 1]},),
         ]
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     @pytest.mark.skip(reason="FIXME: this fails on CI")
     def test_lists_roundtrip(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
@@ -127,21 +127,21 @@ class TestArrowNested(object):
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
             duckdb_cursor,
-            "SELECT list (lllle order by lllle) llllle from (SELECT list (llle order by llle) lllle from (SELECT list(lle order by lle) llle from (SELECT LIST(le order by le) lle FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3",
+            "SELECT list (lllle order by lllle) llllle from (SELECT list (llle order by llle) lllle from (SELECT list(lle order by lle) llle from (SELECT LIST(le order by le) lle FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t) as t1) as t2) as t3",  # noqa: E501
         )
 
         compare_results(
             duckdb_cursor,
-            '''SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
-                        from (SELECT a%4 as grp, list(a order by a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T order by all;''',
+            """SELECT grp,lst,cs FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as cs
+                        from (SELECT a%4 as grp, list(a order by a) as lst FROM range(7) tbl(a) group by grp) as lst_tbl) as T order by all;""",  # noqa: E501
         )
         # Tests for converting multiple lists to/from Arrow with NULL values and/or strings
         compare_results(
             duckdb_cursor,
-            "SELECT list(st order by st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5 order by all",
+            "SELECT list(st order by st) from (select i, case when i%10 then NULL else i::VARCHAR end as st from range(1000) tbl(i)) as t group by i%5 order by all",  # noqa: E501
         )
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_struct_roundtrip(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
 
@@ -156,7 +156,7 @@ class TestArrowNested(object):
             "SELECT a from (SELECT STRUCT_PACK(a := LIST_VALUE(1,2,3), b := i) as a FROM range(10000) tbl(i)) as t",
         )
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_map_roundtrip(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
 
@@ -171,7 +171,7 @@ class TestArrowNested(object):
         compare_results(duckdb_cursor, "SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t")
         compare_results(
             duckdb_cursor,
-            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",
+            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",  # noqa: E501
         )
         compare_results(
             duckdb_cursor,
@@ -182,30 +182,30 @@ class TestArrowNested(object):
         )
         compare_results(
             duckdb_cursor,
-            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5 order by all) as lst_tbl) as T",
+            "SELECT m from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10000) tbl(i) group by i%5 order by all) as lst_tbl) as T",  # noqa: E501
         )
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_map_arrow_to_duckdb(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
 
         map_type = pa.map_(pa.int32(), pa.int32())
         values = [[(3, 12), (3, 21)], [(5, 42)]]
-        arrow_table = pa.table({'detail': pa.array(values, map_type)})
+        arrow_table = pa.table({"detail": pa.array(values, map_type)})
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Arrow map contains duplicate key, which isn't supported by DuckDB map type",
         ):
-            rel = duckdb_cursor.from_arrow(arrow_table).fetchall()
+            duckdb_cursor.from_arrow(arrow_table).fetchall()
 
     def test_null_map_arrow_to_duckdb(self, duckdb_cursor):
         map_type = pa.map_(pa.int32(), pa.int32())
         values = [None, [(5, 42)]]
-        arrow_table = pa.table({'detail': pa.array(values, map_type)})
+        arrow_table = pa.table({"detail": pa.array(values, map_type)})  # noqa: F841
         res = duckdb_cursor.sql("select * from arrow_table").fetchall()
         assert res == [(None,), ({5: 42},)]
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_map_arrow_to_pandas(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
         assert arrow_to_pandas(
@@ -214,17 +214,17 @@ class TestArrowNested(object):
         assert arrow_to_pandas(duckdb_cursor, "SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t") == [[]]
         assert arrow_to_pandas(
             duckdb_cursor,
-            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",
-        ) == [[('Jon Lajoie', 10), ('Backstreet Boys', 9), ('Tenacious D', 10)]]
+            "SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D'),LIST_VALUE(10,9,10)) as a) as t",  # noqa: E501
+        ) == [[("Jon Lajoie", 10), ("Backstreet Boys", 9), ("Tenacious D", 10)]]
         assert arrow_to_pandas(
             duckdb_cursor, "SELECT a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(a)"
         ) == [[(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)], [(1, 2)]]
         assert arrow_to_pandas(
             duckdb_cursor,
             "SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4})) as a",
-        ) == [[({'i': 1, 'j': 2}, {'i': 1, 'j': 2}), ({'i': 3, 'j': 4}, {'i': 3, 'j': 4})]]
+        ) == [[({"i": 1, "j": 2}, {"i": 1, "j": 2}), ({"i": 3, "j": 4}, {"i": 3, "j": 4})]]
 
-    @pytest.mark.parametrize('use_list_view', get_use_list_view_options())
+    @pytest.mark.parametrize("use_list_view", get_use_list_view_options())
     def test_frankstein_nested(self, duckdb_cursor, use_list_view):
         duckdb_cursor.execute(f"pragma arrow_output_list_view={use_list_view};")
 
@@ -237,13 +237,13 @@ class TestArrowNested(object):
         # Maps embedded in a struct
         compare_results(
             duckdb_cursor,
-            "SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
+            "SELECT {'i':mp,'j':mp2} FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",  # noqa: E501
         )
 
         # List of maps
         compare_results(
             duckdb_cursor,
-            "SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",
+            "SELECT [mp,mp2] FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t",  # noqa: E501
         )
 
         # Map with list as key and/or value
@@ -263,5 +263,5 @@ class TestArrowNested(object):
         # MAP that is NULL entirely
         compare_results(
             duckdb_cursor,
-            "SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a",
+            "SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a",  # noqa: E501
         )

@@ -27,8 +27,8 @@
 import datetime
 import decimal
 import unittest
+
 import duckdb
-import pytest
 
 
 class DuckDBTypeTests(unittest.TestCase):
@@ -42,76 +42,76 @@ class DuckDBTypeTests(unittest.TestCase):
         self.con.close()
 
     def test_CheckString(self):
-        self.cur.execute("insert into test(s) values (?)", (u"Österreich",))
+        self.cur.execute("insert into test(s) values (?)", ("Österreich",))
         self.cur.execute("select s from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
+        assert row[0] == "Österreich"
 
     def test_CheckSmallInt(self):
         self.cur.execute("insert into test(i) values (?)", (42,))
         self.cur.execute("select i from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], 42)
+        assert row[0] == 42
 
     def test_CheckLargeInt(self):
         num = 2**40
         self.cur.execute("insert into test(i) values (?)", (num,))
         self.cur.execute("select i from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], num)
+        assert row[0] == num
 
     def test_CheckFloat(self):
         val = 3.14
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        assert row[0] == val
 
     def test_CheckDecimalTooBig(self):
         val = 17.29
         self.cur.execute("insert into test(f) values (?)", (decimal.Decimal(val),))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        assert row[0] == val
 
     def test_CheckDecimal(self):
-        val = '17.29'
+        val = "17.29"
         val = decimal.Decimal(val)
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], self.cur.execute("select 17.29::DOUBLE").fetchone()[0])
+        assert row[0] == self.cur.execute("select 17.29::DOUBLE").fetchone()[0]
 
     def test_CheckDecimalWithExponent(self):
-        val = '1E5'
+        val = "1E5"
         val = decimal.Decimal(val)
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], self.cur.execute("select 1.00000::DOUBLE").fetchone()[0])
+        assert row[0] == self.cur.execute("select 1.00000::DOUBLE").fetchone()[0]
 
     def test_CheckNaN(self):
         import math
 
-        val = decimal.Decimal('nan')
+        val = decimal.Decimal("nan")
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(math.isnan(row[0]), True)
+        assert math.isnan(row[0])
 
     def test_CheckInf(self):
-        val = decimal.Decimal('inf')
+        val = decimal.Decimal("inf")
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        assert row[0] == val
 
     def test_CheckBytesBlob(self):
         val = b"Guglhupf"
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        assert row[0] == val
 
     def test_CheckMemoryviewBlob(self):
         sample = b"Guglhupf"
@@ -119,27 +119,27 @@ class DuckDBTypeTests(unittest.TestCase):
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], sample)
+        assert row[0] == sample
 
     def test_CheckMemoryviewFromhexBlob(self):
-        sample = bytes.fromhex('00FF0F2E3D4C5B6A798800FF00')
+        sample = bytes.fromhex("00FF0F2E3D4C5B6A798800FF00")
         val = memoryview(sample)
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], sample)
+        assert row[0] == sample
 
     def test_CheckNoneBlob(self):
         val = None
         self.cur.execute("insert into test(b) values (?)", (val,))
         self.cur.execute("select b from test")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], val)
+        assert row[0] == val
 
     def test_CheckUnicodeExecute(self):
-        self.cur.execute(u"select 'Österreich'")
+        self.cur.execute("select 'Österreich'")
         row = self.cur.fetchone()
-        self.assertEqual(row[0], u"Österreich")
+        assert row[0] == "Österreich"
 
 
 class CommonTableExpressionTests(unittest.TestCase):
@@ -154,24 +154,24 @@ class CommonTableExpressionTests(unittest.TestCase):
 
     def test_CheckCursorDescriptionCTESimple(self):
         self.cur.execute("with one as (select 1) select * from one")
-        self.assertIsNotNone(self.cur.description)
-        self.assertEqual(self.cur.description[0][0], "1")
+        assert self.cur.description is not None
+        assert self.cur.description[0][0] == "1"
 
     def test_CheckCursorDescriptionCTESMultipleColumns(self):
         self.cur.execute("insert into test values(1)")
         self.cur.execute("insert into test values(2)")
         self.cur.execute("with testCTE as (select * from test) select * from testCTE")
-        self.assertIsNotNone(self.cur.description)
-        self.assertEqual(self.cur.description[0][0], "x")
+        assert self.cur.description is not None
+        assert self.cur.description[0][0] == "x"
 
     def test_CheckCursorDescriptionCTE(self):
         self.cur.execute("insert into test values (1)")
         self.cur.execute("with bar as (select * from test) select * from test where x = 1")
-        self.assertIsNotNone(self.cur.description)
-        self.assertEqual(self.cur.description[0][0], "x")
+        assert self.cur.description is not None
+        assert self.cur.description[0][0] == "x"
         self.cur.execute("with bar as (select * from test) select * from test where x = 2")
-        self.assertIsNotNone(self.cur.description)
-        self.assertEqual(self.cur.description[0][0], "x")
+        assert self.cur.description is not None
+        assert self.cur.description[0][0] == "x"
 
 
 class DateTimeTests(unittest.TestCase):
@@ -189,51 +189,51 @@ class DateTimeTests(unittest.TestCase):
         self.cur.execute("insert into test(d) values (?)", (d,))
         self.cur.execute("select d from test")
         d2 = self.cur.fetchone()[0]
-        self.assertEqual(d, d2)
+        assert d == d2
 
     def test_CheckTime(self):
         t = datetime.time(7, 15, 0)
         self.cur.execute("insert into test(t) values (?)", (t,))
         self.cur.execute("select t from test")
         t2 = self.cur.fetchone()[0]
-        self.assertEqual(t, t2)
+        assert t == t2
 
     def test_CheckTimestamp(self):
         ts = datetime.datetime(2004, 2, 14, 7, 15, 0)
         self.cur.execute("insert into test(ts) values (?)", (ts,))
         self.cur.execute("select ts from test")
         ts2 = self.cur.fetchone()[0]
-        self.assertEqual(ts, ts2)
+        assert ts == ts2
 
     def test_CheckSqlTimestamp(self):
-        now = datetime.datetime.now(datetime.UTC) if hasattr(datetime, 'UTC') else datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.UTC) if hasattr(datetime, "UTC") else datetime.datetime.utcnow()
         self.cur.execute("insert into test(ts) values (current_timestamp)")
         self.cur.execute("select ts from test")
         ts = self.cur.fetchone()[0]
-        self.assertEqual(type(ts), datetime.datetime)
-        self.assertEqual(ts.year, now.year)
+        assert type(ts) is datetime.datetime
+        assert ts.year == now.year
 
     def test_CheckDateTimeSubSeconds(self):
         ts = datetime.datetime(2004, 2, 14, 7, 15, 0, 500000)
         self.cur.execute("insert into test(ts) values (?)", (ts,))
         self.cur.execute("select ts from test")
         ts2 = self.cur.fetchone()[0]
-        self.assertEqual(ts, ts2)
+        assert ts == ts2
 
     def test_CheckTimeSubSeconds(self):
         t = datetime.time(7, 15, 0, 500000)
         self.cur.execute("insert into test(t) values (?)", (t,))
         self.cur.execute("select t from test")
         t2 = self.cur.fetchone()[0]
-        self.assertEqual(t, t2)
+        assert t == t2
 
     def test_CheckDateTimeSubSecondsFloatingPoint(self):
         ts = datetime.datetime(2004, 2, 14, 7, 15, 0, 510241)
         self.cur.execute("insert into test(ts) values (?)", (ts,))
         self.cur.execute("select ts from test")
         ts2 = self.cur.fetchone()[0]
-        self.assertEqual(ts.year, ts2.year)
-        self.assertEqual(ts2.microsecond, 510241)
+        assert ts.year == ts2.year
+        assert ts2.microsecond == 510241
 
 
 class ListTests(unittest.TestCase):
@@ -249,44 +249,24 @@ class ListTests(unittest.TestCase):
     def test_CheckEmptyList(self):
         val = []
         self.cur.execute("insert into test values (?, ?)", (val, val))
-        self.assertEqual(
-            self.cur.execute("select * from test").fetchall(),
-            [(val, val)],
-        )
+        assert self.cur.execute("select * from test").fetchall() == [(val, val)]
 
     def test_CheckSingleList(self):
         val = [1, 2, 3]
         self.cur.execute("insert into test(single) values (?)", (val,))
-        self.assertEqual(
-            self.cur.execute("select * from test").fetchall(),
-            [(val, None)],
-        )
+        assert self.cur.execute("select * from test").fetchall() == [(val, None)]
 
     def test_CheckNestedList(self):
         val = [[1], [2], [3, 4]]
         self.cur.execute("insert into test(nested) values (?)", (val,))
-        self.assertEqual(
-            self.cur.execute("select * from test").fetchall(),
-            [
-                (
-                    None,
-                    val,
-                )
-            ],
-        )
+        assert self.cur.execute("select * from test").fetchall() == [(None, val)]
 
     def test_CheckNone(self):
         val = None
         self.cur.execute("insert into test values (?, ?)", (val, val))
-        self.assertEqual(
-            self.cur.execute("select * from test").fetchall(),
-            [(val, val)],
-        )
+        assert self.cur.execute("select * from test").fetchall() == [(val, val)]
 
     def test_CheckEmbeddedNone(self):
         val = [None]
         self.cur.execute("insert into test values (?, ?)", (val, val))
-        self.assertEqual(
-            self.cur.execute("select * from test").fetchall(),
-            [(val, val)],
-        )
+        assert self.cur.execute("select * from test").fetchall() == [(val, val)]

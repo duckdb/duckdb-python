@@ -1,4 +1,4 @@
-import duckdb
+import datetime
 
 import pytest
 
@@ -7,17 +7,16 @@ pq = pytest.importorskip("pyarrow.parquet")
 ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 pd = pytest.importorskip("pandas")
-import datetime
 
 Timestamp = pd.Timestamp
 
 
-class TestArrowDictionary(object):
+class TestArrowDictionary:
     def test_dictionary(self, duckdb_cursor):
         indices = pa.array([0, 1, 0, 1, 2, 1, 0, 2])
         dictionary = pa.array([10, 100, None])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
 
         assert rel.execute().fetchall() == [(10,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
@@ -27,14 +26,14 @@ class TestArrowDictionary(object):
         indices = pa.array(indices_list)
         dictionary = pa.array([10, 100, None, 999999])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(10,), (100,), (10,), (100,), (None,), (100,), (10,), (None,), (999999,)] * 10000
         assert rel.execute().fetchall() == result
 
         # Table with dictionary and normal array
 
-        arrow_table = pa.Table.from_arrays([dict_array, pa.array(indices_list)], ['a', 'b'])
+        arrow_table = pa.Table.from_arrays([dict_array, pa.array(indices_list)], ["a", "b"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(10, 0), (100, 1), (10, 0), (100, 1), (None, 2), (100, 1), (10, 0), (None, 2), (999999, 3)] * 10000
         assert rel.execute().fetchall() == result
@@ -43,7 +42,7 @@ class TestArrowDictionary(object):
         indices = pa.array([None, 1, 0, 1, 2, 1, 0, 2])
         dictionary = pa.array([10, 100, None])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
 
         assert rel.execute().fetchall() == [(None,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
@@ -51,7 +50,7 @@ class TestArrowDictionary(object):
         indices = pa.array([None, 1, None, 1, 2, 1, 0])
         dictionary = pa.array([10, 100, 100])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         print(rel.execute().fetchall())
         assert rel.execute().fetchall() == [(None,), (100,), (None,), (100,), (100,), (100,), (10,)]
@@ -61,19 +60,19 @@ class TestArrowDictionary(object):
         indices = pa.array(indices_list * 1000)
         dictionary = pa.array([10, 100, 100])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 1000
         assert rel.execute().fetchall() == result
 
         # Table with dictionary and normal array
-        arrow_table = pa.Table.from_arrays([dict_array, indices], ['a', 'b'])
+        arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 1000
         assert rel.execute().fetchall() == result
 
     @pytest.mark.parametrize(
-        'element',
+        "element",
         [
             # list
             """
@@ -110,7 +109,7 @@ class TestArrowDictionary(object):
         ],
     )
     @pytest.mark.parametrize(
-        'count',
+        "count",
         [
             1,
             10,
@@ -123,14 +122,14 @@ class TestArrowDictionary(object):
             5000,
         ],
     )
-    @pytest.mark.parametrize('query', ["select {} as a from range({})", "select [{} for x in range({})] as a"])
+    @pytest.mark.parametrize("query", ["select {} as a from range({})", "select [{} for x in range({})] as a"])
     def test_dictionary_roundtrip(self, query, element, duckdb_cursor, count):
         query = query.format(element, count)
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
-        arrow_res = original_rel.fetch_arrow_table()
+        arrow_res = original_rel.fetch_arrow_table()  # noqa: F841
 
-        roundtrip_rel = duckdb_cursor.sql('select * from arrow_res')
+        roundtrip_rel = duckdb_cursor.sql("select * from arrow_res")
         actual = roundtrip_rel.fetchall()
         assert expected == actual
         assert original_rel.columns == roundtrip_rel.columns
@@ -142,14 +141,14 @@ class TestArrowDictionary(object):
         indices = pa.array(indices_list * 10000)
         dictionary = pa.array([10, 100, 100])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
         assert rel.execute().fetchall() == result
 
         # Table with dictionary and normal array
-        arrow_table = pa.Table.from_arrays([dict_array, indices], ['a', 'b'])
+        arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
@@ -157,14 +156,14 @@ class TestArrowDictionary(object):
 
     def test_dictionary_lifetime(self, duckdb_cursor):
         tables = []
-        expected = ''
+        expected = ""
         for i in range(100):
             if i % 3 == 0:
-                input = 'ABCD' * 17000
+                input = "ABCD" * 17000
             elif i % 3 == 1:
-                input = 'FOOO' * 17000
+                input = "FOOO" * 17000
             else:
-                input = 'BARR' * 17000
+                input = "BARR" * 17000
             expected += input
             array = pa.array(
                 input,
@@ -173,7 +172,7 @@ class TestArrowDictionary(object):
             tables.append(pa.table([array], names=["x"]))
         # All of the tables with different dictionaries are getting merged into one dataset
         # This is testing that our cache is being evicted correctly
-        x = ds.dataset(tables)
+        x = ds.dataset(tables)  # noqa: F841
         res = duckdb_cursor.sql("select * from x").fetchall()
         expected = [(x,) for x in expected]
         assert res == expected
@@ -186,14 +185,14 @@ class TestArrowDictionary(object):
         indices = pa.array(indices_list * 10000)
         dictionary = pa.array([10, 100, 100])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
         assert rel.execute().fetchall() == result
 
         # Table with dictionary and normal array
-        arrow_table = pa.Table.from_arrays([dict_array, indices], ['a', 'b'])
+        arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
@@ -214,7 +213,7 @@ class TestArrowDictionary(object):
 
         for index_type in index_types:
             dict_array = pa.DictionaryArray.from_arrays(index_type, dictionary)
-            arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+            arrow_table = pa.Table.from_arrays([dict_array], ["a"])
             rel = duckdb_cursor.from_arrow(arrow_table)
             result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
             assert rel.execute().fetchall() == result
@@ -222,17 +221,17 @@ class TestArrowDictionary(object):
     def test_dictionary_strings(self, duckdb_cursor):
         indices_list = [None, 0, 1, 2, 3, 4, None]
         indices = pa.array(indices_list * 1000)
-        dictionary = pa.array(['Matt Daaaaaaaaamon', 'Alec Baldwin', 'Sean Penn', 'Tim Robbins', 'Samuel L. Jackson'])
+        dictionary = pa.array(["Matt Daaaaaaaaamon", "Alec Baldwin", "Sean Penn", "Tim Robbins", "Samuel L. Jackson"])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [
             (None,),
-            ('Matt Daaaaaaaaamon',),
-            ('Alec Baldwin',),
-            ('Sean Penn',),
-            ('Tim Robbins',),
-            ('Samuel L. Jackson',),
+            ("Matt Daaaaaaaaamon",),
+            ("Alec Baldwin",),
+            ("Sean Penn",),
+            ("Tim Robbins",),
+            ("Samuel L. Jackson",),
             (None,),
         ] * 1000
         assert rel.execute().fetchall() == result
@@ -249,7 +248,7 @@ class TestArrowDictionary(object):
             ]
         )
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         print(rel.execute().fetchall())
         expected = [

@@ -1,16 +1,10 @@
-import sys
+import pytest
 
 import duckdb
-import pytest
 
 pa = pytest.importorskip("pyarrow")
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
 
-if sys.version_info < (3, 9):
-    pytest.skip(
-        "Python Version must be higher or equal to 3.9 to run this test",
-        allow_module_level=True,
-    )
 
 try:
     adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
@@ -22,7 +16,7 @@ except adbc_driver_manager.InternalError as e:
     )
 
 
-class TestADBCConnectionGetInfo(object):
+class TestADBCConnectionGetInfo:
     def test_connection_basic(self):
         con = adbc_driver_duckdb.connect()
         with con.cursor() as cursor:

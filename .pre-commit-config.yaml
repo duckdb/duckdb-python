@@ -1,0 +1,28 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.13.0
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+      # Run the formatter.
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8    # pick the version of clang-format you want
+    hooks:
+      - id: clang-format
+        files: \.(c|cpp|cc|h|hpp|cxx|hxx)$
+
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+
+  - repo: local
+    hooks:
+      - id: post-checkout-submodules
+        name: Update submodule post-checkout
+        entry: .githooks/post-checkout
+        language: script
+        stages: [ post-checkout ]

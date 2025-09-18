@@ -1,19 +1,20 @@
 import json
 
-import duckdb
 import pytest
+
+import duckdb
 
 
 def _parse_json_func(error_prefix: str):
-    """Helper to check that the error message is indeed parsable json"""
+    """Helper to check that the error message is indeed parsable json."""
 
-    def parse_func(exception):
+    def parse_func(exception) -> bool:
         msg = exception.args[0]
         assert msg.startswith(error_prefix)
         json_str = msg.split(error_prefix, 1)[1]
         try:
             json.loads(json_str)
-        except:
+        except Exception:
             return False
         return True
 

@@ -1,12 +1,14 @@
+import contextlib
 import platform
 import threading
 import time
 
-import duckdb
 import pytest
 
+import duckdb
 
-class TestQueryProgress(object):
+
+class TestQueryProgress:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="threads not allowed on Emscripten",
@@ -17,13 +19,10 @@ class TestQueryProgress(object):
         conn.sql("set progress_bar_time=0")
         conn.sql("create table t as (select range as n from range(10000000))")
 
-        def thread_target():
+        def thread_target() -> None:
             # run a very slow query which hopefully isn't too memory intensive.
-            with reraise:
-                try:
-                    conn.execute("select max(sha1(n::varchar)) from t").fetchall()
-                except duckdb.InterruptException:
-                    pass
+            with reraise, contextlib.suppress(duckdb.InterruptException):
+                conn.execute("select max(sha1(n::varchar)) from t").fetchall()
 
         thread = threading.Thread(target=thread_target)
         thread.start()
@@ -33,7 +32,7 @@ class TestQueryProgress(object):
         # query never progresses.  This will also fail if the query is too
         # quick as it will be back at -1 as soon as the query is finished.
 
-        for _ in range(0, 500):
+        for _ in range(500):
             assert thread.is_alive(), "query finished too quick"
             if (qp1 := conn.query_progress()) > 0:
                 break
@@ -42,7 +41,7 @@ class TestQueryProgress(object):
             pytest.fail("query start timeout")
 
         # keep monitoring and wait for the progress to increase
-        for _ in range(0, 500):
+        for _ in range(500):
             assert thread.is_alive(), "query finished too quick"
             if (qp2 := conn.query_progress()) > qp1:
                 break

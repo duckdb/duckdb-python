@@ -1,17 +1,33 @@
-import duckdb
+import datetime
+import uuid
+from typing import Any, NamedTuple
+
 import pytest
 
-pd = pytest.importorskip("pandas")
-pa = pytest.importorskip('pyarrow', '18.0.0')
-from typing import Union
-import pyarrow.compute as pc
-import uuid
-import datetime
-import numpy as np
-import cmath
-from typing import NamedTuple, Any, List
+import duckdb
+from duckdb.typing import (
+    BIGINT,
+    BLOB,
+    BOOLEAN,
+    DATE,
+    DOUBLE,
+    FLOAT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    TIME,
+    TIMESTAMP,
+    TINYINT,
+    UBIGINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
+    VARCHAR,
+)
 
-from duckdb.typing import *
+pd = pytest.importorskip("pandas")
+pa = pytest.importorskip("pyarrow", "18.0.0")
 
 
 class Candidate(NamedTuple):
@@ -22,28 +38,28 @@ class Candidate(NamedTuple):
 
 def layout(index: int):
     return [
-        ['x', 'x', 'y'],
-        ['x', None, 'y'],
-        [None, 'y', None],
-        ['x', None, None],
-        [None, None, 'y'],
+        ["x", "x", "y"],
+        ["x", None, "y"],
+        [None, "y", None],
+        ["x", None, None],
+        [None, None, "y"],
         [None, None, None],
     ][index]
 
 
 def get_table_data():
-    def add_variations(data, index: int):
+    def add_variations(data, index: int) -> None:
         data.extend(
             [
                 {
-                    'a': layout(index),
-                    'b': layout(0),
-                    'c': layout(0),
+                    "a": layout(index),
+                    "b": layout(0),
+                    "c": layout(0),
                 },
                 {
-                    'a': layout(0),
-                    'b': layout(0),
-                    'c': layout(index),
+                    "a": layout(0),
+                    "b": layout(0),
+                    "c": layout(index),
                 },
             ]
         )
@@ -83,9 +99,9 @@ def get_types():
             2147483647,
         ),
         Candidate(UBIGINT, 18446744073709551615, 9223372036854776000),
-        Candidate(VARCHAR, 'long_string_test', 'smallstring'),
+        Candidate(VARCHAR, "long_string_test", "smallstring"),
         Candidate(
-            UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'), uuid.UUID('ffffffff-ffff-ffff-ffff-000000000000')
+            UUID, uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"), uuid.UUID("ffffffff-ffff-ffff-ffff-000000000000")
         ),
         Candidate(
             FLOAT,
@@ -106,8 +122,8 @@ def get_types():
         ),
         Candidate(
             BLOB,
-            b'\xf6\x96\xb0\x85',
-            b'\x85\xb0\x96\xf6',
+            b"\xf6\x96\xb0\x85",
+            b"\x85\xb0\x96\xf6",
         ),
         Candidate(
             INTERVAL,
@@ -120,24 +136,24 @@ def get_types():
             False,
         ),
         Candidate(
-            duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-            {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
-            {'v1': [5, 4, 3, 2, 1], 'v2': ['non-inlined-string', 'a', 'b', 'c', 'duckdb']},
+            duckdb.struct_type(["BIGINT[]", "VARCHAR[]"]),
+            {"v1": [1, 2, 3], "v2": ["a", "non-inlined string", "duckdb"]},
+            {"v1": [5, 4, 3, 2, 1], "v2": ["non-inlined-string", "a", "b", "c", "duckdb"]},
         ),
-        Candidate(duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string'], ['non-inlined-string', 'test']),
+        Candidate(duckdb.list_type("VARCHAR"), ["the", "duck", "non-inlined string"], ["non-inlined-string", "test"]),
     ]
 
 
 def construct_query(tuples) -> str:
     def construct_values_list(row, start_param_idx):
         parameter_count = len(row)
-        parameters = [f'${x+start_param_idx}' for x in range(parameter_count)]
-        parameters = '(' + ', '.join(parameters) + ')'
+        parameters = [f"${x + start_param_idx}" for x in range(parameter_count)]
+        parameters = "(" + ", ".join(parameters) + ")"
         return parameters
 
     row_size = len(tuples[0])
     values_list = [construct_values_list(x, 1 + (i * row_size)) for i, x in enumerate(tuples)]
-    values_list = ', '.join(values_list)
+    values_list = ", ".join(values_list)
 
     query = f"""
         select * from (values {values_list})
@@ -148,25 +164,25 @@ def construct_query(tuples) -> str:
 def construct_parameters(tuples, dbtype):
     parameters = []
     for row in tuples:
-        parameters.extend(list([duckdb.Value(x, dbtype) for x in row]))
+        parameters.extend([duckdb.Value(x, dbtype) for x in row])
     return parameters
 
 
-class TestUDFNullFiltering(object):
+class TestUDFNullFiltering:
     @pytest.mark.parametrize(
-        'table_data',
+        "table_data",
         get_table_data(),
     )
     @pytest.mark.parametrize(
-        'test_type',
+        "test_type",
         get_types(),
     )
-    @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
+    @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_null_filtering(self, duckdb_cursor, table_data: dict, test_type: Candidate, udf_type):
-        null_count = sum([1 for x in list(zip(*table_data.values())) if any([y == None for y in x])])
+        null_count = sum([1 for x in list(zip(*table_data.values())) if any(y is None for y in x)])
         row_count = len(table_data)
         table_data = {
-            key: [None if not x else test_type.variant_one if x == 'x' else test_type.variant_two for x in value]
+            key: [None if not x else test_type.variant_one if x == "x" else test_type.variant_two for x in value]
             for key, value in table_data.items()
         }
 
@@ -174,26 +190,26 @@ class TestUDFNullFiltering(object):
         query = construct_query(tuples)
         parameters = construct_parameters(tuples, test_type.type)
         rel = duckdb_cursor.sql(query + " t(a, b, c)", params=parameters)
-        rel.to_table('tbl')
+        rel.to_table("tbl")
         rel.show()
 
         def my_func(*args):
-            if udf_type == 'arrow':
+            if udf_type == "arrow":
                 my_func.count += len(args[0])
             else:
                 my_func.count += 1
             return args[0]
 
         def create_parameters(table_data, dbtype):
-            return ", ".join(f'{key}::{dbtype}' for key in list(table_data.keys()))
+            return ", ".join(f"{key}::{dbtype}" for key in list(table_data.keys()))
 
         my_func.count = 0
-        duckdb_cursor.create_function('test', my_func, None, test_type.type, type=udf_type)
+        duckdb_cursor.create_function("test", my_func, None, test_type.type, type=udf_type)
         query = f"select test({create_parameters(table_data, test_type.type)}) from tbl"
         result = duckdb_cursor.sql(query).fetchall()
 
         expected_output = [
-            (t[0],) if not any(x == None for x in t) else (None,) for t in list(zip(*table_data.values()))
+            (t[0],) if not any(x is None for x in t) else (None,) for t in list(zip(*table_data.values()))
         ]
         assert result == expected_output
         assert len(result) == row_count
@@ -201,24 +217,24 @@ class TestUDFNullFiltering(object):
         assert my_func.count == row_count - null_count
 
     @pytest.mark.parametrize(
-        'table_data',
+        "table_data",
         [
             [1, 2, 3, 4],
             [1, 2, None, 4],
         ],
     )
     def test_nulls_from_default_null_handling_native(self, duckdb_cursor, table_data):
-        def returns_null(x):
+        def returns_null(x) -> None:
             return None
 
-        df = pd.DataFrame({'a': table_data})
+        df = pd.DataFrame({"a": table_data})  # noqa: F841
         duckdb_cursor.execute("create table tbl as select * from df")
-        duckdb_cursor.create_function('test', returns_null, [str], int, type='native')
-        with pytest.raises(duckdb.InvalidInputException, match='The UDF is not expected to return NULL values'):
-            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
+        duckdb_cursor.create_function("test", returns_null, [str], int, type="native")
+        with pytest.raises(duckdb.InvalidInputException, match="The UDF is not expected to return NULL values"):
+            duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
 
     @pytest.mark.parametrize(
-        'table_data',
+        "table_data",
         [
             [1, 2, 3, 4],
             [1, 2, None, 4],
@@ -226,12 +242,11 @@ class TestUDFNullFiltering(object):
     )
     def test_nulls_from_default_null_handling_arrow(self, duckdb_cursor, table_data):
         def returns_null(x):
-            l = x.to_pylist()
-            return pa.array([None for _ in l], type=pa.int64())
+            lst = x.to_pylist()
+            return pa.array([None for _ in lst], type=pa.int64())
 
-        df = pd.DataFrame({'a': table_data})
+        df = pd.DataFrame({"a": table_data})  # noqa: F841
         duckdb_cursor.execute("create table tbl as select * from df")
-        duckdb_cursor.create_function('test', returns_null, [str], int, type='arrow')
-        with pytest.raises(duckdb.InvalidInputException, match='The UDF is not expected to return NULL values'):
-            result = duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()
-            print(result)
+        duckdb_cursor.create_function("test", returns_null, [str], int, type="arrow")
+        with pytest.raises(duckdb.InvalidInputException, match="The UDF is not expected to return NULL values"):
+            duckdb_cursor.sql("select test(a::VARCHAR) from tbl").fetchall()

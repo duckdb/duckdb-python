@@ -1,11 +1,11 @@
-from re import S
-import duckdb
-import os
-import pytest
-import tempfile
-from conftest import pandas_supports_arrow_backend
+# ruff: noqa: F841
 import sys
+
+import pytest
+from conftest import pandas_supports_arrow_backend
 from packaging.version import Version
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
@@ -17,7 +17,7 @@ re = pytest.importorskip("re")
 def create_pyarrow_pandas(rel):
     if not pandas_supports_arrow_backend():
         pytest.skip(reason="Pandas version doesn't support 'pyarrow' backend")
-    return rel.df().convert_dtypes(dtype_backend='pyarrow')
+    return rel.df().convert_dtypes(dtype_backend="pyarrow")
 
 
 def create_pyarrow_table(rel):
@@ -34,7 +34,7 @@ def test_decimal_filter_pushdown(duckdb_cursor):
     np = pytest.importorskip("numpy")
     np.random.seed(10)
 
-    df = pl.DataFrame({'x': pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
+    df = pl.DataFrame({"x": pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
 
     query = """
         SELECT
@@ -178,35 +178,34 @@ def string_check_or_pushdown(connection, tbl_name, create_table):
     assert not match
 
 
-class TestArrowFilterPushdown(object):
-
+class TestArrowFilterPushdown:
     @pytest.mark.parametrize(
-        'data_type',
+        "data_type",
         [
-            'TINYINT',
-            'SMALLINT',
-            'INTEGER',
-            'BIGINT',
-            'UTINYINT',
-            'USMALLINT',
-            'UINTEGER',
-            'UBIGINT',
-            'FLOAT',
-            'DOUBLE',
-            'HUGEINT',
-            'DECIMAL(4,1)',
-            'DECIMAL(9,1)',
-            'DECIMAL(18,4)',
-            'DECIMAL(30,12)',
+            "TINYINT",
+            "SMALLINT",
+            "INTEGER",
+            "BIGINT",
+            "UTINYINT",
+            "USMALLINT",
+            "UINTEGER",
+            "UBIGINT",
+            "FLOAT",
+            "DOUBLE",
+            "HUGEINT",
+            "DECIMAL(4,1)",
+            "DECIMAL(9,1)",
+            "DECIMAL(18,4)",
+            "DECIMAL(30,12)",
         ],
     )
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_numeric(self, data_type, duckdb_cursor, create_table):
         tbl_name = "tbl"
         numeric_operators(duckdb_cursor, data_type, tbl_name, create_table)
         numeric_check_or_pushdown(duckdb_cursor, tbl_name, create_table)
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_varchar(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -259,7 +258,7 @@ class TestArrowFilterPushdown(object):
         # More complex tests for OR pushed down on string
         string_check_or_pushdown(duckdb_cursor, "test_varchar", create_table)
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_bool(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -294,7 +293,7 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = True or b = True").fetchone()[0] == 3
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_time(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -352,7 +351,7 @@ class TestArrowFilterPushdown(object):
             == 2
         )
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_timestamp(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -410,7 +409,7 @@ class TestArrowFilterPushdown(object):
         )
         assert (
             duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"
+                "SELECT count(*) from arrow_table where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
             ).fetchone()[0]
             == 1
         )
@@ -422,7 +421,7 @@ class TestArrowFilterPushdown(object):
             == 2
         )
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_timestamp_TZ(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -482,7 +481,7 @@ class TestArrowFilterPushdown(object):
         )
         assert (
             duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"
+                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
             ).fetchone()[0]
             == 1
         )
@@ -494,18 +493,18 @@ class TestArrowFilterPushdown(object):
             == 2
         )
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     @pytest.mark.parametrize(
-        ['data_type', 'value'],
+        ("data_type", "value"),
         [
-            ['TINYINT', 127],
-            ['SMALLINT', 32767],
-            ['INTEGER', 2147483647],
-            ['BIGINT', 9223372036854775807],
-            ['UTINYINT', 255],
-            ['USMALLINT', 65535],
-            ['UINTEGER', 4294967295],
-            ['UBIGINT', 18446744073709551615],
+            ("TINYINT", 127),
+            ("SMALLINT", 32767),
+            ("INTEGER", 2147483647),
+            ("BIGINT", 9223372036854775807),
+            ("UTINYINT", 255),
+            ("USMALLINT", 65535),
+            ("UINTEGER", 4294967295),
+            ("UBIGINT", 18446744073709551615),
         ],
     )
     def test_filter_pushdown_integers(self, duckdb_cursor, data_type, value, create_table):
@@ -514,9 +513,9 @@ class TestArrowFilterPushdown(object):
             CREATE TABLE tbl as select {value}::{data_type} as i
         """
         )
-        expected = duckdb_cursor.table('tbl').fetchall()
+        expected = duckdb_cursor.table("tbl").fetchall()
         filter = "i > 0"
-        rel = duckdb_cursor.table('tbl')
+        rel = duckdb_cursor.table("tbl")
         arrow_table = create_table(rel)
         actual = duckdb_cursor.sql(f"select * from arrow_table where {filter}").fetchall()
         assert expected == actual
@@ -529,11 +528,10 @@ class TestArrowFilterPushdown(object):
         assert expected == actual
 
     @pytest.mark.skipif(
-        Version(pa.__version__) < Version('15.0.0'), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
+        Version(pa.__version__) < Version("15.0.0"), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
     )
     def test_9371(self, duckdb_cursor, tmp_path):
         import datetime
-        import pathlib
 
         # connect to an in-memory database
         duckdb_cursor.execute("SET TimeZone='UTC';")
@@ -546,7 +544,7 @@ class TestArrowFilterPushdown(object):
         # Example data
         dt = datetime.datetime(2023, 8, 29, 1, tzinfo=datetime.timezone.utc)
 
-        my_arrow_table = pa.Table.from_pydict({'ts': [dt, dt, dt], 'value': [1, 2, 3]})
+        my_arrow_table = pa.Table.from_pydict({"ts": [dt, dt, dt], "value": [1, 2, 3]})
         df = my_arrow_table.to_pandas()
         df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
         df.to_parquet(str(file_path))
@@ -557,7 +555,7 @@ class TestArrowFilterPushdown(object):
         expected = [(1, dt), (2, dt), (3, dt)]
         assert output == expected
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_date(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -617,15 +615,15 @@ class TestArrowFilterPushdown(object):
             == 2
         )
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_blob(self, duckdb_cursor, create_table):
         import pandas
 
         df = pandas.DataFrame(
             {
-                'a': [bytes([1]), bytes([2]), bytes([3]), None],
-                'b': [bytes([1]), bytes([2]), bytes([3]), None],
-                'c': [bytes([1]), bytes([2]), bytes([3]), None],
+                "a": [bytes([1]), bytes([2]), bytes([3]), None],
+                "b": [bytes([1]), bytes([2]), bytes([3]), None],
+                "c": [bytes([1]), bytes([2]), bytes([3]), None],
             }
         )
         rel = duckdb.from_df(df)
@@ -660,7 +658,7 @@ class TestArrowFilterPushdown(object):
             duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '\x01' or b = '\x02'").fetchone()[0] == 2
         )
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table, create_pyarrow_dataset])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table, create_pyarrow_dataset])
     def test_filter_pushdown_no_projection(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -685,7 +683,7 @@ class TestArrowFilterPushdown(object):
 
         assert duckdb_cursor.execute("SELECT * FROM arrow_table VALUES where a = 1").fetchall() == [(1, 1, 1)]
 
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_pushdown_2145(self, duckdb_cursor, tmp_path, create_table):
         import pandas
 
@@ -697,12 +695,12 @@ class TestArrowFilterPushdown(object):
         df2 = pandas.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
         df2["date"] = date2
 
-        data1 = tmp_path / 'data1.parquet'
-        data2 = tmp_path / 'data2.parquet'
+        data1 = tmp_path / "data1.parquet"
+        data2 = tmp_path / "data2.parquet"
         duckdb_cursor.execute(f"copy (select * from df1) to '{data1.as_posix()}'")
         duckdb_cursor.execute(f"copy (select * from df2) to '{data2.as_posix()}'")
 
-        glob_pattern = tmp_path / 'data*.parquet'
+        glob_pattern = tmp_path / "data*.parquet"
         table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).fetch_arrow_table()
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
@@ -710,7 +708,7 @@ class TestArrowFilterPushdown(object):
         pandas.testing.assert_frame_equal(expected_df, output_df)
 
     # https://github.com/duckdb/duckdb/pull/4817/files#r1339973721
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_filter_column_removal(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -738,7 +736,7 @@ class TestArrowFilterPushdown(object):
         assert not match
 
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -748,10 +746,10 @@ class TestArrowFilterPushdown(object):
         duckdb_cursor.execute(
             """
             INSERT INTO test_structs VALUES
-                ({'a': 1, 'b': true}), 
-                ({'a': 2, 'b': false}), 
+                ({'a': 1, 'b': true}),
+                ({'a': 2, 'b': false}),
                 (NULL),
-                ({'a': 3, 'b': true}), 
+                ({'a': 3, 'b': true}),
                 ({'a': NULL, 'b': NULL});
         """
         )
@@ -768,7 +766,7 @@ class TestArrowFilterPushdown(object):
         ).fetchall()
 
         input = query_res[0][1]
-        if 'PANDAS_SCAN' in input:
+        if "PANDAS_SCAN" in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
         match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2.*", input, flags=re.DOTALL)
         assert match
@@ -778,7 +776,7 @@ class TestArrowFilterPushdown(object):
 
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true 
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true
         """
         ).fetchall()
 
@@ -809,7 +807,7 @@ class TestArrowFilterPushdown(object):
         assert not match
 
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
-    @pytest.mark.parametrize('create_table', [create_pyarrow_pandas, create_pyarrow_table])
+    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     def test_nested_struct_filter_pushdown(self, duckdb_cursor, create_table):
         duckdb_cursor.execute(
             """
@@ -838,20 +836,20 @@ class TestArrowFilterPushdown(object):
         ).fetchall()
 
         input = query_res[0][1]
-        if 'PANDAS_SCAN' in input:
+        if "PANDAS_SCAN" in input:
             pytest.skip(reason="This version of pandas does not produce an Arrow object")
         match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2.*", input, flags=re.DOTALL)
         assert match
 
         # Check that the filter is applied correctly
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.b < 2").fetchone()[0] == {
-            'a': {'b': 1, 'c': False},
-            'd': {'e': 2, 'f': 'foo'},
+            "a": {"b": 1, "c": False},
+            "d": {"e": 2, "f": "foo"},
         }
 
         query_res = duckdb_cursor.execute(
             """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5 
+            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5
         """
         ).fetchall()
 
@@ -866,8 +864,8 @@ class TestArrowFilterPushdown(object):
         # Check that the filter is applied correctly
         assert duckdb_cursor.execute("SELECT COUNT(*) FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == 1
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == {
-            'a': {'b': None, 'c': True},
-            'd': {'e': 5, 'f': 'qux'},
+            "a": {"b": None, "c": True},
+            "d": {"e": 5, "f": "qux"},
         }
 
         query_res = duckdb_cursor.execute(
@@ -887,8 +885,8 @@ class TestArrowFilterPushdown(object):
 
         # Check that the filter is applied correctly
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.d.f = 'bar'").fetchone()[0] == {
-            'a': {'b': 3, 'c': True},
-            'd': {'e': 4, 'f': 'bar'},
+            "a": {"b": 3, "c": True},
+            "d": {"e": 4, "f": "bar"},
         }
 
     def test_filter_pushdown_not_supported(self):
@@ -899,32 +897,32 @@ class TestArrowFilterPushdown(object):
         arrow_tbl = con.execute("FROM T").fetch_arrow_table()
 
         # No projection just unsupported filter
-        assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, '3', 3, 3)]
+        assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, "3", 3, 3)]
 
         # No projection unsupported + supported filter
-        assert con.execute("from arrow_tbl where c < 4 and a > 2").fetchall() == [(3, '3', 3, 3)]
+        assert con.execute("from arrow_tbl where c < 4 and a > 2").fetchall() == [(3, "3", 3, 3)]
 
         # No projection supported + unsupported + supported filter
-        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3', 3, 3)]
+        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, "3", 3, 3)]
         assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '0' ").fetchall() == []
 
         # Projection with unsupported filter column + unsupported + supported filter
-        assert con.execute("select c, b from arrow_tbl where c < 4 and  b == '3' and a > 2 ").fetchall() == [(3, '3')]
-        assert con.execute("select c, b from arrow_tbl where a > 2 and c < 4 and  b == '3'").fetchall() == [(3, '3')]
+        assert con.execute("select c, b from arrow_tbl where c < 4 and  b == '3' and a > 2 ").fetchall() == [(3, "3")]
+        assert con.execute("select c, b from arrow_tbl where a > 2 and c < 4 and  b == '3'").fetchall() == [(3, "3")]
 
         # Projection without unsupported filter column + unsupported + supported filter
-        assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, '3')]
+        assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, "3")]
 
         # Lets also experiment with multiple unpush-able filters
         con.execute(
-            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"
+            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"  # noqa: E501
         )
 
         arrow_tbl = con.execute("FROM T_2").fetch_arrow_table()
 
         assert con.execute(
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
-        ).fetchall() == [(28, '28')]
+        ).fetchall() == [(28, "28")]
 
     def test_join_filter_pushdown(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
@@ -951,18 +949,18 @@ class TestArrowFilterPushdown(object):
     def test_pushdown_of_optional_filter(self, duckdb_cursor):
         cardinality_table = pa.Table.from_pydict(
             {
-                'column_name': [
-                    'id',
-                    'product_code',
-                    'price',
-                    'quantity',
-                    'category',
-                    'is_available',
-                    'rating',
-                    'discount',
-                    'color',
+                "column_name": [
+                    "id",
+                    "product_code",
+                    "price",
+                    "quantity",
+                    "category",
+                    "is_available",
+                    "rating",
+                    "discount",
+                    "color",
                 ],
-                'cardinality': [100, 100, 100, 45, 5, 3, 6, 39, 5],
+                "cardinality": [100, 100, 100, 45, 5, 3, 6, 39, 5],
             }
         )
 
@@ -976,18 +974,19 @@ class TestArrowFilterPushdown(object):
         )
         res = result.fetchall()
         assert res == [
-            ('is_available', 3),
-            ('category', 5),
-            ('color', 5),
-            ('rating', 6),
-            ('discount', 39),
-            ('quantity', 45),
-            ('id', 100),
-            ('product_code', 100),
-            ('price', 100),
+            ("is_available", 3),
+            ("category", 5),
+            ("color", 5),
+            ("rating", 6),
+            ("discount", 39),
+            ("quantity", 45),
+            ("id", 100),
+            ("product_code", 100),
+            ("price", 100),
         ]
 
-    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the greatest value
+    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the
+    # greatest value
     def test_nan_filter_pushdown(self, duckdb_cursor):
         duckdb_cursor.execute(
             """
@@ -1001,12 +1000,12 @@ class TestArrowFilterPushdown(object):
         """
         )
 
-        def assert_equal_results(con, arrow_table, query):
-            duckdb_res = con.sql(query.format(table='test')).fetchall()
-            arrow_res = con.sql(query.format(table='arrow_table')).fetchall()
+        def assert_equal_results(con, arrow_table, query) -> None:
+            duckdb_res = con.sql(query.format(table="test")).fetchall()
+            arrow_res = con.sql(query.format(table="arrow_table")).fetchall()
             assert len(duckdb_res) == len(arrow_res)
 
-        arrow_table = duckdb_cursor.table('test').fetch_arrow_table()
+        arrow_table = duckdb_cursor.table("test").fetch_arrow_table()
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")
