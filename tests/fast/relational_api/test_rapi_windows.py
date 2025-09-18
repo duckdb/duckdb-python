@@ -680,7 +680,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected))
         result = [
-            (r[0], list(map(lambda x: round(x, 2), r[1])) if r[1] is not None else None)
+            (r[0], [round(x, 2) for x in r[1]] if r[1] is not None else None)
             for r in table.quantile_cont(
                 "v",
                 q=[0.2, 0.5],

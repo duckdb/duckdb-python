@@ -152,7 +152,7 @@ class TestDataFrame:
         columns = ["language", "users_count"]
         data = [("Java", "20000"), ("Python", "100000"), ("Scala", "3000")]
 
-        rowData = map(lambda x: Row(*x), data)
+        rowData = (Row(*x) for x in data)
         df = spark.createDataFrame(rowData, columns)
         res = df.collect()
         assert res == [

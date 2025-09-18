@@ -35,7 +35,7 @@ class Test7652:
 
         # Attempt to perform the same thing with duckdb.
         print("Retrieving from duckdb")
-        duckdb_result = list(map(lambda v: v[0], duckdb_cursor.sql(f"select * from '{temp_file_name}'").fetchall()))
+        duckdb_result = [v[0] for v in duckdb_cursor.sql(f"select * from '{temp_file_name}'").fetchall()]
 
         print("DuckDB result:", duckdb_result)
         assert min(duckdb_result) == min(generated_list)
