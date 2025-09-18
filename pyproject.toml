@@ -347,7 +347,9 @@ select = [
     "UP", # pyupgrade
     "W", # pycodestyle
 ]
-ignore = []
+ignore = [
+    "C901", # ignore function complexity
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
