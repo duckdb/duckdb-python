@@ -349,6 +349,7 @@ select = [
 ]
 ignore = [
     "C901", # ignore function complexity
+    "ANN002", "ANN003", # don't require type annotations for *args and **kwargs
 ]
 
 [tool.ruff.lint.pydocstyle]
