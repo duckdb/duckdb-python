@@ -147,12 +147,12 @@ def list_test_cases():
 
 
 class TestFetchNested:
-    @pytest.mark.parametrize("query, expected", list_test_cases())
+    @pytest.mark.parametrize(("query", "expected"), list_test_cases())
     def test_fetch_df_list(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected', [
+    @pytest.mark.parametrize(("query", "expected"), [
         ("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", {
             'a': [
                 {'a': 42, 'b': 43}
@@ -197,7 +197,7 @@ class TestFetchNested:
         compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected, expected_error', [
+    @pytest.mark.parametrize(("query", "expected", "expected_error"), [
         ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
             'a': [
                 {
@@ -320,7 +320,7 @@ class TestFetchNested:
                 compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected', [
+    @pytest.mark.parametrize(("query", "expected"), [
         ("""
             SELECT [
                 {'i':1,'j':2},

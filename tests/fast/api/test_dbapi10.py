@@ -8,7 +8,7 @@ import duckdb
 
 class TestCursorDescription:
     @pytest.mark.parametrize(
-        "query,column_name,string_type,real_type",
+        ("query", "column_name", "string_type", "real_type"),
         [
             ("SELECT * FROM integers", "i", "INTEGER", int),
             ("SELECT * FROM timestamps", "t", "TIMESTAMP", datetime),

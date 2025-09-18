@@ -495,7 +495,7 @@ class TestArrowFilterPushdown:
 
     @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
     @pytest.mark.parametrize(
-        ["data_type", "value"],
+        ("data_type", "value"),
         [
             ("TINYINT", 127),
             ("SMALLINT", 32767),

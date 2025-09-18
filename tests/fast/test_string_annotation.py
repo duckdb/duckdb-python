@@ -30,7 +30,7 @@ class TestStringAnnotation:
         python_version_lower_than_3_10(), reason="inspect.signature(eval_str=True) only supported since 3.10 and higher"
     )
     @pytest.mark.parametrize(
-        ["input", "expected"],
+        ("input", "expected"),
         [
             ("str", "VARCHAR"),
             ("list[str]", "VARCHAR[]"),

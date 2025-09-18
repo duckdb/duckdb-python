@@ -69,7 +69,7 @@ class TestArrowREE:
         assert res == expected
 
     @pytest.mark.parametrize(
-        ["dbtype", "val1", "val2"],
+        ("dbtype", "val1", "val2"),
         [
             ("TINYINT", "(-128)", "127"),
             ("SMALLINT", "(-32768)", "32767"),

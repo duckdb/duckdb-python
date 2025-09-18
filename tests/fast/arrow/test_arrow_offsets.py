@@ -76,7 +76,7 @@ def expected_result(col1_null, col2_null, expected):
 
 
 null_test_parameters = lambda: pytest.mark.parametrize(
-    ["col1_null", "col2_null"], [(False, True), (True, False), (True, True), (False, False)]
+    ("col1_null", "col2_null"), [(False, True), (True, False), (True, True), (False, False)]
 )
 
 
@@ -132,7 +132,7 @@ class TestArrowOffsets:
         assert res == expected_result(col1_null, col2_null, True)
 
     @pytest.mark.parametrize(
-        ["constructor", "expected"],
+        ("constructor", "expected"),
         [
             (pa_date32(), datetime.date(2328, 11, 12)),
             (pa_date64(), datetime.date(1970, 1, 1)),
@@ -216,7 +216,7 @@ class TestArrowOffsets:
 
     @null_test_parameters()
     @pytest.mark.parametrize(
-        ["constructor", "unit", "expected"],
+        ("constructor", "unit", "expected"),
         [
             (pa_time32(), "ms", datetime.time(0, 2, 11, 72000)),
             (pa_time32(), "s", datetime.time(23, 59, 59)),
@@ -255,7 +255,7 @@ class TestArrowOffsets:
     @null_test_parameters()
     # NOTE: there is sadly no way to create a 'interval[months]' (tiM) type from pyarrow
     @pytest.mark.parametrize(
-        ["constructor", "expected", "converter"],
+        ("constructor", "expected", "converter"),
         [
             (pa_month_day_nano_interval(), datetime.timedelta(days=3932160), month_interval),
             (pa_month_day_nano_interval(), datetime.timedelta(days=131072), day_interval),
@@ -289,7 +289,7 @@ class TestArrowOffsets:
 
     @null_test_parameters()
     @pytest.mark.parametrize(
-        ["constructor", "unit", "expected"],
+        ("constructor", "unit", "expected"),
         [
             (pa_duration(), "ms", datetime.timedelta(seconds=131, microseconds=72000)),
             (pa_duration(), "s", datetime.timedelta(days=1, seconds=44672)),
@@ -324,7 +324,7 @@ class TestArrowOffsets:
 
     @null_test_parameters()
     @pytest.mark.parametrize(
-        ["constructor", "unit", "expected"],
+        ("constructor", "unit", "expected"),
         [
             (pa_timestamp(), "ms", datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=pytz.utc)),
             (pa_timestamp(), "s", datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=pytz.utc)),
@@ -386,7 +386,7 @@ class TestArrowOffsets:
 
     @null_test_parameters()
     @pytest.mark.parametrize(
-        ["precision_scale", "expected"],
+        ("precision_scale", "expected"),
         [
             ((38, 37), decimal.Decimal("9.0000000000000000000000000000000000000")),
             ((38, 24), decimal.Decimal("131072.000000000000000000000000")),
@@ -605,7 +605,7 @@ class TestArrowOffsets:
         else:
             assert res[-1]["a"] == len(res) - 1
 
-    @pytest.mark.parametrize(["outer_null", "inner_null"], [(True, False), (False, True)])
+    @pytest.mark.parametrize(("outer_null", "inner_null"), [(True, False), (False, True)])
     def test_list_of_list_of_struct(self, duckdb_cursor, outer_null, inner_null):
         tuples = [[[{"a": str(i), "b": None, "c": [i]}]] for i in range(MAGIC_ARRAY_SIZE)]
         if outer_null:

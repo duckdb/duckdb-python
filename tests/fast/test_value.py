@@ -140,7 +140,7 @@ class TestValue:
             con.execute("select $1", [value]).fetchall()
 
     @pytest.mark.parametrize(
-        "target_type,test_value,expected_conversion_success",
+        ("target_type", "test_value", "expected_conversion_success"),
         [
             (TINYINT, 0, True),
             (TINYINT, 255, False),
