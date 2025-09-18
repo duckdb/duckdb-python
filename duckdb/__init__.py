@@ -24,12 +24,12 @@ class DBAPITypeObject:
     def __init__(self, types: list[typing.DuckDBPyType]) -> None:
         self.types = types
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, typing.DuckDBPyType):
             return other in self.types
         return False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<DBAPITypeObject [{','.join(str(x) for x in self.types)}]>"
 
 
