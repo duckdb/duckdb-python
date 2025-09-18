@@ -32,8 +32,10 @@ def import_database(import_location):
 def move_database(export_location, import_location):
     export_dir = Path(export_location)
     import_dir = Path(import_location)
-    assert export_dir.exists() and export_dir.is_dir()
-    assert import_dir.exists() and import_dir.is_dir()
+    assert export_dir.exists()
+    assert export_dir.is_dir()
+    assert import_dir.exists()
+    assert import_dir.is_dir()
 
     for file in ["schema.sql", "load.sql", "tbl.csv"]:
         shutil.move(export_dir / file, import_dir)

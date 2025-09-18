@@ -334,10 +334,12 @@ class TestSparkFunctionsNumeric:
         res = df.withColumn("rand", sf.rand()).collect()
 
         assert isinstance(res[0].rand, float)
-        assert res[0].rand >= 0 and res[0].rand < 1
+        assert res[0].rand >= 0
+        assert res[0].rand < 1
 
         assert isinstance(res[1].rand, float)
-        assert res[1].rand >= 0 and res[1].rand < 1
+        assert res[1].rand >= 0
+        assert res[1].rand < 1
 
     @pytest.mark.parametrize("sign_func", [sf.sign, sf.signum])
     def test_sign(self, spark, sign_func):

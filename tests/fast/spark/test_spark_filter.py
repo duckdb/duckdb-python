@@ -81,7 +81,8 @@ class TestDataFrameFilter:
         res = df2.collect()
         assert len(res) == 2
         for item in res:
-            assert item.gender == "M" and item.state == "OH"
+            assert item.gender == "M"
+            assert item.state == "OH"
 
         # Filter IS IN List values
         li = ["OH", "NY"]
@@ -95,7 +96,8 @@ class TestDataFrameFilter:
         df2 = df.filter(~df.state.isin(li))
         res = df2.collect()
         for item in res:
-            assert item.state != "OH" and item.state != "NY"
+            assert item.state != "OH"
+            assert item.state != "NY"
 
         df2 = df.filter(not df.state.isin(li))
         res2 = df2.collect()

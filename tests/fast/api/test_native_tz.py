@@ -16,20 +16,24 @@ class TestNativeTimeZone:
     def test_native_python_timestamp_timezone(self, duckdb_cursor):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
-        assert res[0].hour == 14 and res[0].minute == 52
+        assert res[0].hour == 14
+        assert res[0].minute == 52
         assert res[0].tzinfo.zone == "America/Los_Angeles"
 
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchall()[0]
-        assert res[0].hour == 14 and res[0].minute == 52
+        assert res[0].hour == 14
+        assert res[0].minute == 52
         assert res[0].tzinfo.zone == "America/Los_Angeles"
 
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchmany(1)[0]
-        assert res[0].hour == 14 and res[0].minute == 52
+        assert res[0].hour == 14
+        assert res[0].minute == 52
         assert res[0].tzinfo.zone == "America/Los_Angeles"
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
-        assert res[0].hour == 21 and res[0].minute == 52
+        assert res[0].hour == 21
+        assert res[0].minute == 52
         assert res[0].tzinfo.zone == "UTC"
 
     def test_native_python_time_timezone(self, duckdb_cursor):
@@ -43,11 +47,13 @@ class TestNativeTimeZone:
         res = duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").df()
         assert res.dtypes["tz"].tz.zone == "America/Los_Angeles"
-        assert res["tz"][0].hour == 14 and res["tz"][0].minute == 52
+        assert res["tz"][0].hour == 14
+        assert res["tz"][0].minute == 52
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").df()
-        assert res["tz"][0].hour == 21 and res["tz"][0].minute == 52
+        assert res["tz"][0].hour == 21
+        assert res["tz"][0].minute == 52
 
     def test_pandas_timestamp_time(self, duckdb_cursor):
         with pytest.raises(
@@ -63,12 +69,14 @@ class TestNativeTimeZone:
         table = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetch_arrow_table()
         res = table.to_pandas()
         assert res.dtypes["tz"].tz.zone == "America/Los_Angeles"
-        assert res["tz"][0].hour == 14 and res["tz"][0].minute == 52
+        assert res["tz"][0].hour == 14
+        assert res["tz"][0].minute == 52
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetch_arrow_table().to_pandas()
         assert res.dtypes["tz"].tz.zone == "UTC"
-        assert res["tz"][0].hour == 21 and res["tz"][0].minute == 52
+        assert res["tz"][0].hour == 21
+        assert res["tz"][0].minute == 52
 
     def test_arrow_timestamp_time(self, duckdb_cursor):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
@@ -82,8 +90,10 @@ class TestNativeTimeZone:
             .fetch_arrow_table()
             .to_pandas()
         )
-        assert res1["tz"][0].hour == 14 and res1["tz"][0].minute == 52
-        assert res2["tz"][0].hour == res2["tz"][0].hour and res2["tz"][0].minute == res1["tz"][0].minute
+        assert res1["tz"][0].hour == 14
+        assert res1["tz"][0].minute == 52
+        assert res2["tz"][0].hour == res2["tz"][0].hour
+        assert res2["tz"][0].minute == res1["tz"][0].minute
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res1 = (
@@ -96,5 +106,7 @@ class TestNativeTimeZone:
             .fetch_arrow_table()
             .to_pandas()
         )
-        assert res1["tz"][0].hour == 21 and res1["tz"][0].minute == 52
-        assert res2["tz"][0].hour == res2["tz"][0].hour and res2["tz"][0].minute == res1["tz"][0].minute
+        assert res1["tz"][0].hour == 21
+        assert res1["tz"][0].minute == 52
+        assert res2["tz"][0].hour == res2["tz"][0].hour
+        assert res2["tz"][0].minute == res1["tz"][0].minute
