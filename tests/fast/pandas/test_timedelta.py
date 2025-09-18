@@ -80,7 +80,7 @@ class TestTimedelta:
         equality = equality.format(value=duck_interval)
         res, a, b = duckdb_cursor.execute(equality, [val]).fetchone()
         if res != True:
-            # TODO: in some cases intervals that are identical don't compare equal.
+            # TODO: in some cases intervals that are identical don't compare equal.  # noqa: TD002, TD003
             assert a == b
         else:
             assert res == True

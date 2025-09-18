@@ -292,9 +292,9 @@ class TestRAPIAggregations:
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected))
 
-    # TODO: Approximate aggregate functions
+    # TODO: Approximate aggregate functions  # noqa: TD002, TD003
 
-    # TODO: Statistical aggregate functions
+    # TODO: Statistical aggregate functions  # noqa: TD002, TD003
     def test_median(self, table):
         result = table.median("v").execute().fetchall()
         expected = [(2.0,)]

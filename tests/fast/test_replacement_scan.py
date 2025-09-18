@@ -200,7 +200,7 @@ class TestReplacementScan:
         duckdb_cursor.execute("drop table df")
         df = pd.DataFrame({"b": [1, 2, 3]})
         res = rel.fetchall()
-        # TODO: this should error instead, the 'df' table we relied on has been removed and replaced with a
+        # TODO: this should error instead, the 'df' table we relied on has been removed and replaced with a  # noqa: TD002, TD003
         #  replacement scan
         assert res == [(1,), (2,), (3,)]
 
@@ -263,7 +263,7 @@ class TestReplacementScan:
         if df_create == from_arrow:
             # Because the RecordBatchReader is destructive, it's empty after the first scan
             # But we reference it multiple times, so the subsequent reads have no data to read
-            # TODO: this should probably throw an error...
+            # TODO: this should probably throw an error...  # noqa: TD002, TD003
             assert len(res) >= 0
         else:
             assert res == [([1, 2, 3],), ([1, 2, 3],), ([1, 2, 3],)]
@@ -351,7 +351,7 @@ class TestReplacementScan:
 
         create_view_in_func(duckdb_cursor)
 
-        # TODO: this should be fixed in the future, likely by unifying the behavior of .sql and .execute
+        # TODO: this should be fixed in the future, likely by unifying the behavior of .sql and .execute  # noqa: TD002, TD003
         with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
             rel = duckdb_cursor.sql("select * from v1")
 

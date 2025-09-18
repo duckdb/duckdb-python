@@ -235,7 +235,7 @@ class UnionType(Value):
         super().__init__(object, union_type)
 
 
-# TODO: add EnumValue once `duckdb.enum_type` is added
+# TODO: add EnumValue once `duckdb.enum_type` is added  # noqa: TD002, TD003
 
 __all__ = [
     "BinaryValue",

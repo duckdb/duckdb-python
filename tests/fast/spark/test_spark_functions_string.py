@@ -177,7 +177,7 @@ class TestSparkFunctionsString:
         df = spark.createDataFrame([("abcd",)], ["c"])
 
         res = df.select(F.encode("c", "UTF-8").alias("encoded")).collect()
-        # TODO: Should return the same type
+        # TODO: Should return the same type  # noqa: TD002, TD003
         if USE_ACTUAL_SPARK:
             assert res == [Row(encoded=bytearray(b"abcd"))]
         else:

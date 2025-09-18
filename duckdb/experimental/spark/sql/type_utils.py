@@ -79,7 +79,7 @@ def convert_nested_type(dtype: DuckDBPyType) -> DataType:  # noqa: D103
     if id == "list" or id == "array":
         children = dtype.children
         return ArrayType(convert_type(children[0][1]))
-    # TODO: add support for 'union'
+    # TODO: add support for 'union'  # noqa: TD002, TD003
     if id == "struct":
         children: list[tuple[str, DuckDBPyType]] = dtype.children
         fields = [StructField(x[0], convert_type(x[1])) for x in children]

@@ -85,7 +85,7 @@ def check_struct_upgrade(expected_type: str, creation_method, pair: ObjectPair, 
 
 
 class TestResolveObjectColumns:
-    # TODO: add support for ArrowPandas
+    # TODO: add support for ArrowPandas  # noqa: TD002, TD003
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_integers(self, pandas, duckdb_cursor):
         data = [5, 0, 3]

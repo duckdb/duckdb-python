@@ -228,7 +228,7 @@ class TestArrowOffsets:
     def test_struct_of_time(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):
         size = MAGIC_ARRAY_SIZE
         if unit == "s":
-            # TODO: We limit the size because we don't support time values > 24 hours
+            # TODO: We limit the size because we don't support time values > 24 hours  # noqa: TD002, TD003
             size = 86400  # The amount of seconds in a day
 
         col1 = [i for i in range(size)]

@@ -173,7 +173,7 @@ class Column:
             #    raise ValueError("Using a slice with a step value is not supported")
             # return self.substr(k.start, k.stop)
         else:
-            # TODO: this is super hacky
+            # TODO: this is super hacky  # noqa: TD002, TD003
             expr_str = str(self.expr) + "." + str(k)
             return Column(ColumnExpression(expr_str))
 

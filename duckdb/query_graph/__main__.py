@@ -87,7 +87,7 @@ class NodeTiming:  # noqa: D101
         self.percentage = self.time / total_time
 
     def combine_timing(l: "NodeTiming", r: "NodeTiming") -> "NodeTiming":  # noqa: D102
-        # TODO: can only add timings for same-phase nodes
+        # TODO: can only add timings for same-phase nodes  # noqa: TD002, TD003
         total_time = l.time + r.time
         return NodeTiming(l.phase, total_time)
 
@@ -161,7 +161,7 @@ def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, 
         body += f"<p>cardinality: {card}</p>"
         body += f"<p>estimate: {est}</p>"
         body += f"<p>width: {width} bytes</p>"
-    # TODO: Expand on timing. Usually available from a detailed profiling
+    # TODO: Expand on timing. Usually available from a detailed profiling  # noqa: TD002, TD003
     body += "</div>"
     body += "</span>"
     return body
@@ -250,7 +250,7 @@ def generate_tree_html(graph_json: object) -> str:  # noqa: D103
     tree_prefix = '<div class="tf-tree tf-gap-sm"> \n <ul>'
     tree_suffix = "</ul> </div>"
     # first level of json is general overview
-    # TODO: make sure json output first level always has only 1 level
+    # TODO: make sure json output first level always has only 1 level  # noqa: TD002, TD003
     tree_body = generate_tree_recursive(json_graph["children"][0], cpu_time)
     return tree_prefix + tree_body + tree_suffix
 

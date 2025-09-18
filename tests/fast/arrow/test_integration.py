@@ -15,7 +15,7 @@ class TestArrowIntegration:
         parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
         cols = "id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments"
 
-        # TODO timestamp
+        # TODO timestamp  # noqa: TD002, TD003, TD004
 
         userdata_parquet_table = pq.read_table(parquet_filename)
         userdata_parquet_table.validate(full=True)

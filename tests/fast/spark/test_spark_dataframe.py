@@ -61,7 +61,7 @@ class TestDataFrame:
 
         # Empty list
         if not USE_ACTUAL_SPARK:
-            # TODO: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]
+            # TODO: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]  # noqa: TD002, TD003
             df = spark.createDataFrame([], ["id", "address", "test"])
             res = df.collect()
             assert res == []
@@ -83,13 +83,13 @@ class TestDataFrame:
 
         # Not enough column names
         if not USE_ACTUAL_SPARK:
-            # TODO: Spark does not raise this error
+            # TODO: Spark does not raise this error  # noqa: TD002, TD003
             with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
                 df = spark.createDataFrame(address, ["id", "address"])
 
         # Empty column names list
         # Columns are filled in with default names
-        # TODO: check against Spark behavior
+        # TODO: check against Spark behavior  # noqa: TD002, TD003
         df = spark.createDataFrame(address, [])
         res = df.collect()
         assert res == [
@@ -172,7 +172,7 @@ class TestDataFrame:
         )
         df = spark.createDataFrame([], schema=schema)
         res = df.collect()
-        # TODO: assert that the types and column names are correct
+        # TODO: assert that the types and column names are correct  # noqa: TD002, TD003
         assert res == []
 
     def test_df_from_pandas(self, spark):

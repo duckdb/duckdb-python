@@ -40,7 +40,7 @@ from duckdb.typing import (
 class TestType:
     def test_sqltype(self):
         assert str(duckdb.sqltype("struct(a VARCHAR, b BIGINT)")) == "STRUCT(a VARCHAR, b BIGINT)"
-        # TODO: add tests with invalid type_str
+        # TODO: add tests with invalid type_str  # noqa: TD002, TD003
 
     def test_primitive_types(self):
         assert str(SQLNULL) == '"NULL"'
@@ -83,7 +83,7 @@ class TestType:
         type = duckdb.struct_type({"a": BIGINT, "b": BOOLEAN})
         assert str(type) == "STRUCT(a BIGINT, b BOOLEAN)"
 
-        # TODO: create an unnamed struct when fields are provided as a list
+        # TODO: create an unnamed struct when fields are provided as a list  # noqa: TD002, TD003
         type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == "STRUCT(v1 BIGINT, v2 BOOLEAN)"
 

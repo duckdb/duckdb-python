@@ -47,7 +47,7 @@ class TestSparkCatalog:
             Column(name="b", description=None, dataType="BOOLEAN", nullable=True, isPartition=False, isBucket=False),
         ]
 
-        # TODO: should this error instead?
+        # TODO: should this error instead?  # noqa: TD002, TD003
         non_existant_columns = spark.catalog.listColumns("none_existant")
         assert non_existant_columns == []
 

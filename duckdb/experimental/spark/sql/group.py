@@ -418,4 +418,4 @@ class GroupedData:
             rel = self._df.relation.select(*expressions, groups=group_by)
         return DataFrame(rel, self.session)
 
-    # TODO: add 'pivot'
+    # TODO: add 'pivot'  # noqa: TD002, TD003

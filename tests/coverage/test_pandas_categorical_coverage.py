@@ -68,7 +68,7 @@ def check_create_table(category, pandas):
     conn.execute("DROP TABLE t1")
 
 
-# TODO: extend tests with ArrowPandas
+# TODO: extend tests with ArrowPandas  # noqa: TD002, TD003
 class TestCategory:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint16(self, duckdb_cursor, pandas):

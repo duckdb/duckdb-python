@@ -8,7 +8,7 @@ from pytest import mark, raises
 import duckdb
 
 # We only run this test if this env var is set
-# TODO: we can add a custom command line argument to pytest to provide an extension directory
+# TODO: we can add a custom command line argument to pytest to provide an extension directory  # noqa: TD002, TD003
 # We can use that instead of checking this environment variable inside of conftest.py's 'require' method
 pytestmark = mark.skipif(
     not os.getenv("DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED", False),
