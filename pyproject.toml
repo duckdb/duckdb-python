@@ -274,7 +274,8 @@ build = [
     "setuptools_scm>=8.0",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
-    "ruff>=0.11.13",
+    "pre-commit",
+    "ruff>=0.13.0",
     {include-group = "stubdeps"},
     {include-group = "build"},
     {include-group = "test"},
