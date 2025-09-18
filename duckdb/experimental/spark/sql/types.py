@@ -9,6 +9,7 @@ import re
 import time
 from builtins import tuple
 from collections.abc import Iterator
+from types import MappingProxyType
 from typing import (
     Any,
     ClassVar,
@@ -17,7 +18,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    overload,
+    overload, Mapping,
 )
 
 import duckdb
@@ -512,14 +513,14 @@ class DayTimeIntervalType(AtomicType):
     MINUTE = 2
     SECOND = 3
 
-    _fields = {
+    _fields: Mapping[str, int] = MappingProxyType({
         DAY: "day",
         HOUR: "hour",
         MINUTE: "minute",
         SECOND: "second",
-    }
+    })
 
-    _inverted_fields = dict(zip(_fields.values(), _fields.keys()))
+    _inverted_fields: Mapping[int, str] = MappingProxyType(dict(zip(_fields.values(), _fields.keys())))
 
     def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("INTERVAL"))

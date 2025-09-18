@@ -135,7 +135,7 @@ class TestValue:
     def test_timestamp_sec_not_supported(self, value):
         con = duckdb.connect()
         with pytest.raises(
-            duckdb.NotImplementedException, match="Conversion from 'datetime' to type .* is not implemented yet"
+            duckdb.NotImplementedException, match=r"Conversion from 'datetime' to type .* is not implemented yet"
         ):
             con.execute("select $1", [value]).fetchall()
 

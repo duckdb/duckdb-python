@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 
@@ -384,7 +386,7 @@ class TestDuckDBConnection:
         assert con.sql("select 42").fetchall() == [(42,)]
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="Please provide either a str or a pathlib.Path, not <class 'int'>"
+            duckdb.InvalidInputException, match=re.escape("Please provide either a str or a pathlib.Path, not <class 'int'>")
         ):
             con = duckdb.connect(5)
 

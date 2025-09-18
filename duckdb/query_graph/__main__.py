@@ -228,7 +228,7 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:  
     all_phases = query_timings.get_phases()
     query_timings.add_node_timing(NodeTiming("TOTAL TIME", total_time))
     query_timings.add_node_timing(NodeTiming("Execution Time", execution_time))
-    all_phases = ["TOTAL TIME", "Execution Time"] + all_phases
+    all_phases = ["TOTAL TIME", "Execution Time", *all_phases]
     for phase in all_phases:
         summarized_phase = query_timings.get_summary_phase_timings(phase)
         summarized_phase.calculate_percentage(total_time)

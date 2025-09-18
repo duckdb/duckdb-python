@@ -39,7 +39,7 @@ class TestPandasArrow:
         pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
         con = duckdb.connect()
         with pytest.raises(
-            duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow.lib.Table"
+            duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow\.lib\.Table"
         ):
             res = con.sql("select * from pyarrow_df").fetchall()  # noqa: F841
 
@@ -66,7 +66,7 @@ class TestPandasArrow:
         assert isinstance(df.dtypes["python"], np.dtype("O").__class__)
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow.lib.Table"
+            duckdb.InvalidInputException, match="The dataframe could not be converted to a pyarrow\.lib\.Table"
         ):
             con.sql("select * from df").fetchall()
 

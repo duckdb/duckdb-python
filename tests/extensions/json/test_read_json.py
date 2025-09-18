@@ -38,7 +38,7 @@ class TestReadJSON:
 
     def test_read_json_format(self):
         # Wrong option
-        with pytest.raises(duckdb.BinderException, match="format must be one of .* not 'test'"):
+        with pytest.raises(duckdb.BinderException, match=r"format must be one of .* not 'test'"):
             rel = duckdb.read_json(TestFile("example.json"), format="test")
 
         rel = duckdb.read_json(TestFile("example.json"), format="unstructured")

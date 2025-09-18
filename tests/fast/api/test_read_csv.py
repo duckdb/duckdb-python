@@ -128,7 +128,7 @@ class TestReadCSV:
 
     def test_quote(self, duckdb_cursor):
         with pytest.raises(
-            duckdb.Error, match='The methods read_csv and read_csv_auto do not have the "quote" argument.'
+            duckdb.Error, match='The methods read_csv and read_csv_auto do not have the "quote" argument'
         ):
             duckdb_cursor.read_csv(TestFile("unquote_without_delimiter.csv"), quote="", header=False)
 
@@ -445,8 +445,6 @@ class TestReadCSV:
         assert CountedObject.instance_count == 0
 
     def test_read_csv_glob(self, tmp_path, create_temp_csv):
-        file1_path, file2_path = create_temp_csv
-
         # Use the temporary file paths to read CSV files
         con = duckdb.connect()
         rel = con.read_csv(f"{tmp_path}/file*.csv")  # noqa: F841

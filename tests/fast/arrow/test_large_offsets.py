@@ -16,7 +16,7 @@ class TestArrowLargeOffsets:
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Arrow Appender: The maximum combined list offset for regular list buffers is 2147483647 but "
-            "the offset of 2147481000 exceeds this.",
+            "the offset of 2147481000 exceeds this",
         ):
             duckdb_cursor.sql("SELECT col FROM tbl").fetch_arrow_table()
 
@@ -33,7 +33,7 @@ class TestArrowLargeOffsets:
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Arrow Appender: The maximum combined list offset for regular list buffers is 2147483647 but the "
-            "offset of 2147481000 exceeds this.",
+            "offset of 2147481000 exceeds this",
         ):
             duckdb_cursor.sql("select map(col, col) from tbl").fetch_arrow_table()
 

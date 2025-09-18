@@ -192,7 +192,6 @@ class TestFetchNested:
             ]
         }),
     ])
-    # fmt: on
     def test_struct_df(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 
@@ -301,7 +300,6 @@ class TestFetchNested:
             ]
         }, "Map keys can not be NULL"),
     ])
-    # fmt: on
     def test_map_df(self, duckdb_cursor, query, expected, expected_error):
         if not expected_error:
             compare_results(duckdb_cursor, query, expected)
@@ -449,6 +447,5 @@ class TestFetchNested:
             ]
         }),
     ])
-    # fmt: on
     def test_nested_mix(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)

@@ -326,13 +326,13 @@ class TestResolveObjectColumns:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_duplicate(self, pandas, duckdb_cursor):
         x = pandas.DataFrame([[{"key": ["a", "a", "b"], "value": [4, 0, 4]}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys must be unique."):
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys must be unique"):
             duckdb_cursor.sql("select * from x").show()
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_nullkey(self, pandas, duckdb_cursor):
         x = pandas.DataFrame([[{"key": [None, "a", "b"], "value": [4, 0, 4]}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
@@ -345,7 +345,7 @@ class TestResolveObjectColumns:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_nullkey(self, pandas, duckdb_cursor):
         x = pandas.DataFrame([[{"a": 4, None: 0, "c": 4}], [{"a": 4, None: 0, "d": 4}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
@@ -356,7 +356,7 @@ class TestResolveObjectColumns:
                 [{"key": None, None: 5}],
             ]
         )
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])

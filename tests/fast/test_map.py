@@ -78,7 +78,7 @@ class TestMap:
             print(testrel.map(evil3).df())
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="Expected the UDF to return an object of type 'pandas.DataFrame'"
+            duckdb.InvalidInputException, match="Expected the UDF to return an object of type 'pandas\.DataFrame'"
         ):
             print(testrel.map(evil4).df())
 
@@ -96,7 +96,7 @@ class TestMap:
         testrel.map(return_dataframe).df().equals(pandas.DataFrame({"A": [1]}))
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="UDF returned more than 2048 rows, which is not allowed."
+            duckdb.InvalidInputException, match="UDF returned more than 2048 rows, which is not allowed"
         ):
             testrel.map(return_big_dataframe).df()
 

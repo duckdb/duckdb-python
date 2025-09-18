@@ -129,7 +129,7 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_dirty(self):
         """Test bump_version with dirty working directory."""
-        with pytest.raises(ValueError, match="Dev distance is 0, cannot bump version."):
+        with pytest.raises(ValueError, match="Dev distance is 0, cannot bump version"):
             _bump_dev_version("1.2.3", 0)
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})

@@ -10,7 +10,7 @@ from spark_namespace.sql.types import Row
 
 
 class TestDataFrameSort:
-    data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
+    data = ((56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben"))
 
     def test_sort_ascending(self, spark):
         df = spark.createDataFrame(self.data, ["age", "name"])

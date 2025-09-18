@@ -485,7 +485,7 @@ class TestRelation:
                 assert len(res["a"]) == size
             assert np.all(res["a"] == np.arange(start, start + size))
 
-        with pytest.raises(duckdb.ConversionException, match="Conversion Error.*out of range.*"):
+        with pytest.raises(duckdb.ConversionException, match=r"Conversion Error.*out of range.*"):
             # invalid conversion of negative integer to UINTEGER
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 

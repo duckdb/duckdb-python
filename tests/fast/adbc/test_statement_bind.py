@@ -51,7 +51,7 @@ class TestADBCStatementBind:
             with pytest.raises(
                 adbc_driver_manager.NotSupportedError, match="Binding multiple rows at once is not supported yet"
             ):
-                res, number_of_rows = statement.execute_query()
+                statement.execute_query()
 
     def test_bind_single_row(self):
         expected_result = pa.array([8], type=pa.int64())
@@ -171,7 +171,7 @@ class TestADBCStatementBind:
                 adbc_driver_manager.ProgrammingError,
                 match="Input data has more column than prepared statement has parameters",
             ):
-                res, _ = statement.execute_query()
+                statement.execute_query()
 
     def test_not_enough_parameters(self):
         data = pa.record_batch(
@@ -197,4 +197,4 @@ class TestADBCStatementBind:
                 adbc_driver_manager.ProgrammingError,
                 match="Values were not provided for the following prepared statement parameters: 2",
             ):
-                res, _ = statement.execute_query()
+                statement.execute_query()
