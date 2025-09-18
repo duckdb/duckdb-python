@@ -18,3 +18,11 @@ repos:
     rev: v0.6.13
     hooks:
       - id: cmake-format
+
+  - repo: local
+    hooks:
+      - id: post-checkout-submodules
+        name: Update submodule post-checkout
+        entry: .githooks/post-checkout
+        language: script
+        stages: [ post-checkout ]
