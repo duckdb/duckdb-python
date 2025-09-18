@@ -348,10 +348,10 @@ class DecimalType(FractionalType):
         self.hasPrecisionInfo = True  # this is a public API
 
     def simpleString(self) -> str:  # noqa: D102
-        return "decimal(%d,%d)" % (self.precision, self.scale)
+        return "decimal({:d},{:d})".format(int(self.precision), int(self.scale))
 
     def __repr__(self) -> str:  # noqa: D105
-        return "DecimalType(%d,%d)" % (self.precision, self.scale)
+        return "DecimalType({:d},{:d})".format(int(self.precision), int(self.scale))
 
 
 class DoubleType(FractionalType, metaclass=DataTypeSingleton):
@@ -532,7 +532,7 @@ class DayTimeIntervalType(AtomicType):
 
         fields = DayTimeIntervalType._fields
         if startField not in fields.keys() or endField not in fields.keys():
-            raise RuntimeError("interval %s to %s is invalid" % (startField, endField))
+            raise RuntimeError("interval {} to {} is invalid".format(startField, endField))
         self.startField = cast("int", startField)
         self.endField = cast("int", endField)
 
@@ -541,14 +541,14 @@ class DayTimeIntervalType(AtomicType):
         start_field_name = fields[self.startField]
         end_field_name = fields[self.endField]
         if start_field_name == end_field_name:
-            return "interval %s" % start_field_name
+            return "interval {}".format(start_field_name)
         else:
-            return "interval %s to %s" % (start_field_name, end_field_name)
+            return "interval {} to {}".format(start_field_name, end_field_name)
 
     simpleString = _str_repr
 
     def __repr__(self) -> str:  # noqa: D105
-        return "%s(%d, %d)" % (type(self).__name__, self.startField, self.endField)
+        return "{}({:d}, {:d})".format(type(self).__name__, int(self.startField), int(self.endField))
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -582,7 +582,7 @@ class ArrayType(DataType):
 
     def __init__(self, elementType: DataType, containsNull: bool = True) -> None:  # noqa: D107
         super().__init__(duckdb.list_type(elementType.duckdb_type))
-        assert isinstance(elementType, DataType), "elementType %s should be an instance of %s" % (
+        assert isinstance(elementType, DataType), "elementType {} should be an instance of {}".format(
             elementType,
             DataType,
         )
@@ -590,10 +590,10 @@ class ArrayType(DataType):
         self.containsNull = containsNull
 
     def simpleString(self) -> str:  # noqa: D102
-        return "array<%s>" % self.elementType.simpleString()
+        return "array<{}>".format(self.elementType.simpleString())
 
     def __repr__(self) -> str:  # noqa: D105
-        return "ArrayType(%s, %s)" % (self.elementType, str(self.containsNull))
+        return "ArrayType({}, {})".format(self.elementType, str(self.containsNull))
 
     def needConversion(self) -> bool:  # noqa: D102
         return self.elementType.needConversion()
@@ -635,11 +635,11 @@ class MapType(DataType):
 
     def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True) -> None:  # noqa: D107
         super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
-        assert isinstance(keyType, DataType), "keyType %s should be an instance of %s" % (
+        assert isinstance(keyType, DataType), "keyType {} should be an instance of {}".format(
             keyType,
             DataType,
         )
-        assert isinstance(valueType, DataType), "valueType %s should be an instance of %s" % (
+        assert isinstance(valueType, DataType), "valueType {} should be an instance of {}".format(
             valueType,
             DataType,
         )
@@ -648,13 +648,13 @@ class MapType(DataType):
         self.valueContainsNull = valueContainsNull
 
     def simpleString(self) -> str:  # noqa: D102
-        return "map<%s,%s>" % (
+        return "map<{},{}>".format(
             self.keyType.simpleString(),
             self.valueType.simpleString(),
         )
 
     def __repr__(self) -> str:  # noqa: D105
-        return "MapType(%s, %s, %s)" % (
+        return "MapType({}, {}, {})".format(
             self.keyType,
             self.valueType,
             str(self.valueContainsNull),
@@ -704,21 +704,21 @@ class StructField(DataType):
         metadata: Optional[dict[str, Any]] = None,
     ) -> None:
         super().__init__(dataType.duckdb_type)
-        assert isinstance(dataType, DataType), "dataType %s should be an instance of %s" % (
+        assert isinstance(dataType, DataType), "dataType {} should be an instance of {}".format(
             dataType,
             DataType,
         )
-        assert isinstance(name, str), "field name %s should be a string" % (name)
+        assert isinstance(name, str), "field name {} should be a string".format(name)
         self.name = name
         self.dataType = dataType
         self.nullable = nullable
         self.metadata = metadata or {}
 
     def simpleString(self) -> str:  # noqa: D102
-        return "%s:%s" % (self.name, self.dataType.simpleString())
+        return "{}:{}".format(self.name, self.dataType.simpleString())
 
     def __repr__(self) -> str:  # noqa: D105
-        return "StructField('%s', %s, %s)" % (
+        return "StructField('{}', {}, {})".format(
             self.name,
             self.dataType,
             str(self.nullable),
@@ -886,10 +886,10 @@ class StructType(DataType):
             raise TypeError(msg)
 
     def simpleString(self) -> str:  # noqa: D102
-        return "struct<%s>" % (",".join(f.simpleString() for f in self))
+        return "struct<{}>".format(",".join(f.simpleString() for f in self))
 
     def __repr__(self) -> str:  # noqa: D105
-        return "StructType([%s])" % ", ".join(str(field) for field in self)
+        return "StructType([{}])".format(", ".join(str(field) for field in self))
 
     def __contains__(self, item: str) -> bool:  # noqa: D105
         return item in self.names
@@ -937,7 +937,7 @@ class StructType(DataType):
                     for n, f, c in zip(self.names, self.fields, self._needConversion)
                 )
             else:
-                raise ValueError("Unexpected tuple %r with StructType" % obj)
+                raise ValueError("Unexpected tuple {!r} with StructType".format(obj))
         else:
             if isinstance(obj, dict):
                 return tuple(obj.get(n) for n in self.names)
@@ -947,7 +947,7 @@ class StructType(DataType):
                 d = obj.__dict__
                 return tuple(d.get(n) for n in self.names)
             else:
-                raise ValueError("Unexpected tuple %r with StructType" % obj)
+                raise ValueError("Unexpected tuple {!r} with StructType".format(obj))
 
     def fromInternal(self, obj: tuple) -> "Row":  # noqa: D102
         if obj is None:
@@ -1206,7 +1206,7 @@ class Row(tuple):
         """Create new Row object."""
         if len(args) > len(self):
             raise ValueError(
-                "Can not create Row with fields %s, expected %d values but got %s" % (self, len(self), args)
+                "Can not create Row with fields {}, expected {:d} values but got {}".format(self, len(self), args)
             )
         return _create_row(self, args)
 
@@ -1254,6 +1254,6 @@ class Row(tuple):
     def __repr__(self) -> str:
         """Printable representation of Row used in Python REPL."""
         if hasattr(self, "__fields__"):
-            return "Row(%s)" % ", ".join("%s=%r" % (k, v) for k, v in zip(self.__fields__, tuple(self)))
+            return "Row({})".format(", ".join("{}={!r}".format(k, v) for k, v in zip(self.__fields__, tuple(self))))
         else:
-            return "<Row(%s)>" % ", ".join("%r" % field for field in self)
+            return "<Row({})>".format(", ".join("{!r}".format(field) for field in self))

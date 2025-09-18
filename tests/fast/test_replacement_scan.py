@@ -82,13 +82,13 @@ class TestReplacementScan:
     def test_csv_replacement(self):
         con = duckdb.connect()
         filename = str(Path(__file__).parent / "data" / "integers.csv")
-        res = con.execute("select count(*) from '%s'" % (filename))
+        res = con.execute("select count(*) from '{}'".format(filename))
         assert res.fetchone()[0] == 2
 
     def test_parquet_replacement(self):
         con = duckdb.connect()
         filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
-        res = con.execute("select count(*) from '%s'" % (filename))
+        res = con.execute("select count(*) from '{}'".format(filename))
         assert res.fetchone()[0] == 3
 
     @pytest.mark.parametrize("get_relation", [using_table, using_sql])
