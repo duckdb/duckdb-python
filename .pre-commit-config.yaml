@@ -13,3 +13,8 @@ repos:
     hooks:
       - id: clang-format
         files: \.(c|cpp|cc|h|hpp|cxx|hxx)$
+
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
