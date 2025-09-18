@@ -23,9 +23,14 @@ jobs:
     name: Make sure submodule is in a sane state
     uses: ./.github/workflows/submodule_sanity.yml
 
+  code_quality:
+    name: Code-quality checks
+    needs: submodule_sanity_guard
+    uses: ./.github/workflows/code_quality.yml
+
   packaging_test:
     name: Build a minimal set of packages and run all tests on them
-    needs: submodule_sanity_guard
+    needs: code_quality
     # Skip packaging tests for draft PRs
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     uses: ./.github/workflows/packaging.yml
@@ -36,7 +41,7 @@ jobs:
 
   coverage_test:
     name: Run coverage tests
-    needs: submodule_sanity_guard
+    needs: code_quality
     # Only run coverage test for draft PRs
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
     uses: ./.github/workflows/coverage.yml

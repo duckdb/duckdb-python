@@ -75,11 +75,6 @@ jobs:
           enable-cache: true
           cache-suffix: -${{ github.workflow }}
 
-      - name: Run linting and formatting checks
-        shell: bash
-        run: |
-          uvx pre-commit run --all-files
-
       - name: Run tests with coverage
         shell: bash
         run: |
