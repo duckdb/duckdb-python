@@ -100,9 +100,7 @@ class TestCategory:
         ]
 
     def test_category_string_uint8(self, duckdb_cursor):
-        category = []
-        for i in range(10):
-            category.append(str(i))
+        category = [str(i) for i in range(10)]
         check_create_table(category)
 
     def test_empty_categorical(self, duckdb_cursor):

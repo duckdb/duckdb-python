@@ -133,10 +133,7 @@ class ModuleFile:
         self.classes.reverse()
 
     def get_classes(self):
-        classes = []
-        for item in self.classes:
-            classes.append(item.to_string())
-        return "".join(classes)
+        return "".join(item.to_string() for item in self.classes)
 
     def to_string(self):
         string = f"""
@@ -233,10 +230,8 @@ import_cache_path.write_text(import_cache_file)
 
 
 def get_module_file_path_includes(files: list[ModuleFile]):
-    includes = []
-    for file in files:
-        includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}"')
-    return "\n".join(includes)
+    template = '#include "duckdb_python/import_cache/modules/{}'
+    return "\n".join(template.format(f.file_name) for f in files)
 
 
 module_includes = get_module_file_path_includes(files)

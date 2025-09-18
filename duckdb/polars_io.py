@@ -235,15 +235,12 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             results = relation_final.fetch_arrow_reader()
         else:
             results = relation_final.fetch_arrow_reader(batch_size)
-        while True:
-            try:
-                record_batch = results.read_next_batch()
-                if predicate is not None and duck_predicate is None:
-                    # We have a predicate, but did not manage to push it down, we fallback here
-                    yield pl.from_arrow(record_batch).filter(predicate)
-                else:
-                    yield pl.from_arrow(record_batch)
-            except StopIteration:
-                break
+
+        for record_batch in iter(results.read_next_batch, None):
+            if predicate is not None and duck_predicate is None:
+                # We have a predicate, but did not manage to push it down, we fallback here
+                yield pl.from_arrow(record_batch).filter(predicate)
+            else:
+                yield pl.from_arrow(record_batch)
 
     return register_io_source(source_generator, schema=schema)

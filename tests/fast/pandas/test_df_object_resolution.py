@@ -372,7 +372,7 @@ class TestResolveObjectColumns:
             "v4": ObjectPair({}, {"key1": 21}),
         }
 
-        for _, pair in pairs.items():
+        for pair in pairs.values():
             check_struct_upgrade("MAP(VARCHAR, INTEGER)[]", construct_list, pair, pandas, duckdb_cursor)
 
         for key, pair in pairs.items():

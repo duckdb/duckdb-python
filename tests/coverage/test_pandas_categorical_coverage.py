@@ -72,14 +72,10 @@ def check_create_table(category, pandas):
 class TestCategory:
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint16(self, duckdb_cursor, pandas):
-        category = []
-        for i in range(300):
-            category.append(str(i))
+        category = [str(i) for i in range(300)]
         check_create_table(category, pandas)
 
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint32(self, duckdb_cursor, pandas):
-        category = []
-        for i in range(70000):
-            category.append(str(i))
+        category = [str(i) for i in range(70000)]
         check_create_table(category, pandas)

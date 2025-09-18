@@ -8,7 +8,7 @@ import math
 import re
 import time
 from builtins import tuple
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from types import MappingProxyType
 from typing import (
     Any,
@@ -18,7 +18,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    overload, Mapping,
+    overload,
 )
 
 import duckdb

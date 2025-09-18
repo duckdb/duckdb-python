@@ -109,8 +109,7 @@ def generate():
     body = []
     for method in connection_methods:
         names = method["name"] if isinstance(method["name"], list) else [method["name"]]
-        for name in names:
-            body.append(create_definition(name, method))
+        body.extend(create_definition(name, method) for name in names)
 
     # ---- End of generation code ----
 

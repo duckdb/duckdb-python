@@ -87,12 +87,9 @@ class TestDuckDBConnection:
         con = duckdb.connect()
 
         def use_cursors() -> None:
-            cursors = []
-            for _ in range(10):
-                cursors.append(con.cursor())
+            cursors = [con.cursor() for _ in range(10)]
 
             for cursor in cursors:
-                print("closing cursor")
                 cursor.close()
 
         use_cursors()

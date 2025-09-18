@@ -78,7 +78,7 @@ class TestMap:
             print(testrel.map(evil3).df())
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="Expected the UDF to return an object of type 'pandas\.DataFrame'"
+            duckdb.InvalidInputException, match=r"Expected the UDF to return an object of type 'pandas\.DataFrame'"
         ):
             print(testrel.map(evil4).df())
 

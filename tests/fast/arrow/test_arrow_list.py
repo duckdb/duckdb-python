@@ -24,11 +24,7 @@ def create_and_register_comparison_result(column_list, duckdb_cursor):
     column_amount = len(column_list)
     assert column_amount
     row_amount = len(column_list[0][2])
-    inserted_values = []
-    for row in range(row_amount):
-        for col in range(column_amount):
-            inserted_values.append(column_list[col][2][row])
-    inserted_values = tuple(inserted_values)
+    inserted_values = tuple(column_list[col][2][row] for row in range(row_amount) for col in range(column_amount))
 
     column_format = ",".join(["?" for _ in range(column_amount)])
     row_format = ",".join([f"({column_format})" for _ in range(row_amount)])
