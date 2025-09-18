@@ -19,7 +19,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from enum import Enum
 from html.parser import HTMLParser
-from typing import Optional
+from typing import Optional, Union
 from urllib.parse import urlparse
 
 import pyotp
@@ -172,7 +172,7 @@ class CsrfParser(HTMLParser):
         self.csrf = None  # Result value from all forms on page
         self._in_form = False  # Currently parsing a form with an action we're interested in
 
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:  # noqa: D102
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Union[str, None]]]) -> None:  # noqa: D102
         if not self.csrf:
             if tag == "form":
                 attrs = dict(attrs)
