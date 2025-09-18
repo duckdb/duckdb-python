@@ -218,7 +218,7 @@ class TestArrowREE:
 
         # Verify that the array is run end encoded
         ar_type = arrow_tbl["ree"].type
-        assert pa.types.is_run_end_encoded(ar_type) == True
+        assert pa.types.is_run_end_encoded(ar_type)
 
         # Scan the arrow table, making projections that don't cover the entire table
         # This should be pushed down into arrow to only provide us with the necessary columns

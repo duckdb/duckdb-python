@@ -97,7 +97,7 @@ class TestDataFrameFilter:
         for item in res:
             assert item.state != "OH" and item.state != "NY"
 
-        df2 = df.filter(df.state.isin(li) == False)
+        df2 = df.filter(not df.state.isin(li))
         res2 = df2.collect()
         assert res2 == res
 

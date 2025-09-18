@@ -44,7 +44,7 @@ class TestDBConfig:
             con.execute("select * from df").fetchall()
         except Exception:
             query_failed = True
-        assert query_failed == True
+        assert query_failed
 
     def test_extension_setting(self):
         repository = os.environ.get("LOCAL_EXTENSION_REPO")
@@ -59,7 +59,7 @@ class TestDBConfig:
             duckdb.connect(":memory:", config={"thisoptionisprobablynotthere": "42"})
         except Exception:
             success = False
-        assert success == False
+        assert not success
 
     def test_incorrect_parameter(self, duckdb_cursor):
         success = True
@@ -67,7 +67,7 @@ class TestDBConfig:
             duckdb.connect(":memory:", config={"default_null_order": "42"})
         except Exception:
             success = False
-        assert success == False
+        assert not success
 
     def test_user_agent_default(self, duckdb_cursor):
         con_regular = duckdb.connect(":memory:")

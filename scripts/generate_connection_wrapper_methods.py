@@ -67,7 +67,7 @@ def is_py_args(method):
 
 
 def is_py_kwargs(method):
-    return "kwargs_as_dict" in method and method["kwargs_as_dict"] == True
+    return "kwargs_as_dict" in method and method["kwargs_as_dict"]
 
 
 def remove_section(content, start_marker, end_marker) -> tuple[list[str], list[str]]:

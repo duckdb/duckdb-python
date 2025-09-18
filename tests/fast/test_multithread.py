@@ -21,7 +21,7 @@ def connect_duck(duckdb_conn):
 
 
 def everything_succeeded(results: list[bool]):
-    return all(result == True for result in results)
+    return all(result for result in results)
 
 
 class DuckDBThreaded:
@@ -502,9 +502,9 @@ class TestDuckMultithread:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_cursor(self, duckdb_cursor, pandas):
         def only_some_succeed(results: list[bool]) -> bool:
-            if not any(result == True for result in results):
+            if not any(result for result in results):
                 return False
-            if all(result == True for result in results):
+            if all(result for result in results):
                 return False
             return True
 

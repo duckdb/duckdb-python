@@ -186,8 +186,8 @@ class TestType:
 
     def test_attribute_accessor(self):
         type = duckdb.row_type([BIGINT, duckdb.list_type(duckdb.map_type(BLOB, BIT))])
-        assert hasattr(type, "a") == False
-        assert hasattr(type, "v1") == True
+        assert not hasattr(type, "a")
+        assert hasattr(type, "v1")
 
         field_one = type["v1"]
         assert str(field_one) == "BIGINT"

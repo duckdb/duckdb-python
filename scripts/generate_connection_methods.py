@@ -14,7 +14,7 @@ END_MARKER = "} // END_OF_CONNECTION_METHODS"
 
 
 def is_py_kwargs(method):
-    return "kwargs_as_dict" in method and method["kwargs_as_dict"] == True
+    return "kwargs_as_dict" in method and method["kwargs_as_dict"]
 
 
 def is_py_args(method):

@@ -42,8 +42,8 @@ class TestCursorDescription:
         assert types[1] == STRING
         assert STRING == types[1]  # noqa: SIM300
         assert types[0] != STRING
-        assert (types[1] != STRING) == False
-        assert (STRING != types[1]) == False  # noqa: SIM300
+        assert not (types[1] != STRING)
+        assert not (STRING != types[1])  # noqa: SIM300
 
         assert types[1] in [STRING]
         assert types[1] in [STRING, NUMBER]

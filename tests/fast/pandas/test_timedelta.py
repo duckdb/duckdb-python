@@ -79,8 +79,8 @@ class TestTimedelta:
         equality = "select {value} = $1, {value}, $1"
         equality = equality.format(value=duck_interval)
         res, a, b = duckdb_cursor.execute(equality, [val]).fetchone()
-        if res != True:
+        if not res:
             # TODO: in some cases intervals that are identical don't compare equal.  # noqa: TD002, TD003
             assert a == b
         else:
-            assert res == True
+            assert res

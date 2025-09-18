@@ -511,10 +511,10 @@ class TestResolveObjectColumns:
         converted_col = duckdb_cursor.sql("select * from x").df()
         if pandas.backend == "numpy_nullable":
             float64 = np.dtype("float64")
-            assert isinstance(converted_col["0"].dtype, float64.__class__) == True
+            assert isinstance(converted_col["0"].dtype, float64.__class__)
         else:
             uint64 = np.dtype("uint64")
-            assert isinstance(converted_col["0"].dtype, uint64.__class__) == True
+            assert isinstance(converted_col["0"].dtype, uint64.__class__)
 
     @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_double_object_conversion(self, pandas, duckdb_cursor):
@@ -522,7 +522,7 @@ class TestResolveObjectColumns:
         x = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
         converted_col = duckdb_cursor.sql("select * from x").df()
         double_dtype = np.dtype("float64")
-        assert isinstance(converted_col["0"].dtype, double_dtype.__class__) == True
+        assert isinstance(converted_col["0"].dtype, double_dtype.__class__)
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.xfail(
@@ -569,7 +569,7 @@ class TestResolveObjectColumns:
         converted_col = duckdb_cursor.sql("select * from x").df()
         print(converted_col["0"])
         double_dtype = np.dtype("object")
-        assert isinstance(converted_col["0"].dtype, double_dtype.__class__) == True
+        assert isinstance(converted_col["0"].dtype, double_dtype.__class__)
 
     # Most of the time numpy.datetime64 is just a wrapper around a datetime.datetime object
     # But to support arbitrary precision, it can fall back to using an `int` internally

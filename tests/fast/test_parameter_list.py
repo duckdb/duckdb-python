@@ -28,7 +28,7 @@ class TestParameterList:
     def test_explicit_nan_param(self):
         con = duckdb.default_connection()
         res = con.execute("select isnan(cast(? as double))", (float("nan"),))
-        assert res.fetchone()[0] == True
+        assert res.fetchone()[0]
 
     def test_string_parameter(self, duckdb_cursor):
         conn = duckdb.connect()

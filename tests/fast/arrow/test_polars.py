@@ -273,7 +273,7 @@ class TestPolars:
 
         lazy_df = duck_tbl.pl(lazy=True)
         # == True
-        assert lazy_df.filter(pl.col("a") == True).select(pl.len()).collect().item() == 2
+        assert lazy_df.filter(pl.col("a")).select(pl.len()).collect().item() == 2
 
         # IS NULL
         assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
@@ -282,17 +282,17 @@ class TestPolars:
         assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
 
         # AND
-        assert lazy_df.filter((pl.col("a") == True) & (pl.col("b") == True)).select(pl.len()).collect().item() == 1
+        assert lazy_df.filter((pl.col("a")) & (pl.col("b"))).select(pl.len()).collect().item() == 1
 
         # OR
-        assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3
+        assert lazy_df.filter((pl.col("a")) | (pl.col("b"))).select(pl.len()).collect().item() == 3
 
         # Validate Filters
-        valid_filter(pl.col("a") == True)
+        valid_filter(pl.col("a"))
         valid_filter(pl.col("a").is_null())
         valid_filter(pl.col("a").is_not_null())
-        valid_filter((pl.col("a") == True) & (pl.col("b") == True))
-        valid_filter((pl.col("a") == True) | (pl.col("b") == True))
+        valid_filter((pl.col("a")) & (pl.col("b")))
+        valid_filter((pl.col("a")) | (pl.col("b")))
 
     def test_polars_lazy_pushdown_time(self, duckdb_cursor):
         duckdb_cursor.execute(
