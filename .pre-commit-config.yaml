@@ -7,3 +7,9 @@ repos:
       - id: ruff-check
       # Run the formatter.
       - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8    # pick the version of clang-format you want
+    hooks:
+      - id: clang-format
+        files: \.(c|cpp|cc|h|hpp|cxx|hxx)$
