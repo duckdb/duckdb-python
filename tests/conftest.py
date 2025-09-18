@@ -63,7 +63,7 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_listed)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def duckdb_empty_cursor(request):
     connection = duckdb.connect("")
     cursor = connection.cursor()
@@ -186,7 +186,7 @@ class ArrowPandas:
         return getattr(self.pandas, name)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def require():
     def _require(extension_name, db_name="") -> duckdb.DuckDBPyConnection | None:
         # Paths to search for extensions
@@ -225,7 +225,7 @@ def require():
 
 
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
-@pytest.fixture(scope="function")
+@pytest.fixture
 def spark():
     if not hasattr(spark, "session"):
         # Cache the import
@@ -236,14 +236,14 @@ def spark():
     return spark.session.builder.appName("pyspark").getOrCreate()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def duckdb_cursor():
     connection = duckdb.connect("")
     yield connection
     connection.close()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def integers(duckdb_cursor):
     cursor = duckdb_cursor
     cursor.execute("CREATE TABLE integers (i integer)")
@@ -267,7 +267,7 @@ def integers(duckdb_cursor):
     cursor.execute("drop table integers")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def timestamps(duckdb_cursor):
     cursor = duckdb_cursor
     cursor.execute("CREATE TABLE timestamps (t timestamp)")
@@ -276,7 +276,7 @@ def timestamps(duckdb_cursor):
     cursor.execute("drop table timestamps")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def duckdb_cursor_autocommit(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 
@@ -293,7 +293,7 @@ def duckdb_cursor_autocommit(request, tmp_path):
     return (cursor, connection, test_dbfarm)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def initialize_duckdb(request, tmp_path):
     test_dbfarm = tmp_path.resolve().as_posix()
 

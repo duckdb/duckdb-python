@@ -22,7 +22,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def filter_rel():
     con = duckdb.connect()
     rel = con.sql(
