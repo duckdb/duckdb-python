@@ -1,5 +1,8 @@
 import sys
 
+# we need typing.Union in our import cache
+from typing import Union  # noqa: F401
+
 import pytest
 
 
