@@ -208,8 +208,7 @@ def require():
         extension_paths_found = []
         for pattern in extension_search_patterns:
             extension_pattern_abs = Path(pattern).resolve()
-            print(f"Searching path: {extension_pattern_abs}")
-            for path in extension_pattern_abs.glob():
+            for path in extension_pattern_abs.glob("*"):
                 extension_paths_found.append(path)
 
         for path in extension_paths_found:
