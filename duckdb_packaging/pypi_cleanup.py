@@ -230,7 +230,8 @@ class PyPICleanup:
         elif self._mode == CleanMode.LIST_ONLY:
             logging.info("Running in DRY RUN mode, nothing will be deleted")
         else:
-            raise RuntimeError("Unexpected mode")
+            msg = "Unexpected mode"
+            raise RuntimeError(msg)
 
         logging.info(f"Max development releases to keep per unreleased version: {self._max_dev_releases}")
 

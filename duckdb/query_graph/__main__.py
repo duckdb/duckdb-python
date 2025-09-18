@@ -1,7 +1,6 @@
 import argparse  # noqa: D100
 import json
 import re
-import sys
 import webbrowser
 from functools import reduce
 from pathlib import Path
@@ -322,9 +321,6 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: 
 
 
 def main() -> None:  # noqa: D103
-    if sys.version_info[0] < 3:
-        print("Please use python3")
-        exit(1)
     parser = argparse.ArgumentParser(
         prog="Query Graph Generator",
         description="""Given a json profile output, generate a html file showing the query graph and

@@ -97,7 +97,7 @@ class DuckDBTypeTests(unittest.TestCase):
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        assert math.isnan(row[0]) == True
+        assert math.isnan(row[0])
 
     def test_CheckInf(self):
         val = decimal.Decimal("inf")

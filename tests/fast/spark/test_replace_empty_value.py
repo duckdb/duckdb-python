@@ -30,7 +30,10 @@ class TestReplaceEmpty:
 
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ["name", "state"]
-        key_f = lambda x: x.name or x.state
+
+        def key_f(x):
+            return x.name or x.state
+
         res = df2.sort("name", "state").collect()
         expected_res = [
             Row(name=None, state="CA"),
@@ -48,7 +51,9 @@ class TestReplaceEmpty:
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in replaceCols]).sort(col("state"))
         assert df2.columns == ["state"]
 
-        key_f = lambda x: x.state or ""
+        def key_f(x):
+            return x.state or ""
+
         res = df2.collect()
         assert sorted(res, key=key_f) == sorted(
             [

@@ -20,7 +20,7 @@ from collections.abc import Iterable, Sized
 from typing import Callable, TypeVar, Union
 
 from numpy import float32, float64, int32, int64, ndarray
-from typing_extensions import Literal, Protocol
+from typing_extensions import Literal, Protocol, Self
 
 F = TypeVar("F", bound=Callable)
 T_co = TypeVar("T_co", covariant=True)
@@ -31,7 +31,7 @@ NonUDFType = Literal[0]
 
 
 class SupportsIAdd(Protocol):
-    def __iadd__(self, other: "SupportsIAdd") -> "SupportsIAdd": ...
+    def __iadd__(self, other: "SupportsIAdd") -> Self: ...
 
 
 class SupportsOrdering(Protocol):

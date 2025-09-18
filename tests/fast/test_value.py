@@ -180,7 +180,8 @@ class TestValue:
         value = Value(test_value, target_type)
         con = duckdb.connect()
 
-        work = lambda: con.execute("select typeof(a) from (select $1) tbl(a)", [value]).fetchall()
+        def work():
+            return con.execute("select typeof(a) from (select $1) tbl(a)", [value]).fetchall()
 
         if expected_conversion_success:
             res = work()

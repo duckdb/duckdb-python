@@ -72,9 +72,10 @@ def expected_result(col1_null, col2_null, expected):
     return [(col1, col2)]
 
 
-null_test_parameters = lambda: pytest.mark.parametrize(
-    ("col1_null", "col2_null"), [(False, True), (True, False), (True, True), (False, False)]
-)
+def null_test_parameters():
+    return pytest.mark.parametrize(
+        ("col1_null", "col2_null"), [(False, True), (True, False), (True, True), (False, False)]
+    )
 
 
 class TestArrowOffsets:

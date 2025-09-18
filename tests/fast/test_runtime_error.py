@@ -3,8 +3,13 @@ from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
-closed = lambda: pytest.raises(duckdb.ConnectionException, match="Connection already closed")
-no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match="No open result set")
+
+def closed():
+    return pytest.raises(duckdb.ConnectionException, match="Connection already closed")
+
+
+def no_result_set():
+    return pytest.raises(duckdb.InvalidInputException, match="No open result set")
 
 
 class TestRuntimeError:

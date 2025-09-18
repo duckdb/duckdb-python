@@ -16,7 +16,6 @@ from duckdb import ColumnExpression, Expression, StarExpression
 
 from ..errors import PySparkIndexError, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
-from ._typing import ColumnOrName
 from .column import Column
 from .readwriter import DataFrameWriter
 from .type_utils import duckdb_to_spark_schema
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
 
+    from ._typing import ColumnOrName
     from .group import GroupedData
     from .session import SparkSession
 
@@ -896,7 +896,8 @@ class DataFrame:  # noqa: D101
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+            msg = f"'{self.__class__.__name__}' object has no attribute '{name}'"
+            raise AttributeError(msg)
         return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload

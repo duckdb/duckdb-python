@@ -31,8 +31,6 @@ See gh-7844 for a discussion of the reload problem that motivated this module.
 Note that this approach is taken after from NumPy.
 """
 
-from typing import Type
-
 __ALL__ = ["_NoValue"]
 
 
@@ -59,7 +57,7 @@ class _NoValueType:
     def __new__(cls) -> "_NoValueType":
         # ensure that only one instance exists
         if not cls.__instance:
-            cls.__instance = super(_NoValueType, cls).__new__(cls)
+            cls.__instance = super().__new__(cls)
         return cls.__instance
 
     # Make the _NoValue instance falsey
@@ -69,7 +67,7 @@ class _NoValueType:
     __bool__ = __nonzero__
 
     # needed for python 2 to preserve identity through a pickle
-    def __reduce__(self) -> tuple[Type, tuple]:
+    def __reduce__(self) -> tuple[type, tuple]:
         return (self.__class__, ())
 
     def __repr__(self) -> str:

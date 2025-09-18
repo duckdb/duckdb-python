@@ -48,7 +48,7 @@ class TestHTTPFS:
             if str(e).startswith("HTTP HEAD error") or str(e).startswith("Unable to connect"):
                 return
             else:
-                raise e
+                raise
 
         result_df = connection.fetchdf()
         exp_result = pandas.DataFrame(

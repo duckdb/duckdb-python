@@ -25,7 +25,7 @@ def intercept(monkeypatch: pytest.MonkeyPatch, obj: object, name: str) -> list[s
             return orig(*args, **kwargs)
         except Exception as e:
             error_occurred.append(e)
-            raise e
+            raise
 
     monkeypatch.setattr(obj, name, ceptor)
     return error_occurred

@@ -164,7 +164,7 @@ def construct_query(tuples) -> str:
 def construct_parameters(tuples, dbtype):
     parameters = []
     for row in tuples:
-        parameters.extend(list([duckdb.Value(x, dbtype) for x in row]))
+        parameters.extend([duckdb.Value(x, dbtype) for x in row])
     return parameters
 
 

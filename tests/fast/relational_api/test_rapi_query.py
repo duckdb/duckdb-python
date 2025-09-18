@@ -47,7 +47,7 @@ class TestRAPIQuery:
         # Querying a table relation
         rel = rel.query("x", "select * from x")
         result = rel.execute()
-        assert result.fetchall() == [tuple([x]) for x in input]
+        assert result.fetchall() == [(x,) for x in input]
 
     def test_query_table_basic(self, tbl_table):
         con = duckdb.default_connection()

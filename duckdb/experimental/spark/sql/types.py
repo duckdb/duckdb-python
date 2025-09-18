@@ -123,7 +123,7 @@ class DataTypeSingleton(type):
 
     def __call__(cls: type[T]) -> T:  # type: ignore[override]
         if cls not in cls._instances:  # type: ignore[attr-defined]
-            cls._instances[cls] = super(DataTypeSingleton, cls).__call__()  # type: ignore[misc, attr-defined]
+            cls._instances[cls] = super().__call__()  # type: ignore[misc, attr-defined]
         return cls._instances[cls]  # type: ignore[attr-defined]
 
 
@@ -535,7 +535,8 @@ class DayTimeIntervalType(AtomicType):
 
         fields = DayTimeIntervalType._fields
         if startField not in fields or endField not in fields:
-            raise RuntimeError(f"interval {startField} to {endField} is invalid")
+            msg = f"interval {startField} to {endField} is invalid"
+            raise RuntimeError(msg)
         self.startField = cast("int", startField)
         self.endField = cast("int", endField)
 
@@ -917,7 +918,8 @@ class StructType(DataType):
                     for n, f, c in zip(self.names, self.fields, self._needConversion)
                 )
             else:
-                raise ValueError(f"Unexpected tuple {obj!r} with StructType")
+                msg = f"Unexpected tuple {obj!r} with StructType"
+                raise ValueError(msg)
         else:
             if isinstance(obj, dict):
                 return tuple(obj.get(n) for n in self.names)
@@ -927,7 +929,8 @@ class StructType(DataType):
                 d = obj.__dict__
                 return tuple(d.get(n) for n in self.names)
             else:
-                raise ValueError(f"Unexpected tuple {obj!r} with StructType")
+                msg = f"Unexpected tuple {obj!r} with StructType"
+                raise ValueError(msg)
 
     def fromInternal(self, obj: tuple) -> "Row":  # noqa: D102
         if obj is None:
@@ -1177,23 +1180,24 @@ class Row(tuple):
         if hasattr(self, "__fields__"):
             return item in self.__fields__
         else:
-            return super(Row, self).__contains__(item)
+            return super().__contains__(item)
 
     # let object acts like class
     def __call__(self, *args: Any) -> "Row":  # noqa: ANN401
         """Create new Row object."""
         if len(args) > len(self):
-            raise ValueError(f"Can not create Row with fields {self}, expected {len(self):d} values but got {args}")
+            msg = f"Can not create Row with fields {self}, expected {len(self):d} values but got {args}"
+            raise ValueError(msg)
         return _create_row(self, args)
 
     def __getitem__(self, item: Any) -> Any:  # noqa: D105, ANN401
         if isinstance(item, (int, slice)):
-            return super(Row, self).__getitem__(item)
+            return super().__getitem__(item)
         try:
             # it will be slow when it has many fields,
             # but this will not be used in normal cases
             idx = self.__fields__.index(item)
-            return super(Row, self).__getitem__(idx)
+            return super().__getitem__(idx)
         except IndexError:
             raise KeyError(item)  # noqa: B904
         except ValueError:

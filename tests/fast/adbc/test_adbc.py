@@ -1,17 +1,10 @@
 import datetime
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 import duckdb
-
-if sys.version_info < (3, 9):
-    pytest.skip(
-        "Python Version must be higher or equal to 3.9 to run this test",
-        allow_module_level=True,
-    )
 
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")

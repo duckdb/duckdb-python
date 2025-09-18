@@ -1,5 +1,3 @@
-import sys
-
 import pytest
 from conftest import ArrowPandas, NumpyPandas
 
@@ -29,8 +27,6 @@ def assert_create_register(internal_data, expected_result, data_type, pandas):
 class TestCreateTableFromPandas:
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_integer_create_table(self, duckdb_cursor, pandas):
-        if sys.version_info.major < 3:
-            return
         # TODO: This should work with other data types e.g., int8...  # noqa: TD002, TD003
         data_types = ["Int8", "Int16", "Int32", "Int64"]
         internal_data = [1, 2, 3, 4]

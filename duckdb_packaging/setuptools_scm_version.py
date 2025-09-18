@@ -68,7 +68,8 @@ def _tag_to_version(tag: str) -> str:
 def _bump_dev_version(base_version: str, distance: int) -> str:
     """Bump the given version."""
     if distance == 0:
-        raise ValueError("Dev distance is 0, cannot bump version.")
+        msg = "Dev distance is 0, cannot bump version."
+        raise ValueError(msg)
     major, minor, patch, post, rc = parse_version(base_version)
 
     if post != 0:

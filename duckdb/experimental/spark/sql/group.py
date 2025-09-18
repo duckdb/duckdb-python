@@ -15,15 +15,18 @@
 # limitations under the License.
 #
 
-from typing import Callable, Union, overload
+from typing import TYPE_CHECKING, Callable, Union, overload
 
 from ..exception import ContributionsAcceptedError
-from ._typing import ColumnOrName
 from .column import Column
 from .dataframe import DataFrame
 from .functions import _to_column_expr
-from .session import SparkSession
 from .types import NumericType
+
+# Only import symbols needed for type checking if something is type checking
+if TYPE_CHECKING:
+    from ._typing import ColumnOrName
+    from .session import SparkSession
 
 __all__ = ["GroupedData", "Grouping"]
 

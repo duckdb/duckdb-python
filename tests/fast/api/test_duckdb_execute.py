@@ -68,8 +68,7 @@ class TestDuckDBExecute:
         to_insert = [[1], [2], [3]]
 
         def to_insert_from_generator(what):
-            for x in what:
-                yield x
+            yield from what
 
         gen = to_insert_from_generator(to_insert)
         duckdb_cursor.execute("CREATE TABLE unittest_generator (a INTEGER);")
