@@ -28,10 +28,10 @@ class TestPandasNaN:
         results = conn.execute("select * from testing_null_values").fetchall()
         assert results[0][0] == "val1"
         assert results[0][1] == 1.05
-        assert results[0][2] == None
-        assert results[0][3] == None
+        assert results[0][2] is None
+        assert results[0][3] is None
         assert results[1][0] == "val3"
-        assert results[1][1] == None
+        assert results[1][1] is None
         assert results[1][2] == "val3"
         assert results[1][3] == current_time
 

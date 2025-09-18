@@ -57,7 +57,7 @@ def generate_list(child_size) -> ListGenerationResult:
         if count >= child_size:
             break
         size = SIZE_MAP[i % len(SIZE_MAP)]
-        if size == None:
+        if size is None:
             mask.append(True)
             size = 0
         else:

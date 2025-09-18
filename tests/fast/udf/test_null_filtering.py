@@ -179,7 +179,7 @@ class TestUDFNullFiltering:
     )
     @pytest.mark.parametrize("udf_type", ["arrow", "native"])
     def test_null_filtering(self, duckdb_cursor, table_data: dict, test_type: Candidate, udf_type):
-        null_count = sum([1 for x in list(zip(*table_data.values())) if any(y == None for y in x)])
+        null_count = sum([1 for x in list(zip(*table_data.values())) if any(y is None for y in x)])
         row_count = len(table_data)
         table_data = {
             key: [None if not x else test_type.variant_one if x == "x" else test_type.variant_two for x in value]
@@ -209,7 +209,7 @@ class TestUDFNullFiltering:
         result = duckdb_cursor.sql(query).fetchall()
 
         expected_output = [
-            (t[0],) if not any(x == None for x in t) else (None,) for t in list(zip(*table_data.values()))
+            (t[0],) if not any(x is None for x in t) else (None,) for t in list(zip(*table_data.values()))
         ]
         assert result == expected_output
         assert len(result) == row_count

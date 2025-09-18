@@ -54,4 +54,4 @@ class TestProgressBarArrow:
         tbl = pyarrow.Table.from_arrays([data], ["a"])
         rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate("sum(a)")
-        assert result.execute().fetchone()[0] == None
+        assert result.execute().fetchone()[0] is None

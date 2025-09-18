@@ -259,34 +259,34 @@ class TestDuckDBConnection:
         assert duckdb.execute("select * from range(5)").fetchone() == (0,)
 
     def test_from_arrow(self):
-        assert duckdb.from_arrow != None
+        assert duckdb.from_arrow is not None
 
     def test_from_csv_auto(self):
-        assert duckdb.from_csv_auto != None
+        assert duckdb.from_csv_auto is not None
 
     def test_from_df(self):
-        assert duckdb.from_df != None
+        assert duckdb.from_df is not None
 
     def test_from_parquet(self):
-        assert duckdb.from_parquet != None
+        assert duckdb.from_parquet is not None
 
     def test_from_query(self):
-        assert duckdb.from_query != None
+        assert duckdb.from_query is not None
 
     def test_get_table_names(self):
-        assert duckdb.get_table_names != None
+        assert duckdb.get_table_names is not None
 
     def test_install_extension(self):
-        assert duckdb.install_extension != None
+        assert duckdb.install_extension is not None
 
     def test_load_extension(self):
-        assert duckdb.load_extension != None
+        assert duckdb.load_extension is not None
 
     def test_query(self):
         assert duckdb.query("select 3").fetchall() == [(3,)]
 
     def test_register(self):
-        assert duckdb.register != None
+        assert duckdb.register is not None
 
     def test_register_relation(self):
         con = duckdb.connect()
@@ -339,13 +339,13 @@ class TestDuckDBConnection:
         assert con.table("tbl").fetchall() == [(1,)]
 
     def test_table_function(self):
-        assert duckdb.table_function != None
+        assert duckdb.table_function is not None
 
     def test_unregister(self):
-        assert duckdb.unregister != None
+        assert duckdb.unregister is not None
 
     def test_values(self):
-        assert duckdb.values != None
+        assert duckdb.values is not None
 
     def test_view(self):
         duckdb.execute("create view vw as select range(5)")
@@ -353,10 +353,10 @@ class TestDuckDBConnection:
         duckdb.execute("drop view vw")
 
     def test_close(self):
-        assert duckdb.close != None
+        assert duckdb.close is not None
 
     def test_interrupt(self):
-        assert duckdb.interrupt != None
+        assert duckdb.interrupt is not None
 
     def test_wrap_shadowing(self):
         pd = NumpyPandas()

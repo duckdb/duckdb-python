@@ -146,7 +146,7 @@ class TestArrowIntegration:
         duckdb_cursor.from_arrow(arrow_tbl).create("intervalnulltbl")
         duckdb_tbl_arrow = duckdb_cursor.table("intervalnulltbl").fetch_arrow_table()["a"]
 
-        assert duckdb_tbl_arrow[0].value == None
+        assert duckdb_tbl_arrow[0].value is None
         assert duckdb_tbl_arrow[1].value == expected_value
 
     def test_nested_interval_roundtrip(self, duckdb_cursor):
@@ -164,10 +164,10 @@ class TestArrowIntegration:
         assert duckdb_tbl_arrow[1].value == second_value
         assert duckdb_tbl_arrow[2].value == first_value
         assert duckdb_tbl_arrow[3].value == second_value
-        assert duckdb_tbl_arrow[4].value == None
+        assert duckdb_tbl_arrow[4].value is None
         assert duckdb_tbl_arrow[5].value == second_value
         assert duckdb_tbl_arrow[6].value == first_value
-        assert duckdb_tbl_arrow[7].value == None
+        assert duckdb_tbl_arrow[7].value is None
 
         # List
         query = duckdb_cursor.sql(
@@ -176,7 +176,7 @@ class TestArrowIntegration:
         assert query[0][0].value == pa.MonthDayNano([3, 0, 0])
         assert query[0][1].value == pa.MonthDayNano([0, 5, 0])
         assert query[0][2].value == pa.MonthDayNano([0, 0, 10000000000])
-        assert query[0][3].value == None
+        assert query[0][3].value is None
 
         # Struct
         query = "SELECT a from (SELECT STRUCT_PACK(a := INTERVAL 1 MONTHS, b := INTERVAL 10 DAYS, c:= INTERVAL 20 SECONDS) as a) as t"  # noqa: E501

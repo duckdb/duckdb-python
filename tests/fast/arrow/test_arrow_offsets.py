@@ -602,7 +602,7 @@ class TestArrowOffsets:
             assert x.__class__ == dict
             assert x["a"] == i
         if col1_null:
-            assert res[-1] == None
+            assert res[-1] is None
         else:
             assert res[-1]["a"] == len(res) - 1
 
@@ -643,7 +643,7 @@ class TestArrowOffsets:
             assert res == [(None,)]
         else:
             if inner_null:
-                assert res[-1][-1][-1] == None
+                assert res[-1][-1][-1] is None
             else:
                 assert res[-1][-1][-1] == 131072
 
@@ -669,7 +669,7 @@ class TestArrowOffsets:
         """
         ).fetchone()
         if col1_null:
-            assert res[0] == None
+            assert res[0] is None
         else:
             assert res[0]["a"][-1] == "131072"
 

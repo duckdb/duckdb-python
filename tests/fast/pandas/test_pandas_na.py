@@ -10,9 +10,9 @@ import duckdb
 def assert_nullness(items, null_indices):
     for i in range(len(items)):
         if i in null_indices:
-            assert items[i] == None
+            assert items[i] is None
         else:
-            assert items[i] != None
+            assert items[i] is not None
 
 
 @pytest.mark.skipif(platform.system() == "Emscripten", reason="Pandas interaction is broken in Pyodide 3.11")
@@ -35,7 +35,7 @@ class TestPandasNA:
         df = pd.DataFrame(pd.Series([pd.NA]))
 
         res = duckdb_cursor.execute("select * from df").fetchall()
-        assert res[0][0] == None
+        assert res[0][0] is None
 
         # DataFrame containing multiple values, with a pd.NA mixed in
         null_index = 3

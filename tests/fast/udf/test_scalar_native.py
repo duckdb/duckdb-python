@@ -27,7 +27,7 @@ class TestNativeUDF:
 
     def test_basic_use(self):
         def plus_one(x):
-            if x == None or x > 50:
+            if x is None or x > 50:
                 return x
             return x + 1
 
@@ -128,7 +128,7 @@ class TestNativeUDF:
 
     def test_nulls(self):
         def five_if_null(x):
-            if x == None:
+            if x is None:
                 return 5
             return x
 
