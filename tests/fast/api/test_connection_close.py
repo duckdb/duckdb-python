@@ -31,7 +31,6 @@ class TestConnectionClose:
             # This exception does not get swallowed by DuckDBPyConnection's __exit__
             raise TypeError()
 
-
     def test_reopen_connection(self, duckdb_cursor):
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             db = tmp.name

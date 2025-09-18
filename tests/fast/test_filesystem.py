@@ -191,7 +191,9 @@ class TestPythonFilesystem:
 
         assert memory.open("/root/a=1/data_0.csv").read() == b"2\n"
 
-    def test_copy_partition_with_columns_written(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
+    def test_copy_partition_with_columns_written(
+        self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem
+    ):
         duckdb_cursor.register_filesystem(memory)
 
         duckdb_cursor.execute(
