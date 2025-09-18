@@ -244,7 +244,7 @@ def build_wheel(
 
     # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
     if duckdb_version is not None:
-        _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings, fail_if_exists=True)
+        _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings)
         _log(f"{_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE} set to {duckdb_version}")
     else:
         _log("No explicit DuckDB submodule version provided. Letting CMake figure it out.")
