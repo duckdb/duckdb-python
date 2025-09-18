@@ -19,6 +19,7 @@ _exported_symbols = ["__version__", "version"]
 
 _exported_symbols.extend(["typing", "functional"])
 
+
 class DBAPITypeObject:
     def __init__(self, types: list[typing.DuckDBPyType]) -> None:
         self.types = types
@@ -31,36 +32,41 @@ class DBAPITypeObject:
     def __repr__(self):
         return f"<DBAPITypeObject [{','.join(str(x) for x in self.types)}]>"
 
+
 # Define the standard DBAPI sentinels
-STRING   = DBAPITypeObject([typing.VARCHAR])
-NUMBER   = DBAPITypeObject([
-    typing.TINYINT,
-    typing.UTINYINT,
-    typing.SMALLINT,
-    typing.USMALLINT,
-    typing.INTEGER,
-    typing.UINTEGER,
-    typing.BIGINT,
-    typing.UBIGINT,
-    typing.HUGEINT,
-    typing.UHUGEINT,
-    typing.DuckDBPyType("BIGNUM"),
-    typing.DuckDBPyType("DECIMAL"),
-    typing.FLOAT,
-    typing.DOUBLE
-])
-DATETIME = DBAPITypeObject([
-    typing.DATE,
-    typing.TIME,
-    typing.TIME_TZ,
-    typing.TIMESTAMP,
-    typing.TIMESTAMP_TZ,
-    typing.TIMESTAMP_NS,
-    typing.TIMESTAMP_MS,
-    typing.TIMESTAMP_S
-])
-BINARY   = DBAPITypeObject([typing.BLOB])
-ROWID    = None
+STRING = DBAPITypeObject([typing.VARCHAR])
+NUMBER = DBAPITypeObject(
+    [
+        typing.TINYINT,
+        typing.UTINYINT,
+        typing.SMALLINT,
+        typing.USMALLINT,
+        typing.INTEGER,
+        typing.UINTEGER,
+        typing.BIGINT,
+        typing.UBIGINT,
+        typing.HUGEINT,
+        typing.UHUGEINT,
+        typing.DuckDBPyType("BIGNUM"),
+        typing.DuckDBPyType("DECIMAL"),
+        typing.FLOAT,
+        typing.DOUBLE,
+    ]
+)
+DATETIME = DBAPITypeObject(
+    [
+        typing.DATE,
+        typing.TIME,
+        typing.TIME_TZ,
+        typing.TIMESTAMP,
+        typing.TIMESTAMP_TZ,
+        typing.TIMESTAMP_NS,
+        typing.TIMESTAMP_MS,
+        typing.TIMESTAMP_S,
+    ]
+)
+BINARY = DBAPITypeObject([typing.BLOB])
+ROWID = None
 
 # Classes
 from _duckdb import (
