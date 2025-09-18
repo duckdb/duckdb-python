@@ -210,7 +210,7 @@ class DateTimeTests(unittest.TestCase):
         self.cur.execute("insert into test(ts) values (current_timestamp)")
         self.cur.execute("select ts from test")
         ts = self.cur.fetchone()[0]
-        assert type(ts) == datetime.datetime
+        assert type(ts) is datetime.datetime
         assert ts.year == now.year
 
     def test_CheckDateTimeSubSeconds(self):

@@ -31,9 +31,6 @@ class TestReplaceEmpty:
         df2 = df.select([when(col(c) == "", None).otherwise(col(c)).alias(c) for c in df.columns])
         assert df2.columns == ["name", "state"]
 
-        def key_f(x):
-            return x.name or x.state
-
         res = df2.sort("name", "state").collect()
         expected_res = [
             Row(name=None, state="CA"),

@@ -190,6 +190,7 @@ class CsrfParser(HTMLParser):
 
 
 class CleanMode(Enum):
+    """Supported clean-up modes."""
     LIST_ONLY = 1
     DELETE = 2
 
@@ -238,8 +239,8 @@ class PyPICleanup:
         try:
             with session_with_retries() as http_session:
                 return self._execute_cleanup(http_session)
-        except PyPICleanupError as e:
-            logging.exception(f"Cleanup failed: {e}")
+        except PyPICleanupError:
+            logging.exception("Cleanup failed")
             return 1
         except Exception as e:
             logging.error(f"Unexpected error: {e}", exc_info=True)
@@ -281,13 +282,14 @@ class PyPICleanup:
         try:
             req = http_session.get(f"{self._index_url}/pypi/{self._package}/json")
             req.raise_for_status()
-            data = req.json()
-            versions = {v for v, files in data["releases"].items() if len(files) > 0}
-            logging.debug(f"Found {len(versions)} releases with files")
-            return versions
         except RequestException as e:
             msg = f"Failed to fetch package information for '{self._package}': {e}"
             raise PyPICleanupError(msg) from e
+
+        data = req.json()
+        versions = {v for v, files in data["releases"].items() if len(files) > 0}
+        logging.debug(f"Found {len(versions)} releases with files")
+        return versions
 
     def _is_stable_release_version(self, version: str) -> bool:
         """Determine whether a version string denotes a stable release."""
@@ -488,9 +490,9 @@ class PyPICleanup:
             try:
                 self._delete_single_version(http_session, version)
                 logging.info(f"Successfully deleted {self._package} version {version}")
-            except Exception as e:
+            except Exception:
                 # Continue with other versions rather than failing completely
-                logging.exception(f"Failed to delete version {version}: {e}")
+                logging.exception(f"Failed to delete version {version}")
                 failed_deletions.append(version)
 
         if failed_deletions:
@@ -550,14 +552,14 @@ def main() -> int:
 
         return cleanup.run()
 
-    except ValidationError as e:
-        logging.exception(f"Configuration error: {e}")
+    except ValidationError:
+        logging.exception("Configuration error")
         return 2
     except KeyboardInterrupt:
         logging.info("Operation cancelled by user")
         return 130
-    except Exception as e:
-        logging.exception(f"Unexpected error: {e}", exc_info=args.verbose)
+    except Exception:
+        logging.exception("Unexpected error", exc_info=args.verbose)
         return 1
 
 

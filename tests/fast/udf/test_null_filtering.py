@@ -242,8 +242,8 @@ class TestUDFNullFiltering:
     )
     def test_nulls_from_default_null_handling_arrow(self, duckdb_cursor, table_data):
         def returns_null(x):
-            l = x.to_pylist()
-            return pa.array([None for _ in l], type=pa.int64())
+            lst = x.to_pylist()
+            return pa.array([None for _ in lst], type=pa.int64())
 
         df = pd.DataFrame({"a": table_data})  # noqa: F841
         duckdb_cursor.execute("create table tbl as select * from df")

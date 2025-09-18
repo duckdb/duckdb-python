@@ -2,6 +2,8 @@ import uuid  # noqa: D100
 from collections.abc import Iterable, Sized
 from typing import TYPE_CHECKING, Any, NoReturn, Optional, Union
 
+import duckdb
+
 if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
@@ -31,7 +33,7 @@ from .udf import UDFRegistration
 
 # data is a List of rows
 # every value in each row needs to be turned into a Value
-def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list["duckdb.Value"]:
+def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list[duckdb.Value]:
     from duckdb import Value
 
     new_data = []

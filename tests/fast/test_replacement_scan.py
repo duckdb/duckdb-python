@@ -168,21 +168,21 @@ class TestReplacementScan:
         assert pyrel2.fetchall() == [(42,), (84,)]
 
         pyrel3 = con.query("select i + 100 from pyrel2")
-        assert type(pyrel3) == duckdb.DuckDBPyRelation
+        assert type(pyrel3) is duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(142,), (184,)]
 
     def test_replacement_scan_not_found(self):
         con = duckdb.connect()
         con.execute("set python_scan_all_frames=true")
         with pytest.raises(duckdb.CatalogException, match="Table with name non_existant does not exist"):
-            res = con.sql("select * from non_existant").fetchall()
+            con.sql("select * from non_existant").fetchall()
 
     def test_replacement_scan_alias(self):
         con = duckdb.connect()
         pyrel1 = con.query("from (values (1, 2)) t(i, j)")
         pyrel2 = con.query("from (values (1, 10)) t(i, k)")
         pyrel3 = con.query("from pyrel1 join pyrel2 using(i)")
-        assert type(pyrel3) == duckdb.DuckDBPyRelation
+        assert type(pyrel3) is duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(1, 2, 10)]
 
     def test_replacement_scan_pandas_alias(self):
@@ -200,8 +200,8 @@ class TestReplacementScan:
         duckdb_cursor.execute("drop table df")
         df = pd.DataFrame({"b": [1, 2, 3]})
         res = rel.fetchall()
-        # TODO: this should error instead, the 'df' table we relied on has been removed and replaced with a  # noqa: TD002, TD003
-        #  replacement scan
+        # TODO: this should error instead, the 'df' table we relied on has been removed  # noqa: TD002, TD003
+        #  and replaced with a replacement scan
         assert res == [(1,), (2,), (3,)]
 
     def test_replacement_scan_caching(self, duckdb_cursor):
@@ -351,7 +351,8 @@ class TestReplacementScan:
 
         create_view_in_func(duckdb_cursor)
 
-        # TODO: this should be fixed in the future, likely by unifying the behavior of .sql and .execute  # noqa: TD002, TD003
+        # TODO: this should be fixed in the future, likely by unifying the behavior of  # noqa: TD002, TD003
+        #  .sql and .execute
         with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
             rel = duckdb_cursor.sql("select * from v1")
 

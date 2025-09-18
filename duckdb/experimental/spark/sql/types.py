@@ -1018,7 +1018,7 @@ class UserDefinedType(DataType):
         return "udt"
 
     def __eq__(self, other: object) -> bool:
-        return type(self) == type(other)
+        return type(self) is type(other)
 
 
 _atomic_types: list[type[DataType]] = [

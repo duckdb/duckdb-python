@@ -92,7 +92,7 @@ class TestArrowStringView:
         )
 
     # Test Mix of Inlined and Not-Inlined Strings with Null
-    def test_not_inlined_string_view(self):
+    def test_not_inlined_string_view_2(self):
         RoundTripStringView(
             "SELECT '8bytestr'||(i*10^i)::varchar str FROM range(5) tbl(i) UNION SELECT NULL order by str",
             pa.array(

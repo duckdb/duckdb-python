@@ -596,7 +596,7 @@ class TestArrowOffsets:
         ).fetchall()
         res = res[0][0]
         for i, x in enumerate(res[:-1]):
-            assert x.__class__ == dict
+            assert x.__class__ is dict
             assert x["a"] == i
         if col1_null:
             assert res[-1] is None

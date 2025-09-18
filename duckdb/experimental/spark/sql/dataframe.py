@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from .group import GroupedData
     from .session import SparkSession
 
-from .functions import _to_column_expr, col, lit
+from duckdb.experimental.spark.sql import functions as spark_sql_functions
 
 
 class DataFrame:  # noqa: D101
@@ -438,7 +438,7 @@ class DataFrame:  # noqa: D101
         for c in cols:
             _c = c
             if isinstance(c, str):
-                _c = col(c)
+                _c = spark_sql_functions.col(c)
             elif isinstance(c, int) and not isinstance(c, bool):
                 # ordinal is 1-based
                 if c > 0:
@@ -466,7 +466,7 @@ class DataFrame:  # noqa: D101
                 message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
             )
 
-        columns = [_to_column_expr(c) for c in columns]
+        columns = [spark_sql_functions._to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
 
@@ -678,7 +678,7 @@ class DataFrame:  # noqa: D101
         if on is not None and not all(isinstance(x, str) for x in on):
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
-            on = [_to_column_expr(x) for x in on]
+            on = [spark_sql_functions._to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
             assert isinstance(on[0], Expression), "on should be Column or list of Column"
@@ -882,7 +882,7 @@ class DataFrame:  # noqa: D101
         elif isinstance(item, (list, tuple)):
             return self.select(*item)
         elif isinstance(item, int):
-            return col(self._schema[item].name)
+            return spark_sql_functions.col(self._schema[item].name)
         else:
             msg = f"Unexpected item type: {type(item)}"
             raise TypeError(msg)
@@ -904,7 +904,7 @@ class DataFrame:  # noqa: D101
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData": ...
 
     @overload
-    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData": ...
+    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData": ...  # noqa: PYI063
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
         """Groups the :class:`DataFrame` using the specified columns,
@@ -1094,7 +1094,7 @@ class DataFrame:  # noqa: D101
                 if col in other.relation.columns:
                     cols.append(col)
                 else:
-                    cols.append(lit(None))
+                    cols.append(spark_sql_functions.lit(None))
             other = other.select(*cols)
         else:
             other = other.select(*self.relation.columns)

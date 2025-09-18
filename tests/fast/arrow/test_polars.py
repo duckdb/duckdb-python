@@ -93,10 +93,10 @@ class TestPolars:
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
-        duckdb_cursor.read_json(string).pl()
-        assert duckdb_cursor.execute("FROM res").fetchall() == [([{"content": {"ManagedSystem": {"test": None}}}],)]
+        with pytest.raises(pl.exceptions.PanicException, match=r"Arrow datatype Extension\(.*\) not supported"):
+            duckdb_cursor.read_json(string).pl()
 
-    def test_polars_from_json_error(self, duckdb_cursor):
+    def test_polars_from_json_error_2(self, duckdb_cursor):
         conn = duckdb.connect()
         my_table = conn.query("select 'x' my_str").pl()  # noqa: F841
         my_res = duckdb.query("select my_str from my_table where my_str != 'y'")

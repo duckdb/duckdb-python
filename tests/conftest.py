@@ -69,7 +69,7 @@ def duckdb_empty_cursor(request):
     return cursor
 
 
-def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):
+def getTimeSeriesData(nper=None, freq: "Frequency" = "B"):  # noqa: F821
     import string
     from datetime import datetime
 

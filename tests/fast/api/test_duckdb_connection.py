@@ -122,8 +122,8 @@ class TestDuckDBConnection:
 
     def test_executemany(self):
         # executemany does not keep an open result set
-        # TODO: shouldn't we also have a version that executes a query multiple times with different parameters,  # noqa: TD002, TD003
-        #  returning all of the results?
+        # TODO: shouldn't we also have a version that executes a query multiple times with  # noqa: TD002, TD003
+        #   different parameters, returning all of the results?
         duckdb.execute("create table tbl (i integer, j varchar)")
         duckdb.executemany("insert into tbl VALUES (?, ?)", [(5, "test"), (2, "duck"), (42, "quack")])
         res = duckdb.table("tbl").fetchall()

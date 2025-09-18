@@ -85,10 +85,10 @@ class NodeTiming:  # noqa: D101
     def calculate_percentage(self, total_time: float) -> None:  # noqa: D102
         self.percentage = self.time / total_time
 
-    def combine_timing(l: "NodeTiming", r: "NodeTiming") -> "NodeTiming":  # noqa: D102
+    def combine_timing(self, r: "NodeTiming") -> "NodeTiming":  # noqa: D102
         # TODO: can only add timings for same-phase nodes  # noqa: TD002, TD003
-        total_time = l.time + r.time
-        return NodeTiming(l.phase, total_time)
+        total_time = self.time + r.time
+        return NodeTiming(self.phase, total_time)
 
 
 class AllTimings:  # noqa: D101
@@ -257,7 +257,7 @@ def generate_tree_html(graph_json: object) -> str:  # noqa: D103
 def generate_ipython(json_input: str) -> str:  # noqa: D103
     from IPython.core.display import HTML
 
-    html_output = generate_html(json_input, False)
+    html_output = generate_html(json_input, False)  # noqa: F821
 
     return HTML(
         ('\n	${CSS}\n	${LIBRARIES}\n	<div class="chart" id="query-profile"></div>\n	${CHART_SCRIPT}\n	')

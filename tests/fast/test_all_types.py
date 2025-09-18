@@ -27,9 +27,9 @@ def replace_with_ndarray(obj):
 
 # we need to write our own equality function that considers nan==nan for testing purposes
 def recursive_equality(o1, o2):
-    if type(o1) != type(o2):
+    if type(o1) is not type(o2):
         return False
-    if type(o1) == float and math.isnan(o1) and math.isnan(o2):
+    if type(o1) is not float and math.isnan(o1) and math.isnan(o2):
         return True
     if o1 is np.ma.masked and o2 is np.ma.masked:
         return True

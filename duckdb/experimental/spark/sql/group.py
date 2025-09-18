@@ -317,7 +317,7 @@ class GroupedData:
     def agg(self, *exprs: Column) -> DataFrame: ...
 
     @overload
-    def agg(self, __exprs: dict[str, str]) -> DataFrame: ...
+    def agg(self, __exprs: dict[str, str]) -> DataFrame: ...  # noqa: PYI063
 
     def agg(self, *exprs: Union[Column, dict[str, str]]) -> DataFrame:
         """Compute aggregates and returns the result as a :class:`DataFrame`.

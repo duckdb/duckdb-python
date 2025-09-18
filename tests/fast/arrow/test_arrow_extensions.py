@@ -125,8 +125,8 @@ class TestCanonicalExtensionTypes:
                 return b""
 
             @classmethod
-            def __arrow_ext_deserialize__(cls, storage_type, serialized) -> "UuidTypeWrong":
-                return UuidTypeWrong()
+            def __arrow_ext_deserialize__(cls, storage_type, serialized) -> object:
+                return None
 
         storage_array = pa.array(["pedro"], pa.binary(5))
         my_type = MyType()

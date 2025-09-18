@@ -220,57 +220,6 @@ def slice(x: "ColumnOrName", start: Union["ColumnOrName", int], length: Union["C
     return _invoke_function("list_slice", _to_column_expr(x), start, end)
 
 
-def asc(col: "ColumnOrName") -> Column:
-    """Returns a sort expression based on the ascending order of the given column name.
-
-    .. versionadded:: 1.3.0
-
-    .. versionchanged:: 3.4.0
-        Supports Spark Connect.
-
-    Parameters
-    ----------
-    col : :class:`~pyspark.sql.Column` or str
-        target column to sort by in the ascending order.
-
-    Returns:
-    -------
-    :class:`~pyspark.sql.Column`
-        the column specifying the order.
-
-    Examples:
-    --------
-    Sort by the column 'id' in the descending order.
-
-    >>> df = spark.range(5)
-    >>> df = df.sort(desc("id"))
-    >>> df.show()
-    +---+
-    | id|
-    +---+
-    |  4|
-    |  3|
-    |  2|
-    |  1|
-    |  0|
-    +---+
-
-    Sort by the column 'id' in the ascending order.
-
-    >>> df.orderBy(asc("id")).show()
-    +---+
-    | id|
-    +---+
-    |  0|
-    |  1|
-    |  2|
-    |  3|
-    |  4|
-    +---+
-    """
-    return Column(_to_column_expr(col)).asc()
-
-
 def asc_nulls_first(col: "ColumnOrName") -> Column:
     """Returns a sort expression based on the ascending order of the given
     column name, and null values return before non-null values.
@@ -339,42 +288,6 @@ def asc_nulls_last(col: "ColumnOrName") -> Column:
 
     """  # noqa: D205
     return asc(col).nulls_last()
-
-
-def desc(col: "ColumnOrName") -> Column:
-    """Returns a sort expression based on the descending order of the given column name.
-
-    .. versionadded:: 1.3.0
-
-    .. versionchanged:: 3.4.0
-        Supports Spark Connect.
-
-    Parameters
-    ----------
-    col : :class:`~pyspark.sql.Column` or str
-        target column to sort by in the descending order.
-
-    Returns:
-    -------
-    :class:`~pyspark.sql.Column`
-        the column specifying the order.
-
-    Examples:
-    --------
-    Sort by the column 'id' in the descending order.
-
-    >>> spark.range(5).orderBy(desc("id")).show()
-    +---+
-    | id|
-    +---+
-    |  4|
-    |  3|
-    |  2|
-    |  1|
-    |  0|
-    +---+
-    """
-    return Column(_to_column_expr(col)).desc()
 
 
 def desc_nulls_first(col: "ColumnOrName") -> Column:
@@ -4873,9 +4786,10 @@ def octet_length(col: "ColumnOrName") -> Column:
 
 
 def hex(col: "ColumnOrName") -> Column:
-    """Computes hex value of the given column, which could be :class:`~pyspark.sql.types.StringType`,
-    :class:`~pyspark.sql.types.BinaryType`, :class:`~pyspark.sql.types.IntegerType` or
-    :class:`~pyspark.sql.types.LongType`.
+    """Computes hex value of the given column.
+
+    The column can be :class:`~pyspark.sql.types.StringType`, :class:`~pyspark.sql.types.BinaryType`,
+    :class:`~pyspark.sql.types.IntegerType` or :class:`~pyspark.sql.types.LongType`.
 
     .. versionadded:: 1.5.0
 
@@ -4901,8 +4815,10 @@ def hex(col: "ColumnOrName") -> Column:
 
 
 def unhex(col: "ColumnOrName") -> Column:
-    """Inverse of hex. Interprets each pair of characters as a hexadecimal number and converts to the byte
-    representation of number. column and returns it as a binary column.
+    """Inverse of hex.
+
+    Interprets each pair of characters as a hexadecimal number and converts to the byte representation of number column
+    and returns it as a binary column.
 
     .. versionadded:: 1.5.0
 

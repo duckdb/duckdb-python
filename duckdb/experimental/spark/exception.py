@@ -1,3 +1,4 @@
+# ruff: noqa: D100
 from typing import Optional
 
 

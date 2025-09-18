@@ -14,8 +14,8 @@ class TestSparkColumn:
     def test_struct_column(self, spark):
         df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)])
 
-        # TODO: column names should be set explicitly using the Row, rather than letting duckdb assign defaults  # noqa: TD002, TD003
-        #  (col0, col1, etc..)
+        # TODO: column names should be set explicitly using the Row, rather than letting duckdb  # noqa: TD002, TD003
+        #   assign defaults(col0, col1, etc..)
         if USE_ACTUAL_SPARK:
             df = df.withColumn("struct", struct(df.a, df.b))
         else:

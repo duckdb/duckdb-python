@@ -21,7 +21,7 @@ from spark_namespace.sql.types import (
 
 
 def assert_column_objects_equal(col1: Column, col2: Column):
-    assert type(col1) == type(col2)
+    assert type(col1) is type(col2)
     if not USE_ACTUAL_SPARK:
         assert col1.expr == col2.expr
 

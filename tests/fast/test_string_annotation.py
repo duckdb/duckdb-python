@@ -41,7 +41,7 @@ class TestStringAnnotation:
 
         func = make_annotated_function(input)
         sig = signature(func)
-        assert sig.return_annotation.__class__ == str
+        assert sig.return_annotation.__class__ is str
 
         duckdb_cursor.create_function("foo", func)
         rel = duckdb_cursor.sql("select foo()")

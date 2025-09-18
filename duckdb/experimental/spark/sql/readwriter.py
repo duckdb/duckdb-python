@@ -100,7 +100,7 @@ class DataFrameReader:  # noqa: D101
         from duckdb.experimental.spark.sql.dataframe import DataFrame
 
         if not isinstance(path, str):
-            raise ImportError
+            raise TypeError
         if options:
             raise ContributionsAcceptedError
 
