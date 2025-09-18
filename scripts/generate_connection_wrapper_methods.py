@@ -5,7 +5,7 @@ from pathlib import Path
 # Requires `python3 -m pip install cxxheaderparser pcpp`
 from get_cpp_methods import ConnectionMethod, ReturnType, get_methods
 
-os.chdir(os.path.dirname(__file__))
+os.chdir(Path(__file__).parent)
 
 JSON_PATH = "connection_methods.json"
 DUCKDB_PYTHON_SOURCE = Path("..") / "src" / "duckdb_py" / "duckdb_python.cpp"

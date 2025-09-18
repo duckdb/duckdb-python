@@ -1,8 +1,8 @@
-import os
+from pathlib import Path
 
 from mypy import stubtest
 
-MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), "mypy.ini")  # noqa: PTH118
+MYPY_INI_PATH = Path(__file__).parent / "mypy.ini"
 
 
 def test_generated_stubs():

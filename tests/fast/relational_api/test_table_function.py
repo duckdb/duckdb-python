@@ -1,15 +1,15 @@
-import os
+from pathlib import Path
 
 import pytest
 
 import duckdb
 
-script_path = os.path.dirname(__file__)
+script_path = Path(__file__).parent
 
 
 class TestTableFunction:
     def test_table_function(self, duckdb_cursor):
-        path = os.path.join(script_path, "..", "data/integers.csv")  # noqa: PTH118
+        path = str(script_path / ".." / "data/integers.csv")
         rel = duckdb_cursor.table_function("read_csv", [path])
         res = rel.fetchall()
         assert res == [(1, 10, 0), (2, 50, 30)]

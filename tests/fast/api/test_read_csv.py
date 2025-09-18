@@ -2,6 +2,7 @@ import datetime
 import platform
 import sys
 from io import BytesIO, StringIO
+from pathlib import Path
 from typing import NoReturn
 
 import pytest
@@ -11,10 +12,8 @@ from duckdb import CSVLineTerminator
 
 
 def TestFile(name):
-    import os
-
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", name)  # noqa: PTH118
-    return filename
+    filename = Path(__file__).parent / ".." / "data" / name
+    return str(filename)
 
 
 @pytest.fixture

@@ -1,5 +1,5 @@
 import datetime
-import os
+from pathlib import Path
 
 import pytest
 
@@ -12,7 +12,7 @@ np = pytest.importorskip("numpy")
 
 class TestArrowIntegration:
     def test_parquet_roundtrip(self, duckdb_cursor):
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
         cols = "id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments"
 
         # TODO timestamp
@@ -37,7 +37,7 @@ class TestArrowIntegration:
             assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
     def test_unsigned_roundtrip(self, duckdb_cursor):
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "unsigned.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "unsigned.parquet")
         cols = "a, b, c, d"
 
         unsigned_parquet_table = pq.read_table(parquet_filename)

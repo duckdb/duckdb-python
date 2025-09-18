@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import pytest
 
@@ -7,7 +7,7 @@ import duckdb
 VARCHAR = duckdb.typing.VARCHAR
 BIGINT = duckdb.typing.BIGINT
 
-filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")  # noqa: PTH118
+filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
 
 
 @pytest.fixture(scope="session")

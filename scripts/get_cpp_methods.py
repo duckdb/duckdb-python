@@ -1,5 +1,4 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
-import os
 from enum import Enum
 from pathlib import Path
 from typing import Callable
@@ -8,7 +7,7 @@ import cxxheaderparser.parser
 import cxxheaderparser.preprocessor
 import cxxheaderparser.visitor
 
-scripts_folder = os.path.dirname(os.path.abspath(__file__))
+scripts_folder = Path(__file__).parent
 
 
 class FunctionParam:

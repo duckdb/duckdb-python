@@ -1,5 +1,5 @@
 # ruff: noqa: F841
-import os
+from pathlib import Path
 
 import pytest
 
@@ -81,13 +81,13 @@ def create_relation(conn, query: str) -> duckdb.DuckDBPyRelation:
 class TestReplacementScan:
     def test_csv_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")  # noqa: PTH118
+        filename = str(Path(__file__).parent / "data" / "integers.csv")
         res = con.execute("select count(*) from '%s'" % (filename))
         assert res.fetchone()[0] == 2
 
     def test_parquet_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")  # noqa: PTH118
+        filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
         res = con.execute("select count(*) from '%s'" % (filename))
         assert res.fetchone()[0] == 3
 

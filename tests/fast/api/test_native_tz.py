@@ -1,5 +1,5 @@
 import datetime
-import os
+from pathlib import Path
 
 import pytest
 from packaging.version import Version
@@ -9,7 +9,7 @@ import duckdb
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
 
-filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "tz.parquet")  # noqa: PTH118
+filename = str(Path(__file__).parent / ".." / "data" / "tz.parquet")
 
 
 class TestNativeTimeZone:

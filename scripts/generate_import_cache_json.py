@@ -1,9 +1,8 @@
 import json
-import os
 from pathlib import Path
 from typing import Union
 
-script_dir = os.path.dirname(__file__)
+script_dir = Path(__file__).parent
 
 lines: list[str] = [file for file in open(f"{script_dir}/imports.py").read().split("\n") if file != ""]
 

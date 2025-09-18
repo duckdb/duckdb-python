@@ -2,7 +2,7 @@ import json
 import os
 from pathlib import Path
 
-os.chdir(os.path.dirname(__file__))
+os.chdir(Path(__file__).parent)
 
 JSON_PATH = "connection_methods.json"
 WRAPPER_JSON_PATH = "connection_wrapper_methods.json"

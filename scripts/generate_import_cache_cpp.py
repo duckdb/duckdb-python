@@ -1,8 +1,7 @@
 import json
-import os
 from pathlib import Path
 
-script_dir = os.path.dirname(__file__)
+script_dir = Path(__file__).parent
 
 # Load existing JSON data from a file if it exists
 json_data = {}

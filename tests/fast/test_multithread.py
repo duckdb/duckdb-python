@@ -1,7 +1,7 @@
-import os
 import platform
 import queue as Queue
 import threading
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -331,7 +331,7 @@ def from_arrow(duckdb_conn, queue, pandas):
 def from_csv_auto(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "integers.csv")  # noqa: PTH118
+    filename = str(Path(__file__).parent / "data" / "integers.csv")
     try:
         duckdb_conn.from_csv_auto(filename)
         queue.put(True)
@@ -342,7 +342,7 @@ def from_csv_auto(duckdb_conn, queue, pandas):
 def from_parquet(duckdb_conn, queue, pandas):
     # Get a new connection
     duckdb_conn = duckdb.connect()
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "binary_string.parquet")  # noqa: PTH118
+    filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
     try:
         duckdb_conn.from_parquet(filename)
         queue.put(True)

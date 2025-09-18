@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import duckdb
 
@@ -22,7 +22,7 @@ class TestArrowScanner:
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         arrow_dataset = pyarrow.dataset.dataset(
             [
@@ -48,7 +48,7 @@ class TestArrowScanner:
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         arrow_dataset = pyarrow.dataset.dataset(
             [
@@ -72,7 +72,7 @@ class TestArrowScanner:
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         arrow_dataset = pyarrow.dataset.dataset(
             [
@@ -95,7 +95,7 @@ class TestArrowScanner:
         if not can_run:
             return
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "userdata1.parquet")  # noqa: PTH118
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         arrow_dataset = pyarrow.dataset.dataset(
             [

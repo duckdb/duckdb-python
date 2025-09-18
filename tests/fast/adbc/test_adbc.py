@@ -1,6 +1,6 @@
 import datetime
-import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -99,9 +99,9 @@ def test_connection_get_objects_filters(duck_conn):
 
 
 def test_commit(tmp_path):
-    db = os.path.join(tmp_path, "tmp.db")  # noqa: PTH118
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
@@ -239,7 +239,7 @@ def test_insertion(duck_conn):
 
 def test_read(duck_conn):
     with duck_conn.cursor() as cursor:
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "category.csv")  # noqa: PTH118
+        filename = Path(__file__).parent / ".." / "data" / "category.csv"
         cursor.execute(f"SELECT * FROM '{filename}'")
         assert cursor.fetch_arrow_table().to_pydict() == {
             "CATEGORY_ID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -301,9 +301,9 @@ def test_large_chunk(tmp_path):
     # Create the table
     table = pyarrow.table([col1, col2, col3], names=["ints", "floats", "strings"])
 
-    db = os.path.join(tmp_path, "tmp.db")  # noqa: PTH118
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
         adbc_driver_manager.connect(
@@ -327,9 +327,9 @@ def test_dictionary_data(tmp_path):
 
     # Wrap in a table
     table = pyarrow.table({"fruits": dict_array})
-    db = os.path.join(tmp_path, "tmp.db")  # noqa: PTH118
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
         adbc_driver_manager.connect(
@@ -355,9 +355,9 @@ def test_ree_data(tmp_path):
 
     table = pyarrow.table({"fruits": ree_array})
 
-    db = os.path.join(tmp_path, "tmp.db")  # noqa: PTH118
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
         adbc_driver_manager.connect(
