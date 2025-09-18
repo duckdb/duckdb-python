@@ -191,6 +191,7 @@ class CsrfParser(HTMLParser):
 
 class CleanMode(Enum):
     """Supported clean-up modes."""
+
     LIST_ONLY = 1
     DELETE = 2
 
