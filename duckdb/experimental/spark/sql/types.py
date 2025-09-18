@@ -1038,9 +1038,7 @@ _complex_types: list[type[Union[ArrayType, MapType, StructType]]] = [
     MapType,
     StructType,
 ]
-_all_complex_types: dict[str, type[Union[ArrayType, MapType, StructType]]] = {
-    v.typeName(): v for v in _complex_types
-}
+_all_complex_types: dict[str, type[Union[ArrayType, MapType, StructType]]] = {v.typeName(): v for v in _complex_types}
 
 
 _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")

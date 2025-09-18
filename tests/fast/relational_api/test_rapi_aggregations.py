@@ -320,9 +320,7 @@ class TestRAPIAggregations:
         expected = [(2.0,)]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected))
-        result = [
-            [round(x, 2) for x in r[0]] for r in table.quantile_cont("v", q=[0.1, 0.5]).execute().fetchall()
-        ]
+        result = [[round(x, 2) for x in r[0]] for r in table.quantile_cont("v", q=[0.1, 0.5]).execute().fetchall()]
         expected = [[0.2, 2.0]]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected))
