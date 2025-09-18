@@ -9,7 +9,7 @@ import duckdb
 
 
 def run_parallel_queries(main_table, left_join_table, expected_df, pandas, iteration_count=5):
-    for i in range(iteration_count):
+    for _i in range(iteration_count):
         output_df = None
         sql = """
         select

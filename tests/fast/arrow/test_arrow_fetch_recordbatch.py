@@ -280,7 +280,7 @@ class TestArrowFetchRecordBatch:
             query = duckdb_cursor.execute("SELECT a FROM t")
             record_batch_reader = query.fetch_record_batch(i)
             num_loops = int(object_size / i)
-            for j in range(num_loops):
+            for _j in range(num_loops):
                 assert record_batch_reader.schema.names == ["a"]
                 chunk = record_batch_reader.read_next_batch()
                 assert len(chunk) == i

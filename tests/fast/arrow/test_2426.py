@@ -15,7 +15,7 @@ class Test2426:
         con.execute("Create Table test (a integer)")
 
         for i in range(1024):
-            for j in range(2):
+            for _j in range(2):
                 con.execute("Insert Into test values ('" + str(i) + "')")
         con.execute("Insert Into test values ('5000')")
         con.execute("Insert Into test values ('6000')")

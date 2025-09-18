@@ -382,7 +382,7 @@ class TestResolveObjectColumns:
                 expected_type = "STRUCT(v1 MAP(VARCHAR, INTEGER))"
             check_struct_upgrade(expected_type, construct_struct, pair, pandas, duckdb_cursor)
 
-        for key, pair in pairs.items():
+        for pair in pairs.values():
             check_struct_upgrade("MAP(VARCHAR, MAP(VARCHAR, INTEGER))", construct_map, pair, pandas, duckdb_cursor)
 
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])

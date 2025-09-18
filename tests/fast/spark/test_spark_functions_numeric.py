@@ -132,8 +132,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("exp_value", sf.exp(sf.col("firstColumn")))
         res = df.select("exp_value").collect()
-        round(res[0].exp_value, 2) == 2
-        res[1].exp_value == 1
+        assert round(res[0].exp_value, 2) == 2
+        assert res[1].exp_value == 1
 
     def test_factorial(self, spark):
         data = [
@@ -169,8 +169,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("ln_value", sf.ln(sf.col("firstColumn")))
         res = df.select("ln_value").collect()
-        round(res[0].ln_value, 2) == 1
-        res[1].ln_value == 0
+        assert round(res[0].ln_value, 2) == 1
+        assert res[1].ln_value == 0
 
     def test_degrees(self, spark):
         data = [
@@ -180,8 +180,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("degrees_value", sf.degrees(sf.col("firstColumn")))
         res = df.select("degrees_value").collect()
-        round(res[0].degrees_value, 2) == 180
-        res[1].degrees_value == 0
+        assert round(res[0].degrees_value, 2) == 180
+        assert res[1].degrees_value == 0
 
     def test_radians(self, spark):
         data = [
@@ -191,8 +191,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("radians_value", sf.radians(sf.col("firstColumn")))
         res = df.select("radians_value").collect()
-        round(res[0].radians_value, 2) == 3.14
-        res[1].radians_value == 0
+        assert round(res[0].radians_value, 2) == 3.14
+        assert res[1].radians_value == 0
 
     def test_atan(self, spark):
         data = [
@@ -202,8 +202,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("atan_value", sf.atan(sf.col("firstColumn")))
         res = df.select("atan_value").collect()
-        round(res[0].atan_value, 2) == 0.79
-        res[1].atan_value == 0
+        assert round(res[0].atan_value, 2) == 0.79
+        assert res[1].atan_value == 0
 
     def test_atan2(self, spark):
         data = [
@@ -215,20 +215,20 @@ class TestSparkFunctionsNumeric:
         # Both columns
         df2 = df.withColumn("atan2_value", sf.atan2(sf.col("firstColumn"), "secondColumn"))
         res = df2.select("atan2_value").collect()
-        round(res[0].atan2_value, 2) == 0.79
-        res[1].atan2_value == 0
+        assert round(res[0].atan2_value, 2) == 0.79
+        assert res[1].atan2_value == 0
 
         # Both literals
         df2 = df.withColumn("atan2_value_lit", sf.atan2(1, 1))
         res = df2.select("atan2_value_lit").collect()
-        round(res[0].atan2_value_lit, 2) == 0.79
-        round(res[1].atan2_value_lit, 2) == 0.79
+        assert round(res[0].atan2_value_lit, 2) == 0.79
+        assert round(res[1].atan2_value_lit, 2) == 0.79
 
         # One literal, one column
         df2 = df.withColumn("atan2_value_lit_col", sf.atan2(1.0, sf.col("secondColumn")))
         res = df2.select("atan2_value_lit_col").collect()
-        round(res[0].atan2_value_lit_col, 2) == 0.79
-        res[1].atan2_value_lit_col == 0
+        assert round(res[0].atan2_value_lit_col, 2) == 0.79
+        assert round(res[1].atan2_value_lit_col, 2) == 1.57
 
     def test_tan(self, spark):
         data = [
@@ -238,8 +238,8 @@ class TestSparkFunctionsNumeric:
         df = spark.createDataFrame(data, ["firstColumn"])
         df = df.withColumn("tan_value", sf.tan(sf.col("firstColumn")))
         res = df.select("tan_value").collect()
-        res[0].tan_value == 0
-        round(res[1].tan_value, 2) == 1.56
+        assert res[0].tan_value == 0
+        assert round(res[1].tan_value, 2) == 1.56
 
     def test_round(self, spark):
         data = [

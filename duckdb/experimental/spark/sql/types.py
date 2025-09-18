@@ -855,7 +855,7 @@ class StructType(DataType):
                 return self.fields[key]
             except IndexError:
                 msg = "StructType index out of range"
-                raise IndexError(msg)
+                raise IndexError(msg)  # noqa: B904
         elif isinstance(key, slice):
             return StructType(self.fields[key])
         else:
@@ -1194,9 +1194,9 @@ class Row(tuple):
             idx = self.__fields__.index(item)
             return super(Row, self).__getitem__(idx)
         except IndexError:
-            raise KeyError(item)
+            raise KeyError(item)  # noqa: B904
         except ValueError:
-            raise ValueError(item)
+            raise ValueError(item)  # noqa: B904
 
     def __getattr__(self, item: str) -> Any:  # noqa: D105, ANN401
         if item.startswith("__"):
@@ -1207,9 +1207,9 @@ class Row(tuple):
             idx = self.__fields__.index(item)
             return self[idx]
         except IndexError:
-            raise AttributeError(item)
+            raise AttributeError(item)  # noqa: B904
         except ValueError:
-            raise AttributeError(item)
+            raise AttributeError(item)  # noqa: B904
 
     def __setattr__(self, key: Any, value: Any) -> None:  # noqa: D105, ANN401
         if key != "__fields__":

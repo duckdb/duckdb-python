@@ -186,8 +186,8 @@ class TestDuckDBConnection:
         duckdb.execute("Create Table test (a integer)")
 
         for i in range(1024):
-            for j in range(2):
-                duckdb.execute("Insert Into test values ('" + str(i) + "')")
+            duckdb.execute("Insert Into test values ('" + str(i) + "')")
+            duckdb.execute("Insert Into test values ('" + str(i) + "')")
         duckdb.execute("Insert Into test values ('5000')")
         duckdb.execute("Insert Into test values ('6000')")
         sql = """

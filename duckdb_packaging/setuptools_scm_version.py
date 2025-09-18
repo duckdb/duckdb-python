@@ -56,7 +56,7 @@ def version_scheme(version: _VersionObject) -> str:
         return _bump_dev_version(str(version.tag), distance)
     except Exception as e:
         msg = f"Failed to bump version: {e}"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e
 
 
 def _tag_to_version(tag: str) -> str:

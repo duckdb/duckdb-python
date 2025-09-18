@@ -173,6 +173,6 @@ def get_git_describe(
         )
         result.check_returncode()
         return result.stdout.strip()
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         msg = "git executable can't be found"
-        raise RuntimeError(msg)
+        raise RuntimeError(msg) from e

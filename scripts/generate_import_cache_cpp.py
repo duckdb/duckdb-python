@@ -173,7 +173,7 @@ namespace duckdb {{
 
 
 files: list[ModuleFile] = []
-for name, value in json_data.items():
+for value in json_data.values():
     if value["full_path"] != value["name"]:
         continue
     files.append(ModuleFile(value))

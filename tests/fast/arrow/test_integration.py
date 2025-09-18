@@ -218,7 +218,7 @@ class TestArrowIntegration:
         duckdb_cursor.execute("CREATE TABLE test (a varchar)")
 
         # Test Small, Null and Very Big String
-        for i in range(1000):
+        for _i in range(1000):
             duckdb_cursor.execute(
                 "INSERT INTO  test VALUES ('Matt Damon'),(NULL), ('Jeffffreeeey Jeeeeef Baaaaaaazos'), ('X-Content-Type-Options')"  # noqa: E501
             )

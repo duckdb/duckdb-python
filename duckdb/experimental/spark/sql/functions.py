@@ -1495,7 +1495,7 @@ def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Col
     .. deprecated:: 2.1.0
         Use :func:`approx_count_distinct` instead.
     """
-    warnings.warn("Deprecated in 2.1, use approx_count_distinct instead.", FutureWarning)
+    warnings.warn("Deprecated in 2.1, use approx_count_distinct instead.", FutureWarning, stacklevel=3)
     return approx_count_distinct(col, rsd)
 
 

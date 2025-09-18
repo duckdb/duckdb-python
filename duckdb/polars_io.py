@@ -56,7 +56,7 @@ def _pl_operation_to_sql(op: str) -> str:
             "Or": "OR",
         }[op]
     except KeyError:
-        raise NotImplementedError(op)
+        raise NotImplementedError(op)  # noqa: B904
 
 
 def _escape_sql_identifier(identifier: str) -> str:
