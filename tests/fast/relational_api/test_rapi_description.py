@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 
 
 class TestRAPIDescription:

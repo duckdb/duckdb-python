@@ -1,5 +1,4 @@
 import os
-import shutil
 import warnings
 from importlib import import_module
 from pathlib import Path
