@@ -32,5 +32,5 @@ class TestQueryInterruption:
             # indicating that the query interruption functionality is broken
             assert True
         except KeyboardInterrupt:
-            pytest.fail()
+            pytest.fail("Interrupted by user")
         thread.join()

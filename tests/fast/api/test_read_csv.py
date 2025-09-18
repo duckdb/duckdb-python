@@ -349,7 +349,7 @@ class TestReadCSV:
 
         # The MemoryFileSystem reads the content into another object, so this fails instantly
         obj = ReadError()
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="-1"):
             duckdb_cursor.read_csv(obj).fetchall()
 
         # For that same reason, this will not error, because the data is retrieved with 'read' and then

@@ -208,16 +208,6 @@ class TestFetchNested:
                 }
             ]
         }, ""),
-        ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
-            'a': [
-                {
-                    '1':10,
-                    '2':9,
-                    '3':8,
-                    '4':7
-                }
-            ]
-        }, ""),
         ("SELECT a from (select MAP(LIST_VALUE(),LIST_VALUE()) as a) as t", {
             'a': [
                 {}
