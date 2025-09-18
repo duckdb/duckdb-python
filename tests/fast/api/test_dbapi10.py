@@ -10,20 +10,20 @@ class TestCursorDescription:
     @pytest.mark.parametrize(
         "query,column_name,string_type,real_type",
         [
-            ["SELECT * FROM integers", "i", "INTEGER", int],
-            ["SELECT * FROM timestamps", "t", "TIMESTAMP", datetime],
-            ["SELECT DATE '1992-09-20' AS date_col;", "date_col", "DATE", date],
-            ["SELECT '\\xAA'::BLOB AS blob_col;", "blob_col", "BLOB", bytes],
-            [
+            ("SELECT * FROM integers", "i", "INTEGER", int),
+            ("SELECT * FROM timestamps", "t", "TIMESTAMP", datetime),
+            ("SELECT DATE '1992-09-20' AS date_col;", "date_col", "DATE", date),
+            ("SELECT '\\xAA'::BLOB AS blob_col;", "blob_col", "BLOB", bytes),
+            (
                 "SELECT {'x': 1, 'y': 2, 'z': 3} AS struct_col",
                 "struct_col",
                 "STRUCT(x INTEGER, y INTEGER, z INTEGER)",
                 dict,
-            ],
-            ["SELECT [1, 2, 3] AS list_col", "list_col", "INTEGER[]", list],
-            ["SELECT 'Frank' AS str_col", "str_col", "VARCHAR", str],
-            ["SELECT [1, 2, 3]::JSON AS json_col", "json_col", "JSON", str],
-            ["SELECT union_value(tag := 1) AS union_col", "union_col", "UNION(tag INTEGER)", int],
+            ),
+            ("SELECT [1, 2, 3] AS list_col", "list_col", "INTEGER[]", list),
+            ("SELECT 'Frank' AS str_col", "str_col", "VARCHAR", str),
+            ("SELECT [1, 2, 3]::JSON AS json_col", "json_col", "JSON", str),
+            ("SELECT union_value(tag := 1) AS union_col", "union_col", "UNION(tag INTEGER)", int),
         ],
     )
     def test_description(self, query, column_name, string_type, real_type, duckdb_cursor, timestamps, integers):
