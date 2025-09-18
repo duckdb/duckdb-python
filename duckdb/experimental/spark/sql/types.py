@@ -513,12 +513,14 @@ class DayTimeIntervalType(AtomicType):
     MINUTE = 2
     SECOND = 3
 
-    _fields: Mapping[str, int] = MappingProxyType({
-        DAY: "day",
-        HOUR: "hour",
-        MINUTE: "minute",
-        SECOND: "second",
-    })
+    _fields: Mapping[str, int] = MappingProxyType(
+        {
+            DAY: "day",
+            HOUR: "hour",
+            MINUTE: "minute",
+            SECOND: "second",
+        }
+    )
 
     _inverted_fields: Mapping[int, str] = MappingProxyType(dict(zip(_fields.values(), _fields.keys())))
 
