@@ -366,6 +366,10 @@ strict = true
     # Ignore boolean positional args in the Spark API
     'FBT001'
 ]
+"duckdb_packaging/**.py" = [
+    # ignore all performance-related rules for duckdb_packaging
+    'PERF'
+]
 "tests/**.py" = [
     # No need for package, module, class, function, init etc docstrings in tests
     'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107',
