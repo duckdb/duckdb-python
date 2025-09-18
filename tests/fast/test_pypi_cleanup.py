@@ -392,9 +392,11 @@ class TestPyPICleanup:
         mock_response.raise_for_status.side_effect = requests.HTTPError("404")
         mock_get.return_value = mock_response
 
-        with pytest.raises(PyPICleanupError, match="Failed to fetch package information"):
-            with session_with_retries() as session:
-                cleanup_dryrun_max_2._fetch_released_versions(session)
+        with (
+            pytest.raises(PyPICleanupError, match="Failed to fetch package information"),
+            session_with_retries() as session,
+        ):
+            cleanup_dryrun_max_2._fetch_released_versions(session)
 
     @patch("duckdb_packaging.pypi_cleanup.PyPICleanup._get_csrf_token")
     @patch("requests.Session.post")

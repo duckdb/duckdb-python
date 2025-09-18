@@ -504,9 +504,7 @@ class TestDuckMultithread:
         def only_some_succeed(results: list[bool]) -> bool:
             if not any(result for result in results):
                 return False
-            if all(result for result in results):
-                return False
-            return True
+            return not all(result for result in results)
 
         duck_threads = DuckDBThreaded(10, cursor, pandas)
         duck_threads.multithread_test(only_some_succeed)

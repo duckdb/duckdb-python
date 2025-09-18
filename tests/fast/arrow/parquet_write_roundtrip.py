@@ -11,8 +11,8 @@ pa = pytest.importorskip("pyarrow")
 
 
 def parquet_types_test(type_list):
-    temp = tempfile.NamedTemporaryFile()
-    temp_name = temp.name
+    with tempfile.NamedTemporaryFile() as tmp:
+        temp_name = tmp.name
     for type_pair in type_list:
         value_list = type_pair[0]
         numpy_type = type_pair[1]

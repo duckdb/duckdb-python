@@ -21,7 +21,7 @@ class TestReadParquet:
                 return "deadlock"
 
             def ls(self, path, detail=True, **kwargs):
-                vals = [k for k in self._data.keys() if k.startswith(path)]
+                vals = [k for k in self._data if k.startswith(path)]
                 if detail:
                     return [
                         {

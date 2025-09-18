@@ -742,10 +742,7 @@ def like(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Col
     >>> df.select(like(df.a, df.b, lit("/")).alias("r")).collect()
     [Row(r=True)]
     """  # noqa: D205
-    if escapeChar is None:
-        escapeChar = ConstantExpression("\\")
-    else:
-        escapeChar = _to_column_expr(escapeChar)
+    escapeChar = ConstantExpression("\\") if escapeChar is None else _to_column_expr(escapeChar)
     return _invoke_function("like_escape", _to_column_expr(str), _to_column_expr(pattern), escapeChar)
 
 
@@ -779,10 +776,7 @@ def ilike(str: "ColumnOrName", pattern: "ColumnOrName", escapeChar: Optional["Co
     >>> df.select(ilike(df.a, df.b, lit("/")).alias("r")).collect()
     [Row(r=True)]
     """  # noqa: D205
-    if escapeChar is None:
-        escapeChar = ConstantExpression("\\")
-    else:
-        escapeChar = _to_column_expr(escapeChar)
+    escapeChar = ConstantExpression("\\") if escapeChar is None else _to_column_expr(escapeChar)
     return _invoke_function("ilike_escape", _to_column_expr(str), _to_column_expr(pattern), escapeChar)
 
 

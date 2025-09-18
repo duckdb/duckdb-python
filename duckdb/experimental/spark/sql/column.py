@@ -223,11 +223,7 @@ class Column:
         return Column(expr)
 
     def cast(self, dataType: Union[DataType, str]) -> "Column":  # noqa: D102
-        if isinstance(dataType, str):
-            # Try to construct a default DuckDBPyType from it
-            internal_type = DuckDBPyType(dataType)
-        else:
-            internal_type = dataType.duckdb_type
+        internal_type = DuckDBPyType(dataType) if isinstance(dataType, str) else dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
 
     def isin(self, *cols: Union[Iterable[Union["Column", str]], Union["Column", str]]) -> "Column":  # noqa: D102

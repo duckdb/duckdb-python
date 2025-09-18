@@ -36,10 +36,7 @@ def recursive_equality(o1, o2):
     try:
         if len(o1) != len(o2):
             return False
-        for i in range(len(o1)):
-            if not recursive_equality(o1[i], o2[i]):
-                return False
-        return True
+        return all(recursive_equality(o1[i], o2[i]) for i in range(len(o1)))
     except Exception:
         return o1 == o2
 

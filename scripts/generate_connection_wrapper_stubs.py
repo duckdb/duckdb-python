@@ -91,10 +91,7 @@ def generate():
 
     body = []
     for method in methods:
-        if isinstance(method["name"], list):
-            names = method["name"]
-        else:
-            names = [method["name"]]
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
 
         # Artificially add 'connection' keyword argument
         if "kwargs" not in method:

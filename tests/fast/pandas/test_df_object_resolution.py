@@ -376,10 +376,7 @@ class TestResolveObjectColumns:
             check_struct_upgrade("MAP(VARCHAR, INTEGER)[]", construct_list, pair, pandas, duckdb_cursor)
 
         for key, pair in pairs.items():
-            if key == "v4":
-                expected_type = "MAP(VARCHAR, MAP(VARCHAR, INTEGER))"
-            else:
-                expected_type = "STRUCT(v1 MAP(VARCHAR, INTEGER))"
+            expected_type = "MAP(VARCHAR, MAP(VARCHAR, INTEGER))" if key == "v4" else "STRUCT(v1 MAP(VARCHAR, INTEGER))"
             check_struct_upgrade(expected_type, construct_struct, pair, pandas, duckdb_cursor)
 
         for pair in pairs.values():

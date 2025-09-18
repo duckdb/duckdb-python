@@ -155,4 +155,4 @@ class TestDBApiFetch:
         select a from map_cte;
         """
         res = duckdb_cursor.sql(query).fetchone()
-        assert "key" in res[0].keys()
+        assert "key" in res[0]

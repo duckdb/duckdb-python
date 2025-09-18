@@ -531,7 +531,7 @@ class DayTimeIntervalType(AtomicType):
             endField = startField
 
         fields = DayTimeIntervalType._fields
-        if startField not in fields.keys() or endField not in fields.keys():
+        if startField not in fields or endField not in fields:
             raise RuntimeError(f"interval {startField} to {endField} is invalid")
         self.startField = cast("int", startField)
         self.endField = cast("int", endField)

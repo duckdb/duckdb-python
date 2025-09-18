@@ -1,3 +1,4 @@
+import contextlib
 import platform
 import threading
 import time
@@ -20,11 +21,8 @@ class TestQueryProgress:
 
         def thread_target() -> None:
             # run a very slow query which hopefully isn't too memory intensive.
-            with reraise:
-                try:
-                    conn.execute("select max(sha1(n::varchar)) from t").fetchall()
-                except duckdb.InterruptException:
-                    pass
+            with reraise, contextlib.suppress(duckdb.InterruptException):
+                conn.execute("select max(sha1(n::varchar)) from t").fetchall()
 
         thread = threading.Thread(target=thread_target)
         thread.start()

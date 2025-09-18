@@ -50,12 +50,10 @@ class TestArrowREE:
         ["UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT"],
     )
     def test_arrow_run_end_encoding_numerics(self, duckdb_cursor, query, run_length, size, value_type):
-        if value_type == "UTINYINT":
-            if size > 255:
-                size = 255
-        if value_type == "TINYINT":
-            if size > 127:
-                size = 127
+        if value_type == "UTINYINT" and size > 255:
+            size = 255
+        if value_type == "TINYINT" and size > 127:
+            size = 127
         query = query.format(run_length, value_type, size)
         rel = duckdb_cursor.sql(query)
         array = rel.fetch_arrow_table()["ree"]

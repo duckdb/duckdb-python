@@ -1,3 +1,4 @@
+import contextlib
 import json
 from pathlib import Path
 from typing import Union
@@ -155,17 +156,15 @@ for line in lines:
 # Load existing JSON data from a file if it exists
 existing_json_data = {}
 json_cache_path = Path(script_dir) / "cache_data.json"
-try:
+with contextlib.suppress(FileNotFoundError):
     existing_json_data = json.loads(json_cache_path.read_text())
-except FileNotFoundError:
-    pass
 
 
 def update_json(existing: dict, new: dict) -> dict:
     # Iterate over keys in the new dictionary.
     for key in new:
         new_value = new[key]
-        old_value = existing[key] if key in existing else None
+        old_value = existing.get(key)
 
         # If both values are dictionaries, update recursively.
         if isinstance(new_value, dict) and isinstance(old_value, dict):

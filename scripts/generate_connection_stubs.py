@@ -75,10 +75,7 @@ def generate():
     overloaded_methods: set[str] = {m for m in connection_methods if isinstance(m["name"], list)}
 
     for method in connection_methods:
-        if isinstance(method["name"], list):
-            names = method["name"]
-        else:
-            names = [method["name"]]
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
         for name in names:
             if name in overloaded_methods:
                 body.append(create_overloaded_definition(name, method))

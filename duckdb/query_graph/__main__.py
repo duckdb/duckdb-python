@@ -116,7 +116,7 @@ class AllTimings:  # noqa: D101
 
     def get_sum_of_all_timings(self) -> float:  # noqa: D102
         total_timing_sum = 0
-        for phase in self.phase_to_timings.keys():
+        for phase in self.phase_to_timings:
             total_timing_sum += self.get_summary_phase_timings(phase).time
         return total_timing_sum
 

@@ -23,9 +23,7 @@ def is_py_args(method):
     args = method["args"]
     if len(args) == 0:
         return False
-    if args[0]["name"] != "*args":
-        return False
-    return True
+    return args[0]["name"] == "*args"
 
 
 def generate():
@@ -110,10 +108,7 @@ def generate():
 
     body = []
     for method in connection_methods:
-        if isinstance(method["name"], list):
-            names = method["name"]
-        else:
-            names = [method["name"]]
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
         for name in names:
             body.append(create_definition(name, method))
 

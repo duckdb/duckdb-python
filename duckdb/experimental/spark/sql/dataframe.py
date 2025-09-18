@@ -972,10 +972,7 @@ class DataFrame:  # noqa: D101
         """  # noqa: D205
         from .group import GroupedData, Grouping
 
-        if len(cols) == 1 and isinstance(cols[0], list):
-            columns = cols[0]
-        else:
-            columns = cols
+        columns = cols[0] if len(cols) == 1 and isinstance(cols[0], list) else cols
         return GroupedData(Grouping(*columns), self)
 
     groupby = groupBy

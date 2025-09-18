@@ -1,3 +1,4 @@
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -13,10 +14,8 @@ def get_tables(con):
 
 
 def test_multiple_writes():
-    try:
+    with contextlib.suppress(Exception):
         Path("test.db").unlink()
-    except Exception:
-        pass
     con1 = duckdb.connect("test.db")
     con2 = duckdb.connect("test.db")
     con1.execute("CREATE TABLE foo1 as SELECT 1 as a, 2 as b")
@@ -30,10 +29,8 @@ def test_multiple_writes():
     del con2
     del con3
 
-    try:
+    with contextlib.suppress(Exception):
         Path("test.db").unlink()
-    except Exception:
-        pass
 
 
 def test_multiple_writes_memory():

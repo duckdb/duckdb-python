@@ -60,9 +60,7 @@ def is_py_args(method):
     args = method["args"]
     if len(args) == 0:
         return False
-    if args[0]["name"] != "*args":
-        return False
-    return True
+    return args[0]["name"] == "*args"
 
 
 def is_py_kwargs(method):
@@ -196,10 +194,7 @@ def generate():
     body = []
     all_names = []
     for method in connection_methods:
-        if isinstance(method["name"], list):
-            names = method["name"]
-        else:
-            names = [method["name"]]
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
         if "kwargs" not in method:
             method["kwargs"] = []
         method["kwargs"].append({"name": "connection", "type": "Optional[DuckDBPyConnection]", "default": "None"})
@@ -211,10 +206,7 @@ def generate():
             all_names.append(name)
 
     for method in wrapper_methods:
-        if isinstance(method["name"], list):
-            names = method["name"]
-        else:
-            names = [method["name"]]
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
         if "kwargs" not in method:
             method["kwargs"] = []
         method["kwargs"].append({"name": "connection", "type": "Optional[DuckDBPyConnection]", "default": "None"})

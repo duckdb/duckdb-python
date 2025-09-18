@@ -70,10 +70,7 @@ protected:
             item = self.items[key]
             name = item["name"]
             var_name = get_variable_name(name)
-            if item["children"] == []:
-                class_name = "PythonImportCacheItem"
-            else:
-                class_name = get_class_name(item["full_path"])
+            class_name = "PythonImportCacheItem" if item["children"] == [] else get_class_name(item["full_path"])
             variables.append(f"\t{class_name} {var_name};")
         return "\n".join(variables)
 
@@ -87,10 +84,7 @@ protected:
                 initialization = f'{var_name}("{name}", this)'
                 variables.append(initialization)
             else:
-                if item["type"] == "module":
-                    arguments = ""
-                else:
-                    arguments = "this"
+                arguments = "" if item["type"] == "module" else "this"
                 initialization = f"{var_name}({arguments})"
                 variables.append(initialization)
         if self.module["type"] != "module":

@@ -1,3 +1,4 @@
+import contextlib
 import shutil
 from pathlib import Path
 
@@ -24,10 +25,8 @@ class TestMultiStatement:
 
         # test export/import
         export_location = Path.cwd() / "duckdb_pytest_dir_export"
-        try:
+        with contextlib.suppress(Exception):
             shutil.rmtree(export_location)
-        except Exception:
-            pass
         con.execute("CREATE TABLE integers2(i INTEGER)")
         con.execute("INSERT INTO integers2 VALUES (1), (5), (7), (1928)")
         con.execute(f"EXPORT DATABASE '{export_location}'")

@@ -68,10 +68,7 @@ def decimal_value(value, precision, scale):
 
 def expected_result(col1_null, col2_null, expected):
     col1 = None if col1_null else expected
-    if col1_null or col2_null:
-        col2 = None
-    else:
-        col2 = expected
+    col2 = None if col1_null or col2_null else expected
     return [(col1, col2)]
 
 
