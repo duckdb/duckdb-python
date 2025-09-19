@@ -89,14 +89,26 @@ jobs:
           cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
           python-version: ${{ matrix.python }}
 
+      # Load MSVC environment, needed for Windows - ninja builds
+      # Without this, the linking step will fail.
+      # Note: CIBW uses the host environment for windows, rather than an isolated container
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: ${{ matrix.platform.cibw_system == 'win' }}
+        with:
+          arch: ${{ matrix.platform.arch }}
+
       - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
         uses: pypa/cibuildwheel@v3.1
         env:
           CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-          # PYTHON_GIL=1: Suppresses the RuntimeWarning that the GIL is enabled on free-threaded builds. 
-          # TODO: Remove PYTHON_GIL=1 when free-threaded is supported. 
+          # PYTHON_GIL=1: Suppresses the RuntimeWarning that the GIL is enabled on free-threaded builds.
+          # TODO: Remove PYTHON_GIL=1 when free-threaded is supported.
+          # CMAKE_BUILD_TYPE=Release: Override Debug default when MSVC dev environment is loaded
           CIBW_ENVIRONMENT: PYTHON_GIL=1
+          # For Windows, msvc-dev-cmd sets build to Debug. So, override it back to Release. 
+          # This is a problem because Debug enables Jemalloc, which fails to build on Windows
+          CIBW_ENVIRONMENT_WINDOWS: PYTHON_GIL=1 CMAKE_BUILD_TYPE=Release
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
