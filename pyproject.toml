@@ -227,6 +227,8 @@ test = [ # dependencies used for running tests
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
+    "pytest-xdist", #  multi-processed tests, if `-n <num_workers> | auto`
+    "pytest-randomly", # randomizes test order to ensure no test dependencies, enabled on install
     "mypy",
     "coverage",
     "gcovr; python_version < '3.14'",
@@ -306,6 +308,7 @@ filterwarnings = [
     "ignore:distutils Version classes are deprecated:DeprecationWarning",
     "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
 ]
+timeout = 600  # don't let individual tests "hang"
 
 [tool.coverage.run]
 branch = true
