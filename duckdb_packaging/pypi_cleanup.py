@@ -1,5 +1,4 @@
-"""
-!!HERE BE DRAGONS!! Use this script with care!
+"""!!HERE BE DRAGONS!! Use this script with care!
 
 PyPI package cleanup tool. This script will:
 * Never remove a stable version (including a post release version)
@@ -17,8 +16,10 @@ import re
 import sys
 import time
 from collections import defaultdict
+from collections.abc import Generator
+from enum import Enum
 from html.parser import HTMLParser
-from typing import Optional, Set, Generator
+from typing import Optional, Union
 from urllib.parse import urlparse
 
 import pyotp
@@ -28,8 +29,8 @@ from requests.adapters import HTTPAdapter
 from requests.exceptions import RequestException
 from urllib3 import Retry
 
-_PYPI_URL_PROD = 'https://pypi.org/'
-_PYPI_URL_TEST = 'https://test.pypi.org/'
+_PYPI_URL_PROD = "https://pypi.org/"
+_PYPI_URL_TEST = "https://test.pypi.org/"
 _DEFAULT_MAX_NIGHTLIES = 2
 _LOGIN_RETRY_ATTEMPTS = 3
 _LOGIN_RETRY_DELAY = 5
@@ -50,87 +51,65 @@ This script will:
 * Keep the configured amount of dev releases per version, and remove older dev releases
         """,
         epilog="Environment variables required (unless --dry-run): PYPI_CLEANUP_PASSWORD, PYPI_CLEANUP_OTP",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be deleted but don't actually do it"
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be deleted but don't actually do it")
 
     host_group = parser.add_mutually_exclusive_group(required=True)
-    host_group.add_argument(
-        "--prod",
-        action="store_true",
-        help="Use production PyPI (pypi.org)"
-    )
-    host_group.add_argument(
-        "--test",
-        action="store_true",
-        help="Use test PyPI (test.pypi.org)"
-    )
+    host_group.add_argument("--prod", action="store_true", help="Use production PyPI (pypi.org)")
+    host_group.add_argument("--test", action="store_true", help="Use test PyPI (test.pypi.org)")
 
     parser.add_argument(
-        "-m", "--max-nightlies",
+        "-m",
+        "--max-nightlies",
         type=int,
         default=_DEFAULT_MAX_NIGHTLIES,
-        help=f"Max number of nightlies of unreleased versions (default={_DEFAULT_MAX_NIGHTLIES})"
+        help=f"Max number of nightlies of unreleased versions (default={_DEFAULT_MAX_NIGHTLIES})",
     )
 
-    parser.add_argument(
-        "-u", "--username",
-        type=validate_username,
-        help="PyPI username (required unless --dry-run)"
-    )
+    parser.add_argument("-u", "--username", type=validate_username, help="PyPI username (required unless --dry-run)")
 
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose debug logging"
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug logging")
 
     return parser
 
+
 class PyPICleanupError(Exception):
     """Base exception for PyPI cleanup operations."""
-    pass
 
 
 class AuthenticationError(PyPICleanupError):
     """Raised when authentication fails."""
-    pass
 
 
 class ValidationError(PyPICleanupError):
     """Raised when input validation fails."""
-    pass
 
 
-def setup_logging(verbose: bool = False) -> None:
+def setup_logging(level: int = logging.INFO) -> None:
     """Configure logging with appropriate level and format."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    logging.basicConfig(level=level, format="%(asctime)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
 
 def validate_username(value: str) -> str:
     """Validate and sanitize username input."""
     if not value or not value.strip():
-        raise argparse.ArgumentTypeError("Username cannot be empty")
-    
+        msg = "Username cannot be empty"
+        raise argparse.ArgumentTypeError(msg)
+
     username = value.strip()
     if len(username) > 100:  # Reasonable limit
-        raise argparse.ArgumentTypeError("Username too long (max 100 characters)")
-    
+        msg = "Username too long (max 100 characters)"
+        raise argparse.ArgumentTypeError(msg)
+
     # Basic validation - PyPI usernames are alphanumeric with limited special chars
-    if not re.match(r'^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$', username):
-        raise argparse.ArgumentTypeError("Invalid username format")
-    
+    if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", username):
+        msg = "Invalid username format"
+        raise argparse.ArgumentTypeError(msg)
+
     return username
+
 
 @contextlib.contextmanager
 def session_with_retries() -> Generator[Session, None, None]:
@@ -143,7 +122,7 @@ def session_with_retries() -> Generator[Session, None, None]:
             connect=3,  # try 3 times before giving up on connection errors
             read=3,  # try 3 times before giving up on read errors
             status=3,  # try 3 times before giving up on status errors (see forcelist below)
-            status_forcelist=[429] + [status for status in range(500, 512)],
+            status_forcelist=[429, *list(range(500, 512))],
             other=0,  # whatever else may cause an error should break
             backoff_factor=0.1,  # [0.0s, 0.2s, 0.4s]
             raise_on_redirect=True,  # raise exception when redirect error retries are exhausted
@@ -154,107 +133,115 @@ def session_with_retries() -> Generator[Session, None, None]:
         session.mount("https://", adapter)
         yield session
 
-def load_credentials(dry_run: bool) -> tuple[Optional[str], Optional[str]]:
+
+def load_credentials() -> tuple[Optional[str], Optional[str]]:
     """Load credentials from environment variables."""
-    if dry_run:
-        return None, None
-    
-    password = os.getenv('PYPI_CLEANUP_PASSWORD')
-    otp = os.getenv('PYPI_CLEANUP_OTP')
-    
+    password = os.getenv("PYPI_CLEANUP_PASSWORD")
+    otp = os.getenv("PYPI_CLEANUP_OTP")
+
     if not password:
-        raise ValidationError("PYPI_CLEANUP_PASSWORD environment variable is required when not in dry-run mode")
+        msg = "PYPI_CLEANUP_PASSWORD environment variable is required when not in dry-run mode"
+        raise ValidationError(msg)
     if not otp:
-        raise ValidationError("PYPI_CLEANUP_OTP environment variable is required when not in dry-run mode")
-    
+        msg = "PYPI_CLEANUP_OTP environment variable is required when not in dry-run mode"
+        raise ValidationError(msg)
+
     return password, otp
 
 
 def validate_arguments(args: argparse.Namespace) -> None:
     """Validate parsed arguments."""
     if not args.dry_run and not args.username:
-        raise ValidationError("--username is required when not in dry-run mode")
-    
+        msg = "--username is required when not in dry-run mode"
+        raise ValidationError(msg)
+
     if args.max_nightlies < 0:
-        raise ValidationError("--max-nightlies must be non-negative")
+        msg = "--max-nightlies must be non-negative"
+        raise ValidationError(msg)
+
 
 class CsrfParser(HTMLParser):
     """HTML parser to extract CSRF tokens from PyPI forms.
-    
+
     Based on pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
     """
-    def __init__(self, target, contains_input=None):
+
+    def __init__(self, target: str) -> None:  # noqa: D107
         super().__init__()
         self._target = target
-        self._contains_input = contains_input
         self.csrf = None  # Result value from all forms on page
-        self._csrf = None  # Temp value from current form
         self._in_form = False  # Currently parsing a form with an action we're interested in
-        self._input_contained = False  # Input field requested is contained in the current form
 
-    def handle_starttag(self, tag, attrs):
-        if tag == "form":
-            attrs = dict(attrs)
-            action = attrs.get("action")  # Might be None.
-            if action and (action == self._target or action.startswith(self._target)):
-                self._in_form = True
-            return
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Union[str, None]]]) -> None:  # noqa: D102
+        if not self.csrf:
+            if tag == "form":
+                attrs = dict(attrs)
+                action = attrs.get("action")  # Might be None.
+                if action and (action == self._target or action.startswith(self._target)):
+                    self._in_form = True
+            elif self._in_form and tag == "input":
+                attrs = dict(attrs)
+                if attrs.get("name") == "csrf_token" and not self.csrf:
+                    self.csrf = attrs["value"]
 
-        if self._in_form and tag == "input":
-            attrs = dict(attrs)
-            if attrs.get("name") == "csrf_token":
-                self._csrf = attrs["value"]
-
-            if self._contains_input and attrs.get("name") == self._contains_input:
-                self._input_contained = True
-
-            return
-
-    def handle_endtag(self, tag):
-        if tag == "form":
+    def handle_endtag(self, tag: str) -> None:  # noqa: D102
+        if tag == "form" and self._in_form:
             self._in_form = False
-            # If we're in a right form that contains the requested input and csrf is not set
-            if (not self._contains_input or self._input_contained) and not self.csrf:
-                self.csrf = self._csrf
-            return
+
+
+class CleanMode(Enum):
+    """Supported clean-up modes."""
+
+    LIST_ONLY = 1
+    DELETE = 2
 
 
 class PyPICleanup:
     """Main class for performing PyPI package cleanup operations."""
 
-    def __init__(self, index_url: str, do_delete: bool, max_dev_releases: int=_DEFAULT_MAX_NIGHTLIES,
-                 username: Optional[str]=None, password: Optional[str]=None, otp: Optional[str]=None):
+    def __init__(  # noqa: D107
+        self,
+        index_url: str,
+        mode: CleanMode,
+        max_dev_releases: int = _DEFAULT_MAX_NIGHTLIES,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        otp: Optional[str] = None,
+    ) -> None:
         parsed_url = urlparse(index_url)
-        self._index_url = parsed_url.geturl().rstrip('/')
+        self._index_url = parsed_url.geturl().rstrip("/")
         self._index_host = parsed_url.hostname
-        self._do_delete = do_delete
+        self._mode = mode
         self._max_dev_releases = max_dev_releases
         self._username = username
         self._password = password
         self._otp = otp
-        self._package = 'duckdb'
+        self._package = "duckdb"
         self._dev_version_pattern = re.compile(r"^(?P<version>\d+\.\d+\.\d+)\.dev(?P<dev_id>\d+)$")
         self._rc_version_pattern = re.compile(r"^(?P<version>\d+\.\d+\.\d+)\.rc\d+$")
         self._stable_version_pattern = re.compile(r"^\d+\.\d+\.\d+(\.post\d+)?$")
 
     def run(self) -> int:
         """Execute the cleanup process.
-        
+
         Returns:
             int: Exit code (0 for success, non-zero for failure)
         """
-        if self._do_delete:
-            logging.warning(f"NOT A DRILL: WILL DELETE PACKAGES")
-        else:
+        if self._mode == CleanMode.DELETE:
+            logging.warning("NOT A DRILL: WILL DELETE PACKAGES")
+        elif self._mode == CleanMode.LIST_ONLY:
             logging.info("Running in DRY RUN mode, nothing will be deleted")
+        else:
+            msg = "Unexpected mode"
+            raise RuntimeError(msg)
 
         logging.info(f"Max development releases to keep per unreleased version: {self._max_dev_releases}")
 
         try:
             with session_with_retries() as http_session:
                 return self._execute_cleanup(http_session)
-        except PyPICleanupError as e:
-            logging.error(f"Cleanup failed: {e}")
+        except PyPICleanupError:
+            logging.exception("Cleanup failed")
             return 1
         except Exception as e:
             logging.error(f"Unexpected error: {e}", exc_info=True)
@@ -262,47 +249,48 @@ class PyPICleanup:
 
     def _execute_cleanup(self, http_session: Session) -> int:
         """Execute the main cleanup logic."""
-
         # Get released versions
         versions = self._fetch_released_versions(http_session)
         if not versions:
             logging.info(f"No releases found for {self._package}")
             return 0
-        
+
         # Determine versions to delete
         versions_to_delete = self._determine_versions_to_delete(versions)
         if not versions_to_delete:
             logging.info("No versions to delete (no stale rc's or dev releases)")
             return 0
-        
+
         logging.warning(f"Found {len(versions_to_delete)} versions to clean up:")
         for version in sorted(versions_to_delete):
             logging.warning(version)
-        
-        if not self._do_delete:
+
+        if self._mode != CleanMode.DELETE:
             logging.info("Dry run complete - no packages were deleted")
             return 0
 
         # Perform authentication and deletion
         self._authenticate(http_session)
         self._delete_versions(http_session, versions_to_delete)
-        
+
         logging.info(f"Successfully cleaned up {len(versions_to_delete)} development versions")
         return 0
-    
-    def _fetch_released_versions(self, http_session: Session) -> Set[str]:
+
+    def _fetch_released_versions(self, http_session: Session) -> set[str]:
         """Fetch package release information from PyPI API."""
         logging.debug(f"Fetching package information for '{self._package}'")
-        
+
         try:
             req = http_session.get(f"{self._index_url}/pypi/{self._package}/json")
             req.raise_for_status()
-            data = req.json()
-            versions = {v for v, files in data["releases"].items() if len(files) > 0}
-            logging.debug(f"Found {len(versions)} releases with files")
-            return versions
         except RequestException as e:
-            raise PyPICleanupError(f"Failed to fetch package information for '{self._package}': {e}") from e
+            msg = f"Failed to fetch package information for '{self._package}': {e}"
+            raise PyPICleanupError(msg) from e
+
+        data = req.json()
+        versions = {v for v, files in data["releases"].items() if len(files) > 0}
+        logging.debug(f"Found {len(versions)} releases with files")
+        return versions
 
     def _is_stable_release_version(self, version: str) -> bool:
         """Determine whether a version string denotes a stable release."""
@@ -320,17 +308,19 @@ class PyPICleanup:
         """Parse a rc version string to determine the base version."""
         match = self._rc_version_pattern.match(version)
         if not match:
-            raise PyPICleanupError(f"Invalid rc version '{version}'")
+            msg = f"Invalid rc version '{version}'"
+            raise PyPICleanupError(msg)
         return match.group("version") if match else None
 
     def _parse_dev_version(self, version: str) -> tuple[str, int]:
         """Parse a dev version string to determine the base version and dev version id."""
         match = self._dev_version_pattern.match(version)
         if not match:
-            raise PyPICleanupError(f"Invalid dev version '{version}'")
+            msg = f"Invalid dev version '{version}'"
+            raise PyPICleanupError(msg)
         return match.group("version"), int(match.group("dev_id"))
 
-    def _determine_versions_to_delete(self, versions: Set[str]) -> Set[str]:
+    def _determine_versions_to_delete(self, versions: set[str]) -> set[str]:
         """Determine which package versions should be deleted."""
         logging.debug("Analyzing versions to determine cleanup candidates")
 
@@ -378,26 +368,29 @@ class PyPICleanup:
 
         # Final safety checks
         if versions_to_delete == versions:
-            raise PyPICleanupError(
+            msg = (
                 f"Safety check failed: cleanup would delete ALL versions of '{self._package}'. "
                 "This would make the package permanently inaccessible. Aborting."
             )
+            raise PyPICleanupError(msg)
         if len(versions_to_delete.intersection(stable_versions)) > 0:
-            raise PyPICleanupError(
+            msg = (
                 f"Safety check failed: cleanup would delete one or more stable versions of '{self._package}'. "
                 f"A regexp might be broken? (would delete {versions_to_delete.intersection(stable_versions)})"
             )
+            raise PyPICleanupError(msg)
         unknown_versions = versions.difference(stable_versions).difference(rc_versions).difference(dev_versions)
         if unknown_versions:
             logging.warning(f"Found version string(s) in an unsupported format: {unknown_versions}")
 
         return versions_to_delete
-    
+
     def _authenticate(self, http_session: Session) -> None:
         """Authenticate with PyPI."""
         if not self._username or not self._password:
-            raise AuthenticationError("Username and password are required for authentication")
-        
+            msg = "Username and password are required for authentication"
+            raise AuthenticationError(msg)
+
         logging.info(f"Authenticating user '{self._username}' with PyPI")
 
         try:
@@ -408,12 +401,13 @@ class PyPICleanup:
             if login_response.url.startswith(f"{self._index_url}/account/two-factor/"):
                 logging.debug("Two-factor authentication required")
                 self._handle_two_factor_auth(http_session, login_response)
-            
+
             logging.info("Authentication successful")
 
         except RequestException as e:
-            raise AuthenticationError(f"Network error during authentication: {e}") from e
-    
+            msg = f"Network error during authentication: {e}"
+            raise AuthenticationError(msg) from e
+
     def _get_csrf_token(self, http_session: Session, form_action: str) -> str:
         """Extract CSRF token from a form page."""
         resp = http_session.get(f"{self._index_url}{form_action}")
@@ -421,43 +415,41 @@ class PyPICleanup:
         parser = CsrfParser(form_action)
         parser.feed(resp.text)
         if not parser.csrf:
-            raise AuthenticationError(f"No CSRF token found in {form_action}")
+            msg = f"No CSRF token found in {form_action}"
+            raise AuthenticationError(msg)
         return parser.csrf
-    
+
     def _perform_login(self, http_session: Session) -> requests.Response:
         """Perform the initial login with username/password."""
-
         # Get login form and CSRF token
         csrf_token = self._get_csrf_token(http_session, "/account/login/")
 
-        login_data = {
-            "csrf_token": csrf_token,
-            "username": self._username,
-            "password": self._password
-        }
+        login_data = {"csrf_token": csrf_token, "username": self._username, "password": self._password}
 
         response = http_session.post(
             f"{self._index_url}/account/login/",
             data=login_data,
-            headers={"referer": f"{self._index_url}/account/login/"}
+            headers={"referer": f"{self._index_url}/account/login/"},
         )
         response.raise_for_status()
 
         # Check if login failed (redirected back to login page)
         if response.url == f"{self._index_url}/account/login/":
-            raise AuthenticationError(f"Login failed for user '{self._username}' - check credentials")
+            msg = f"Login failed for user '{self._username}' - check credentials"
+            raise AuthenticationError(msg)
 
         return response
-    
+
     def _handle_two_factor_auth(self, http_session: Session, response: requests.Response) -> None:
         """Handle two-factor authentication."""
         if not self._otp:
-            raise AuthenticationError("Two-factor authentication required but no OTP secret provided")
-        
+            msg = "Two-factor authentication required but no OTP secret provided"
+            raise AuthenticationError(msg)
+
         two_factor_url = response.url
-        form_action = two_factor_url[len(self._index_url):]
+        form_action = two_factor_url[len(self._index_url) :]
         csrf_token = self._get_csrf_token(http_session, form_action)
-        
+
         # Try authentication with retries
         for attempt in range(_LOGIN_RETRY_ATTEMPTS):
             try:
@@ -467,7 +459,7 @@ class PyPICleanup:
                 auth_response = http_session.post(
                     two_factor_url,
                     data={"csrf_token": csrf_token, "method": "totp", "totp_value": auth_code},
-                    headers={"referer": two_factor_url}
+                    headers={"referer": two_factor_url},
                 )
                 auth_response.raise_for_status()
 
@@ -479,46 +471,48 @@ class PyPICleanup:
                 if attempt < _LOGIN_RETRY_ATTEMPTS - 1:
                     logging.debug(f"2FA code rejected, retrying in {_LOGIN_RETRY_DELAY} seconds...")
                     time.sleep(_LOGIN_RETRY_DELAY)
-                
+
             except RequestException as e:
                 if attempt == _LOGIN_RETRY_ATTEMPTS - 1:
-                    raise AuthenticationError(f"Network error during 2FA: {e}") from e
+                    msg = f"Network error during 2FA: {e}"
+                    raise AuthenticationError(msg) from e
                 logging.debug(f"Network error during 2FA attempt {attempt + 1}, retrying...")
                 time.sleep(_LOGIN_RETRY_DELAY)
-        
-        raise AuthenticationError("Two-factor authentication failed after all attempts")
-    
-    def _delete_versions(self, http_session: Session, versions_to_delete: Set[str]) -> None:
+
+        msg = "Two-factor authentication failed after all attempts"
+        raise AuthenticationError(msg)
+
+    def _delete_versions(self, http_session: Session, versions_to_delete: set[str]) -> None:
         """Delete the specified package versions."""
         logging.info(f"Starting deletion of {len(versions_to_delete)} development versions")
-        
-        failed_deletions = list()
+
+        failed_deletions = []
         for version in sorted(versions_to_delete):
             try:
                 self._delete_single_version(http_session, version)
                 logging.info(f"Successfully deleted {self._package} version {version}")
-            except Exception as e:
+            except Exception:
                 # Continue with other versions rather than failing completely
-                logging.error(f"Failed to delete version {version}: {e}")
+                logging.exception(f"Failed to delete version {version}")
                 failed_deletions.append(version)
-        
+
         if failed_deletions:
-            raise PyPICleanupError(
-                f"Failed to delete {len(failed_deletions)}/{len(versions_to_delete)} versions: {failed_deletions}"
-            )
-    
+            msg = f"Failed to delete {len(failed_deletions)}/{len(versions_to_delete)} versions: {failed_deletions}"
+            raise PyPICleanupError(msg)
+
     def _delete_single_version(self, http_session: Session, version: str) -> None:
         """Delete a single package version."""
         # Safety check
         if not self._is_dev_version(version) or self._is_rc_version(version):
-            raise PyPICleanupError(f"Refusing to delete non-[dev|rc] version: {version}")
-        
+            msg = f"Refusing to delete non-[dev|rc] version: {version}"
+            raise PyPICleanupError(msg)
+
         logging.debug(f"Deleting {self._package} version {version}")
-        
+
         # Get deletion form and CSRF token
         form_action = f"/manage/project/{self._package}/release/{version}/"
         form_url = f"{self._index_url}{form_action}"
-        
+
         csrf_token = self._get_csrf_token(http_session, form_action)
 
         # Submit deletion request
@@ -528,7 +522,7 @@ class PyPICleanup:
                 "csrf_token": csrf_token,
                 "confirm_delete_version": version,
             },
-            headers={"referer": form_url}
+            headers={"referer": form_url},
         )
         delete_response.raise_for_status()
 
@@ -537,34 +531,36 @@ def main() -> int:
     """Main entry point for the script."""
     parser = create_argument_parser()
     args = parser.parse_args()
-    
+
     # Setup logging
-    setup_logging(args.verbose)
-    
+    setup_logging((args.verbose and logging.DEBUG) or logging.INFO)
+
     try:
         # Validate arguments
         validate_arguments(args)
-        
-        # Load credentials
-        password, otp = load_credentials(args.dry_run)
-        
+
+        # Dry run vs delete
+        password, otp, mode = None, None, CleanMode.LIST_ONLY
+        if args.dry_run:
+            password, otp = load_credentials()
+            mode = CleanMode.DELETE
+
         # Determine PyPI URL
         pypi_url = _PYPI_URL_PROD if args.prod else _PYPI_URL_TEST
-        
+
         # Create and run cleanup
-        cleanup = PyPICleanup(pypi_url, not args.dry_run, args.max_nightlies, username=args.username,
-            password=password, otp=otp)
-        
+        cleanup = PyPICleanup(pypi_url, mode, args.max_nightlies, username=args.username, password=password, otp=otp)
+
         return cleanup.run()
-        
-    except ValidationError as e:
-        logging.error(f"Configuration error: {e}")
+
+    except ValidationError:
+        logging.exception("Configuration error")
         return 2
     except KeyboardInterrupt:
         logging.info("Operation cancelled by user")
         return 130
-    except Exception as e:
-        logging.error(f"Unexpected error: {e}", exc_info=args.verbose)
+    except Exception:
+        logging.exception("Unexpected error", exc_info=args.verbose)
         return 1
 
 

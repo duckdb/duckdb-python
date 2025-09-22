@@ -1,10 +1,8 @@
-import platform
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from duckdb.experimental.spark.sql.types import Row
-from duckdb.experimental.spark.sql.functions import col
 
 
 @pytest.fixture
@@ -19,7 +17,6 @@ def df2(spark):
 
 class TestDataFrameIntersect:
     def test_exceptAll(self, spark, df, df2):
-
         df3 = df.exceptAll(df2).sort(*df.columns)
         res = df3.collect()
 

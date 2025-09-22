@@ -1,4 +1,4 @@
-#
+#  # noqa: D100
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -16,37 +16,30 @@
 #
 
 import re
-from typing import Dict
 
 from .error_classes import ERROR_CLASSES_MAP
 
 
 class ErrorClassesReader:
-    """
-    A reader to load error information from error_classes.py.
-    """
+    """A reader to load error information from error_classes.py."""
 
-    def __init__(self) -> None:
+    def __init__(self) -> None:  # noqa: D107
         self.error_info_map = ERROR_CLASSES_MAP
 
-    def get_error_message(self, error_class: str, message_parameters: Dict[str, str]) -> str:
-        """
-        Returns the completed error message by applying message parameters to the message template.
-        """
+    def get_error_message(self, error_class: str, message_parameters: dict[str, str]) -> str:
+        """Returns the completed error message by applying message parameters to the message template."""
         message_template = self.get_message_template(error_class)
         # Verify message parameters.
         message_parameters_from_template = re.findall("<([a-zA-Z0-9_-]+)>", message_template)
         assert set(message_parameters_from_template) == set(message_parameters), (
-            f"Undefined error message parameter for error class: {error_class}. "
-            f"Parameters: {message_parameters}"
+            f"Undefined error message parameter for error class: {error_class}. Parameters: {message_parameters}"
         )
         table = str.maketrans("<>", "{}")
 
         return message_template.translate(table).format(**message_parameters)
 
     def get_message_template(self, error_class: str) -> str:
-        """
-        Returns the message template for corresponding error class from error_classes.py.
+        """Returns the message template for corresponding error class from error_classes.py.
 
         For example,
         when given `error_class` is "EXAMPLE_ERROR_CLASS",
@@ -93,7 +86,8 @@ class ErrorClassesReader:
         if main_error_class in self.error_info_map:
             main_error_class_info_map = self.error_info_map[main_error_class]
         else:
-            raise ValueError(f"Cannot find main error class '{main_error_class}'")
+            msg = f"Cannot find main error class '{main_error_class}'"
+            raise ValueError(msg)
 
         main_message_template = "\n".join(main_error_class_info_map["message"])
 
@@ -108,7 +102,8 @@ class ErrorClassesReader:
             if sub_error_class in main_error_class_subclass_info_map:
                 sub_error_class_info_map = main_error_class_subclass_info_map[sub_error_class]
             else:
-                raise ValueError(f"Cannot find sub error class '{sub_error_class}'")
+                msg = f"Cannot find sub error class '{sub_error_class}'"
+                raise ValueError(msg)
 
             sub_message_template = "\n".join(sub_error_class_info_map["message"])
             message_template = main_message_template + " " + sub_message_template

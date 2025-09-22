@@ -1,5 +1,4 @@
-from _duckdb.typing import (
-    DuckDBPyType,
+from _duckdb.typing import (  # noqa: D104
     BIGINT,
     BIT,
     BLOB,
@@ -8,29 +7,29 @@ from _duckdb.typing import (
     DOUBLE,
     FLOAT,
     HUGEINT,
-    UHUGEINT,
     INTEGER,
     INTERVAL,
     SMALLINT,
     SQLNULL,
     TIME,
+    TIME_TZ,
     TIMESTAMP,
     TIMESTAMP_MS,
     TIMESTAMP_NS,
     TIMESTAMP_S,
     TIMESTAMP_TZ,
-    TIME_TZ,
     TINYINT,
     UBIGINT,
+    UHUGEINT,
     UINTEGER,
     USMALLINT,
     UTINYINT,
     UUID,
-    VARCHAR
+    VARCHAR,
+    DuckDBPyType,
 )
 
 __all__ = [
-    "DuckDBPyType",
     "BIGINT",
     "BIT",
     "BLOB",
@@ -39,7 +38,6 @@ __all__ = [
     "DOUBLE",
     "FLOAT",
     "HUGEINT",
-    "UHUGEINT",
     "INTEGER",
     "INTERVAL",
     "SMALLINT",
@@ -53,9 +51,11 @@ __all__ = [
     "TIME_TZ",
     "TINYINT",
     "UBIGINT",
+    "UHUGEINT",
     "UINTEGER",
     "USMALLINT",
     "UTINYINT",
     "UUID",
-    "VARCHAR"
+    "VARCHAR",
+    "DuckDBPyType",
 ]

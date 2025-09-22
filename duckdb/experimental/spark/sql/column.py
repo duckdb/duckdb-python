@@ -1,19 +1,19 @@
-from typing import Union, TYPE_CHECKING, Any, cast, Callable, Tuple
-from ..exception import ContributionsAcceptedError
+from collections.abc import Iterable  # noqa: D100
+from typing import TYPE_CHECKING, Any, Callable, Union, cast
 
+from ..exception import ContributionsAcceptedError
 from .types import DataType
 
 if TYPE_CHECKING:
-    from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
+    from ._typing import DateTimeLiteral, DecimalLiteral, LiteralType
 
-from duckdb import ConstantExpression, ColumnExpression, FunctionExpression, Expression
-
+from duckdb import ColumnExpression, ConstantExpression, Expression, FunctionExpression
 from duckdb.typing import DuckDBPyType
 
 __all__ = ["Column"]
 
 
-def _get_expr(x) -> Expression:
+def _get_expr(x: Union["Column", str]) -> Expression:
     return x.expr if isinstance(x, Column) else ConstantExpression(x)
 
 
@@ -30,7 +30,7 @@ def _unary_op(
     name: str,
     doc: str = "unary operator",
 ) -> Callable[["Column"], "Column"]:
-    """Create a method for given unary operator"""
+    """Create a method for given unary operator."""
 
     def _(self: "Column") -> "Column":
         # Call the function identified by 'name' on the internal Expression object
@@ -45,7 +45,7 @@ def _bin_op(
     name: str,
     doc: str = "binary operator",
 ) -> Callable[["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"]:
-    """Create a method for given binary operator"""
+    """Create a method for given binary operator."""
 
     def _(
         self: "Column",
@@ -63,7 +63,7 @@ def _bin_func(
     name: str,
     doc: str = "binary function",
 ) -> Callable[["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"]:
-    """Create a function expression for the given binary function"""
+    """Create a function expression for the given binary function."""
 
     def _(
         self: "Column",
@@ -78,8 +78,7 @@ def _bin_func(
 
 
 class Column:
-    """
-    A column in a DataFrame.
+    """A column in a DataFrame.
 
     :class:`Column` instances can be created by::
 
@@ -95,11 +94,11 @@ class Column:
     .. versionadded:: 1.3.0
     """
 
-    def __init__(self, expr: Expression):
+    def __init__(self, expr: Expression) -> None:  # noqa: D107
         self.expr = expr
 
     # arithmetic operators
-    def __neg__(self):
+    def __neg__(self) -> "Column":  # noqa: D105
         return Column(-self.expr)
 
     # `and`, `or`, `not` cannot be overloaded in Python,
@@ -138,9 +137,8 @@ class Column:
 
     __rpow__ = _bin_op("__rpow__")
 
-    def __getitem__(self, k: Any) -> "Column":
-        """
-        An expression that gets an item at position ``ordinal`` out of a list,
+    def __getitem__(self, k: Any) -> "Column":  # noqa: ANN401
+        """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
         .. versionadded:: 1.3.0
@@ -153,35 +151,34 @@ class Column:
         k
             a literal value, or a slice object without step.
 
-        Returns
+        Returns:
         -------
         :class:`Column`
             Column representing the item got by key out of a dict, or substrings sliced by
             the given slice object.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
-        >>> df.select(df.l[slice(1, 3)], df.d['key']).show()
+        >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
+        >>> df.select(df.l[slice(1, 3)], df.d["key"]).show()
         +------------------+------+
         |substring(l, 1, 3)|d[key]|
         +------------------+------+
         |               abc| value|
         +------------------+------+
-        """
+        """  # noqa: D205
         if isinstance(k, slice):
             raise ContributionsAcceptedError
             # if k.step is not None:
             #    raise ValueError("Using a slice with a step value is not supported")
             # return self.substr(k.start, k.stop)
         else:
-            # FIXME: this is super hacky
+            # TODO: this is super hacky  # noqa: TD002, TD003
             expr_str = str(self.expr) + "." + str(k)
             return Column(ColumnExpression(expr_str))
 
-    def __getattr__(self, item: Any) -> "Column":
-        """
-        An expression that gets an item at position ``ordinal`` out of a list,
+    def __getattr__(self, item: Any) -> "Column":  # noqa: ANN401
+        """An expression that gets an item at position ``ordinal`` out of a list,
         or gets an item by key out of a dict.
 
         Parameters
@@ -189,55 +186,53 @@ class Column:
         item
             a literal value.
 
-        Returns
+        Returns:
         -------
         :class:`Column`
             Column representing the item got by key out of a dict.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
+        >>> df = spark.createDataFrame([("abcedfg", {"key": "value"})], ["l", "d"])
         >>> df.select(df.d.key).show()
         +------+
         |d[key]|
         +------+
         | value|
         +------+
-        """
+        """  # noqa: D205
         if item.startswith("__"):
-            raise AttributeError("Can not access __ (dunder) method")
+            msg = "Can not access __ (dunder) method"
+            raise AttributeError(msg)
         return self[item]
 
-    def alias(self, alias: str):
+    def alias(self, alias: str) -> "Column":  # noqa: D102
         return Column(self.expr.alias(alias))
 
-    def when(self, condition: "Column", value: Any):
+    def when(self, condition: "Column", value: Union["Column", str]) -> "Column":  # noqa: D102
         if not isinstance(condition, Column):
-            raise TypeError("condition should be a Column")
+            msg = "condition should be a Column"
+            raise TypeError(msg)
         v = _get_expr(value)
         expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
-    def otherwise(self, value: Any):
+    def otherwise(self, value: Union["Column", str]) -> "Column":  # noqa: D102
         v = _get_expr(value)
         expr = self.expr.otherwise(v)
         return Column(expr)
 
-    def cast(self, dataType: Union[DataType, str]) -> "Column":
-        if isinstance(dataType, str):
-            # Try to construct a default DuckDBPyType from it
-            internal_type = DuckDBPyType(dataType)
-        else:
-            internal_type = dataType.duckdb_type
+    def cast(self, dataType: Union[DataType, str]) -> "Column":  # noqa: D102
+        internal_type = DuckDBPyType(dataType) if isinstance(dataType, str) else dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
 
-    def isin(self, *cols: Any) -> "Column":
+    def isin(self, *cols: Union[Iterable[Union["Column", str]], Union["Column", str]]) -> "Column":  # noqa: D102
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
-            cols = cast(Tuple, cols[0])
+            cols = cast("tuple", cols[0])
 
         cols = cast(
-            Tuple,
+            "tuple",
             [_get_expr(c) for c in cols],
         )
         return Column(self.expr.isin(*cols))
@@ -247,14 +242,14 @@ class Column:
         self,
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
-        """binary function"""
+        """Binary function."""
         return Column(self.expr == (_get_expr(other)))
 
     def __ne__(  # type: ignore[override]
         self,
-        other: Any,
+        other: object,
     ) -> "Column":
-        """binary function"""
+        """Binary function."""
         return Column(self.expr != (_get_expr(other)))
 
     __lt__ = _bin_op("__lt__")
@@ -347,22 +342,20 @@ class Column:
     nulls_first = _unary_op("nulls_first")
     nulls_last = _unary_op("nulls_last")
 
-
-    def asc_nulls_first(self) -> "Column":
+    def asc_nulls_first(self) -> "Column":  # noqa: D102
         return self.asc().nulls_first()
 
-    def asc_nulls_last(self) -> "Column":
+    def asc_nulls_last(self) -> "Column":  # noqa: D102
         return self.asc().nulls_last()
 
-    def desc_nulls_first(self) -> "Column":
+    def desc_nulls_first(self) -> "Column":  # noqa: D102
         return self.desc().nulls_first()
 
-    def desc_nulls_last(self) -> "Column":
+    def desc_nulls_last(self) -> "Column":  # noqa: D102
         return self.desc().nulls_last()
 
-    def isNull(self) -> "Column":
+    def isNull(self) -> "Column":  # noqa: D102
         return Column(self.expr.isnull())
 
-    def isNotNull(self) -> "Column":
+    def isNotNull(self) -> "Column":  # noqa: D102
         return Column(self.expr.isnotnull())
-

@@ -18,8 +18,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  code_quality:
+    name: Code-quality checks
+    uses: ./.github/workflows/code_quality.yml
+
   test:
     name: Run coverage tests
+    needs: code_quality
     uses: ./.github/workflows/coverage.yml
     with:
       git_ref: ${{ github.ref }}

@@ -2,11 +2,12 @@ import platform
 import threading
 import time
 
-import duckdb
 import pytest
 
+import duckdb
 
-class TestConnectionInterrupt(object):
+
+class TestConnectionInterrupt:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="threads not allowed on Emscripten",
@@ -14,7 +15,7 @@ class TestConnectionInterrupt(object):
     def test_connection_interrupt(self):
         conn = duckdb.connect()
 
-        def interrupt():
+        def interrupt() -> None:
             # Wait for query to start running before interrupting
             time.sleep(0.1)
             conn.interrupt()
