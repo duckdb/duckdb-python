@@ -1,17 +1,14 @@
 import duckdb
-import os
 
 try:
     import pyarrow as pa
-    from pyarrow import parquet as pq
-    import numpy as np
 
     can_run = True
-except:
+except Exception:
     can_run = False
 
 
-class TestArrowLargeString(object):
+class TestArrowLargeString:
     def test_large_string_type(self, duckdb_cursor):
         if not can_run:
             return
@@ -22,4 +19,4 @@ class TestArrowLargeString(object):
 
         rel = duckdb.from_arrow(arrow_table)
         res = rel.execute().fetchall()
-        assert res == [('foo',), ('baaaar',), ('b',)]
+        assert res == [("foo",), ("baaaar",), ("b",)]

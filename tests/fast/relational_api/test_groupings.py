@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 
 
 @pytest.fixture
@@ -17,12 +18,12 @@ def con():
 		) AS tbl(a, b, c))
 	"""
     )
-    yield conn
+    return conn
 
 
-class TestGroupings(object):
+class TestGroupings:
     def test_basic_grouping(self, con):
-        rel = con.table('tbl').sum("a", "b")
+        rel = con.table("tbl").sum("a", "b")
         res = rel.fetchall()
         assert res == [(7,), (2,), (5,)]
 
@@ -31,7 +32,7 @@ class TestGroupings(object):
         assert res == res2
 
     def test_cubed(self, con):
-        rel = con.table('tbl').sum("a", "CUBE (b)").order("ALL")
+        rel = con.table("tbl").sum("a", "CUBE (b)").order("ALL")
         res = rel.fetchall()
         assert res == [(2,), (5,), (7,), (14,)]
 
@@ -40,7 +41,7 @@ class TestGroupings(object):
         assert res == res2
 
     def test_rollup(self, con):
-        rel = con.table('tbl').sum("a", "ROLLUP (b, c)").order("ALL")
+        rel = con.table("tbl").sum("a", "ROLLUP (b, c)").order("ALL")
         res = rel.fetchall()
         assert res == [(1,), (1,), (2,), (2,), (2,), (3,), (5,), (5,), (7,), (14,)]
 

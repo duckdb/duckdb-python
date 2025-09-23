@@ -1,32 +1,34 @@
-import duckdb
 import datetime
+
 import pytest
+
+import duckdb
 
 
 def create_query(positive, type):
-    inf = 'infinity' if positive else '-infinity'
+    inf = "infinity" if positive else "-infinity"
     return f"""
         select '{inf}'::{type}
     """
 
 
-class TestDateTimeDateTime(object):
-    @pytest.mark.parametrize('positive', [True, False])
+class TestDateTimeDateTime:
+    @pytest.mark.parametrize("positive", [True, False])
     @pytest.mark.parametrize(
-        'type',
+        "type",
         [
-            'TIMESTAMP',
-            'TIMESTAMP_S',
-            'TIMESTAMP_MS',
-            'TIMESTAMP_NS',
-            'TIMESTAMPTZ',
-            'TIMESTAMP_US',
+            "TIMESTAMP",
+            "TIMESTAMP_S",
+            "TIMESTAMP_MS",
+            "TIMESTAMP_NS",
+            "TIMESTAMPTZ",
+            "TIMESTAMP_US",
         ],
     )
     def test_timestamp_infinity(self, positive, type):
         con = duckdb.connect()
 
-        if type in ['TIMESTAMP_S', 'TIMESTAMP_MS', 'TIMESTAMP_NS']:
+        if type in ["TIMESTAMP_S", "TIMESTAMP_MS", "TIMESTAMP_NS"]:
             # Infinity (both positive and negative) is not supported for non-usecond timetamps
             return
 

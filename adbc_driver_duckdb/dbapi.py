@@ -15,14 +15,13 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""
-DBAPI 2.0-compatible facade for the ADBC DuckDB driver.
-"""
+"""DBAPI 2.0-compatible facade for the ADBC DuckDB driver."""
 
 import typing
 
 import adbc_driver_manager
 import adbc_driver_manager.dbapi
+
 import adbc_driver_duckdb
 
 __all__ = [

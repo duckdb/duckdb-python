@@ -1,16 +1,16 @@
-import duckdb
-import datetime
 import numpy as np
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 
 def create_generic_dataframe(data, pandas):
-    return pandas.DataFrame({'col0': pandas.Series(data=data, dtype='object')})
+    return pandas.DataFrame({"col0": pandas.Series(data=data, dtype="object")})
 
 
-class TestResolveObjectColumns(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+class TestResolveObjectColumns:
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_sample_low_correct(self, duckdb_cursor, pandas):
         print(pandas.backend)
         duckdb_conn = duckdb.connect()
@@ -21,7 +21,7 @@ class TestResolveObjectColumns(object):
         duckdb_df = duckdb_conn.query("select * FROM (VALUES (1000008), (6), (9), (4), (1), (6)) as '0'").df()
         pandas.testing.assert_frame_equal(duckdb_df, roundtripped_df, check_dtype=False)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_sample_low_incorrect_detected(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("SET pandas_analyze_sample=2")
@@ -31,9 +31,9 @@ class TestResolveObjectColumns(object):
         df = create_generic_dataframe(data, pandas)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
         # Sample high enough to detect mismatch in types, fallback to VARCHAR
-        assert roundtripped_df['col0'].dtype == np.dtype('object')
+        assert roundtripped_df["col0"].dtype == np.dtype("object")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_sample_zero(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
         # Disable dataframe analyze
@@ -42,12 +42,12 @@ class TestResolveObjectColumns(object):
         df = create_generic_dataframe(data, pandas)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
         # Always converts to VARCHAR
-        if pandas.backend == 'pyarrow':
-            assert roundtripped_df['col0'].dtype == np.dtype('int64')
+        if pandas.backend == "pyarrow":
+            assert roundtripped_df["col0"].dtype == np.dtype("int64")
         else:
-            assert roundtripped_df['col0'].dtype == np.dtype('object')
+            assert roundtripped_df["col0"].dtype == np.dtype("object")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_sample_low_incorrect_undetected(self, duckdb_cursor, pandas):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("SET pandas_analyze_sample=1")
@@ -55,7 +55,7 @@ class TestResolveObjectColumns(object):
         df = create_generic_dataframe(data, pandas)
         # Sample size is too low to detect the mismatch, exception is raised when trying to convert
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
-            roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
+            duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
 
     def test_reset_analyze_sample_setting(self, duckdb_cursor):
         duckdb_cursor.execute("SET pandas_analyze_sample=5")
@@ -65,10 +65,10 @@ class TestResolveObjectColumns(object):
         res = duckdb_cursor.execute("select current_setting('pandas_analyze_sample')").fetchall()
         assert res == [(1000,)]
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_10750(self, duckdb_cursor, pandas):
         max_row_number = 2000
-        data = {'id': [i for i in range(max_row_number + 1)], 'content': [None for _ in range(max_row_number + 1)]}
+        data = {"id": list(range(max_row_number + 1)), "content": [None for _ in range(max_row_number + 1)]}
 
         pdf = pandas.DataFrame(data=data)
         duckdb_cursor.register("content", pdf)

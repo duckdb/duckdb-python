@@ -1,7 +1,6 @@
-import pytest
-import tempfile
-
 import os
+
+import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
@@ -17,12 +16,12 @@ def df(spark):
     )
     columns = ["CourseName", "fee", "discount"]
     dataframe = spark.createDataFrame(data=simpleData, schema=columns)
-    yield dataframe
+    return dataframe
 
 
-class TestSparkToParquet(object):
+class TestSparkToParquet:
     def test_basic_to_parquet(self, df, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")
+        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")  # noqa: PTH118
 
         df.write.parquet(temp_file_name)
 
@@ -31,7 +30,7 @@ class TestSparkToParquet(object):
         assert sorted(df.collect()) == sorted(csv_rel.collect())
 
     def test_compressed_to_parquet(self, df, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")
+        temp_file_name = os.path.join(tmp_path, "temp_file.parquet")  # noqa: PTH118
 
         df.write.parquet(temp_file_name, compression="ZSTD")
 

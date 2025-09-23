@@ -1,24 +1,20 @@
+import uuid  # noqa: D100
 from functools import reduce
+from keyword import iskeyword
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    List,
-    Dict,
     Optional,
-    Tuple,
     Union,
     cast,
     overload,
 )
-import uuid
-from keyword import iskeyword
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
 
-from ._typing import ColumnOrName
-from ..errors import PySparkTypeError, PySparkValueError, PySparkIndexError
+from ..errors import PySparkIndexError, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
 from .column import Column
 from .readwriter import DataFrameWriter
@@ -29,43 +25,42 @@ if TYPE_CHECKING:
     import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-    from .group import GroupedData, Grouping
+    from ._typing import ColumnOrName
+    from .group import GroupedData
     from .session import SparkSession
 
-from ..errors import PySparkValueError
-from .functions import _to_column_expr, col, lit
+from duckdb.experimental.spark.sql import functions as spark_sql_functions
 
 
-class DataFrame:
-    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
+class DataFrame:  # noqa: D101
+    def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession") -> None:  # noqa: D107
         self.relation = relation
         self.session = session
         self._schema = None
         if self.relation is not None:
             self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
-    def show(self, **kwargs) -> None:
+    def show(self, **kwargs) -> None:  # noqa: D102
         self.relation.show()
 
-    def toPandas(self) -> "PandasDataFrame":
+    def toPandas(self) -> "PandasDataFrame":  # noqa: D102
         return self.relation.df()
 
     def toArrow(self) -> "pa.Table":
-        """
-        Returns the contents of this :class:`DataFrame` as PyArrow ``pyarrow.Table``.
+        """Returns the contents of this :class:`DataFrame` as PyArrow ``pyarrow.Table``.
 
         This is only available if PyArrow is installed and available.
 
         .. versionadded:: 4.0.0
 
-        Notes
+        Notes:
         -----
         This method should only be used if the resulting PyArrow ``pyarrow.Table`` is
         expected to be small, as all the data is loaded into the driver's memory.
 
         This API is a developer API.
 
-        Examples
+        Examples:
         --------
         >>> df.toArrow()  # doctest: +SKIP
         pyarrow.Table
@@ -88,7 +83,7 @@ class DataFrame:
         name : str
             Name of the view.
 
-        Examples
+        Examples:
         --------
         Create a local temporary view named 'people'.
 
@@ -108,12 +103,13 @@ class DataFrame:
         """
         self.relation.create_view(name, True)
 
-    def createGlobalTempView(self, name: str) -> None:
+    def createGlobalTempView(self, name: str) -> None:  # noqa: D102
         raise NotImplementedError
 
-    def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":
+    def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":  # noqa: D102
         if columnName not in self.relation:
-            raise ValueError(f"DataFrame does not contain a column named {columnName}")
+            msg = f"DataFrame does not contain a column named {columnName}"
+            raise ValueError(msg)
         cols = []
         for x in self.relation.columns:
             col = ColumnExpression(x)
@@ -123,7 +119,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumn(self, columnName: str, col: Column) -> "DataFrame":
+    def withColumn(self, columnName: str, col: Column) -> "DataFrame":  # noqa: D102
         if not isinstance(col, Column):
             raise PySparkTypeError(
                 error_class="NOT_COLUMN",
@@ -143,9 +139,8 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumns(self, *colsMap: Dict[str, Column]) -> "DataFrame":
-        """
-        Returns a new :class:`DataFrame` by adding multiple columns or replacing the
+    def withColumns(self, *colsMap: dict[str, Column]) -> "DataFrame":
+        """Returns a new :class:`DataFrame` by adding multiple columns or replacing the
         existing columns that have the same names.
 
         The colsMap is a map of column name and column, the column must only refer to attributes
@@ -162,22 +157,22 @@ class DataFrame:
         colsMap : dict
             a dict of column name and :class:`Column`. Currently, only a single map is supported.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             DataFrame with new or replaced columns.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
-        >>> df.withColumns({'age2': df.age + 2, 'age3': df.age + 3}).show()
+        >>> df.withColumns({"age2": df.age + 2, "age3": df.age + 3}).show()
         +---+-----+----+----+
         |age| name|age2|age3|
         +---+-----+----+----+
         |  2|Alice|   4|   5|
         |  5|  Bob|   7|   8|
         +---+-----+----+----+
-        """
+        """  # noqa: D205
         # Below code is to help enable kwargs in future.
         assert len(colsMap) == 1
         colsMap = colsMap[0]  # type: ignore[assignment]
@@ -218,9 +213,8 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-    def withColumnsRenamed(self, colsMap: Dict[str, str]) -> "DataFrame":
-        """
-        Returns a new :class:`DataFrame` by renaming multiple columns.
+    def withColumnsRenamed(self, colsMap: dict[str, str]) -> "DataFrame":
+        """Returns a new :class:`DataFrame` by renaming multiple columns.
         This is a no-op if the schema doesn't contain the given column names.
 
         .. versionadded:: 3.4.0
@@ -232,31 +226,31 @@ class DataFrame:
             a dict of existing column names and corresponding desired column names.
             Currently, only a single map is supported.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             DataFrame with renamed columns.
 
-        See Also
+        See Also:
         --------
         :meth:`withColumnRenamed`
 
-        Notes
+        Notes:
         -----
         Support Spark Connect
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
-        >>> df = df.withColumns({'age2': df.age + 2, 'age3': df.age + 3})
-        >>> df.withColumnsRenamed({'age2': 'age4', 'age3': 'age5'}).show()
+        >>> df = df.withColumns({"age2": df.age + 2, "age3": df.age + 3})
+        >>> df.withColumnsRenamed({"age2": "age4", "age3": "age5"}).show()
         +---+-----+----+----+
         |age| name|age4|age5|
         +---+-----+----+----+
         |  2|Alice|   4|   5|
         |  5|  Bob|   7|   8|
         +---+-----+----+----+
-        """
+        """  # noqa: D205
         if not isinstance(colsMap, dict):
             raise PySparkTypeError(
                 error_class="NOT_DICT",
@@ -265,9 +259,8 @@ class DataFrame:
 
         unknown_columns = set(colsMap.keys()) - set(self.relation.columns)
         if unknown_columns:
-            raise ValueError(
-                f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
-            )
+            msg = f"DataFrame does not contain column(s): {', '.join(unknown_columns)}"
+            raise ValueError(msg)
 
         # Compute this only once
         old_column_names = list(colsMap.keys())
@@ -289,11 +282,7 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
-
-
-    def transform(
-        self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any
-    ) -> "DataFrame":
+    def transform(self, func: Callable[..., "DataFrame"], *args: Any, **kwargs: Any) -> "DataFrame":  # noqa: ANN401
         """Returns a new :class:`DataFrame`. Concise syntax for chaining custom transformations.
 
         .. versionadded:: 3.0.0
@@ -314,21 +303,19 @@ class DataFrame:
 
             .. versionadded:: 3.3.0
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Transformed DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql.functions import col
         >>> df = spark.createDataFrame([(1, 1.0), (2, 2.0)], ["int", "float"])
         >>> def cast_all_to_int(input_df):
         ...     return input_df.select([col(col_name).cast("int") for col_name in input_df.columns])
-        ...
         >>> def sort_columns_asc(input_df):
         ...     return input_df.select(*sorted(input_df.columns))
-        ...
         >>> df.transform(cast_all_to_int).transform(sort_columns_asc).show()
         +-----+---+
         |float|int|
@@ -338,8 +325,9 @@ class DataFrame:
         +-----+---+
 
         >>> def add_n(input_df, n):
-        ...     return input_df.select([(col(col_name) + n).alias(col_name)
-        ...                             for col_name in input_df.columns])
+        ...     return input_df.select(
+        ...         [(col(col_name) + n).alias(col_name) for col_name in input_df.columns]
+        ...     )
         >>> df.transform(add_n, 1).transform(add_n, n=10).show()
         +---+-----+
         |int|float|
@@ -350,14 +338,11 @@ class DataFrame:
         """
         result = func(self, *args, **kwargs)
         assert isinstance(result, DataFrame), (
-            "Func returned an instance of type [%s], "
-            "should have been DataFrame." % type(result)
+            f"Func returned an instance of type [{type(result)}], should have been DataFrame."
         )
         return result
 
-    def sort(
-        self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any
-    ) -> "DataFrame":
+    def sort(self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any) -> "DataFrame":  # noqa: ANN401
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
@@ -372,16 +357,15 @@ class DataFrame:
             Sort ascending vs. descending. Specify list for multiple sort orders.
             If a list is specified, the length of the list must equal the length of the `cols`.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Sorted DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql.functions import desc, asc
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
 
         Sort the DataFrame in ascending order.
 
@@ -419,8 +403,9 @@ class DataFrame:
 
         Specify multiple columns
 
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice"), (2, "Bob"), (5, "Bob")], schema=["age", "name"]
+        ... )
         >>> df.orderBy(desc("age"), "name").show()
         +---+-----+
         |age| name|
@@ -453,7 +438,7 @@ class DataFrame:
         for c in cols:
             _c = c
             if isinstance(c, str):
-                _c = col(c)
+                _c = spark_sql_functions.col(c)
             elif isinstance(c, int) and not isinstance(c, bool):
                 # ordinal is 1-based
                 if c > 0:
@@ -481,13 +466,13 @@ class DataFrame:
                 message_parameters={"arg_name": "ascending", "arg_type": type(ascending).__name__},
             )
 
-        columns = [_to_column_expr(c) for c in columns]
+        columns = [spark_sql_functions._to_column_expr(c) for c in columns]
         rel = self.relation.sort(*columns)
         return DataFrame(rel, self.session)
 
     orderBy = sort
 
-    def head(self, n: Optional[int] = None) -> Union[Optional[Row], List[Row]]:
+    def head(self, n: Optional[int] = None) -> Union[Optional[Row], list[Row]]:  # noqa: D102
         if n is None:
             rs = self.head(1)
             return rs[0] if rs else None
@@ -495,7 +480,7 @@ class DataFrame:
 
     first = head
 
-    def take(self, num: int) -> List[Row]:
+    def take(self, num: int) -> list[Row]:  # noqa: D102
         return self.limit(num).collect()
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
@@ -509,15 +494,14 @@ class DataFrame:
             a :class:`Column` of :class:`types.BooleanType`
             or a string of SQL expressions.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Filtered DataFrame.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
 
         Filter by :class:`Column` instances.
 
@@ -563,38 +547,34 @@ class DataFrame:
 
     where = filter
 
-    def select(self, *cols) -> "DataFrame":
+    def select(self, *cols) -> "DataFrame":  # noqa: D102
         cols = list(cols)
         if len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, list):
-            projections = [
-                x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols
-            ]
+            projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
         else:
-            projections = [
-                cols.expr if isinstance(cols, Column) else ColumnExpression(cols)
-            ]
+            projections = [cols.expr if isinstance(cols, Column) else ColumnExpression(cols)]
         rel = self.relation.select(*projections)
         return DataFrame(rel, self.session)
 
     @property
-    def columns(self) -> List[str]:
+    def columns(self) -> list[str]:
         """Returns all column names as a list.
 
-        Examples
+        Examples:
         --------
         >>> df.columns
         ['age', 'name']
         """
         return [f.name for f in self.schema.fields]
 
-    def _ipython_key_completions_(self) -> List[str]:
+    def _ipython_key_completions_(self) -> list[str]:
         # Provides tab-completion for column names in PySpark DataFrame
         # when accessed in bracket notation, e.g. df['<TAB>]
         return self.columns
 
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:  # noqa: D105
         out = set(super().__dir__())
         out.update(c for c in self.columns if c.isidentifier() and not iskeyword(c))
         return sorted(out)
@@ -602,7 +582,7 @@ class DataFrame:
     def join(
         self,
         other: "DataFrame",
-        on: Optional[Union[str, List[str], Column, List[Column]]] = None,
+        on: Optional[Union[str, list[str], Column, list[Column]]] = None,
         how: Optional[str] = None,
     ) -> "DataFrame":
         """Joins with another :class:`DataFrame`, using the given join expression.
@@ -622,12 +602,12 @@ class DataFrame:
             ``right``, ``rightouter``, ``right_outer``, ``semi``, ``leftsemi``, ``left_semi``,
             ``anti``, ``leftanti`` and ``left_anti``.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Joined DataFrame.
 
-        Examples
+        Examples:
         --------
         The following performs a full outer join between ``df1`` and ``df2``.
 
@@ -636,22 +616,24 @@ class DataFrame:
         >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
         >>> df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")])
         >>> df3 = spark.createDataFrame([Row(age=2, name="Alice"), Row(age=5, name="Bob")])
-        >>> df4 = spark.createDataFrame([
-        ...     Row(age=10, height=80, name="Alice"),
-        ...     Row(age=5, height=None, name="Bob"),
-        ...     Row(age=None, height=None, name="Tom"),
-        ...     Row(age=None, height=None, name=None),
-        ... ])
+        >>> df4 = spark.createDataFrame(
+        ...     [
+        ...         Row(age=10, height=80, name="Alice"),
+        ...         Row(age=5, height=None, name="Bob"),
+        ...         Row(age=None, height=None, name="Tom"),
+        ...         Row(age=None, height=None, name=None),
+        ...     ]
+        ... )
 
         Inner join on columns (default)
 
-        >>> df.join(df2, 'name').select(df.name, df2.height).show()
+        >>> df.join(df2, "name").select(df.name, df2.height).show()
         +----+------+
         |name|height|
         +----+------+
         | Bob|    85|
         +----+------+
-        >>> df.join(df4, ['name', 'age']).select(df.name, df.age).show()
+        >>> df.join(df4, ["name", "age"]).select(df.name, df.age).show()
         +----+---+
         |name|age|
         +----+---+
@@ -660,8 +642,9 @@ class DataFrame:
 
         Outer join for both DataFrames on the 'name' column.
 
-        >>> df.join(df2, df.name == df2.name, 'outer').select(
-        ...     df.name, df2.height).sort(desc("name")).show()
+        >>> df.join(df2, df.name == df2.name, "outer").select(df.name, df2.height).sort(
+        ...     desc("name")
+        ... ).show()
         +-----+------+
         | name|height|
         +-----+------+
@@ -669,7 +652,7 @@ class DataFrame:
         |Alice|  NULL|
         | NULL|    80|
         +-----+------+
-        >>> df.join(df2, 'name', 'outer').select('name', 'height').sort(desc("name")).show()
+        >>> df.join(df2, "name", "outer").select("name", "height").sort(desc("name")).show()
         +-----+------+
         | name|height|
         +-----+------+
@@ -680,11 +663,9 @@ class DataFrame:
 
         Outer join for both DataFrams with multiple columns.
 
-        >>> df.join(
-        ...     df3,
-        ...     [df.name == df3.name, df.age == df3.age],
-        ...     'outer'
-        ... ).select(df.name, df3.age).show()
+        >>> df.join(df3, [df.name == df3.name, df.age == df3.age], "outer").select(
+        ...     df.name, df3.age
+        ... ).show()
         +-----+---+
         | name|age|
         +-----+---+
@@ -692,20 +673,16 @@ class DataFrame:
         |  Bob|  5|
         +-----+---+
         """
-
         if on is not None and not isinstance(on, list):
             on = [on]  # type: ignore[assignment]
-        if on is not None and not all([isinstance(x, str) for x in on]):
+        if on is not None and not all(isinstance(x, str) for x in on):
             assert isinstance(on, list)
             # Get (or create) the Expressions from the list of Columns
-            on = [_to_column_expr(x) for x in on]
+            on = [spark_sql_functions._to_column_expr(x) for x in on]
 
             # & all the Expressions together to form one Expression
-            assert isinstance(
-                on[0], Expression
-            ), "on should be Column or list of Column"
-            on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
-
+            assert isinstance(on[0], Expression), "on should be Column or list of Column"
+            on = reduce(lambda x, y: x.__and__(y), cast("list[Expression]", on))
 
         if on is None and how is None:
             result = self.relation.join(other.relation)
@@ -714,14 +691,14 @@ class DataFrame:
                 how = "inner"
             if on is None:
                 on = "true"
-            elif isinstance(on, list) and all([isinstance(x, str) for x in on]):
+            elif isinstance(on, list) and all(isinstance(x, str) for x in on):
                 # Passed directly through as a list of strings
                 on = on
             else:
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
 
-            def map_to_recognized_jointype(how):
+            def map_to_recognized_jointype(how: str) -> str:
                 known_aliases = {
                     "inner": [],
                     "outer": ["full", "fullouter", "full_outer"],
@@ -730,15 +707,10 @@ class DataFrame:
                     "anti": ["leftanti", "left_anti"],
                     "semi": ["leftsemi", "left_semi"],
                 }
-                mapped_type = None
                 for type, aliases in known_aliases.items():
                     if how == type or how in aliases:
-                        mapped_type = type
-                        break
-
-                if not mapped_type:
-                    mapped_type = how
-                return mapped_type
+                        return type
+                return how
 
             how = map_to_recognized_jointype(how)
             result = self.relation.join(other.relation, on, how)
@@ -757,18 +729,16 @@ class DataFrame:
         other : :class:`DataFrame`
             Right side of the cartesian product.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Joined DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql import Row
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
-        >>> df2 = spark.createDataFrame(
-        ...     [Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")])
         >>> df.crossJoin(df2.select("height")).select("age", "name", "height").show()
         +---+-----+------+
         |age| name|height|
@@ -791,21 +761,21 @@ class DataFrame:
         alias : str
             an alias name to be set for the :class:`DataFrame`.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Aliased DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql.functions import col, desc
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
         >>> df_as1 = df.alias("df_as1")
         >>> df_as2 = df.alias("df_as2")
-        >>> joined_df = df_as1.join(df_as2, col("df_as1.name") == col("df_as2.name"), 'inner')
-        >>> joined_df.select(
-        ...     "df_as1.name", "df_as2.name", "df_as2.age").sort(desc("df_as1.name")).show()
+        >>> joined_df = df_as1.join(df_as2, col("df_as1.name") == col("df_as2.name"), "inner")
+        >>> joined_df.select("df_as1.name", "df_as2.name", "df_as2.age").sort(
+        ...     desc("df_as1.name")
+        ... ).show()
         +-----+-----+---+
         | name| name|age|
         +-----+-----+---+
@@ -817,7 +787,7 @@ class DataFrame:
         assert isinstance(alias, str), "alias should be a string"
         return DataFrame(self.relation.set_alias(alias), self.session)
 
-    def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
+    def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]  # noqa: D102
         exclude = []
         for col in cols:
             if isinstance(col, str):
@@ -834,7 +804,7 @@ class DataFrame:
         expr = StarExpression(exclude=exclude)
         return DataFrame(self.relation.select(expr), self.session)
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return str(self.relation)
 
     def limit(self, num: int) -> "DataFrame":
@@ -846,15 +816,14 @@ class DataFrame:
             Number of records to return. Will return this number of records
             or all records if the DataFrame contains less than this number of records.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Subset of the records
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
         >>> df.limit(1).show()
         +---+----+
         |age|name|
@@ -870,17 +839,15 @@ class DataFrame:
         rel = self.relation.limit(num)
         return DataFrame(rel, self.session)
 
-    def __contains__(self, item: str):
-        """
-        Check if the :class:`DataFrame` contains a column by the name of `item`
-        """
+    def __contains__(self, item: str) -> bool:
+        """Check if the :class:`DataFrame` contains a column by the name of `item`."""
         return item in self.relation
 
     @property
     def schema(self) -> StructType:
         """Returns the schema of this :class:`DataFrame` as a :class:`duckdb.experimental.spark.sql.types.StructType`.
 
-        Examples
+        Examples:
         --------
         >>> df.schema
         StructType([StructField('age', IntegerType(), True),
@@ -889,25 +856,21 @@ class DataFrame:
         return self._schema
 
     @overload
-    def __getitem__(self, item: Union[int, str]) -> Column:
-        ...
+    def __getitem__(self, item: Union[int, str]) -> Column: ...
 
     @overload
-    def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
-        ...
+    def __getitem__(self, item: Union[Column, list, tuple]) -> "DataFrame": ...
 
-    def __getitem__(
-        self, item: Union[int, str, Column, List, Tuple]
-    ) -> Union[Column, "DataFrame"]:
+    def __getitem__(self, item: Union[int, str, Column, list, tuple]) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
-        Examples
+        Examples:
         --------
-        >>> df.select(df['age']).collect()
+        >>> df.select(df["age"]).collect()
         [Row(age=2), Row(age=5)]
-        >>> df[ ["name", "age"]].collect()
+        >>> df[["name", "age"]].collect()
         [Row(name='Alice', age=2), Row(name='Bob', age=5)]
-        >>> df[ df.age > 3 ].collect()
+        >>> df[df.age > 3].collect()
         [Row(age=5, name='Bob')]
         >>> df[df[0] > 3].collect()
         [Row(age=5, name='Bob')]
@@ -919,31 +882,29 @@ class DataFrame:
         elif isinstance(item, (list, tuple)):
             return self.select(*item)
         elif isinstance(item, int):
-            return col(self._schema[item].name)
+            return spark_sql_functions.col(self._schema[item].name)
         else:
-            raise TypeError(f"Unexpected item type: {type(item)}")
+            msg = f"Unexpected item type: {type(item)}"
+            raise TypeError(msg)
 
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.
 
-        Examples
+        Examples:
         --------
         >>> df.select(df.age).collect()
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError(
-                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
-            )
+            msg = f"'{self.__class__.__name__}' object has no attribute '{name}'"
+            raise AttributeError(msg)
         return Column(duckdb.ColumnExpression(self.relation.alias, name))
 
     @overload
-    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
-        ...
+    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData": ...
 
     @overload
-    def groupBy(self, __cols: Union[List[Column], List[str]]) -> "GroupedData":
-        ...
+    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData": ...  # noqa: PYI063
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
         """Groups the :class:`DataFrame` using the specified columns,
@@ -959,15 +920,16 @@ class DataFrame:
             Each element should be a column name (string) or an expression (:class:`Column`)
             or list of them.
 
-        Returns
+        Returns:
         -------
         :class:`GroupedData`
             Grouped data by given columns.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice"), (2, "Bob"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice"), (2, "Bob"), (2, "Bob"), (5, "Bob")], schema=["age", "name"]
+        ... )
 
         Empty grouping columns triggers a global aggregation.
 
@@ -1008,22 +970,19 @@ class DataFrame:
         |  Bob|  2|    2|
         |  Bob|  5|    1|
         +-----+---+-----+
-        """
+        """  # noqa: D205
         from .group import GroupedData, Grouping
 
-        if len(cols) == 1 and isinstance(cols[0], list):
-            columns = cols[0]
-        else:
-            columns = cols
+        columns = cols[0] if len(cols) == 1 and isinstance(cols[0], list) else cols
         return GroupedData(Grouping(*columns), self)
 
     groupby = groupBy
 
     @property
-    def write(self) -> DataFrameWriter:
+    def write(self) -> DataFrameWriter:  # noqa: D102
         return DataFrameWriter(self)
 
-    def printSchema(self):
+    def printSchema(self) -> None:  # noqa: D102
         raise ContributionsAcceptedError
 
     def union(self, other: "DataFrame") -> "DataFrame":
@@ -1035,22 +994,22 @@ class DataFrame:
         other : :class:`DataFrame`
             Another :class:`DataFrame` that needs to be unioned
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
 
-        See Also
+        See Also:
         --------
         DataFrame.unionAll
 
-        Notes
+        Notes:
         -----
         This is equivalent to `UNION ALL` in SQL. To do a SQL-style set union
         (that does deduplication of elements), use this function followed by :func:`distinct`.
 
         Also as standard in SQL, this function resolves columns by position (not by name).
 
-        Examples
+        Examples:
         --------
         >>> df1 = spark.createDataFrame([[1, 2, 3]], ["col0", "col1", "col2"])
         >>> df2 = spark.createDataFrame([[4, 5, 6]], ["col1", "col2", "col0"])
@@ -1068,14 +1027,12 @@ class DataFrame:
         |   1|   2|   3|
         |   1|   2|   3|
         +----+----+----+
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.union(other.relation), self.session)
 
     unionAll = union
 
-    def unionByName(
-        self, other: "DataFrame", allowMissingColumns: bool = False
-    ) -> "DataFrame":
+    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing union of rows in this and another
         :class:`DataFrame`.
 
@@ -1096,12 +1053,12 @@ class DataFrame:
 
            .. versionadded:: 3.1.0
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Combined DataFrame.
 
-        Examples
+        Examples:
         --------
         The difference between this function and :func:`union` is that this function
         resolves columns by name (not by position):
@@ -1130,14 +1087,14 @@ class DataFrame:
         |   1|   2|   3|NULL|
         |NULL|   4|   5|   6|
         +----+----+----+----+
-        """
+        """  # noqa: D205
         if allowMissingColumns:
             cols = []
             for col in self.relation.columns:
                 if col in other.relation.columns:
                     cols.append(col)
                 else:
-                    cols.append(lit(None))
+                    cols.append(spark_sql_functions.lit(None))
             other = other.select(*cols)
         else:
             other = other.select(*self.relation.columns)
@@ -1160,16 +1117,16 @@ class DataFrame:
         other : :class:`DataFrame`
             Another :class:`DataFrame` that needs to be combined.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Combined DataFrame.
 
-        Notes
+        Notes:
         -----
         This is equivalent to `INTERSECT` in SQL.
 
-        Examples
+        Examples:
         --------
         >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
         >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
@@ -1180,7 +1137,7 @@ class DataFrame:
         |  b|  3|
         |  a|  1|
         +---+---+
-        """
+        """  # noqa: D205
         return self.intersectAll(other).drop_duplicates()
 
     def intersectAll(self, other: "DataFrame") -> "DataFrame":
@@ -1200,12 +1157,12 @@ class DataFrame:
         other : :class:`DataFrame`
             Another :class:`DataFrame` that needs to be combined.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Combined DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> df1 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3), ("c", 4)], ["C1", "C2"])
         >>> df2 = spark.createDataFrame([("a", 1), ("a", 1), ("b", 3)], ["C1", "C2"])
@@ -1217,7 +1174,7 @@ class DataFrame:
         |  a|  1|
         |  b|  3|
         +---+---+
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.intersect(other.relation), self.session)
 
     def exceptAll(self, other: "DataFrame") -> "DataFrame":
@@ -1237,14 +1194,15 @@ class DataFrame:
         other : :class:`DataFrame`
             The other :class:`DataFrame` to compare to.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
 
-        Examples
+        Examples:
         --------
         >>> df1 = spark.createDataFrame(
-        ...         [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b",  3), ("c", 4)], ["C1", "C2"])
+        ...     [("a", 1), ("a", 1), ("a", 1), ("a", 2), ("b", 3), ("c", 4)], ["C1", "C2"]
+        ... )
         >>> df2 = spark.createDataFrame([("a", 1), ("b", 3)], ["C1", "C2"])
         >>> df1.exceptAll(df2).show()
         +---+---+
@@ -1256,10 +1214,10 @@ class DataFrame:
         |  c|  4|
         +---+---+
 
-        """
+        """  # noqa: D205
         return DataFrame(self.relation.except_(other.relation), self.session)
 
-    def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
+    def dropDuplicates(self, subset: Optional[list[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
 
@@ -1276,19 +1234,21 @@ class DataFrame:
         subset : List of column names, optional
             List of columns to use for duplicate comparison (default All columns).
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             DataFrame without duplicates.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql import Row
-        >>> df = spark.createDataFrame([
-        ...     Row(name='Alice', age=5, height=80),
-        ...     Row(name='Alice', age=5, height=80),
-        ...     Row(name='Alice', age=10, height=80)
-        ... ])
+        >>> df = spark.createDataFrame(
+        ...     [
+        ...         Row(name="Alice", age=5, height=80),
+        ...         Row(name="Alice", age=5, height=80),
+        ...         Row(name="Alice", age=10, height=80),
+        ...     ]
+        ... )
 
         Deduplicate the same rows.
 
@@ -1302,16 +1262,16 @@ class DataFrame:
 
         Deduplicate values on 'name' and 'height' columns.
 
-        >>> df.dropDuplicates(['name', 'height']).show()
+        >>> df.dropDuplicates(["name", "height"]).show()
         +-----+---+------+
         | name|age|height|
         +-----+---+------+
         |Alice|  5|    80|
         +-----+---+------+
-        """
+        """  # noqa: D205
         if subset:
             rn_col = f"tmp_col_{uuid.uuid1().hex}"
-            subset_str = ', '.join([f'"{c}"' for c in subset])
+            subset_str = ", ".join([f'"{c}"' for c in subset])
             window_spec = f"OVER(PARTITION BY {subset_str}) AS {rn_col}"
             df = DataFrame(self.relation.row_number(window_spec, "*"), self.session)
             return df.filter(f"{rn_col} = 1").drop(rn_col)
@@ -1320,19 +1280,17 @@ class DataFrame:
 
     drop_duplicates = dropDuplicates
 
-
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             DataFrame with distinct records.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (23, "Alice")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (23, "Alice")], ["age", "name"])
 
         Return the number of distinct rows in the :class:`DataFrame`
 
@@ -1345,15 +1303,14 @@ class DataFrame:
     def count(self) -> int:
         """Returns the number of rows in this :class:`DataFrame`.
 
-        Returns
+        Returns:
         -------
         int
             Number of rows.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame(
-        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
 
         Return the number of rows in the :class:`DataFrame`.
 
@@ -1369,33 +1326,28 @@ class DataFrame:
         assert types_count == len(existing_columns)
 
         cast_expressions = [
-            f"{existing}::{target_type} as {existing}"
-            for existing, target_type in zip(existing_columns, types)
+            f"{existing}::{target_type} as {existing}" for existing, target_type in zip(existing_columns, types)
         ]
         cast_expressions = ", ".join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
         return DataFrame(new_rel, self.session)
 
-    def toDF(self, *cols) -> "DataFrame":
+    def toDF(self, *cols) -> "DataFrame":  # noqa: D102
         existing_columns = self.relation.columns
         column_count = len(cols)
         if column_count != len(existing_columns):
-            raise PySparkValueError(
-                message="Provided column names and number of columns in the DataFrame don't match"
-            )
+            raise PySparkValueError(message="Provided column names and number of columns in the DataFrame don't match")
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
-        projections = [
-            existing.alias(new) for existing, new in zip(existing_columns, cols)
-        ]
+        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
-    def collect(self) -> List[Row]:
+    def collect(self) -> list[Row]:  # noqa: D102
         columns = self.relation.columns
         result = self.relation.fetchall()
 
-        def construct_row(values, names) -> Row:
+        def construct_row(values: list, names: list[str]) -> Row:
             row = tuple.__new__(Row, list(values))
             row.__fields__ = list(names)
             return row
@@ -1411,16 +1363,16 @@ class DataFrame:
         .. versionchanged:: 3.4.0
             Supports Spark Connect.
 
-        Notes
+        Notes:
         -----
         The default storage level has changed to `MEMORY_AND_DISK_DESER` to match Scala in 3.0.
 
-        Returns
+        Returns:
         -------
         :class:`DataFrame`
             Cached DataFrame.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.range(1)
         >>> df.cache()

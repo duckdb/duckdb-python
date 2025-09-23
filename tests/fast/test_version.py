@@ -1,5 +1,6 @@
-import duckdb
 import sys
+
+import duckdb
 
 
 def test_version():

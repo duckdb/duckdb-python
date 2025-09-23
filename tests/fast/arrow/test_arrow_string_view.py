@@ -1,11 +1,11 @@
-import duckdb
 import pytest
-from packaging import version
 
-pa = pytest.importorskip('pyarrow')
+import duckdb
+
+pa = pytest.importorskip("pyarrow")
 
 pytestmark = pytest.mark.skipif(
-    not hasattr(pa, 'string_view'), reason="This version of PyArrow does not support StringViews"
+    not hasattr(pa, "string_view"), reason="This version of PyArrow does not support StringViews"
 )
 
 
@@ -20,14 +20,14 @@ def RoundTripStringView(query, array):
 
     # Generate an arrow table
     # Create a field for the array with a specific data type
-    field = pa.field('str_val', pa.string_view())
+    field = pa.field("str_val", pa.string_view())
 
     # Create a schema for the table using the field
     schema = pa.schema([field])
 
     # Create a table using the schema and the array
-    gt_table = pa.Table.from_arrays([array], schema=schema)
-    arrow_table = con.execute("select * from gt_table").fetch_arrow_table()
+    gt_table = pa.Table.from_arrays([array], schema=schema)  # noqa: F841
+    arrow_table = con.execute("select * from gt_table").fetch_arrow_table()  # noqa: F841
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
 
 
@@ -43,7 +43,7 @@ def RoundTripDuckDBInternal(query):
         assert res[i] == from_arrow_res[i]
 
 
-class TestArrowStringView(object):
+class TestArrowStringView:
     # Test Small Inlined String View
     def test_inlined_string_view(self):
         RoundTripStringView(
@@ -77,7 +77,7 @@ class TestArrowStringView(object):
     # Test Small Not-Inlined Strings with Null
     def test_not_inlined_string_view_with_null(self):
         RoundTripStringView(
-            "SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(5) tbl(i) UNION SELECT NULL order by str",
+            "SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(5) tbl(i) UNION SELECT NULL order by str",  # noqa: E501
             pa.array(
                 [
                     "Imaverybigstringmuchbiggerthanfourbytes0",
@@ -92,7 +92,7 @@ class TestArrowStringView(object):
         )
 
     # Test Mix of Inlined and Not-Inlined Strings with Null
-    def test_not_inlined_string_view(self):
+    def test_not_inlined_string_view_2(self):
         RoundTripStringView(
             "SELECT '8bytestr'||(i*10^i)::varchar str FROM range(5) tbl(i) UNION SELECT NULL order by str",
             pa.array(
@@ -103,26 +103,26 @@ class TestArrowStringView(object):
 
     # Test Over-Vector Size
     def test_large_string_view_inlined(self):
-        RoundTripDuckDBInternal('''select * from (SELECT i::varchar str FROM range(10000) tbl(i))  order by str''')
+        RoundTripDuckDBInternal("""select * from (SELECT i::varchar str FROM range(10000) tbl(i))  order by str""")
 
     def test_large_string_view_inlined_with_null(self):
         RoundTripDuckDBInternal(
-            '''select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
+            """select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str"""
         )
 
     def test_large_string_view_not_inlined(self):
         RoundTripDuckDBInternal(
-            '''select * from (SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
+            """select * from (SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str"""  # noqa: E501
         )
 
     def test_large_string_view_not_inlined_with_null(self):
         RoundTripDuckDBInternal(
-            '''select * from (SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
+            """select * from (SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str"""  # noqa: E501
         )
 
     def test_large_string_view_mixed_with_null(self):
         RoundTripDuckDBInternal(
-            '''select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
+            """select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str"""  # noqa: E501
         )
 
     def test_multiple_data_buffers(self):
@@ -143,7 +143,7 @@ class TestArrowStringView(object):
         # pl = pytest.importorskip('polars')
         # con = duckdb.connect()
         # con.execute("SET produce_arrow_string_view=True")
-        # query = '''select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''
+        # query = '''select * from (SELECT i::varchar str FROM range(10000) tbl(i) UNION SELECT 'Imaverybigstringmuchbiggerthanfourbytes'||i::varchar str FROM range(10000) tbl(i) UNION select null)  order by str'''  # noqa: E501
         # polars_df = con.execute(query).pl()
         # result = con.execute(query).fetchall()
         # con.register('polars_df', polars_df)

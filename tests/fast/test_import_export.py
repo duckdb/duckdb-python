@@ -1,9 +1,9 @@
-import duckdb
-import pytest
-from os import path
 import shutil
-import os
 from pathlib import Path
+
+import pytest
+
+import duckdb
 
 
 def export_database(export_location):
@@ -30,11 +30,15 @@ def import_database(import_location):
 
 
 def move_database(export_location, import_location):
-    assert path.exists(export_location)
-    assert path.exists(import_location)
+    export_dir = Path(export_location)
+    import_dir = Path(import_location)
+    assert export_dir.exists()
+    assert export_dir.is_dir()
+    assert import_dir.exists()
+    assert import_dir.is_dir()
 
-    for file in ['schema.sql', 'load.sql', 'tbl.csv']:
-        shutil.move(path.join(export_location, file), import_location)
+    for file in ["schema.sql", "load.sql", "tbl.csv"]:
+        shutil.move(export_dir / file, import_dir)
 
 
 def export_move_and_import(export_path, import_path):
@@ -56,25 +60,24 @@ def export_and_import_empty_db(db_path, _):
 
 
 class TestDuckDBImportExport:
-    @pytest.mark.parametrize('routine', [export_move_and_import, export_and_import_empty_db])
+    @pytest.mark.parametrize("routine", [export_move_and_import, export_and_import_empty_db])
     def test_import_and_export(self, routine, tmp_path_factory):
         export_path = str(tmp_path_factory.mktemp("export_dbs", numbered=True))
         import_path = str(tmp_path_factory.mktemp("import_dbs", numbered=True))
         routine(export_path, import_path)
 
     def test_import_empty_db(self, tmp_path_factory):
-        import_path = str(tmp_path_factory.mktemp("empty_db", numbered=True))
+        import_path = Path(tmp_path_factory.mktemp("empty_db", numbered=True))
 
         # Create an empty db folder structure
-        Path(Path(import_path) / 'load.sql').touch()
-        Path(Path(import_path) / 'schema.sql').touch()
+        (import_path / "load.sql").touch()
+        (import_path / "schema.sql").touch()
 
         con = duckdb.connect()
         con.execute(f"import database '{import_path}'")
 
         # Put a single comment into the 'schema.sql' file
-        with open(Path(import_path) / 'schema.sql', 'w') as f:
-            f.write('--\n')
+        (import_path / "schema.sql").write_text("--\n")
 
         con.close()
         con = duckdb.connect()

@@ -1,19 +1,21 @@
-import duckdb
-import os
 import math
-from pytest import mark, fixture, importorskip
+from pathlib import Path
 
-read_csv = importorskip('pyarrow.csv').read_csv
-requests = importorskip('requests')
-requests_adapters = importorskip('requests.adapters')
-urllib3_util = importorskip('urllib3.util')
-np = importorskip('numpy')
+import pytest
+
+import duckdb
+
+read_csv = pytest.importorskip("pyarrow.csv").read_csv
+requests = pytest.importorskip("requests")
+requests_adapters = pytest.importorskip("requests.adapters")
+urllib3_util = pytest.importorskip("urllib3.util")
+np = pytest.importorskip("numpy")
 
 
 def group_by_q1(con):
     con.execute("CREATE TABLE ans AS SELECT id1, sum(v1) AS v1 FROM x GROUP BY id1")
     res = con.execute("SELECT COUNT(*), sum(v1)::varchar AS v1 FROM ans").fetchall()
-    assert res == [(96, '28498857')]
+    assert res == [(96, "28498857")]
     con.execute("DROP TABLE ans")
 
 
@@ -55,7 +57,7 @@ def group_by_q5(con):
 
 def group_by_q6(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id4, id5, quantile_cont(v3, 0.5) AS median_v3, stddev(v3) AS sd_v3 FROM x GROUP BY id4, id5;"
+        "CREATE TABLE ans AS SELECT id4, id5, quantile_cont(v3, 0.5) AS median_v3, stddev(v3) AS sd_v3 FROM x GROUP BY id4, id5;"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), sum(median_v3) AS median_v3, sum(sd_v3) AS sd_v3 FROM ans").fetchall()
     assert res[0][0] == 9216
@@ -74,7 +76,7 @@ def group_by_q7(con):
 
 def group_by_q8(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2"
+        "CREATE TABLE ans AS SELECT id6, v3 AS largest2_v3 FROM (SELECT id6, v3, row_number() OVER (PARTITION BY id6 ORDER BY v3 DESC) AS order_v3 FROM x WHERE v3 IS NOT NULL) sub_query WHERE order_v3 <= 2"  # noqa: E501
     )
     res = con.execute("SELECT count(*), sum(largest2_v3) AS largest2_v3 FROM ans").fetchall()
     assert res[0][0] == 190002
@@ -92,7 +94,7 @@ def group_by_q9(con):
 
 def group_by_q10(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x GROUP BY id1, id2, id3, id4, id5, id6;"
+        "CREATE TABLE ans AS SELECT id1, id2, id3, id4, id5, id6, sum(v3) AS v3, count(*) AS count FROM x GROUP BY id1, id2, id3, id4, id5, id6;"  # noqa: E501
     )
     res = con.execute("SELECT sum(v3) AS v3, sum(count) AS count FROM ans;").fetchall()
     assert math.floor(res[0][0]) == 474969574
@@ -111,7 +113,7 @@ def join_by_q1(con):
 
 def join_by_q2(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x JOIN medium USING (id2);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 8998412
@@ -122,7 +124,7 @@ def join_by_q2(con):
 
 def join_by_q3(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id4 AS medium_id4, medium.id5 AS medium_id5, v2 FROM x LEFT JOIN medium USING (id2);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 10000000
@@ -133,7 +135,7 @@ def join_by_q3(con):
 
 def join_by_q4(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);"
+        "CREATE TABLE ans AS SELECT x.*, medium.id1 AS medium_id1, medium.id2 AS medium_id2, medium.id4 AS medium_id4, v2 FROM x JOIN medium USING (id5);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 8998412
@@ -144,7 +146,7 @@ def join_by_q4(con):
 
 def join_by_q5(con):
     con.execute(
-        "CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);"
+        "CREATE TABLE ans AS SELECT x.*, big.id1 AS big_id1, big.id2 AS big_id2, big.id4 AS big_id4, big.id5 AS big_id5, big.id6 AS big_id6, v2 FROM x JOIN big USING (id3);"  # noqa: E501
     )
     res = con.execute("SELECT COUNT(*), SUM(v1) AS v1, SUM(v2) AS v2 FROM ans;").fetchall()
     assert res[0][0] == 9000000
@@ -153,9 +155,9 @@ def join_by_q5(con):
     con.execute("DROP TABLE ans")
 
 
-class TestH2OAIArrow(object):
-    @mark.parametrize(
-        'function',
+class TestH2OAIArrow:
+    @pytest.mark.parametrize(
+        "function",
         [
             group_by_q1,
             group_by_q2,
@@ -169,15 +171,15 @@ class TestH2OAIArrow(object):
             group_by_q10,
         ],
     )
-    @mark.parametrize('threads', [1, 4])
-    @mark.usefixtures('group_by_data')
+    @pytest.mark.parametrize("threads", [1, 4])
+    @pytest.mark.usefixtures("group_by_data")
     def test_group_by(self, threads, function, group_by_data):
         group_by_data.execute(f"PRAGMA threads={threads}")
         function(group_by_data)
 
-    @mark.parametrize('threads', [1, 4])
-    @mark.parametrize(
-        'function',
+    @pytest.mark.parametrize("threads", [1, 4])
+    @pytest.mark.parametrize(
+        "function",
         [
             join_by_q1,
             join_by_q2,
@@ -186,72 +188,72 @@ class TestH2OAIArrow(object):
             join_by_q5,
         ],
     )
-    @mark.usefixtures('large_data')
+    @pytest.mark.usefixtures("large_data")
     def test_join(self, threads, function, large_data):
         large_data.execute(f"PRAGMA threads={threads}")
 
         function(large_data)
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def arrow_dataset_register():
-    """Single fixture to download files and register them on the given connection"""
+    """Single fixture to download files and register them on the given connection."""
     session = requests.Session()
     retries = urllib3_util.Retry(
-        allowed_methods={'GET'},  # only retry on GETs (all we do)
+        allowed_methods={"GET"},  # only retry on GETs (all we do)
         total=None,  # disable to make the below take effect
         redirect=10,  # Don't follow more than 10 redirects in a row
         connect=3,  # try 3 times before giving up on connection errors
         read=3,  # try 3 times before giving up on read errors
         status=3,  # try 3 times before giving up on status errors (see forcelist below)
-        status_forcelist=[429] + [status for status in range(500, 512)],
+        status_forcelist=[429, *list(range(500, 512))],
         other=0,  # whatever else may cause an error should break
         backoff_factor=0.1,  # [0.0s, 0.2s, 0.4s]
         raise_on_redirect=True,  # raise exception when redirect error retries are exhausted
         raise_on_status=True,  # raise exception when status error retries are exhausted
         respect_retry_after_header=True,  # respect Retry-After headers
     )
-    session.mount('https://', requests_adapters.HTTPAdapter(max_retries=retries))
-    saved_filenames = set()
+    session.mount("https://", requests_adapters.HTTPAdapter(max_retries=retries))
+    saved_filepaths = set()
 
-    def _register(url, filename, con, tablename):
+    def _register(url, filename, con, tablename) -> None:
         r = session.get(url)
-        with open(filename, 'wb') as f:
-            f.write(r.content)
+        filepath = Path(filename)
+        filepath.write_bytes(r.content)
         con.register(tablename, read_csv(filename))
-        saved_filenames.add(filename)
+        saved_filepaths.add(filepath)
 
     yield _register
 
-    for filename in saved_filenames:
-        os.remove(filename)
+    for filepath in saved_filepaths:
+        filepath.unlink()
     session.close()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def large_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz',
-        'J1_1e7_NA_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz",
+        "J1_1e7_NA_0_0.csv.gz",
         con,
         "x",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz',
-        'J1_1e7_1e1_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz",
+        "J1_1e7_1e1_0_0.csv.gz",
         con,
         "small",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz',
-        'J1_1e7_1e4_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz",
+        "J1_1e7_1e4_0_0.csv.gz",
         con,
         "medium",
     )
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz',
-        'J1_1e7_1e7_0_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz",
+        "J1_1e7_1e7_0_0.csv.gz",
         con,
         "big",
     )
@@ -259,12 +261,12 @@ def large_data(arrow_dataset_register):
     con.close()
 
 
-@fixture(scope="module")
+@pytest.fixture(scope="module")
 def group_by_data(arrow_dataset_register):
     con = duckdb.connect()
     arrow_dataset_register(
-        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz',
-        'G1_1e7_1e2_5_0.csv.gz',
+        "https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz",
+        "G1_1e7_1e2_5_0.csv.gz",
         con,
         "x",
     )

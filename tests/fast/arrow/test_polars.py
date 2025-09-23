@@ -1,13 +1,14 @@
-import duckdb
-import pytest
-import sys
 import datetime
+
+import pytest
+
+import duckdb
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
 
-from duckdb.polars_io import _predicate_to_expression
+from duckdb.polars_io import _predicate_to_expression  # noqa: E402
 
 
 def valid_filter(filter):
@@ -20,7 +21,7 @@ def invalid_filter(filter):
     assert sql_expression is None
 
 
-class TestPolars(object):
+class TestPolars:
     def test_polars(self, duckdb_cursor):
         df = pl.DataFrame(
             {
@@ -31,21 +32,21 @@ class TestPolars(object):
             }
         )
         # scan plus return a polars dataframe
-        polars_result = duckdb_cursor.sql('SELECT * FROM df').pl()
+        polars_result = duckdb_cursor.sql("SELECT * FROM df").pl()
         pl_testing.assert_frame_equal(df, polars_result)
 
         # now do the same for a lazy dataframe
-        lazy_df = df.lazy()
-        lazy_result = duckdb_cursor.sql('SELECT * FROM lazy_df').pl()
+        lazy_df = df.lazy()  # noqa: F841
+        lazy_result = duckdb_cursor.sql("SELECT * FROM lazy_df").pl()
         pl_testing.assert_frame_equal(df, lazy_result)
 
         con = duckdb.connect()
-        con_result = con.execute('SELECT * FROM df').pl()
+        con_result = con.execute("SELECT * FROM df").pl()
         pl_testing.assert_frame_equal(df, con_result)
 
     def test_execute_polars(self, duckdb_cursor):
         res1 = duckdb_cursor.execute("SELECT 1 AS a, 2 AS a").pl()
-        assert res1.columns == ['a', 'a_1']
+        assert res1.columns == ["a", "a_1"]
 
     def test_register_polars(self, duckdb_cursor):
         con = duckdb.connect()
@@ -58,21 +59,21 @@ class TestPolars(object):
             }
         )
         # scan plus return a polars dataframe
-        con.register('polars_df', df)
-        polars_result = con.execute('select * from polars_df').pl()
+        con.register("polars_df", df)
+        polars_result = con.execute("select * from polars_df").pl()
         pl_testing.assert_frame_equal(df, polars_result)
-        con.unregister('polars_df')
-        with pytest.raises(duckdb.CatalogException, match='Table with name polars_df does not exist'):
+        con.unregister("polars_df")
+        with pytest.raises(duckdb.CatalogException, match="Table with name polars_df does not exist"):
             con.execute("SELECT * FROM polars_df;").pl()
 
-        con.register('polars_df', df.lazy())
-        polars_result = con.execute('select * from polars_df').pl()
+        con.register("polars_df", df.lazy())
+        polars_result = con.execute("select * from polars_df").pl()
         pl_testing.assert_frame_equal(df, polars_result)
 
     def test_empty_polars_dataframe(self, duckdb_cursor):
-        polars_empty_df = pl.DataFrame()
+        polars_empty_df = pl.DataFrame()  # noqa: F841
         with pytest.raises(
-            duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
+            duckdb.InvalidInputException, match="Provided table/dataframe must have at least one column"
         ):
             duckdb_cursor.sql("from polars_empty_df")
 
@@ -82,7 +83,7 @@ class TestPolars(object):
         duckdb_cursor.sql("set arrow_lossless_conversion=false")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
         res = duckdb_cursor.read_json(string).pl()
-        assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
+        assert str(res["entry"][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
 
     @pytest.mark.skipif(
         not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
@@ -92,14 +93,14 @@ class TestPolars(object):
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
-        res = duckdb_cursor.read_json(string).pl()
-        assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
+        with pytest.raises(pl.exceptions.PanicException, match=r"Arrow datatype Extension\(.*\) not supported"):
+            duckdb_cursor.read_json(string).pl()
 
-    def test_polars_from_json_error(self, duckdb_cursor):
+    def test_polars_from_json_error_2(self, duckdb_cursor):
         conn = duckdb.connect()
-        my_table = conn.query("select 'x' my_str").pl()
+        my_table = conn.query("select 'x' my_str").pl()  # noqa: F841
         my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
-        assert my_res.fetchall() == [('x',)]
+        assert my_res.fetchall() == [("x",)]
 
     def test_polars_lazy_from_conn(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
@@ -107,7 +108,7 @@ class TestPolars(object):
         result = duckdb_conn.execute("SELECT 42 as bla")
 
         lazy_df = result.pl(lazy=True)
-        assert lazy_df.collect().to_dicts() == [{'bla': 42}]
+        assert lazy_df.collect().to_dicts() == [{"bla": 42}]
 
     def test_polars_lazy(self, duckdb_cursor):
         con = duckdb.connect()
@@ -118,43 +119,43 @@ class TestPolars(object):
 
         assert isinstance(lazy_df, pl.LazyFrame)
         assert lazy_df.collect().to_dicts() == [
-            {'a': 'Pedro', 'b': 32},
-            {'a': 'Mark', 'b': 31},
-            {'a': 'Thijs', 'b': 29},
+            {"a": "Pedro", "b": 32},
+            {"a": "Mark", "b": 31},
+            {"a": "Thijs", "b": 29},
         ]
 
-        assert lazy_df.select('a').collect().to_dicts() == [{'a': 'Pedro'}, {'a': 'Mark'}, {'a': 'Thijs'}]
-        assert lazy_df.limit(1).collect().to_dicts() == [{'a': 'Pedro', 'b': 32}]
+        assert lazy_df.select("a").collect().to_dicts() == [{"a": "Pedro"}, {"a": "Mark"}, {"a": "Thijs"}]
+        assert lazy_df.limit(1).collect().to_dicts() == [{"a": "Pedro", "b": 32}]
         assert lazy_df.filter(pl.col("b") < 32).collect().to_dicts() == [
-            {'a': 'Mark', 'b': 31},
-            {'a': 'Thijs', 'b': 29},
+            {"a": "Mark", "b": 31},
+            {"a": "Thijs", "b": 29},
         ]
-        assert lazy_df.filter(pl.col("b") < 32).select('a').collect().to_dicts() == [{'a': 'Mark'}, {'a': 'Thijs'}]
+        assert lazy_df.filter(pl.col("b") < 32).select("a").collect().to_dicts() == [{"a": "Mark"}, {"a": "Thijs"}]
 
     def test_polars_column_with_tricky_name(self, duckdb_cursor):
         # Test that a polars DataFrame with a column name that is non standard still works
-        df_colon = pl.DataFrame({"x:y": [1, 2]})
+        df_colon = pl.DataFrame({"x:y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_colon").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x:y": 1}, {"x:y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x:y") == 1).collect()
         assert result.to_dicts() == [{"x:y": 1}]
 
-        df_space = pl.DataFrame({"x y": [1, 2]})
+        df_space = pl.DataFrame({"x y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_space").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x y": 1}, {"x y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x y") == 1).collect()
         assert result.to_dicts() == [{"x y": 1}]
 
-        df_dot = pl.DataFrame({"x.y": [1, 2]})
+        df_dot = pl.DataFrame({"x.y": [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_dot").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{"x.y": 1}, {"x.y": 2}]
         result = lf.select(pl.all()).filter(pl.col("x.y") == 1).collect()
         assert result.to_dicts() == [{"x.y": 1}]
 
-        df_quote = pl.DataFrame({'"xy"': [1, 2]})
+        df_quote = pl.DataFrame({'"xy"': [1, 2]})  # noqa: F841
         lf = duckdb_cursor.sql("from df_quote").pl(lazy=True)
         result = lf.select(pl.all()).collect()
         assert result.to_dicts() == [{'"xy"': 1}, {'"xy"': 2}]
@@ -162,23 +163,23 @@ class TestPolars(object):
         assert result.to_dicts() == [{'"xy"': 1}]
 
     @pytest.mark.parametrize(
-        'data_type',
+        "data_type",
         [
-            'TINYINT',
-            'SMALLINT',
-            'INTEGER',
-            'BIGINT',
-            'UTINYINT',
-            'USMALLINT',
-            'UINTEGER',
-            'UBIGINT',
-            'FLOAT',
-            'DOUBLE',
-            'HUGEINT',
-            'DECIMAL(4,1)',
-            'DECIMAL(9,1)',
-            'DECIMAL(18,4)',
-            'DECIMAL(30,12)',
+            "TINYINT",
+            "SMALLINT",
+            "INTEGER",
+            "BIGINT",
+            "UTINYINT",
+            "USMALLINT",
+            "UINTEGER",
+            "UBIGINT",
+            "FLOAT",
+            "DOUBLE",
+            "HUGEINT",
+            "DECIMAL(4,1)",
+            "DECIMAL(9,1)",
+            "DECIMAL(18,4)",
+            "DECIMAL(30,12)",
         ],
     )
     def test_polars_lazy_pushdown_numeric(self, data_type, duckdb_cursor):
@@ -272,7 +273,7 @@ class TestPolars(object):
 
         lazy_df = duck_tbl.pl(lazy=True)
         # == True
-        assert lazy_df.filter(pl.col("a") == True).select(pl.len()).collect().item() == 2
+        assert lazy_df.filter(pl.col("a")).select(pl.len()).collect().item() == 2
 
         # IS NULL
         assert lazy_df.filter(pl.col("a").is_null()).select(pl.len()).collect().item() == 1
@@ -281,17 +282,17 @@ class TestPolars(object):
         assert lazy_df.filter(pl.col("a").is_not_null()).select(pl.len()).collect().item() == 3
 
         # AND
-        assert lazy_df.filter((pl.col("a") == True) & (pl.col("b") == True)).select(pl.len()).collect().item() == 1
+        assert lazy_df.filter((pl.col("a")) & (pl.col("b"))).select(pl.len()).collect().item() == 1
 
         # OR
-        assert lazy_df.filter((pl.col("a") == True) | (pl.col("b") == True)).select(pl.len()).collect().item() == 3
+        assert lazy_df.filter((pl.col("a")) | (pl.col("b"))).select(pl.len()).collect().item() == 3
 
         # Validate Filters
-        valid_filter(pl.col("a") == True)
+        valid_filter(pl.col("a"))
         valid_filter(pl.col("a").is_null())
         valid_filter(pl.col("a").is_not_null())
-        valid_filter((pl.col("a") == True) & (pl.col("b") == True))
-        valid_filter((pl.col("a") == True) | (pl.col("b") == True))
+        valid_filter((pl.col("a")) & (pl.col("b")))
+        valid_filter((pl.col("a")) | (pl.col("b")))
 
     def test_polars_lazy_pushdown_time(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -388,8 +389,8 @@ class TestPolars(object):
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
         ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
 
-        # These will require a cast, which we currently do not support, hence the filter won't be pushed down, but the results
-        # Should still be correct, and we check we can't really pushdown the filter yet.
+        # These will require a cast, which we currently do not support, hence the filter won't be pushed down, but
+        # the results should still be correct, and we check we can't really pushdown the filter yet.
 
         # ==
         assert lazy_df.filter(pl.col("a") == ts_2008).select(pl.len()).collect().item() == 1
@@ -524,9 +525,9 @@ class TestPolars(object):
 
         df = pandas.DataFrame(
             {
-                'a': [bytes([1]), bytes([2]), bytes([3]), None],
-                'b': [bytes([1]), bytes([2]), bytes([3]), None],
-                'c': [bytes([1]), bytes([2]), bytes([3]), None],
+                "a": [bytes([1]), bytes([2]), bytes([3]), None],
+                "b": [bytes([1]), bytes([2]), bytes([3]), None],
+                "c": [bytes([1]), bytes([2]), bytes([3]), None],
             }
         )
         duck_tbl = duckdb.from_df(df)

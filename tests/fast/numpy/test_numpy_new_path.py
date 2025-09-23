@@ -1,14 +1,16 @@
 """The support for scaning over numpy arrays reuses many codes for pandas.
 Therefore, we only test the new codes and exec paths.
-"""
+"""  # noqa: D205
+
+from datetime import timedelta
 
 import numpy as np
-import duckdb
-from datetime import timedelta
 import pytest
 
+import duckdb
 
-class TestScanNumpy(object):
+
+class TestScanNumpy:
     def test_scan_numpy(self, duckdb_cursor):
         z = np.array([1, 2, 3])
         res = duckdb_cursor.sql("select * from z").fetchall()
@@ -28,11 +30,11 @@ class TestScanNumpy(object):
 
         z = np.array(["zzz", "xxx"])
         res = duckdb_cursor.sql("select * from z").fetchall()
-        assert res == [('zzz',), ('xxx',)]
+        assert res == [("zzz",), ("xxx",)]
 
         z = [np.array(["zzz", "xxx"]), np.array([1, 2])]
         res = duckdb_cursor.sql("select * from z").fetchall()
-        assert res == [('zzz', 1), ('xxx', 2)]
+        assert res == [("zzz", 1), ("xxx", 2)]
 
         # test ndarray with dtype = object (python dict)
         z = []
@@ -41,9 +43,9 @@ class TestScanNumpy(object):
         z = np.array(z)
         res = duckdb_cursor.sql("select * from z").fetchall()
         assert res == [
-            ({'3': 0},),
-            ({'2': 1},),
-            ({'1': 2},),
+            ({"3": 0},),
+            ({"2": 1},),
+            ({"1": 2},),
         ]
 
         # test timedelta
@@ -74,12 +76,12 @@ class TestScanNumpy(object):
         # dict of mixed types
         z = {"z": np.array([1, 2, 3]), "x": np.array(["z", "x", "c"])}
         res = duckdb_cursor.sql("select * from z").fetchall()
-        assert res == [(1, 'z'), (2, 'x'), (3, 'c')]
+        assert res == [(1, "z"), (2, "x"), (3, "c")]
 
         # list of mixed types
         z = [np.array([1, 2, 3]), np.array(["z", "x", "c"])]
         res = duckdb_cursor.sql("select * from z").fetchall()
-        assert res == [(1, 'z'), (2, 'x'), (3, 'c')]
+        assert res == [(1, "z"), (2, "x"), (3, "c")]
 
         # currently unsupported formats, will throw duckdb.InvalidInputException
 

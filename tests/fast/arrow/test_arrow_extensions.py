@@ -1,15 +1,17 @@
-import duckdb
-import pytest
-import uuid
-import json
-from uuid import UUID
+# ruff: noqa: F841
 import datetime
+import json
+import uuid
+from uuid import UUID
 
-pa = pytest.importorskip('pyarrow', '18.0.0')
+import pytest
+
+import duckdb
+
+pa = pytest.importorskip("pyarrow", "18.0.0")
 
 
-class TestCanonicalExtensionTypes(object):
-
+class TestCanonicalExtensionTypes:
     def test_uuid(self):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("SET arrow_lossless_conversion = true")
@@ -17,9 +19,9 @@ class TestCanonicalExtensionTypes(object):
         storage_array = pa.array([uuid.uuid4().bytes for _ in range(4)], pa.binary(16))
         storage_array = pa.uuid().wrap_array(storage_array)
 
-        arrow_table = pa.Table.from_arrays([storage_array], names=['uuid_col'])
+        arrow_table = pa.Table.from_arrays([storage_array], names=["uuid_col"])
 
-        duck_arrow = duckdb_cursor.execute('FROM arrow_table').fetch_arrow_table()
+        duck_arrow = duckdb_cursor.execute("FROM arrow_table").fetch_arrow_table()
 
         assert duck_arrow.equals(arrow_table)
 
@@ -30,14 +32,14 @@ class TestCanonicalExtensionTypes(object):
         arrow_table = duckdb_cursor.execute("select uuid from test_all_types()").fetch_arrow_table()
 
         assert arrow_table.to_pylist() == [
-            {'uuid': UUID('00000000-0000-0000-0000-000000000000')},
-            {'uuid': UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')},
-            {'uuid': None},
+            {"uuid": UUID("00000000-0000-0000-0000-000000000000")},
+            {"uuid": UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")},
+            {"uuid": None},
         ]
 
         assert duckdb_cursor.execute("FROM arrow_table").fetchall() == [
-            (UUID('00000000-0000-0000-0000-000000000000'),),
-            (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
+            (UUID("00000000-0000-0000-0000-000000000000"),),
+            (UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),),
             (None,),
         ]
 
@@ -45,8 +47,8 @@ class TestCanonicalExtensionTypes(object):
             "select '00000000-0000-0000-0000-000000000100'::UUID as uuid"
         ).fetch_arrow_table()
 
-        assert arrow_table.to_pylist() == [{'uuid': UUID('00000000-0000-0000-0000-000000000100')}]
-        assert duckdb_cursor.execute("FROM arrow_table").fetchall() == [(UUID('00000000-0000-0000-0000-000000000100'),)]
+        assert arrow_table.to_pylist() == [{"uuid": UUID("00000000-0000-0000-0000-000000000100")}]
+        assert duckdb_cursor.execute("FROM arrow_table").fetchall() == [(UUID("00000000-0000-0000-0000-000000000100"),)]
 
     def test_json(self, duckdb_cursor):
         data = {"name": "Pedro", "age": 28, "car": "VW Fox"}
@@ -56,10 +58,10 @@ class TestCanonicalExtensionTypes(object):
 
         storage_array = pa.array([json_string], pa.string())
 
-        arrow_table = pa.Table.from_arrays([storage_array], names=['json_col'])
+        arrow_table = pa.Table.from_arrays([storage_array], names=["json_col"])
 
         duckdb_cursor.execute("SET arrow_lossless_conversion = true")
-        duck_arrow = duckdb_cursor.execute('FROM arrow_table').fetch_arrow_table()
+        duck_arrow = duckdb_cursor.execute("FROM arrow_table").fetch_arrow_table()
 
         assert duck_arrow.equals(arrow_table)
 
@@ -70,8 +72,8 @@ class TestCanonicalExtensionTypes(object):
         res_arrow = duckdb_cursor.execute("select uuid from test_all_types()").fetch_arrow_table()
         res_duck = duckdb_cursor.execute("from res_arrow").fetchall()
         assert res_duck == [
-            (UUID('00000000-0000-0000-0000-000000000000'),),
-            (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
+            (UUID("00000000-0000-0000-0000-000000000000"),),
+            (UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),),
             (None,),
         ]
 
@@ -79,15 +81,15 @@ class TestCanonicalExtensionTypes(object):
         duckdb_cursor = duckdb.connect()
         res_arrow = duckdb_cursor.execute("select uuid from test_all_types()").fetch_arrow_table()
         assert res_arrow.to_pylist() == [
-            {'uuid': '00000000-0000-0000-0000-000000000000'},
-            {'uuid': 'ffffffff-ffff-ffff-ffff-ffffffffffff'},
-            {'uuid': None},
+            {"uuid": "00000000-0000-0000-0000-000000000000"},
+            {"uuid": "ffffffff-ffff-ffff-ffff-ffffffffffff"},
+            {"uuid": None},
         ]
 
         res_duck = duckdb_cursor.execute("from res_arrow").fetchall()
         assert res_duck == [
-            ('00000000-0000-0000-0000-000000000000',),
-            ('ffffffff-ffff-ffff-ffff-ffffffffffff',),
+            ("00000000-0000-0000-0000-000000000000",),
+            ("ffffffff-ffff-ffff-ffff-ffffffffffff",),
             (None,),
         ]
 
@@ -98,8 +100,8 @@ class TestCanonicalExtensionTypes(object):
         res_arrow = duckdb_cursor.execute("select uuid from test_all_types()").fetch_record_batch()
         res_duck = duckdb.execute("from res_arrow").fetchall()
         assert res_duck == [
-            (UUID('00000000-0000-0000-0000-000000000000'),),
-            (UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),),
+            (UUID("00000000-0000-0000-0000-000000000000"),),
+            (UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),),
             (None,),
         ]
 
@@ -109,62 +111,62 @@ class TestCanonicalExtensionTypes(object):
             return x
 
         con = duckdb.connect()
-        con.create_function('test', test_function, ['UUID'], 'UUID', type='arrow')
+        con.create_function("test", test_function, ["UUID"], "UUID", type="arrow")
 
-        rel = con.sql("select ? as x", params=[uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')])
+        rel = con.sql("select ? as x", params=[uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")])
         rel.project("test(x) from t").fetchall()
 
     def test_unimplemented_extension(self, duckdb_cursor):
         class MyType(pa.ExtensionType):
-            def __init__(self):
+            def __init__(self) -> None:
                 pa.ExtensionType.__init__(self, pa.binary(5), "pedro.binary")
 
-            def __arrow_ext_serialize__(self):
-                return b''
+            def __arrow_ext_serialize__(self) -> bytes:
+                return b""
 
             @classmethod
-            def __arrow_ext_deserialize__(cls, storage_type, serialized):
-                return UuidTypeWrong()
+            def __arrow_ext_deserialize__(cls, storage_type, serialized) -> object:
+                return None
 
-        storage_array = pa.array(['pedro'], pa.binary(5))
+        storage_array = pa.array(["pedro"], pa.binary(5))
         my_type = MyType()
         storage_array = my_type.wrap_array(storage_array)
 
         age_array = pa.array([29], pa.int32())
 
-        arrow_table = pa.Table.from_arrays([storage_array, age_array], names=['pedro_pedro_pedro', 'age'])
+        arrow_table = pa.Table.from_arrays([storage_array, age_array], names=["pedro_pedro_pedro", "age"])
 
-        duck_arrow = duckdb_cursor.execute('FROM arrow_table').fetch_arrow_table()
-        assert duckdb_cursor.execute('FROM duck_arrow').fetchall() == [(b'pedro', 29)]
+        duck_arrow = duckdb_cursor.execute("FROM arrow_table").fetch_arrow_table()
+        assert duckdb_cursor.execute("FROM duck_arrow").fetchall() == [(b"pedro", 29)]
 
     def test_hugeint(self):
         con = duckdb.connect()
 
         con.execute("SET arrow_lossless_conversion = true")
 
-        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
+        storage_array = pa.array([b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"], pa.binary(16))
         hugeint_type = pa.opaque(pa.binary(16), "hugeint", "DuckDB")
 
         storage_array = hugeint_type.wrap_array(storage_array)
 
-        arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
+        arrow_table = pa.Table.from_arrays([storage_array], names=["numbers"])
 
-        assert con.execute('FROM arrow_table').fetchall() == [(-1,)]
+        assert con.execute("FROM arrow_table").fetchall() == [(-1,)]
 
-        assert con.execute('FROM arrow_table').fetch_arrow_table().equals(arrow_table)
+        assert con.execute("FROM arrow_table").fetch_arrow_table().equals(arrow_table)
 
         con.execute("SET arrow_lossless_conversion = false")
 
-        assert not con.execute('FROM arrow_table').fetch_arrow_table().equals(arrow_table)
+        assert not con.execute("FROM arrow_table").fetch_arrow_table().equals(arrow_table)
 
     def test_uhugeint(self, duckdb_cursor):
-        storage_array = pa.array([b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff'], pa.binary(16))
+        storage_array = pa.array([b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"], pa.binary(16))
         uhugeint_type = pa.opaque(pa.binary(16), "uhugeint", "DuckDB")
         storage_array = uhugeint_type.wrap_array(storage_array)
 
-        arrow_table = pa.Table.from_arrays([storage_array], names=['numbers'])
+        arrow_table = pa.Table.from_arrays([storage_array], names=["numbers"])
 
-        assert duckdb_cursor.execute('FROM arrow_table').fetchall() == [(340282366920938463463374607431768211455,)]
+        assert duckdb_cursor.execute("FROM arrow_table").fetchall() == [(340282366920938463463374607431768211455,)]
 
     def test_bit(self):
         con = duckdb.connect()
@@ -176,18 +178,18 @@ class TestCanonicalExtensionTypes(object):
         res_bit = con.execute("SELECT '0101011'::BIT str FROM range(5) tbl(i)").fetch_arrow_table()
 
         assert con.execute("FROM res_blob").fetchall() == [
-            (b'\x01\xab',),
-            (b'\x01\xab',),
-            (b'\x01\xab',),
-            (b'\x01\xab',),
-            (b'\x01\xab',),
+            (b"\x01\xab",),
+            (b"\x01\xab",),
+            (b"\x01\xab",),
+            (b"\x01\xab",),
+            (b"\x01\xab",),
         ]
         assert con.execute("FROM res_bit").fetchall() == [
-            ('0101011',),
-            ('0101011',),
-            ('0101011',),
-            ('0101011',),
-            ('0101011',),
+            ("0101011",),
+            ("0101011",),
+            ("0101011",),
+            ("0101011",),
+            ("0101011",),
         ]
 
     def test_timetz(self):
@@ -207,14 +209,14 @@ class TestCanonicalExtensionTypes(object):
     def test_bignum(self):
         con = duckdb.connect()
         res_bignum = con.execute(
-            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum a FROM range(1) tbl(i)"
+            "SELECT '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368'::bignum a FROM range(1) tbl(i)"  # noqa: E501
         ).fetch_arrow_table()
-        assert res_bignum.column("a").type.type_name == 'bignum'
+        assert res_bignum.column("a").type.type_name == "bignum"
         assert res_bignum.column("a").type.vendor_name == "DuckDB"
 
         assert con.execute("FROM res_bignum").fetchall() == [
             (
-                '179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368',
+                "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
             )
         ]
 
@@ -235,9 +237,9 @@ class TestCanonicalExtensionTypes(object):
         indices = pa.array([0, 1, 0, 1, 2, 1, 0, 2])
         dictionary = pa.array(
             [
-                b'\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
-                b'\x01\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
-                b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff',
+                b"\x00\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                b"\x01\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
+                b"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff",
             ],
             pa.binary(16),
         )
@@ -245,7 +247,7 @@ class TestCanonicalExtensionTypes(object):
         dictionary = uhugeint_type.wrap_array(dictionary)
 
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
-        arrow_table = pa.Table.from_arrays([dict_array], ['a'])
+        arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         assert rel.execute().fetchall() == [
             (340282366920938463463374607431768211200,),
@@ -263,13 +265,13 @@ class TestCanonicalExtensionTypes(object):
         con.execute("SET arrow_lossless_conversion = true")
         storage_array = pa.array([-1, 0, 1, 2, None], pa.int8())
         bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), storage_array)
-        arrow_table = pa.Table.from_arrays([bool8_array], names=['bool8'])
-        assert con.execute('FROM arrow_table').fetchall() == [(True,), (False,), (True,), (True,), (None,)]
-        result_table = con.execute('FROM arrow_table').fetch_arrow_table()
+        arrow_table = pa.Table.from_arrays([bool8_array], names=["bool8"])
+        assert con.execute("FROM arrow_table").fetchall() == [(True,), (False,), (True,), (True,), (None,)]
+        result_table = con.execute("FROM arrow_table").fetch_arrow_table()
 
         res_storage_array = pa.array([1, 0, 1, 1, None], pa.int8())
         res_bool8_array = pa.ExtensionArray.from_storage(pa.bool8(), res_storage_array)
-        res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=['bool8'])
+        res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=["bool8"])
 
         assert result_table.equals(res_arrow_table)
 
@@ -279,7 +281,7 @@ class TestCanonicalExtensionTypes(object):
             pa.binary(),
             metadata={
                 "ARROW:extension:name": "foofyfoo",
-                "ARROW:extension:metadata": 'this is not valid json',
+                "ARROW:extension:metadata": "this is not valid json",
             },
         )
         schema = pa.schema([field])
@@ -296,7 +298,7 @@ class TestCanonicalExtensionTypes(object):
             pa.binary(),
             metadata={
                 "ARROW:extension:name": "arrow.opaque",
-                "ARROW:extension:metadata": 'this is not valid json',
+                "ARROW:extension:metadata": "this is not valid json",
             },
         )
         schema = pa.schema([field])
@@ -337,9 +339,9 @@ class TestCanonicalExtensionTypes(object):
             schema=schema,
         )
         assert duckdb_cursor.sql("""DESCRIBE FROM bignum_table;""").fetchone() == (
-            'bignum_value',
-            'BIGNUM',
-            'YES',
+            "bignum_value",
+            "BIGNUM",
+            "YES",
             None,
             None,
             None,
