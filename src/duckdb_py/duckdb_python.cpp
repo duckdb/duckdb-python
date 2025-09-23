@@ -1007,7 +1007,15 @@ static void RegisterExpectedResultType(py::handle &m) {
 	expected_return_type.export_values();
 }
 
+/**
+ * Fwd declaration of duckdb_adbc_init (the entrypoint of our ADBC driver) that must be exported.
+ */
+extern "C" PYBIND11_EXPORT extern void duckdb_adbc_init(void);
+
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
+	// Take address to force duckdb_adbc_init symbol inclusion
+	(void)&duckdb_adbc_init;
+
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)

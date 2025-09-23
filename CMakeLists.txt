@@ -80,6 +80,37 @@ pybind11_add_module(
 target_link_libraries(_duckdb PRIVATE _duckdb_dependencies)
 
 # ────────────────────────────────────────────
+# Controlling symbol export
+#
+# We want to export exactly two symbols: - PyInit__duckdb: this allows CPython
+# to load the module - duckdb_adbc_init: the DuckDB ADBC driver
+#
+# The export of symbols on OSX and Linux is controlled by: - Visibility
+# annotations in the code (for this lib we use the PYBIND11_EXPORT macro) -
+# Telling the linker which symbols we want exported, which we do below
+#
+# For Windows, we rely on just the visbility annotations.
+# ────────────────────────────────────────────
+set_target_properties(
+  _duckdb
+  PROPERTIES CXX_VISIBILITY_PRESET hidden
+             C_VISIBILITY_PRESET hidden
+             VISIBILITY_INLINES_HIDDEN ON)
+
+if(APPLE)
+  target_link_options(
+    _duckdb PRIVATE "LINKER:-exported_symbol,_duckdb_adbc_init"
+    "LINKER:-exported_symbol,_PyInit__duckdb")
+elseif(UNIX AND NOT APPLE)
+  target_link_options(
+    _duckdb PRIVATE "LINKER:--export-dynamic-symbol=duckdb_adbc_init"
+    "LINKER:--export-dynamic-symbol=PyInit__duckdb")
+endif()
+
+# if(MSVC) target_link_options(_duckdb PRIVATE "/INCLUDE:duckdb_adbc_init")
+# else() target_link_options(_duckdb PRIVATE "-Wl,-u,duckdb_adbc_init") endif()
+
+# ────────────────────────────────────────────
 # Put the object file in the correct place
 # ────────────────────────────────────────────
 

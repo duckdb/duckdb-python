@@ -1,24 +1,21 @@
 import datetime
 from pathlib import Path
 
+import adbc_driver_manager.dbapi
 import numpy as np
+import pyarrow
 import pytest
 
-import duckdb
-
-adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
-adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
-
-pyarrow = pytest.importorskip("pyarrow")
+import adbc_driver_duckdb.dbapi
 
 # When testing local, if you build via BUILD_PYTHON=1 make, you need to manually set up the
 # dylib duckdb path.
-driver_path = duckdb.duckdb.__file__
+driver_path = adbc_driver_duckdb.driver_path()
 
 
 @pytest.fixture
 def duck_conn():
-    with adbc_driver_manager.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
+    with adbc_driver_manager.dbapi.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
 
@@ -98,7 +95,7 @@ def test_commit(tmp_path):
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
-    with adbc_driver_manager.connect(
+    with adbc_driver_manager.dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -108,7 +105,7 @@ def test_commit(tmp_path):
             cur.adbc_ingest("ingest", table, "create")
 
     # Check Data is not there
-    with adbc_driver_manager.connect(
+    with adbc_driver_manager.dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -118,7 +115,7 @@ def test_commit(tmp_path):
         with conn.cursor() as cur:
             # This errors because the table does not exist
             with pytest.raises(
-                adbc_driver_manager_lib.InternalError,
+                adbc_driver_manager._lib.InternalError,
                 match=r"Table with name ingest does not exist!",
             ):
                 cur.execute("SELECT count(*) from ingest")
@@ -127,7 +124,7 @@ def test_commit(tmp_path):
 
     # This now works because we enabled autocommit
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -221,7 +218,7 @@ def test_insertion(duck_conn):
     # Test Append
     with duck_conn.cursor() as cursor:
         with pytest.raises(
-            adbc_driver_manager_lib.InternalError,
+            adbc_driver_manager.InternalError,
             match=r'Table with name "ingest_table" already exists!',
         ):
             cursor.adbc_ingest("ingest_table", table, "create")
@@ -299,7 +296,7 @@ def test_large_chunk(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -325,7 +322,7 @@ def test_dictionary_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -353,7 +350,7 @@ def test_ree_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,

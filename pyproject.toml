@@ -48,7 +48,7 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
     "pandas",  # used for pandas dataframes all over the place
     "pyarrow", # used for pyarrow support
-    "adbc_driver_manager", # for the adbc driver (TODO: this should live under the duckdb package)
+    "adbc-driver-manager", # for the adbc driver
 ]
 
 ######################################################################################################
@@ -225,6 +225,7 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "pyarrow",
 ]
 test = [ # dependencies used for running tests
+    "adbc-driver-manager",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",

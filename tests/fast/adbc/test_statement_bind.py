@@ -1,10 +1,8 @@
+import adbc_driver_manager
+import pyarrow as pa
 import pytest
 
-pa = pytest.importorskip("pyarrow")
-adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
-
-adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
-con = adbc_driver_duckdb.connect()
+import adbc_driver_duckdb.dbapi
 
 
 def _import(handle):
@@ -33,7 +31,7 @@ class TestADBCStatementBind:
             names=["ints"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? * 2 as i")
@@ -55,7 +53,7 @@ class TestADBCStatementBind:
             names=["ints"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? * 2 as i")
@@ -90,7 +88,7 @@ class TestADBCStatementBind:
             names=["ints", "strings", "bools"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a, ? as b, ? as c")
@@ -120,7 +118,7 @@ class TestADBCStatementBind:
         # Create the RecordBatch
         record_batch = pa.RecordBatch.from_arrays([struct_array], schema=schema)
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a")
@@ -143,7 +141,7 @@ class TestADBCStatementBind:
             names=["ints", "strings"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a")
@@ -171,7 +169,7 @@ class TestADBCStatementBind:
             names=["strings"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a, ? as b")
