@@ -1,15 +1,10 @@
-import duckdb
-import pytest
-import sys
 import datetime
-import os
-import numpy as np
+from pathlib import Path
 
-if sys.version_info < (3, 9):
-    pytest.skip(
-        "Python Version must be higher or equal to 3.9 to run this test",
-        allow_module_level=True,
-    )
+import numpy as np
+import pytest
+
+import duckdb
 
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
@@ -47,7 +42,7 @@ def test_connection_get_table_types(duck_conn):
     with duck_conn.cursor() as cursor:
         # Test Default Schema
         cursor.execute("CREATE TABLE tableschema (ints BIGINT)")
-    assert duck_conn.adbc_get_table_types() == ['BASE TABLE']
+    assert duck_conn.adbc_get_table_types() == ["BASE TABLE"]
 
 
 def test_connection_get_objects(duck_conn):
@@ -97,9 +92,9 @@ def test_connection_get_objects_filters(duck_conn):
 
 
 def test_commit(tmp_path):
-    db = os.path.join(tmp_path, "tmp.db")
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
@@ -124,21 +119,23 @@ def test_commit(tmp_path):
             # This errors because the table does not exist
             with pytest.raises(
                 adbc_driver_manager_lib.InternalError,
-                match=r'Table with name ingest does not exist!',
+                match=r"Table with name ingest does not exist!",
             ):
                 cur.execute("SELECT count(*) from ingest")
 
             cur.adbc_ingest("ingest", table, "create")
 
     # This now works because we enabled autocommit
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT count(*) from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {'count_star()': [4]}
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("SELECT count(*) from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [4]}
 
 
 def test_connection_get_table_schema(duck_conn):
@@ -235,7 +232,7 @@ def test_insertion(duck_conn):
 
 def test_read(duck_conn):
     with duck_conn.cursor() as cursor:
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "category.csv")
+        filename = Path(__file__).parent / ".." / "data" / "category.csv"
         cursor.execute(f"SELECT * FROM '{filename}'")
         assert cursor.fetch_arrow_table().to_pydict() == {
             "CATEGORY_ID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -297,46 +294,50 @@ def test_large_chunk(tmp_path):
     # Create the table
     table = pyarrow.table([col1, col2, col3], names=["ints", "floats", "strings"])
 
-    db = os.path.join(tmp_path, "tmp.db")
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("SELECT count(*) from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {'count_star()': [30_000]}
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("SELECT count(*) from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [30_000]}
 
 
 def test_dictionary_data(tmp_path):
-    data = ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
+    data = ["apple", "banana", "apple", "orange", "banana", "banana"]
 
     dict_type = pyarrow.dictionary(index_type=pyarrow.int32(), value_type=pyarrow.string())
     dict_array = pyarrow.array(data, type=dict_type)
 
     # Wrap in a table
-    table = pyarrow.table({'fruits': dict_array})
-    db = os.path.join(tmp_path, "tmp.db")
-    if os.path.exists(db):
-        os.remove(db)
+    table = pyarrow.table({"fruits": dict_array})
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {
-                'fruits': ['apple', 'banana', 'apple', 'orange', 'banana', 'banana']
-            }
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {
+            "fruits": ["apple", "banana", "apple", "orange", "banana", "banana"]
+        }
 
 
 def test_ree_data(tmp_path):
@@ -347,50 +348,52 @@ def test_ree_data(tmp_path):
 
     table = pyarrow.table({"fruits": ree_array})
 
-    db = os.path.join(tmp_path, "tmp.db")
-    if os.path.exists(db):
-        os.remove(db)
+    db = Path(tmp_path) / "tmp.db"
+    if db.exists():
+        db.unlink()
     db_kwargs = {"path": f"{db}"}
-    with adbc_driver_manager.connect(
-        driver=driver_path,
-        entrypoint="duckdb_adbc_init",
-        db_kwargs=db_kwargs,
-        autocommit=True,
-    ) as conn:
-        with conn.cursor() as cur:
-            cur.adbc_ingest("ingest", table, "create")
-            cur.execute("from ingest")
-            assert cur.fetch_arrow_table().to_pydict() == {
-                'fruits': ['apple', 'apple', 'apple', 'banana', 'banana', 'orange']
-            }
+    with (
+        adbc_driver_manager.connect(
+            driver=driver_path,
+            entrypoint="duckdb_adbc_init",
+            db_kwargs=db_kwargs,
+            autocommit=True,
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.adbc_ingest("ingest", table, "create")
+        cur.execute("from ingest")
+        assert cur.fetch_arrow_table().to_pydict() == {
+            "fruits": ["apple", "apple", "apple", "banana", "banana", "orange"]
+        }
 
 
 def sorted_get_objects(catalogs):
     res = []
-    for catalog in sorted(catalogs, key=lambda cat: cat['catalog_name']):
+    for catalog in sorted(catalogs, key=lambda cat: cat["catalog_name"]):
         new_catalog = {
-            "catalog_name": catalog['catalog_name'],
+            "catalog_name": catalog["catalog_name"],
             "catalog_db_schemas": [],
         }
 
-        for db_schema in sorted(catalog['catalog_db_schemas'] or [], key=lambda sch: sch['db_schema_name']):
+        for db_schema in sorted(catalog["catalog_db_schemas"] or [], key=lambda sch: sch["db_schema_name"]):
             new_db_schema = {
-                "db_schema_name": db_schema['db_schema_name'],
+                "db_schema_name": db_schema["db_schema_name"],
                 "db_schema_tables": [],
             }
 
-            for table in sorted(db_schema['db_schema_tables'] or [], key=lambda tab: tab['table_name']):
+            for table in sorted(db_schema["db_schema_tables"] or [], key=lambda tab: tab["table_name"]):
                 new_table = {
-                    "table_name": table['table_name'],
-                    "table_type": table['table_type'],
+                    "table_name": table["table_name"],
+                    "table_type": table["table_type"],
                     "table_columns": [],
                     "table_constraints": [],
                 }
 
-                for column in sorted(table['table_columns'] or [], key=lambda col: col['ordinal_position']):
+                for column in sorted(table["table_columns"] or [], key=lambda col: col["ordinal_position"]):
                     new_table["table_columns"].append(column)
 
-                for constraint in sorted(table['table_constraints'] or [], key=lambda con: con['constraint_name']):
+                for constraint in sorted(table["table_constraints"] or [], key=lambda con: con["constraint_name"]):
                     new_table["table_constraints"].append(constraint)
 
                 new_db_schema["db_schema_tables"].append(new_table)

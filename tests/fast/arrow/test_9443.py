@@ -1,14 +1,13 @@
-import duckdb
+from datetime import time
+from pathlib import PurePosixPath
+
 import pytest
 
 pq = pytest.importorskip("pyarrow.parquet")
 pa = pytest.importorskip("pyarrow")
 
-from datetime import time
-from pathlib import PurePosixPath
 
-
-class Test9443(object):
+class Test9443:
     def test_9443(self, tmp_path, duckdb_cursor):
         arrow_table = pa.Table.from_pylist(
             [

@@ -1,17 +1,16 @@
-import numpy as np
-from datetime import time, timezone
-import duckdb
-import pytest
 import datetime
+from datetime import time, timezone
+
+import pytest
 
 pandas = pytest.importorskip("pandas")
 
 
-class TestTimeTz(object):
+class TestTimeTz:
     def test_time_tz(self, duckdb_cursor):
-        df = pandas.DataFrame({"col1": [time(1, 2, 3, tzinfo=timezone.utc)]})
+        df = pandas.DataFrame({"col1": [time(1, 2, 3, tzinfo=timezone.utc)]})  # noqa: F841
 
-        sql = f'SELECT * FROM df'
+        sql = "SELECT * FROM df"
 
         duckdb_cursor.execute(sql)
 

@@ -1,28 +1,27 @@
-import pytest
-import duckdb
-import io
 import datetime
+import io
+
+import pytest
 
 fsspec = pytest.importorskip("fsspec")
 
 
-class TestReadParquet(object):
+class TestReadParquet:
     def test_fsspec_deadlock(self, duckdb_cursor, tmp_path):
         # Create test parquet data
         file_path = tmp_path / "data.parquet"
-        duckdb_cursor.sql("COPY (FROM range(50_000)) TO '{}' (FORMAT parquet)".format(str(file_path)))
-        with open(file_path, "rb") as f:
-            parquet_data = f.read()
+        duckdb_cursor.sql(f"COPY (FROM range(50_000)) TO '{file_path!s}' (FORMAT parquet)")
+        parquet_data = file_path.read_bytes()
 
         class TestFileSystem(fsspec.AbstractFileSystem):
             protocol = "deadlock"
 
             @property
-            def fsid(self):
+            def fsid(self) -> str:
                 return "deadlock"
 
             def ls(self, path, detail=True, **kwargs):
-                vals = [k for k in self._data.keys() if k.startswith(path)]
+                vals = [k for k in self._data if k.startswith(path)]
                 if detail:
                     return [
                         {
@@ -44,12 +43,12 @@ class TestReadParquet(object):
             def _open(self, path, **kwargs):
                 return io.BytesIO(self._data[path])
 
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self._data = {"a": parquet_data, "b": parquet_data}
 
         fsspec.register_implementation("deadlock", TestFileSystem, clobber=True)
-        fs = fsspec.filesystem('deadlock')
+        fs = fsspec.filesystem("deadlock")
         duckdb_cursor.register_filesystem(fs)
 
         result = duckdb_cursor.read_parquet(file_globs=["deadlock://a", "deadlock://b"], union_by_name=True)

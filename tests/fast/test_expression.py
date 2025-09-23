@@ -1,19 +1,20 @@
-import platform
-import duckdb
-import pytest
-from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
-from duckdb import (
-    Expression,
-    ConstantExpression,
-    ColumnExpression,
-    LambdaExpression,
-    CoalesceOperator,
-    StarExpression,
-    FunctionExpression,
-    CaseExpression,
-)
-from duckdb.value.constant import Value, IntegerValue
 import datetime
+import platform
+
+import pytest
+
+import duckdb
+from duckdb import (
+    CaseExpression,
+    CoalesceOperator,
+    ColumnExpression,
+    ConstantExpression,
+    FunctionExpression,
+    LambdaExpression,
+    StarExpression,
+)
+from duckdb.typing import INTEGER, TIMESTAMP, VARCHAR
+from duckdb.value.constant import IntegerValue, Value
 
 pytestmark = pytest.mark.skipif(
     platform.system() == "Emscripten",
@@ -21,7 +22,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def filter_rel():
     con = duckdb.connect()
     rel = con.sql(
@@ -36,9 +37,10 @@ def filter_rel():
     """
     )
     yield rel
+    con.close()
 
 
-class TestExpression(object):
+class TestExpression:
     def test_constant_expression(self):
         con = duckdb.connect()
 
@@ -59,7 +61,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [(5,)]
 
-    @pytest.mark.skipif(platform.system() == 'Windows', reason="There is some weird interaction in Windows CI")
+    @pytest.mark.skipif(platform.system() == "Windows", reason="There is some weird interaction in Windows CI")
     def test_column_expression(self):
         con = duckdb.connect()
 
@@ -71,12 +73,12 @@ class TestExpression(object):
                 3 as c
         """
         )
-        column = ColumnExpression('a')
+        column = ColumnExpression("a")
         rel2 = rel.select(column)
         res = rel2.fetchall()
         assert res == [(1,)]
 
-        column = ColumnExpression('d')
+        column = ColumnExpression("d")
         with pytest.raises(duckdb.BinderException, match='Referenced column "d" not found'):
             rel2 = rel.select(column)
 
@@ -89,9 +91,9 @@ class TestExpression(object):
         """
         )
 
-        rel2 = rel.select(CoalesceOperator(ConstantExpression(None), ConstantExpression('hello').cast(int)))
+        rel2 = rel.select(CoalesceOperator(ConstantExpression(None), ConstantExpression("hello").cast(int)))
         res = rel2.explain()
-        assert 'COALESCE' in res
+        assert "COALESCE" in res
 
         with pytest.raises(duckdb.ConversionException, match="Could not convert string 'hello' to INT64"):
             rel2.fetchall()
@@ -103,8 +105,8 @@ class TestExpression(object):
         """
         )
 
-        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one argument'):
-            rel3 = rel.select(CoalesceOperator())
+        with pytest.raises(duckdb.InvalidInputException, match="Please provide at least one argument"):
+            rel.select(CoalesceOperator())
 
         rel4 = rel.select(CoalesceOperator(ConstantExpression(None)))
         assert rel4.fetchone() == (None,)
@@ -112,7 +114,7 @@ class TestExpression(object):
         rel5 = rel.select(CoalesceOperator(ConstantExpression(42)))
         assert rel5.fetchone() == (42,)
 
-        exprtest = con.table('exprtest')
+        exprtest = con.table("exprtest")
         rel6 = exprtest.select(CoalesceOperator(ColumnExpression("a")))
         res = rel6.fetchall()
         assert res == [(42,), (43,), (None,), (45,)]
@@ -193,17 +195,17 @@ class TestExpression(object):
         """
         )
         rel = rel.select(
-            ConstantExpression("a").alias('c0'),
-            ConstantExpression(42).alias('c1'),
-            ConstantExpression(None).alias('c2'),
+            ConstantExpression("a").alias("c0"),
+            ConstantExpression(42).alias("c1"),
+            ConstantExpression(None).alias("c2"),
         )
         res = rel.explain()
-        assert 'c0' in res
-        assert 'c1' in res
+        assert "c0" in res
+        assert "c1" in res
         # 'c2' is not in the explain result because it shows NULL instead
-        assert 'NULL' in res
+        assert "NULL" in res
         res = rel.fetchall()
-        assert res == [('a', 42, None)]
+        assert res == [("a", 42, None)]
 
     def test_column_expression_table(self):
         con = duckdb.connect()
@@ -219,10 +221,10 @@ class TestExpression(object):
         """
         )
 
-        rel = con.table('tbl')
-        rel2 = rel.select('c0', 'c1', 'c2')
+        rel = con.table("tbl")
+        rel2 = rel.select("c0", "c1", "c2")
         res = rel2.fetchall()
-        assert res == [('a', 'b', 'c'), ('d', 'e', 'f'), ('g', 'h', 'i')]
+        assert res == [("a", "b", "c"), ("d", "e", "f"), ("g", "h", "i")]
 
     def test_column_expression_view(self):
         con = duckdb.connect()
@@ -241,18 +243,18 @@ class TestExpression(object):
             CREATE VIEW v1 as select c0 as c3, c2 as c4 from tbl;
         """
         )
-        rel = con.view('v1')
-        rel2 = rel.select('c3', 'c4')
+        rel = con.view("v1")
+        rel2 = rel.select("c3", "c4")
         res = rel2.fetchall()
-        assert res == [('a', 'c'), ('d', 'f'), ('g', 'i')]
+        assert res == [("a", "c"), ("d", "f"), ("g", "i")]
 
     def test_column_expression_replacement_scan(self):
         con = duckdb.connect()
 
         pd = pytest.importorskip("pandas")
-        df = pd.DataFrame({'a': [42, 43, 0], 'b': [True, False, True], 'c': [23.123, 623.213, 0.30234]})
+        df = pd.DataFrame({"a": [42, 43, 0], "b": [True, False, True], "c": [23.123, 623.213, 0.30234]})  # noqa: F841
         rel = con.sql("select * from df")
-        rel2 = rel.select('a', 'b')
+        rel2 = rel.select("a", "b")
         res = rel2.fetchall()
         assert res == [(42, True), (43, False), (0, True)]
 
@@ -271,7 +273,7 @@ class TestExpression(object):
         )
 
         constant = ConstantExpression(val)
-        col = ColumnExpression('b')
+        col = ColumnExpression("b")
         expr = col + constant
 
         rel = rel.select(expr, expr)
@@ -288,7 +290,7 @@ class TestExpression(object):
                 5 as b
         """
         )
-        function = FunctionExpression("-", ColumnExpression('b'), ColumnExpression('a'))
+        function = FunctionExpression("-", ColumnExpression("b"), ColumnExpression("a"))
         rel2 = rel.select(function)
         res = rel2.fetchall()
         assert res == [(4,)]
@@ -301,7 +303,7 @@ class TestExpression(object):
             select 5 as a
         """
         )
-        col = ColumnExpression('a')
+        col = ColumnExpression("a")
         col = -col
         rel = rel.select(col)
         res = rel.fetchall()
@@ -317,8 +319,8 @@ class TestExpression(object):
                 1 as b
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
         expr = col1 - col2
         rel2 = rel.select(expr)
         res = rel2.fetchall()
@@ -337,8 +339,8 @@ class TestExpression(object):
                 2 as b
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
         expr = col1 * col2
         rel = rel.select(expr)
         res = rel.fetchall()
@@ -354,8 +356,8 @@ class TestExpression(object):
                 2 as b
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
         expr = col1 / col2
         rel2 = rel.select(expr)
         res = rel2.fetchall()
@@ -376,8 +378,8 @@ class TestExpression(object):
                 2 as b
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
         expr = col1 % col2
         rel2 = rel.select(expr)
         res = rel2.fetchall()
@@ -393,8 +395,8 @@ class TestExpression(object):
                 2 as b
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
         expr = col1**col2
         rel2 = rel.select(expr)
         res = rel2.fetchall()
@@ -411,9 +413,9 @@ class TestExpression(object):
                 3 as c
         """
         )
-        a = ColumnExpression('a')
-        b = ColumnExpression('b')
-        c = ColumnExpression('c')
+        a = ColumnExpression("a")
+        b = ColumnExpression("b")
+        c = ColumnExpression("c")
 
         # 5 BETWEEN 2 AND 3 -> false
         assert rel.select(a.between(b, c)).fetchall() == [(False,)]
@@ -437,32 +439,32 @@ class TestExpression(object):
             """
         )
 
-        col1 = ColumnExpression('c0')
-        col2 = ColumnExpression('c1')
+        col1 = ColumnExpression("c0")
+        col2 = ColumnExpression("c1")
 
-        lower_a = ConstantExpression('a')
-        upper_a = ConstantExpression('A')
+        lower_a = ConstantExpression("a")
+        upper_a = ConstantExpression("A")
 
         # SELECT c0 LIKE 'a' == True
-        assert rel.select(FunctionExpression('~~', col1, lower_a)).fetchall() == [(True,)]
+        assert rel.select(FunctionExpression("~~", col1, lower_a)).fetchall() == [(True,)]
 
         # SELECT c0 LIKE 'A' == False
-        assert rel.select(FunctionExpression('~~', col1, upper_a)).fetchall() == [(False,)]
+        assert rel.select(FunctionExpression("~~", col1, upper_a)).fetchall() == [(False,)]
 
         # SELECT c0 LIKE 'A' COLLATE NOCASE == True
-        assert rel.select(FunctionExpression('~~', col1, upper_a.collate('NOCASE'))).fetchall() == [(True,)]
+        assert rel.select(FunctionExpression("~~", col1, upper_a.collate("NOCASE"))).fetchall() == [(True,)]
 
         # SELECT c1 LIKE 'a' == False
-        assert rel.select(FunctionExpression('~~', col2, lower_a)).fetchall() == [(False,)]
+        assert rel.select(FunctionExpression("~~", col2, lower_a)).fetchall() == [(False,)]
 
         # SELECT c1 LIKE 'a' COLLATE NOCASE == True
-        assert rel.select(FunctionExpression('~~', col2, lower_a.collate('NOCASE'))).fetchall() == [(True,)]
+        assert rel.select(FunctionExpression("~~", col2, lower_a.collate("NOCASE"))).fetchall() == [(True,)]
 
-        with pytest.raises(duckdb.BinderException, match='collations are only supported for type varchar'):
-            rel.select(FunctionExpression('~~', col2, lower_a).collate('NOCASE'))
+        with pytest.raises(duckdb.BinderException, match="collations are only supported for type varchar"):
+            rel.select(FunctionExpression("~~", col2, lower_a).collate("NOCASE"))
 
-        with pytest.raises(duckdb.CatalogException, match='Collation with name non-existant does not exist'):
-            rel.select(FunctionExpression('~~', col2, lower_a.collate('non-existant')))
+        with pytest.raises(duckdb.CatalogException, match="Collation with name non-existant does not exist"):
+            rel.select(FunctionExpression("~~", col2, lower_a.collate("non-existant")))
 
     def test_equality_expression(self):
         con = duckdb.connect()
@@ -475,9 +477,9 @@ class TestExpression(object):
                 5 as c
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        col3 = ColumnExpression('c')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        col3 = ColumnExpression("c")
         expr1 = col1 == col2
         expr2 = col1 == col3
         rel2 = rel.select(expr1, expr2)
@@ -497,22 +499,22 @@ class TestExpression(object):
         # Use a tuple of strings as 'lhs'
         func = FunctionExpression(
             "list_reduce",
-            ColumnExpression('a'),
-            LambdaExpression(('x', 'y'), ColumnExpression('x') + ColumnExpression('y')),
+            ColumnExpression("a"),
+            LambdaExpression(("x", "y"), ColumnExpression("x") + ColumnExpression("y")),
         )
         rel2 = rel.select(func)
         res = rel2.fetchall()
         assert res == [(6,)]
 
         # Use only a string name as 'lhs'
-        func = FunctionExpression("list_apply", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
+        func = FunctionExpression("list_apply", ColumnExpression("a"), LambdaExpression("x", ColumnExpression("x") + 3))
         rel2 = rel.select(func)
         res = rel2.fetchall()
         assert res == [([4, 5, 6],)]
 
         # 'row' is not a lambda function, so it doesn't accept a lambda expression
-        func = FunctionExpression("row", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('x') + 3))
-        with pytest.raises(duckdb.BinderException, match='This scalar function does not support lambdas'):
+        func = FunctionExpression("row", ColumnExpression("a"), LambdaExpression("x", ColumnExpression("x") + 3))
+        with pytest.raises(duckdb.BinderException, match="This scalar function does not support lambdas"):
             rel2 = rel.select(func)
 
         # lhs has to be a tuple of strings or a single string
@@ -520,11 +522,11 @@ class TestExpression(object):
             ValueError, match="Please provide 'lhs' as either a tuple containing strings, or a single string"
         ):
             func = FunctionExpression(
-                "list_filter", ColumnExpression('a'), LambdaExpression(42, ColumnExpression('x') + 3)
+                "list_filter", ColumnExpression("a"), LambdaExpression(42, ColumnExpression("x") + 3)
             )
 
         func = FunctionExpression(
-            "list_filter", ColumnExpression('a'), LambdaExpression('x', ColumnExpression('y') != 3)
+            "list_filter", ColumnExpression("a"), LambdaExpression("x", ColumnExpression("y") != 3)
         )
         with pytest.raises(duckdb.BinderException, match='Referenced column "y" not found in FROM clause'):
             rel2 = rel.select(func)
@@ -540,9 +542,9 @@ class TestExpression(object):
                 5 as c
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        col3 = ColumnExpression('c')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        col3 = ColumnExpression("c")
         expr1 = col1 != col2
         expr2 = col1 != col3
         rel2 = rel.select(expr1, expr2)
@@ -561,10 +563,10 @@ class TestExpression(object):
                 3 as d
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        col3 = ColumnExpression('c')
-        col4 = ColumnExpression('d')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        col3 = ColumnExpression("c")
+        col4 = ColumnExpression("d")
 
         # Greater than
         expr1 = col1 > col2
@@ -606,11 +608,11 @@ class TestExpression(object):
             select 1 as a
         """
         )
-        col = ColumnExpression('a')
-        col = col.alias('b')
+        col = ColumnExpression("a")
+        col = col.alias("b")
 
         rel2 = rel.select(col)
-        assert rel2.columns == ['b']
+        assert rel2.columns == ["b"]
 
     def test_star_expression(self):
         con = duckdb.connect()
@@ -628,7 +630,7 @@ class TestExpression(object):
         assert res == [(1, 2)]
 
         # With exclude list
-        star = StarExpression(exclude=['a'])
+        star = StarExpression(exclude=["a"])
         rel2 = rel.select(star)
         res = rel2.fetchall()
         assert res == [(2,)]
@@ -644,13 +646,13 @@ class TestExpression(object):
         """
         )
 
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        expr = FunctionExpression('struct_pack', col1, col2).alias('struct')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        expr = FunctionExpression("struct_pack", col1, col2).alias("struct")
 
         rel = rel.select(expr)
         res = rel.fetchall()
-        assert res == [({'a': 1, 'b': 2},)]
+        assert res == [({"a": 1, "b": 2},)]
 
     def test_function_expression_udf(self):
         con = duckdb.connect()
@@ -658,7 +660,7 @@ class TestExpression(object):
         def my_simple_func(a: int, b: int, c: int) -> int:
             return a + b + c
 
-        con.create_function('my_func', my_simple_func)
+        con.create_function("my_func", my_simple_func)
 
         rel = con.sql(
             """
@@ -668,10 +670,10 @@ class TestExpression(object):
                 3 as c
         """
         )
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        col3 = ColumnExpression('c')
-        expr = FunctionExpression('my_func', col1, col2, col3)
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        col3 = ColumnExpression("c")
+        expr = FunctionExpression("my_func", col1, col2, col3)
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(6,)]
@@ -688,10 +690,10 @@ class TestExpression(object):
                 ) tbl(text, start, "end")
             """
         )
-        expr = FunctionExpression('array_slice', "start", "text", "end")
+        expr = FunctionExpression("array_slice", "start", "text", "end")
         rel2 = rel.select(expr)
         res = rel2.fetchall()
-        assert res == [('tes',), ('his is',), ('di',)]
+        assert res == [("tes",), ("his is",), ("di",)]
 
     def test_column_expression_function_coverage(self):
         con = duckdb.connect()
@@ -707,11 +709,11 @@ class TestExpression(object):
         """
         )
 
-        rel = con.table('tbl')
-        expr = FunctionExpression('||', FunctionExpression('||', 'c0', 'c1'), 'c2')
+        rel = con.table("tbl")
+        expr = FunctionExpression("||", FunctionExpression("||", "c0", "c1"), "c2")
         rel2 = rel.select(expr)
         res = rel2.fetchall()
-        assert res == [('abc',), ('def',), ('ghi',)]
+        assert res == [("abc",), ("def",), ("ghi",)]
 
     def test_function_expression_aggregate(self):
         con = duckdb.connect()
@@ -725,11 +727,11 @@ class TestExpression(object):
                 ) tbl(text)
             """
         )
-        expr = FunctionExpression('first', 'text')
+        expr = FunctionExpression("first", "text")
         with pytest.raises(
-            duckdb.BinderException, match='Binder Error: Aggregates cannot be present in a Project relation!'
+            duckdb.BinderException, match="Binder Error: Aggregates cannot be present in a Project relation!"
         ):
-            rel2 = rel.select(expr)
+            rel.select(expr)
 
     def test_case_expression(self):
         con = duckdb.connect()
@@ -743,9 +745,9 @@ class TestExpression(object):
         """
         )
 
-        col1 = ColumnExpression('a')
-        col2 = ColumnExpression('b')
-        col3 = ColumnExpression('c')
+        col1 = ColumnExpression("a")
+        col2 = ColumnExpression("b")
+        col3 = ColumnExpression("c")
 
         const1 = ConstantExpression(IntegerValue(1))
         # CASE WHEN col1 > 1 THEN 5 ELSE NULL
@@ -796,17 +798,17 @@ class TestExpression(object):
 
     def test_numeric_overflow(self):
         con = duckdb.connect()
-        rel = con.sql('select 3000::SHORT salary')
+        rel = con.sql("select 3000::SHORT salary")
+        expr = ColumnExpression("salary") * 100
+        rel2 = rel.select(expr)
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
-            expr = ColumnExpression("salary") * 100
-            rel2 = rel.select(expr)
-            res = rel2.fetchall()
+            rel2.fetchall()
 
+        val = duckdb.Value(100, duckdb.typing.TINYINT)
+        expr2 = ColumnExpression("salary") * val
+        rel3 = rel.select(expr2)
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
-            val = duckdb.Value(100, duckdb.typing.TINYINT)
-            expr = ColumnExpression("salary") * val
-            rel2 = rel.select(expr)
-            res = rel2.fetchall()
+            rel3.fetchall()
 
     def test_struct_column_expression(self):
         con = duckdb.connect()
@@ -823,7 +825,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
-        assert res == [(1, 'a'), (1, 'b')]
+        assert res == [(1, "a"), (1, "b")]
 
     def test_filter_not(self, filter_rel):
         expr = ColumnExpression("a") == 1
@@ -832,18 +834,18 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
-        assert res == [(2, 'b'), (3, 'c'), (4, 'a')]
+        assert res == [(2, "b"), (3, "c"), (4, "a")]
 
     def test_filter_and(self, filter_rel):
         expr = ColumnExpression("a") == 1
         expr = ~expr
         # AND operator
 
-        expr = expr & ('b' != ConstantExpression('b'))
+        expr = expr & (ConstantExpression("b") != "b")
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
-        assert res == [(3, 'c'), (4, 'a')]
+        assert res == [(3, "c"), (4, "a")]
 
     def test_filter_or(self, filter_rel):
         # OR operator
@@ -851,7 +853,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
-        assert res == [(1, 'a'), (1, 'b'), (4, 'a')]
+        assert res == [(1, "a"), (1, "b"), (4, "a")]
 
     def test_filter_mixed(self, filter_rel):
         # Mixed
@@ -861,7 +863,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
-        assert res == [(1, 'a'), (4, 'a')]
+        assert res == [(1, "a"), (4, "a")]
 
     def test_empty_in(self, filter_rel):
         expr = ColumnExpression("a")
@@ -884,7 +886,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
-        assert res == [(1, 'a'), (2, 'b'), (1, 'b')]
+        assert res == [(1, "a"), (2, "b"), (1, "b")]
 
     def test_filter_not_in(self, filter_rel):
         expr = ColumnExpression("a")
@@ -894,7 +896,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
-        assert res == [(3, 'c'), (4, 'a')]
+        assert res == [(3, "c"), (4, "a")]
 
         # NOT IN expression
         expr = ColumnExpression("a")
@@ -902,7 +904,7 @@ class TestExpression(object):
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
-        assert res == [(3, 'c'), (4, 'a')]
+        assert res == [(3, "c"), (4, "a")]
 
     def test_null(self):
         con = duckdb.connect()
@@ -924,7 +926,7 @@ class TestExpression(object):
         assert res == [(False,), (False,), (True,), (False,), (False,)]
 
         res2 = rel.filter(b.isnotnull()).fetchall()
-        assert res2 == [(1, 'a'), (2, 'b'), (4, 'c'), (5, 'a')]
+        assert res2 == [(1, "a"), (2, "b"), (4, "c"), (5, "a")]
 
     def test_sort(self):
         con = duckdb.connect()
@@ -956,12 +958,12 @@ class TestExpression(object):
         # Nulls first
         rel2 = rel.sort(b.desc().nulls_first())
         res = rel2.b.fetchall()
-        assert res == [(None,), ('c',), ('b',), ('a',), ('a',)]
+        assert res == [(None,), ("c",), ("b",), ("a",), ("a",)]
 
         # Nulls last
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
-        assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
+        assert res == [("c",), ("b",), ("a",), ("a",), (None,)]
 
     def test_aggregate(self):
         con = duckdb.connect()
@@ -981,19 +983,18 @@ class TestExpression(object):
         res = rel.aggregate([5]).execute().fetchone()[0]
         assert res == 5
 
+        class MyClass:
+            def __init__(self) -> None:
+                pass
+
         # Providing something that can not be converted into an expression is an error:
         with pytest.raises(
-            duckdb.InvalidInputException, match='Invalid Input Error: Please provide arguments of type Expression!'
+            duckdb.InvalidInputException, match="Invalid Input Error: Please provide arguments of type Expression!"
         ):
-
-            class MyClass:
-                def __init__(self):
-                    pass
-
-            res = rel.aggregate([MyClass()]).fetchone()[0]
+            rel.aggregate([MyClass()]).fetchone()[0]
 
         with pytest.raises(
             duckdb.InvalidInputException,
             match="Please provide either a string or list of Expression objects, not <class 'int'>",
         ):
-            res = rel.aggregate(5).execute().fetchone()
+            rel.aggregate(5).execute().fetchone()

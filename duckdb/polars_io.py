@@ -1,20 +1,22 @@
-import duckdb
-import polars as pl
-from typing import Iterator, Optional
-
-from polars.io.plugins import register_io_source
-from duckdb import SQLExpression
+import datetime  # noqa: D100
 import json
+from collections.abc import Iterator
 from decimal import Decimal
-import datetime
+from typing import Optional
+
+import polars as pl
+from polars.io.plugins import register_io_source
+
+import duckdb
+from duckdb import SQLExpression
+
 
 def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
-    """
-    Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
-    
+    """Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
+
     Parameters:
         predicate (pl.Expr): A Polars expression (e.g., col("foo") > 5)
-    
+
     Returns:
         SQLExpression: A DuckDB SQL expression string equivalent.
         None: If conversion fails.
@@ -25,20 +27,19 @@ def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
     """
     # Serialize the Polars expression tree to JSON
     tree = json.loads(predicate.meta.serialize(format="json"))
-    
+
     try:
         # Convert the tree to SQL
         sql_filter = _pl_tree_to_sql(tree)
         return SQLExpression(sql_filter)
-    except:
+    except Exception:
         # If the conversion fails, we return None
         return None
 
 
 def _pl_operation_to_sql(op: str) -> str:
-    """
-    Map Polars binary operation strings to SQL equivalents.
-    
+    """Map Polars binary operation strings to SQL equivalents.
+
     Example:
         >>> _pl_operation_to_sql("Eq")
         '='
@@ -55,12 +56,11 @@ def _pl_operation_to_sql(op: str) -> str:
             "Or": "OR",
         }[op]
     except KeyError:
-        raise NotImplementedError(op)
+        raise NotImplementedError(op)  # noqa: B904
 
 
 def _escape_sql_identifier(identifier: str) -> str:
-    """
-    Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
+    """Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
 
     Example:
         >>> _escape_sql_identifier('column"name')
@@ -71,15 +71,14 @@ def _escape_sql_identifier(identifier: str) -> str:
 
 
 def _pl_tree_to_sql(tree: dict) -> str:
-    """
-    Recursively convert a Polars expression tree (as JSON) to a SQL string.
-    
+    """Recursively convert a Polars expression tree (as JSON) to a SQL string.
+
     Parameters:
         tree (dict): JSON-deserialized expression tree from Polars
-    
+
     Returns:
         str: SQL expression string
-    
+
     Example:
         Input tree:
         {
@@ -97,13 +96,15 @@ def _pl_tree_to_sql(tree: dict) -> str:
     if node_type == "BinaryExpr":
         # Binary expressions: left OP right
         return (
-                "(" +
-                " ".join((
-                    _pl_tree_to_sql(subtree['left']),
-                    _pl_operation_to_sql(subtree['op']),
-                    _pl_tree_to_sql(subtree['right'])
-                )) +
-                ")"
+            "("
+            + " ".join(
+                (
+                    _pl_tree_to_sql(subtree["left"]),
+                    _pl_operation_to_sql(subtree["op"]),
+                    _pl_tree_to_sql(subtree["right"]),
+                )
+            )
+            + ")"
         )
     if node_type == "Column":
         # A reference to a column name
@@ -131,9 +132,11 @@ def _pl_tree_to_sql(tree: dict) -> str:
                 return f"({arg_sql} IS NULL)"
             if func == "IsNotNull":
                 return f"({arg_sql} IS NOT NULL)"
-            raise NotImplementedError(f"Boolean function not supported: {func}")
+            msg = f"Boolean function not supported: {func}"
+            raise NotImplementedError(msg)
 
-        raise NotImplementedError(f"Unsupported function type: {func_dict}")
+        msg = f"Unsupported function type: {func_dict}"
+        raise NotImplementedError(msg)
 
     if node_type == "Scalar":
         # Detect format: old style (dtype/value) or new style (direct type key)
@@ -147,20 +150,30 @@ def _pl_tree_to_sql(tree: dict) -> str:
 
         # Decimal support
         if dtype.startswith("{'Decimal'") or dtype == "Decimal":
-            decimal_value = value['Decimal']
+            decimal_value = value["Decimal"]
             decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
             return str(decimal_value)
 
         # Datetime with microseconds since epoch
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
-            micros = value['Datetime'][0]
+            micros = value["Datetime"][0]
             dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
-            return f"'{str(dt_timestamp)}'::TIMESTAMP"
+            return f"'{dt_timestamp!s}'::TIMESTAMP"
 
         # Match simple numeric/boolean types
-        if dtype in ("Int8", "Int16", "Int32", "Int64",
-                     "UInt8", "UInt16", "UInt32", "UInt64",
-                     "Float32", "Float64", "Boolean"):
+        if dtype in (
+            "Int8",
+            "Int16",
+            "Int32",
+            "Int64",
+            "UInt8",
+            "UInt16",
+            "UInt32",
+            "UInt64",
+            "Float32",
+            "Float64",
+            "Boolean",
+        ):
             return str(value[dtype])
 
         # Time type
@@ -168,9 +181,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
             nanoseconds = value["Time"]
             seconds = nanoseconds // 1_000_000_000
             microseconds = (nanoseconds % 1_000_000_000) // 1_000
-            dt_time = (datetime.datetime.min + datetime.timedelta(
-                seconds=seconds, microseconds=microseconds
-            )).time()
+            dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
             return f"'{dt_time}'::TIME"
 
         # Date type
@@ -182,7 +193,7 @@ def _pl_tree_to_sql(tree: dict) -> str:
         # Binary type
         if dtype == "Binary":
             binary_data = bytes(value["Binary"])
-            escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
+            escaped = "".join(f"\\x{b:02x}" for b in binary_data)
             return f"'{escaped}'::BLOB"
 
         # String type
@@ -191,15 +202,16 @@ def _pl_tree_to_sql(tree: dict) -> str:
             string_val = value.get("StringOwned", value.get("String", None))
             return f"'{string_val}'"
 
+        msg = f"Unsupported scalar type {dtype!s}, with value {value}"
+        raise NotImplementedError(msg)
 
-        raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+    msg = f"Node type: {node_type} is not implemented. {subtree}"
+    raise NotImplementedError(msg)
 
-    raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
-    """
-    A polars IO plugin for DuckDB.
-    """
+    """A polars IO plugin for DuckDB."""
+
     def source_generator(
         with_columns: Optional[list[str]],
         predicate: Optional[pl.Expr],
@@ -223,15 +235,12 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             results = relation_final.fetch_arrow_reader()
         else:
             results = relation_final.fetch_arrow_reader(batch_size)
-        while True:
-            try:
-                record_batch = results.read_next_batch()
-                if predicate is not None and duck_predicate is None:
-                    # We have a predicate, but did not manage to push it down, we fallback here
-                    yield pl.from_arrow(record_batch).filter(predicate)
-                else:
-                    yield pl.from_arrow(record_batch)
-            except StopIteration:
-                break
+
+        for record_batch in iter(results.read_next_batch, None):
+            if predicate is not None and duck_predicate is None:
+                # We have a predicate, but did not manage to push it down, we fallback here
+                yield pl.from_arrow(record_batch).filter(predicate)
+            else:
+                yield pl.from_arrow(record_batch)
 
     return register_io_source(source_generator, schema=schema)

@@ -1,13 +1,13 @@
-import duckdb
-import pytest
 import string
+
+import pytest
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")
 pl = pytest.importorskip("polars")
 
 
-class Test7699(object):
+class Test7699:
     def test_7699(self, duckdb_cursor):
         pl_tbl = pl.DataFrame(
             {
@@ -22,4 +22,4 @@ class Test7699(object):
 
         rel = duckdb_cursor.sql("select * from df1234")
         res = rel.fetchall()
-        assert res == [('K',), ('L',), ('K',), ('L',), ('M',)]
+        assert res == [("K",), ("L",), ("K",), ("L",), ("M",)]

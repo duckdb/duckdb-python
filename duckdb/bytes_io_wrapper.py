@@ -1,5 +1,5 @@
-from io import StringIO, TextIOBase
-from typing import Union
+from io import StringIO, TextIOBase  # noqa: D100
+from typing import Any, Union
 
 """
 BSD 3-Clause License
@@ -36,10 +36,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
 
-class BytesIOWrapper:
+class BytesIOWrapper:  # noqa: D101
     # Wrapper that wraps a StringIO buffer and reads bytes from it
     # Created for compat with pyarrow read_csv
-    def __init__(self, buffer: Union[StringIO, TextIOBase], encoding: str = "utf-8") -> None:
+    def __init__(self, buffer: Union[StringIO, TextIOBase], encoding: str = "utf-8") -> None:  # noqa: D107
         self.buffer = buffer
         self.encoding = encoding
         # Because a character can be represented by more than 1 byte,
@@ -48,10 +48,10 @@ class BytesIOWrapper:
         # overflow to the front of the bytestring the next time reading is performed
         self.overflow = b""
 
-    def __getattr__(self, attr: str):
+    def __getattr__(self, attr: str) -> Any:  # noqa: D105, ANN401
         return getattr(self.buffer, attr)
 
-    def read(self, n: Union[int, None] = -1) -> bytes:
+    def read(self, n: Union[int, None] = -1) -> bytes:  # noqa: D102
         assert self.buffer is not None
         bytestring = self.buffer.read(n).encode(self.encoding)
         # When n=-1/n greater than remaining bytes: Read entire file/rest of file
@@ -63,4 +63,3 @@ class BytesIOWrapper:
             to_return = combined_bytestring[:n]
             self.overflow = combined_bytestring[n:]
             return to_return
-

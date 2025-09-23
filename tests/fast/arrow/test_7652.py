@@ -1,23 +1,20 @@
-import duckdb
-import os
-import pytest
 import tempfile
+
+import pytest
 
 pa = pytest.importorskip("pyarrow", minversion="11")
 pq = pytest.importorskip("pyarrow.parquet", minversion="11")
 
 
-class Test7652(object):
+class Test7652:
     def test_7652(self, duckdb_cursor):
-        temp_file_name = tempfile.NamedTemporaryFile(suffix='.parquet').name
+        with tempfile.NamedTemporaryFile(suffix=".parquet") as tmp:
+            temp_file_name = tmp.name
         # Generate a list of values that aren't uniform in changes.
         generated_list = [1, 0, 2]
 
-        print("Generated values:", generated_list)
-        print(f"Min value: {min(generated_list)} max value: {max(generated_list)}")
-
         # Convert list of values to a PyArrow table with a single column.
-        fake_table = pa.Table.from_arrays([pa.array(generated_list, pa.int64())], names=['n0'])
+        fake_table = pa.Table.from_arrays([pa.array(generated_list, pa.int64())], names=["n0"])
 
         # Write that column with DELTA_BINARY_PACKED encoding
         with pq.ParquetWriter(
@@ -36,7 +33,7 @@ class Test7652(object):
 
         # Attempt to perform the same thing with duckdb.
         print("Retrieving from duckdb")
-        duckdb_result = list(map(lambda v: v[0], duckdb_cursor.sql(f"select * from '{temp_file_name}'").fetchall()))
+        duckdb_result = [v[0] for v in duckdb_cursor.sql(f"select * from '{temp_file_name}'").fetchall()]
 
         print("DuckDB result:", duckdb_result)
         assert min(duckdb_result) == min(generated_list)

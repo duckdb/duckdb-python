@@ -2,20 +2,10 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
-from spark_namespace.sql.functions import sum, avg, max, min, mean, count
 
 
 @pytest.fixture
@@ -30,7 +20,7 @@ def dataframe_a(spark):
     ]
     empColumns = ["emp_id", "name", "superior_emp_id", "year_joined", "emp_dept_id", "gender", "salary"]
     dataframe = spark.createDataFrame(data=emp, schema=empColumns)
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture
@@ -38,10 +28,10 @@ def dataframe_b(spark):
     dept = [("Finance", 10), ("Marketing", 20), ("Sales", 30), ("IT", 40)]
     deptColumns = ["dept_name", "dept_id"]
     dataframe = spark.createDataFrame(data=dept, schema=deptColumns)
-    yield dataframe
+    return dataframe
 
 
-class TestDataFrameJoin(object):
+class TestDataFrameJoin:
     def test_inner_join(self, dataframe_a, dataframe_b):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, "inner")
         df = df.sort(*df.columns)
@@ -49,63 +39,63 @@ class TestDataFrameJoin(object):
         expected = [
             Row(
                 emp_id=1,
-                name='Smith',
+                name="Smith",
                 superior_emp_id=-1,
-                year_joined='2018',
-                emp_dept_id='10',
-                gender='M',
+                year_joined="2018",
+                emp_dept_id="10",
+                gender="M",
                 salary=3000,
-                dept_name='Finance',
+                dept_name="Finance",
                 dept_id=10,
             ),
             Row(
                 emp_id=2,
-                name='Rose',
+                name="Rose",
                 superior_emp_id=1,
-                year_joined='2010',
-                emp_dept_id='20',
-                gender='M',
+                year_joined="2010",
+                emp_dept_id="20",
+                gender="M",
                 salary=4000,
-                dept_name='Marketing',
+                dept_name="Marketing",
                 dept_id=20,
             ),
             Row(
                 emp_id=3,
-                name='Williams',
+                name="Williams",
                 superior_emp_id=1,
-                year_joined='2010',
-                emp_dept_id='10',
-                gender='M',
+                year_joined="2010",
+                emp_dept_id="10",
+                gender="M",
                 salary=1000,
-                dept_name='Finance',
+                dept_name="Finance",
                 dept_id=10,
             ),
             Row(
                 emp_id=4,
-                name='Jones',
+                name="Jones",
                 superior_emp_id=2,
-                year_joined='2005',
-                emp_dept_id='10',
-                gender='F',
+                year_joined="2005",
+                emp_dept_id="10",
+                gender="F",
                 salary=2000,
-                dept_name='Finance',
+                dept_name="Finance",
                 dept_id=10,
             ),
             Row(
                 emp_id=5,
-                name='Brown',
+                name="Brown",
                 superior_emp_id=2,
-                year_joined='2010',
-                emp_dept_id='40',
-                gender='',
+                year_joined="2010",
+                emp_dept_id="40",
+                gender="",
                 salary=-1,
-                dept_name='IT',
+                dept_name="IT",
                 dept_id=40,
             ),
         ]
         assert sorted(res) == sorted(expected)
 
-    @pytest.mark.parametrize('how', ['outer', 'fullouter', 'full', 'full_outer'])
+    @pytest.mark.parametrize("how", ["outer", "fullouter", "full", "full_outer"])
     def test_outer_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
@@ -114,66 +104,66 @@ class TestDataFrameJoin(object):
             [
                 Row(
                     emp_id=1,
-                    name='Smith',
+                    name="Smith",
                     superior_emp_id=-1,
-                    year_joined='2018',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2018",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=3000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=2,
-                    name='Rose',
+                    name="Rose",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='20',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="20",
+                    gender="M",
                     salary=4000,
-                    dept_name='Marketing',
+                    dept_name="Marketing",
                     dept_id=20,
                 ),
                 Row(
                     emp_id=3,
-                    name='Williams',
+                    name="Williams",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=1000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=4,
-                    name='Jones',
+                    name="Jones",
                     superior_emp_id=2,
-                    year_joined='2005',
-                    emp_dept_id='10',
-                    gender='F',
+                    year_joined="2005",
+                    emp_dept_id="10",
+                    gender="F",
                     salary=2000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=5,
-                    name='Brown',
+                    name="Brown",
                     superior_emp_id=2,
-                    year_joined='2010',
-                    emp_dept_id='40',
-                    gender='',
+                    year_joined="2010",
+                    emp_dept_id="40",
+                    gender="",
                     salary=-1,
-                    dept_name='IT',
+                    dept_name="IT",
                     dept_id=40,
                 ),
                 Row(
                     emp_id=6,
-                    name='Brown',
+                    name="Brown",
                     superior_emp_id=2,
-                    year_joined='2010',
-                    emp_dept_id='50',
-                    gender='',
+                    year_joined="2010",
+                    emp_dept_id="50",
+                    gender="",
                     salary=-1,
                     dept_name=None,
                     dept_id=None,
@@ -186,14 +176,14 @@ class TestDataFrameJoin(object):
                     emp_dept_id=None,
                     gender=None,
                     salary=None,
-                    dept_name='Sales',
+                    dept_name="Sales",
                     dept_id=30,
                 ),
             ],
             key=lambda x: x.emp_id or 0,
         )
 
-    @pytest.mark.parametrize('how', ['right', 'rightouter', 'right_outer'])
+    @pytest.mark.parametrize("how", ["right", "rightouter", "right_outer"])
     def test_right_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
@@ -202,57 +192,57 @@ class TestDataFrameJoin(object):
             [
                 Row(
                     emp_id=1,
-                    name='Smith',
+                    name="Smith",
                     superior_emp_id=-1,
-                    year_joined='2018',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2018",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=3000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=2,
-                    name='Rose',
+                    name="Rose",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='20',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="20",
+                    gender="M",
                     salary=4000,
-                    dept_name='Marketing',
+                    dept_name="Marketing",
                     dept_id=20,
                 ),
                 Row(
                     emp_id=3,
-                    name='Williams',
+                    name="Williams",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=1000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=4,
-                    name='Jones',
+                    name="Jones",
                     superior_emp_id=2,
-                    year_joined='2005',
-                    emp_dept_id='10',
-                    gender='F',
+                    year_joined="2005",
+                    emp_dept_id="10",
+                    gender="F",
                     salary=2000,
-                    dept_name='Finance',
+                    dept_name="Finance",
                     dept_id=10,
                 ),
                 Row(
                     emp_id=5,
-                    name='Brown',
+                    name="Brown",
                     superior_emp_id=2,
-                    year_joined='2010',
-                    emp_dept_id='40',
-                    gender='',
+                    year_joined="2010",
+                    emp_dept_id="40",
+                    gender="",
                     salary=-1,
-                    dept_name='IT',
+                    dept_name="IT",
                     dept_id=40,
                 ),
                 Row(
@@ -263,14 +253,14 @@ class TestDataFrameJoin(object):
                     emp_dept_id=None,
                     gender=None,
                     salary=None,
-                    dept_name='Sales',
+                    dept_name="Sales",
                     dept_id=30,
                 ),
             ],
             key=lambda x: x.emp_id or 0,
         )
 
-    @pytest.mark.parametrize('how', ['semi', 'leftsemi', 'left_semi'])
+    @pytest.mark.parametrize("how", ["semi", "leftsemi", "left_semi"])
     def test_semi_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
@@ -279,59 +269,59 @@ class TestDataFrameJoin(object):
             [
                 Row(
                     emp_id=1,
-                    name='Smith',
+                    name="Smith",
                     superior_emp_id=-1,
-                    year_joined='2018',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2018",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=3000,
                 ),
                 Row(
                     emp_id=2,
-                    name='Rose',
+                    name="Rose",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='20',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="20",
+                    gender="M",
                     salary=4000,
                 ),
                 Row(
                     emp_id=3,
-                    name='Williams',
+                    name="Williams",
                     superior_emp_id=1,
-                    year_joined='2010',
-                    emp_dept_id='10',
-                    gender='M',
+                    year_joined="2010",
+                    emp_dept_id="10",
+                    gender="M",
                     salary=1000,
                 ),
                 Row(
                     emp_id=4,
-                    name='Jones',
+                    name="Jones",
                     superior_emp_id=2,
-                    year_joined='2005',
-                    emp_dept_id='10',
-                    gender='F',
+                    year_joined="2005",
+                    emp_dept_id="10",
+                    gender="F",
                     salary=2000,
                 ),
                 Row(
                     emp_id=5,
-                    name='Brown',
+                    name="Brown",
                     superior_emp_id=2,
-                    year_joined='2010',
-                    emp_dept_id='40',
-                    gender='',
+                    year_joined="2010",
+                    emp_dept_id="40",
+                    gender="",
                     salary=-1,
                 ),
             ]
         )
 
-    @pytest.mark.parametrize('how', ['anti', 'leftanti', 'left_anti'])
+    @pytest.mark.parametrize("how", ["anti", "leftanti", "left_anti"])
     def test_anti_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         df = df.sort(*df.columns)
         res = df.collect()
         assert res == [
-            Row(emp_id=6, name='Brown', superior_emp_id=2, year_joined='2010', emp_dept_id='50', gender='', salary=-1)
+            Row(emp_id=6, name="Brown", superior_emp_id=2, year_joined="2010", emp_dept_id="50", gender="", salary=-1)
         ]
 
     def test_self_join(self, dataframe_a):
@@ -351,11 +341,11 @@ class TestDataFrameJoin(object):
         res = df.collect()
         assert sorted(res, key=lambda x: x.emp_id) == sorted(
             [
-                Row(emp_id=2, name='Rose', superior_emp_id=1, superior_emp_name='Smith'),
-                Row(emp_id=3, name='Williams', superior_emp_id=1, superior_emp_name='Smith'),
-                Row(emp_id=4, name='Jones', superior_emp_id=2, superior_emp_name='Rose'),
-                Row(emp_id=5, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
-                Row(emp_id=6, name='Brown', superior_emp_id=2, superior_emp_name='Rose'),
+                Row(emp_id=2, name="Rose", superior_emp_id=1, superior_emp_name="Smith"),
+                Row(emp_id=3, name="Williams", superior_emp_id=1, superior_emp_name="Smith"),
+                Row(emp_id=4, name="Jones", superior_emp_id=2, superior_emp_name="Rose"),
+                Row(emp_id=5, name="Brown", superior_emp_id=2, superior_emp_name="Rose"),
+                Row(emp_id=6, name="Brown", superior_emp_id=2, superior_emp_name="Rose"),
             ],
             key=lambda x: x.emp_id,
         )
@@ -382,33 +372,38 @@ class TestDataFrameJoin(object):
         )
 
     def test_join_with_using_clause(self, spark, dataframe_a):
-        dataframe_a = dataframe_a.select('name', 'year_joined')
+        dataframe_a = dataframe_a.select("name", "year_joined")
 
-        df = dataframe_a.alias('df1')
-        df2 = dataframe_a.alias('df2')
-        res = df.join(df2, ['name', 'year_joined']).sort('name', 'year_joined')
+        df = dataframe_a.alias("df1")
+        df2 = dataframe_a.alias("df2")
+        res = df.join(df2, ["name", "year_joined"]).sort("name", "year_joined")
         res = res.collect()
         assert res == [
-            Row(name='Brown', year_joined='2010'),
-            Row(name='Brown', year_joined='2010'),
-            Row(name='Brown', year_joined='2010'),
-            Row(name='Brown', year_joined='2010'),
-            Row(name='Jones', year_joined='2005'),
-            Row(name='Rose', year_joined='2010'),
-            Row(name='Smith', year_joined='2018'),
-            Row(name='Williams', year_joined='2010'),
+            Row(name="Brown", year_joined="2010"),
+            Row(name="Brown", year_joined="2010"),
+            Row(name="Brown", year_joined="2010"),
+            Row(name="Brown", year_joined="2010"),
+            Row(name="Jones", year_joined="2005"),
+            Row(name="Rose", year_joined="2010"),
+            Row(name="Smith", year_joined="2018"),
+            Row(name="Williams", year_joined="2010"),
         ]
 
     def test_join_with_common_column(self, spark, dataframe_a):
-        dataframe_a = dataframe_a.select('name', 'year_joined')
+        dataframe_a = dataframe_a.select("name", "year_joined")
 
-        df = dataframe_a.alias('df1')
-        df2 = dataframe_a.alias('df2')
-        res = df.join(df2, df.name == df2.name).sort('df1.name')
+        df = dataframe_a.alias("df1")
+        df2 = dataframe_a.alias("df2")
+        res = df.join(df2, df.name == df2.name).sort("df1.name")
         res = res.collect()
         assert (
-            str(res)
-            == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', name='Williams', year_joined='2010')]"
+            str(res) == "[Row(name='Brown', year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', "
+            "year_joined='2010', name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', "
+            "name='Brown', year_joined='2010'), Row(name='Brown', year_joined='2010', name='Brown', "
+            "year_joined='2010'), Row(name='Jones', year_joined='2005', name='Jones', year_joined='2005'), "
+            "Row(name='Rose', year_joined='2010', name='Rose', year_joined='2010'), Row(name='Smith', "
+            "year_joined='2018', name='Smith', year_joined='2018'), Row(name='Williams', year_joined='2010', "
+            "name='Williams', year_joined='2010')]"
         )
 
     @pytest.mark.xfail(condition=True, reason="Selecting from a duplicate binding causes an error")

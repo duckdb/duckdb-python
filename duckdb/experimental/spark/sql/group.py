@@ -1,4 +1,4 @@
-#
+#  # noqa: D100
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -15,32 +15,34 @@
 # limitations under the License.
 #
 
-from ..exception import ContributionsAcceptedError
-from typing import Callable, TYPE_CHECKING, overload, Dict, Union, List
+from typing import TYPE_CHECKING, Callable, Union, overload
 
+from ..exception import ContributionsAcceptedError
 from .column import Column
-from .session import SparkSession
 from .dataframe import DataFrame
 from .functions import _to_column_expr
-from ._typing import ColumnOrName
 from .types import NumericType
 
+# Only import symbols needed for type checking if something is type checking
 if TYPE_CHECKING:
-    from ._typing import LiteralType
+    from ._typing import ColumnOrName
+    from .session import SparkSession
 
 __all__ = ["GroupedData", "Grouping"]
+
 
 def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
     expressions = ",".join(list(cols))
     group_by = str(self._grouping) if self._grouping else ""
     projections = self._grouping.get_columns()
-    jdf = getattr(self._df.relation, "apply")(
+    jdf = self._df.relation.apply(
         function_name=name,  # aggregate function
         function_aggr=expressions,  # inputs to aggregate
         group_expr=group_by,  # groups
         projected_columns=projections,  # projections
     )
     return DataFrame(jdf, self.session)
+
 
 def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     def _api(self: "GroupedData", *cols: str) -> DataFrame:
@@ -52,49 +54,49 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     return _api
 
 
-class Grouping:
-    def __init__(self, *cols: "ColumnOrName", **kwargs):
+class Grouping:  # noqa: D101
+    def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:  # noqa: D107
         self._type = ""
         self._cols = [_to_column_expr(x) for x in cols]
-        if 'special' in kwargs:
-            special = kwargs['special']
+        if "special" in kwargs:
+            special = kwargs["special"]
             accepted_special = ["cube", "rollup"]
             assert special in accepted_special
             self._type = special
 
-    def get_columns(self) -> str:
+    def get_columns(self) -> str:  # noqa: D102
         columns = ",".join([str(x) for x in self._cols])
         return columns
 
-    def __str__(self):
+    def __str__(self) -> str:  # noqa: D105
         columns = self.get_columns()
         if self._type:
-            return self._type + '(' + columns + ')'
+            return self._type + "(" + columns + ")"
         return columns
 
 
 class GroupedData:
-    """
-    A set of methods for aggregations on a :class:`DataFrame`,
+    """A set of methods for aggregations on a :class:`DataFrame`,
     created by :func:`DataFrame.groupBy`.
 
-    """
+    """  # noqa: D205
 
-    def __init__(self, grouping: Grouping, df: DataFrame):
+    def __init__(self, grouping: Grouping, df: DataFrame) -> None:  # noqa: D107
         self._grouping = grouping
         self._df = df
         self.session: SparkSession = df.session
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # noqa: D105
         return str(self._df)
 
     def count(self) -> DataFrame:
         """Counts the number of records for each group.
 
-        Examples
+        Examples:
         --------
         >>> df = spark.createDataFrame(
-        ...      [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"])
+        ...     [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"]
+        ... )
         >>> df.show()
         +---+-----+
         |age| name|
@@ -115,7 +117,7 @@ class GroupedData:
         |  Bob|    2|
         +-----+-----+
         """
-        return _api_internal(self, "count").withColumnRenamed('count_star()', 'count')
+        return _api_internal(self, "count").withColumnRenamed("count_star()", "count")
 
     @df_varargs_api
     def mean(self, *cols: str) -> DataFrame:
@@ -139,11 +141,12 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -156,7 +159,7 @@ class GroupedData:
 
         Group-by name, and calculate the mean of the age in each group.
 
-        >>> df.groupBy("name").avg('age').sort("name").show()
+        >>> df.groupBy("name").avg("age").sort("name").show()
         +-----+--------+
         | name|avg(age)|
         +-----+--------+
@@ -166,7 +169,7 @@ class GroupedData:
 
         Calculate the mean of the age and height in all data.
 
-        >>> df.groupBy().avg('age', 'height').show()
+        >>> df.groupBy().avg("age", "height").show()
         +--------+-----------+
         |avg(age)|avg(height)|
         +--------+-----------+
@@ -177,18 +180,19 @@ class GroupedData:
         if len(columns) == 0:
             schema = self._df.schema
             # Take only the numeric types of the relation
-            columns: List[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
+            columns: list[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
         return _api_internal(self, "avg", *columns)
 
     @df_varargs_api
     def max(self, *cols: str) -> DataFrame:
         """Computes the max value for each numeric columns for each group.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -228,11 +232,12 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -272,11 +277,12 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
 
-        Examples
+        Examples:
         --------
-        >>> df = spark.createDataFrame([
-        ...     (2, "Alice", 80), (3, "Alice", 100),
-        ...     (5, "Bob", 120), (10, "Bob", 140)], ["age", "name", "height"])
+        >>> df = spark.createDataFrame(
+        ...     [(2, "Alice", 80), (3, "Alice", 100), (5, "Bob", 120), (10, "Bob", 140)],
+        ...     ["age", "name", "height"],
+        ... )
         >>> df.show()
         +---+-----+------+
         |age| name|height|
@@ -308,14 +314,12 @@ class GroupedData:
         """
 
     @overload
-    def agg(self, *exprs: Column) -> DataFrame:
-        ...
+    def agg(self, *exprs: Column) -> DataFrame: ...
 
     @overload
-    def agg(self, __exprs: Dict[str, str]) -> DataFrame:
-        ...
+    def agg(self, __exprs: dict[str, str]) -> DataFrame: ...  # noqa: PYI063
 
-    def agg(self, *exprs: Union[Column, Dict[str, str]]) -> DataFrame:
+    def agg(self, *exprs: Union[Column, dict[str, str]]) -> DataFrame:
         """Compute aggregates and returns the result as a :class:`DataFrame`.
 
         The available aggregate functions can be:
@@ -347,17 +351,18 @@ class GroupedData:
             a dict mapping from column name (string) to aggregate functions (string),
             or a list of :class:`Column`.
 
-        Notes
+        Notes:
         -----
         Built-in aggregation functions and group aggregate pandas UDFs cannot be mixed
         in a single call to this function.
 
-        Examples
+        Examples:
         --------
         >>> from pyspark.sql import functions as F
         >>> from pyspark.sql.functions import pandas_udf, PandasUDFType
         >>> df = spark.createDataFrame(
-        ...      [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"])
+        ...     [(2, "Alice"), (3, "Alice"), (5, "Bob"), (10, "Bob")], ["age", "name"]
+        ... )
         >>> df.show()
         +---+-----+
         |age| name|
@@ -393,10 +398,9 @@ class GroupedData:
 
         Same as above but uses pandas UDF.
 
-        >>> @pandas_udf('int', PandasUDFType.GROUPED_AGG)  # doctest: +SKIP
+        >>> @pandas_udf("int", PandasUDFType.GROUPED_AGG)  # doctest: +SKIP
         ... def min_udf(v):
         ...     return v.min()
-        ...
         >>> df.groupBy(df.name).agg(min_udf(df.age)).sort("name").show()  # doctest: +SKIP
         +-----+------------+
         | name|min_udf(age)|
@@ -417,4 +421,4 @@ class GroupedData:
             rel = self._df.relation.select(*expressions, groups=group_by)
         return DataFrame(rel, self.session)
 
-    # TODO: add 'pivot'
+    # TODO: add 'pivot'  # noqa: TD002, TD003

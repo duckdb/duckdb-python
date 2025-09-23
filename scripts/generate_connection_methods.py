@@ -1,10 +1,11 @@
-import os
 import json
+import os
+from pathlib import Path
 
-os.chdir(os.path.dirname(__file__))
+os.chdir(Path(__file__).parent)
 
-JSON_PATH = os.path.join("connection_methods.json")
-PYCONNECTION_SOURCE = os.path.join("..", "src", "pyconnection.cpp")
+JSON_PATH = "connection_methods.json"
+PYCONNECTION_SOURCE = Path("..") / "src" / "duckdb_py" / "pyconnection.cpp"
 
 INITIALIZE_METHOD = (
     "static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>> &m) {"
@@ -13,58 +14,57 @@ END_MARKER = "} // END_OF_CONNECTION_METHODS"
 
 
 def is_py_kwargs(method):
-    return 'kwargs_as_dict' in method and method['kwargs_as_dict'] == True
+    return "kwargs_as_dict" in method and method["kwargs_as_dict"]
 
 
 def is_py_args(method):
-    if 'args' not in method:
+    if "args" not in method:
         return False
-    args = method['args']
+    args = method["args"]
     if len(args) == 0:
         return False
-    if args[0]['name'] != '*args':
-        return False
-    return True
+    return args[0]["name"] == "*args"
 
 
 def generate():
     # Read the PYCONNECTION_SOURCE file
-    with open(PYCONNECTION_SOURCE, 'r') as source_file:
-        source_code = source_file.readlines()
+    source_code = Path(PYCONNECTION_SOURCE).read_text().splitlines()
 
     start_index = -1
     end_index = -1
     for i, line in enumerate(source_code):
         if line.startswith(INITIALIZE_METHOD):
             if start_index != -1:
-                raise ValueError("Encountered the INITIALIZE_METHOD a second time, quitting!")
+                msg = "Encountered the INITIALIZE_METHOD a second time, quitting!"
+                raise ValueError(msg)
             start_index = i
         elif line.startswith(END_MARKER):
             if end_index != -1:
-                raise ValueError("Encountered the END_MARKER a second time, quitting!")
+                msg = "Encountered the END_MARKER a second time, quitting!"
+                raise ValueError(msg)
             end_index = i
 
     if start_index == -1 or end_index == -1:
-        raise ValueError("Couldn't find start or end marker in source file")
+        msg = "Couldn't find start or end marker in source file"
+        raise ValueError(msg)
 
     start_section = source_code[: start_index + 1]
     end_section = source_code[end_index:]
     # ---- Generate the definition code from the json ----
 
     # Read the JSON file
-    with open(JSON_PATH, 'r') as json_file:
-        connection_methods = json.load(json_file)
+    connection_methods = json.loads(Path(JSON_PATH).read_text())
 
     DEFAULT_ARGUMENT_MAP = {
-        'True': 'true',
-        'False': 'false',
-        'None': 'py::none()',
-        'PythonUDFType.NATIVE': 'PythonUDFType::NATIVE',
-        'PythonExceptionHandling.DEFAULT': 'PythonExceptionHandling::FORWARD_ERROR',
-        'FunctionNullHandling.DEFAULT': 'FunctionNullHandling::DEFAULT_NULL_HANDLING',
+        "True": "true",
+        "False": "false",
+        "None": "py::none()",
+        "PythonUDFType.NATIVE": "PythonUDFType::NATIVE",
+        "PythonExceptionHandling.DEFAULT": "PythonExceptionHandling::FORWARD_ERROR",
+        "FunctionNullHandling.DEFAULT": "FunctionNullHandling::DEFAULT_NULL_HANDLING",
     }
 
-    def map_default(val):
+    def map_default(val) -> str:
         if val in DEFAULT_ARGUMENT_MAP:
             return DEFAULT_ARGUMENT_MAP[val]
         return val
@@ -72,61 +72,57 @@ def generate():
     def create_arguments(arguments) -> list:
         result = []
         for arg in arguments:
-            if arg['name'] == '*args':
+            if arg["name"] == "*args":
                 break
-            argument = f"py::arg(\"{arg['name']}\")"
-            if 'allow_none' in arg:
-                value = str(arg['allow_none']).lower()
+            argument = f'py::arg("{arg["name"]}")'
+            if "allow_none" in arg:
+                value = str(arg["allow_none"]).lower()
                 argument += f".none({value})"
             # Add the default argument if present
-            if 'default' in arg:
-                default = map_default(arg['default'])
+            if "default" in arg:
+                default = map_default(arg["default"])
                 argument += f" = {default}"
             result.append(argument)
         return result
 
     def create_definition(name, method) -> str:
-        definition = f"m.def(\"{name}\""
+        definition = f'm.def("{name}"'
         definition += ", "
-        definition += f"""&DuckDBPyConnection::{method['function']}"""
+        definition += f"""&DuckDBPyConnection::{method["function"]}"""
         definition += ", "
-        definition += f"\"{method['docs']}\""
-        if 'args' in method and not is_py_args(method):
+        definition += f'"{method["docs"]}"'
+        if "args" in method and not is_py_args(method):
             definition += ", "
-            arguments = create_arguments(method['args'])
-            definition += ', '.join(arguments)
-        if 'kwargs' in method:
+            arguments = create_arguments(method["args"])
+            definition += ", ".join(arguments)
+        if "kwargs" in method:
             definition += ", "
             if is_py_kwargs(method):
                 definition += "py::kw_only()"
             else:
                 definition += "py::kw_only(), "
-                arguments = create_arguments(method['kwargs'])
-                definition += ', '.join(arguments)
+                arguments = create_arguments(method["kwargs"])
+                definition += ", ".join(arguments)
         definition += ");"
         return definition
 
     body = []
     for method in connection_methods:
-        if isinstance(method['name'], list):
-            names = method['name']
-        else:
-            names = [method['name']]
-        for name in names:
-            body.append(create_definition(name, method))
+        names = method["name"] if isinstance(method["name"], list) else [method["name"]]
+        body.extend(create_definition(name, method) for name in names)
 
     # ---- End of generation code ----
 
-    with_newlines = ['\t' + x + '\n' for x in body]
+    with_newlines = ["\t" + x + "\n" for x in body]
     # Recreate the file content by concatenating all the pieces together
 
     new_content = start_section + with_newlines + end_section
 
     # Write out the modified PYCONNECTION_SOURCE file
-    with open(PYCONNECTION_SOURCE, 'w') as source_file:
-        source_file.write("".join(new_content))
+    Path(PYCONNECTION_SOURCE).write_text("".join(new_content))
 
 
-if __name__ == '__main__':
-    raise ValueError("Please use 'generate_connection_code.py' instead of running the individual script(s)")
+if __name__ == "__main__":
+    msg = "Please use 'generate_connection_code.py' instead of running the individual script(s)"
+    raise ValueError(msg)
     # generate()

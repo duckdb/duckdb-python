@@ -1,32 +1,31 @@
-from typing import Optional, List, Any, Union, Iterable, TYPE_CHECKING
-import uuid
+import uuid  # noqa: D100
+from collections.abc import Iterable, Sized
+from typing import TYPE_CHECKING, Any, NoReturn, Optional, Union
 
-if TYPE_CHECKING:
-    from .catalog import Catalog
-    from pandas.core.frame import DataFrame as PandasDataFrame
-
-from ..exception import ContributionsAcceptedError
-from .types import StructType, AtomicType, DataType
-from ..conf import SparkConf
-from .dataframe import DataFrame
-from .conf import RuntimeConfig
-from .readwriter import DataFrameReader
-from ..context import SparkContext
-from .udf import UDFRegistration
-from .streaming import DataStreamReader
 import duckdb
 
-from ..errors import (
-    PySparkTypeError,
-    PySparkValueError
-)
+if TYPE_CHECKING:
+    from pandas.core.frame import DataFrame as PandasDataFrame
 
-from ..errors.error_classes import *
+    from .catalog import Catalog
+
+
+from ..conf import SparkConf
+from ..context import SparkContext
+from ..errors import PySparkTypeError
+from ..exception import ContributionsAcceptedError
+from .conf import RuntimeConfig
+from .dataframe import DataFrame
+from .readwriter import DataFrameReader
+from .streaming import DataStreamReader
+from .types import StructType
+from .udf import UDFRegistration
 
 # In spark:
 # SparkSession holds a SparkContext
 # SparkContext gets created from SparkConf
-# At this level the check is made to determine whether the instance already exists and just needs to be retrieved or it needs to be created
+# At this level the check is made to determine whether the instance already exists and just needs
+# to be retrieved or it needs to be created.
 
 # For us this is done inside of `duckdb.connect`, based on the passed in path + configuration
 # SparkContext can be compared to our Connection class, and SparkConf to our ClientContext class
@@ -34,7 +33,7 @@ from ..errors.error_classes import *
 
 # data is a List of rows
 # every value in each row needs to be turned into a Value
-def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
+def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list[duckdb.Value]:
     from duckdb import Value
 
     new_data = []
@@ -44,8 +43,8 @@ def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     return new_data
 
 
-class SparkSession:
-    def __init__(self, context: SparkContext):
+class SparkSession:  # noqa: D101
+    def __init__(self, context: SparkContext) -> None:  # noqa: D107
         self.conn = context.connection
         self._context = context
         self._conf = RuntimeConfig(self.conn)
@@ -53,15 +52,16 @@ class SparkSession:
     def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
         try:
             import pandas
+
             has_pandas = True
         except ImportError:
             has_pandas = False
         if has_pandas and isinstance(data, pandas.DataFrame):
-            unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
+            unique_name = f"pyspark_pandas_df_{uuid.uuid1()}"
             self.conn.register(unique_name, data)
             return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
-        def verify_tuple_integrity(tuples):
+        def verify_tuple_integrity(tuples: list[tuple]) -> None:
             if len(tuples) <= 1:
                 return
             expected_length = len(tuples[0])
@@ -73,9 +73,9 @@ class SparkSession:
                     error_class="LENGTH_SHOULD_BE_THE_SAME",
                     message_parameters={
                         "arg1": f"data{i}",
-                        "arg2": f"data{i+1}",
+                        "arg2": f"data{i + 1}",
                         "arg1_length": str(expected_length),
-                        "arg2_length": str(actual_length)
+                        "arg2_length": str(actual_length),
                     },
                 )
 
@@ -83,16 +83,16 @@ class SparkSession:
             data = list(data)
         verify_tuple_integrity(data)
 
-        def construct_query(tuples) -> str:
-            def construct_values_list(row, start_param_idx):
+        def construct_query(tuples: Iterable) -> str:
+            def construct_values_list(row: Sized, start_param_idx: int) -> str:
                 parameter_count = len(row)
-                parameters = [f'${x+start_param_idx}' for x in range(parameter_count)]
-                parameters = '(' + ', '.join(parameters) + ')'
+                parameters = [f"${x + start_param_idx}" for x in range(parameter_count)]
+                parameters = "(" + ", ".join(parameters) + ")"
                 return parameters
 
             row_size = len(tuples[0])
             values_list = [construct_values_list(x, 1 + (i * row_size)) for i, x in enumerate(tuples)]
-            values_list = ', '.join(values_list)
+            values_list = ", ".join(values_list)
 
             query = f"""
                 select * from (values {values_list})
@@ -101,7 +101,7 @@ class SparkSession:
 
         query = construct_query(data)
 
-        def construct_parameters(tuples):
+        def construct_parameters(tuples: Iterable) -> list[list]:
             parameters = []
             for row in tuples:
                 parameters.extend(list(row))
@@ -112,7 +112,9 @@ class SparkSession:
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
-    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
+    def _createDataFrameFromPandas(
+        self, data: "PandasDataFrame", types: Union[list[str], None], names: Union[list[str], None]
+    ) -> DataFrame:
         df = self._create_dataframe(data)
 
         # Cast to types
@@ -123,10 +125,10 @@ class SparkSession:
             df = df.toDF(*names)
         return df
 
-    def createDataFrame(
+    def createDataFrame(  # noqa: D102
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
-        schema: Optional[Union[StructType, List[str]]] = None,
+        schema: Optional[Union[StructType, list[str]]] = None,
         samplingRatio: Optional[float] = None,
         verifySchema: bool = True,
     ) -> DataFrame:
@@ -175,7 +177,7 @@ class SparkSession:
         if is_empty:
             rel = df.relation
             # Add impossible where clause
-            rel = rel.filter('1=0')
+            rel = rel.filter("1=0")
             df = DataFrame(rel, self)
 
         # Cast to types
@@ -186,10 +188,10 @@ class SparkSession:
             df = df.toDF(*names)
         return df
 
-    def newSession(self) -> "SparkSession":
+    def newSession(self) -> "SparkSession":  # noqa: D102
         return SparkSession(self._context)
 
-    def range(
+    def range(  # noqa: D102
         self,
         start: int,
         end: Optional[int] = None,
@@ -203,26 +205,26 @@ class SparkSession:
             end = start
             start = 0
 
-        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]),self)
+        return DataFrame(self.conn.table_function("range", parameters=[start, end, step]), self)
 
-    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
+    def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:  # noqa: D102, ANN401
         if kwargs:
             raise NotImplementedError
         relation = self.conn.sql(sqlQuery)
         return DataFrame(relation, self)
 
-    def stop(self) -> None:
+    def stop(self) -> None:  # noqa: D102
         self._context.stop()
 
-    def table(self, tableName: str) -> DataFrame:
+    def table(self, tableName: str) -> DataFrame:  # noqa: D102
         relation = self.conn.table(tableName)
         return DataFrame(relation, self)
 
-    def getActiveSession(self) -> "SparkSession":
+    def getActiveSession(self) -> "SparkSession":  # noqa: D102
         return self
 
     @property
-    def catalog(self) -> "Catalog":
+    def catalog(self) -> "Catalog":  # noqa: D102
         if not hasattr(self, "_catalog"):
             from duckdb.experimental.spark.sql.catalog import Catalog
 
@@ -230,59 +232,62 @@ class SparkSession:
         return self._catalog
 
     @property
-    def conf(self) -> RuntimeConfig:
+    def conf(self) -> RuntimeConfig:  # noqa: D102
         return self._conf
 
     @property
-    def read(self) -> DataFrameReader:
+    def read(self) -> DataFrameReader:  # noqa: D102
         return DataFrameReader(self)
 
     @property
-    def readStream(self) -> DataStreamReader:
+    def readStream(self) -> DataStreamReader:  # noqa: D102
         return DataStreamReader(self)
 
     @property
-    def sparkContext(self) -> SparkContext:
+    def sparkContext(self) -> SparkContext:  # noqa: D102
         return self._context
 
     @property
-    def streams(self) -> Any:
+    def streams(self) -> NoReturn:  # noqa: D102
         raise ContributionsAcceptedError
 
     @property
-    def udf(self) -> UDFRegistration:
+    def udf(self) -> UDFRegistration:  # noqa: D102
         return UDFRegistration(self)
 
     @property
-    def version(self) -> str:
-        return '1.0.0'
+    def version(self) -> str:  # noqa: D102
+        return "1.0.0"
 
-    class Builder:
-        def __init__(self):
+    class Builder:  # noqa: D106
+        def __init__(self) -> None:  # noqa: D107
             pass
 
-        def master(self, name: str) -> "SparkSession.Builder":
+        def master(self, name: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def appName(self, name: str) -> "SparkSession.Builder":
+        def appName(self, name: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def remote(self, url: str) -> "SparkSession.Builder":
+        def remote(self, url: str) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 
-        def getOrCreate(self) -> "SparkSession":
+        def getOrCreate(self) -> "SparkSession":  # noqa: D102
             context = SparkContext("__ignored__")
             return SparkSession(context)
 
-        def config(
-            self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None
+        def config(  # noqa: D102
+            self,
+            key: Optional[str] = None,
+            value: Optional[Any] = None,  # noqa: ANN401
+            conf: Optional[SparkConf] = None,
         ) -> "SparkSession.Builder":
             return self
 
-        def enableHiveSupport(self) -> "SparkSession.Builder":
+        def enableHiveSupport(self) -> "SparkSession.Builder":  # noqa: D102
             # no-op
             return self
 

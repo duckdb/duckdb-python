@@ -330,9 +330,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	                py::is_operator());
 	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"),
 	                py::is_operator());
-	type_module.def("__hash__", [](const DuckDBPyType &type) {
-		return py::hash(py::str(type.ToString()));
-	});
+	type_module.def("__hash__", [](const DuckDBPyType &type) { return py::hash(py::str(type.ToString())); });
 	type_module.def_property_readonly("id", &DuckDBPyType::GetId);
 	type_module.def_property_readonly("children", &DuckDBPyType::Children);
 	type_module.def(py::init<>([](const string &type_str, shared_ptr<DuckDBPyConnection> connection = nullptr) {

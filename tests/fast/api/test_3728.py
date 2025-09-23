@@ -1,7 +1,7 @@
 import duckdb
 
 
-class Test3728(object):
+class Test3728:
     def test_3728_describe_enum(self, duckdb_cursor):
         # Create an in-memory database, but the problem is also present in file-backed DBs
         cursor = duckdb.connect(":memory:")
@@ -14,6 +14,6 @@ class Test3728(object):
 
         # This fails with "RuntimeError: Not implemented Error: unsupported type: mood"
         assert cursor.table("person").execute().description == [
-            ('name', 'VARCHAR', None, None, None, None, None),
-            ('current_mood', "ENUM('sad', 'ok', 'happy')", None, None, None, None, None),
+            ("name", "VARCHAR", None, None, None, None, None),
+            ("current_mood", "ENUM('sad', 'ok', 'happy')", None, None, None, None, None),
         ]

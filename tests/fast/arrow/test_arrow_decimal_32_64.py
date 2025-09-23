@@ -1,14 +1,16 @@
-import duckdb
-import pytest
 from decimal import Decimal
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowDecimalTypes(object):
+class TestArrowDecimalTypes:
     def test_decimal_32(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
-        duckdb_cursor.execute('SET arrow_output_version = 1.5')
+        duckdb_cursor.execute("SET arrow_output_version = 1.5")
         decimal_32 = pa.Table.from_pylist(
             [
                 {"data": Decimal("100.20")},
@@ -20,10 +22,10 @@ class TestArrowDecimalTypes(object):
         )
         # Test scan
         assert duckdb_cursor.execute("FROM decimal_32").fetchall() == [
-            (Decimal('100.20'),),
-            (Decimal('110.21'),),
-            (Decimal('31.20'),),
-            (Decimal('500.20'),),
+            (Decimal("100.20"),),
+            (Decimal("110.21"),),
+            (Decimal("31.20"),),
+            (Decimal("500.20"),),
         ]
         # Test filter pushdown
         assert duckdb_cursor.execute("SELECT COUNT(*) FROM decimal_32 where data > 100 and data < 200 ").fetchall() == [
@@ -37,7 +39,7 @@ class TestArrowDecimalTypes(object):
 
     def test_decimal_64(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
-        duckdb_cursor.execute('SET arrow_output_version = 1.5')
+        duckdb_cursor.execute("SET arrow_output_version = 1.5")
         decimal_64 = pa.Table.from_pylist(
             [
                 {"data": Decimal("1000.231")},
@@ -50,10 +52,10 @@ class TestArrowDecimalTypes(object):
 
         # Test scan
         assert duckdb_cursor.execute("FROM decimal_64").fetchall() == [
-            (Decimal('1000.231'),),
-            (Decimal('1100.231'),),
-            (Decimal('999999999999.231'),),
-            (Decimal('500.200'),),
+            (Decimal("1000.231"),),
+            (Decimal("1100.231"),),
+            (Decimal("999999999999.231"),),
+            (Decimal("500.200"),),
         ]
 
         # Test Filter pushdown

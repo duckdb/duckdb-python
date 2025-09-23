@@ -1,19 +1,22 @@
-import duckdb
+# ruff: noqa: F841
 import datetime
-import numpy as np
-import platform
-import pytest
 import decimal
 import math
-from decimal import Decimal
+import platform
 import re
-from conftest import NumpyPandas, ArrowPandas
+from decimal import Decimal
+
+import numpy as np
+import pytest
+from conftest import ArrowPandas, NumpyPandas
+
+import duckdb
 
 standard_vector_size = duckdb.__standard_vector_size__
 
 
 def create_generic_dataframe(data, pandas):
-    return pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
+    return pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
 
 
 def create_repeated_nulls(size):
@@ -25,15 +28,15 @@ def create_repeated_nulls(size):
 
 def create_trailing_non_null(size):
     data = [None for _ in range(size - 1)]
-    data.append('this is a long string')
+    data.append("this is a long string")
     return data
 
 
 class IntString:
-    def __init__(self, value: int):
+    def __init__(self, value: int) -> None:
         self.value = value
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.value)
 
 
@@ -43,16 +46,16 @@ def ConvertStringToDecimal(data: list, pandas):
     for i in range(len(data)):
         if isinstance(data[i], str):
             data[i] = decimal.Decimal(data[i])
-    data = pandas.Series(data=data, dtype='object')
+    data = pandas.Series(data=data, dtype="object")
     return data
 
 
 class ObjectPair:
-    def __init__(self, obj1, obj2):
+    def __init__(self, obj1, obj2) -> None:
         self.first = obj1
         self.second = obj2
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str([self.first, self.second])
 
 
@@ -61,13 +64,13 @@ def construct_list(pair):
 
 
 def construct_struct(pair):
-    return [{'v1': pair.first}, {'v1': pair.second}]
+    return [{"v1": pair.first}, {"v1": pair.second}]
 
 
 def construct_map(pair):
     return [
-        {'key': ['v1', 'v2'], "value": [pair.first, pair.first]},
-        {'key': ['v1', 'v2'], "value": [pair.second, pair.second]},
+        {"key": ["v1", "v2"], "value": [pair.first, pair.first]},
+        {"key": ["v1", "v2"], "value": [pair.second, pair.second]},
     ]
 
 
@@ -81,159 +84,160 @@ def check_struct_upgrade(expected_type: str, creation_method, pair: ObjectPair, 
     assert expected_type == rel.types[0]
 
 
-class TestResolveObjectColumns(object):
-    # TODO: add support for ArrowPandas
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+class TestResolveObjectColumns:
+    # TODO: add support for ArrowPandas  # noqa: TD002, TD003
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_integers(self, pandas, duckdb_cursor):
         data = [5, 0, 3]
         df_in = create_generic_dataframe(data, pandas)
-        # These are float64 because pandas would force these to be float64 even if we set them to int8, int16, int32, int64 respectively
-        df_expected_res = pandas.DataFrame({'0': pandas.Series(data=data, dtype='int32')})
+        # These are float64 because pandas would force these to be float64 even if we set them to int8, int16,
+        # int32, int64 respectively
+        df_expected_res = pandas.DataFrame({"0": pandas.Series(data=data, dtype="int32")})
         df_out = duckdb_cursor.sql("SELECT * FROM df_in").df()
         print(df_out)
         pandas.testing.assert_frame_equal(df_expected_res, df_out)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_correct(self, pandas, duckdb_cursor):
-        data = [{'a': 1, 'b': 3, 'c': 3, 'd': 7}]
-        df = pandas.DataFrame({'0': pandas.Series(data=data)})
+        data = [{"a": 1, "b": 3, "c": 3, "d": 7}]
+        df = pandas.DataFrame({"0": pandas.Series(data=data)})
         duckdb_col = duckdb_cursor.sql("SELECT {a: 1, b: 3, c: 3, d: 7} as '0'").df()
         converted_col = duckdb_cursor.sql("SELECT * FROM df").df()
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_different_keys(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'e': 7}],  #'e' instead of 'd' as key
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "e": 7}],  #'e' instead of 'd' as key
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
 
         converted_df = duckdb_cursor.sql("SELECT * FROM x").df()
         y = pandas.DataFrame(
             [
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'e'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "e"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
             ]
         )
         equal_df = duckdb_cursor.sql("SELECT * FROM y").df()
         pandas.testing.assert_frame_equal(converted_df, equal_df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_incorrect_amount_of_keys(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3}],  # incorrect amount of keys
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3}],  # incorrect amount of keys
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
         converted_df = duckdb_cursor.sql("SELECT * FROM x").df()
         y = pandas.DataFrame(
             [
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c'], 'value': [1, 3, 3]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c"], "value": [1, 3, 3]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
             ]
         )
         equal_df = duckdb_cursor.sql("SELECT * FROM y").df()
         pandas.testing.assert_frame_equal(converted_df, equal_df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_value_upgrade(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 'string'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": "string"}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
         y = pandas.DataFrame(
             [
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 'string'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': '7'}],
+                [{"a": 1, "b": 3, "c": 3, "d": "string"}],
+                [{"a": 1, "b": 3, "c": 3, "d": "7"}],
+                [{"a": 1, "b": 3, "c": 3, "d": "7"}],
+                [{"a": 1, "b": 3, "c": 3, "d": "7"}],
+                [{"a": 1, "b": 3, "c": 3, "d": "7"}],
             ]
         )
         converted_df = duckdb_cursor.sql("SELECT * FROM x").df()
         equal_df = duckdb_cursor.sql("SELECT * FROM y").df()
         pandas.testing.assert_frame_equal(converted_df, equal_df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_null(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
                 [None],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
         y = pandas.DataFrame(
             [
                 [None],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
         converted_df = duckdb_cursor.sql("SELECT * FROM x").df()
         equal_df = duckdb_cursor.sql("SELECT * FROM y").df()
         pandas.testing.assert_frame_equal(converted_df, equal_df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_value_upgrade(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 'test'}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
-                [{'a': 1, 'b': 3, 'c': 3, 'd': 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": "test"}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
+                [{"a": 1, "b": 3, "c": 3, "d": 7}],
             ]
         )
         y = pandas.DataFrame(
             [
-                [{'a': '1', 'b': '3', 'c': '3', 'd': 'test'}],
-                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}],
-                [{'a': '1', 'b': '3', 'c': '3'}],
-                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}],
-                [{'a': '1', 'b': '3', 'c': '3', 'd': '7'}],
+                [{"a": "1", "b": "3", "c": "3", "d": "test"}],
+                [{"a": "1", "b": "3", "c": "3", "d": "7"}],
+                [{"a": "1", "b": "3", "c": "3"}],
+                [{"a": "1", "b": "3", "c": "3", "d": "7"}],
+                [{"a": "1", "b": "3", "c": "3", "d": "7"}],
             ]
         )
         converted_df = duckdb_cursor.sql("SELECT * FROM x").df()
         equal_df = duckdb_cursor.sql("SELECT * FROM y").df()
         pandas.testing.assert_frame_equal(converted_df, equal_df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_correct(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
             ]
         )
-        x.rename(columns={0: 'a'}, inplace=True)
+        x.rename(columns={0: "a"}, inplace=True)
         converted_col = duckdb_cursor.sql("select * from x as 'a'").df()
         duckdb_cursor.sql(
             """
@@ -253,10 +257,10 @@ class TestResolveObjectColumns(object):
         print(converted_col.columns)
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    @pytest.mark.parametrize('sample_size', [1, 10])
-    @pytest.mark.parametrize('fill', [1000, 10000])
-    @pytest.mark.parametrize('get_data', [create_repeated_nulls, create_trailing_non_null])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("sample_size", [1, 10])
+    @pytest.mark.parametrize("fill", [1000, 10000])
+    @pytest.mark.parametrize("get_data", [create_repeated_nulls, create_trailing_non_null])
     def test_analyzing_nulls(self, pandas, duckdb_cursor, fill, sample_size, get_data):
         data = get_data(fill)
         df1 = pandas.DataFrame(data={"col1": data})
@@ -265,9 +269,9 @@ class TestResolveObjectColumns(object):
 
         pandas.testing.assert_frame_equal(df1, df)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_nested_map(self, pandas, duckdb_cursor):
-        df = pandas.DataFrame(data={'col1': [{'a': {'b': {'x': 'A', 'y': 'B'}}}, {'c': {'b': {'x': 'A'}}}]})
+        df = pandas.DataFrame(data={"col1": [{"a": {"b": {"x": "A", "y": "B"}}}, {"c": {"b": {"x": "A"}}}]})
 
         rel = duckdb_cursor.sql("select * from df")
         expected_rel = duckdb_cursor.sql(
@@ -283,18 +287,18 @@ class TestResolveObjectColumns(object):
         expected_res = str(expected_rel)
         assert res == expected_res
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_value_upgrade(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 'test']}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
-                [{'key': ['a', 'b', 'c', 'd'], 'value': [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, "test"]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
+                [{"key": ["a", "b", "c", "d"], "value": [1, 3, 3, 7]}],
             ]
         )
-        x.rename(columns={0: 'a'}, inplace=True)
+        x.rename(columns={0: "a"}, inplace=True)
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_cursor.sql(
             """
@@ -319,69 +323,66 @@ class TestResolveObjectColumns(object):
         print(converted_col.columns)
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_duplicate(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([[{'key': ['a', 'a', 'b'], 'value': [4, 0, 4]}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys must be unique."):
+        x = pandas.DataFrame([[{"key": ["a", "a", "b"], "value": [4, 0, 4]}]])
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys must be unique"):
             duckdb_cursor.sql("select * from x").show()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_nullkey(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([[{'key': [None, 'a', 'b'], 'value': [4, 0, 4]}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        x = pandas.DataFrame([[{"key": [None, "a", "b"], "value": [4, 0, 4]}]])
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_nullkeylist(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([[{'key': None, 'value': None}]])
+        x = pandas.DataFrame([[{"key": None, "value": None}]])
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_col = duckdb_cursor.sql("SELECT MAP(NULL, NULL) as '0'").df()
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_nullkey(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([[{'a': 4, None: 0, 'c': 4}], [{'a': 4, None: 0, 'd': 4}]])
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        x = pandas.DataFrame([[{"a": 4, None: 0, "c": 4}], [{"a": 4, None: 0, "d": 4}]])
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_map_fallback_nullkey_coverage(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
-                [{'key': None, 'value': None}],
-                [{'key': None, None: 5}],
+                [{"key": None, "value": None}],
+                [{"key": None, None: 5}],
             ]
         )
-        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL."):
+        with pytest.raises(duckdb.InvalidInputException, match="Map keys can not be NULL"):
             converted_col = duckdb_cursor.sql("select * from x").df()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_structs_in_nested_types(self, pandas, duckdb_cursor):
         # This test is testing a bug that occurred when type upgrades occurred inside nested types
         # STRUCT(key1 varchar) + STRUCT(key1 varchar, key2 varchar) turns into MAP
         # But when inside a nested structure, this upgrade did not happen properly
 
         pairs = {
-            'v1': ObjectPair({'key1': 21}, {'key1': 21, 'key2': 42}),
-            'v2': ObjectPair({'key1': 21}, {'key2': 21}),
-            'v3': ObjectPair({'key1': 21, 'key2': 42}, {'key1': 21}),
-            'v4': ObjectPair({}, {'key1': 21}),
+            "v1": ObjectPair({"key1": 21}, {"key1": 21, "key2": 42}),
+            "v2": ObjectPair({"key1": 21}, {"key2": 21}),
+            "v3": ObjectPair({"key1": 21, "key2": 42}, {"key1": 21}),
+            "v4": ObjectPair({}, {"key1": 21}),
         }
 
-        for _, pair in pairs.items():
-            check_struct_upgrade('MAP(VARCHAR, INTEGER)[]', construct_list, pair, pandas, duckdb_cursor)
+        for pair in pairs.values():
+            check_struct_upgrade("MAP(VARCHAR, INTEGER)[]", construct_list, pair, pandas, duckdb_cursor)
 
         for key, pair in pairs.items():
-            if key == 'v4':
-                expected_type = 'MAP(VARCHAR, MAP(VARCHAR, INTEGER))'
-            else:
-                expected_type = 'STRUCT(v1 MAP(VARCHAR, INTEGER))'
+            expected_type = "MAP(VARCHAR, MAP(VARCHAR, INTEGER))" if key == "v4" else "STRUCT(v1 MAP(VARCHAR, INTEGER))"
             check_struct_upgrade(expected_type, construct_struct, pair, pandas, duckdb_cursor)
 
-        for key, pair in pairs.items():
-            check_struct_upgrade('MAP(VARCHAR, MAP(VARCHAR, INTEGER))', construct_map, pair, pandas, duckdb_cursor)
+        for pair in pairs.values():
+            check_struct_upgrade("MAP(VARCHAR, MAP(VARCHAR, INTEGER))", construct_map, pair, pandas, duckdb_cursor)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_structs_of_different_sizes(self, pandas, duckdb_cursor):
         # This list has both a STRUCT(v1) and a STRUCT(v1, v2) member
         # Those can't be combined
@@ -404,9 +405,9 @@ class TestResolveObjectColumns(object):
         )
         res = duckdb_cursor.query("select typeof(col) from df").fetchall()
         # So we fall back to converting them as VARCHAR instead
-        assert res == [('MAP(VARCHAR, VARCHAR)[]',), ('MAP(VARCHAR, VARCHAR)[]',)]
+        assert res == [("MAP(VARCHAR, VARCHAR)[]",), ("MAP(VARCHAR, VARCHAR)[]",)]
 
-        malformed_struct = duckdb.Value({"v1": 1, "v2": 2}, duckdb.struct_type({'v1': int}))
+        malformed_struct = duckdb.Value({"v1": 1, "v2": 2}, duckdb.struct_type({"v1": int}))
         with pytest.raises(
             duckdb.InvalidInputException,
             match=re.escape(
@@ -414,9 +415,8 @@ class TestResolveObjectColumns(object):
             ),
         ):
             res = duckdb_cursor.execute("select $1", [malformed_struct])
-            print(res)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_key_conversion(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
@@ -428,48 +428,48 @@ class TestResolveObjectColumns(object):
         duckdb_cursor.sql("drop view if exists tbl")
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_correct(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([{'0': [[5], [34], [-245]]}])
+        x = pandas.DataFrame([{"0": [[5], [34], [-245]]}])
         duckdb_col = duckdb_cursor.sql("select [[5], [34], [-245]] as '0'").df()
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_cursor.sql("drop view if exists tbl")
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_contains_null(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([{'0': [[5], None, [-245]]}])
+        x = pandas.DataFrame([{"0": [[5], None, [-245]]}])
         duckdb_col = duckdb_cursor.sql("select [[5], NULL, [-245]] as '0'").df()
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_cursor.sql("drop view if exists tbl")
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_starts_with_null(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([{'0': [None, [5], [-245]]}])
+        x = pandas.DataFrame([{"0": [None, [5], [-245]]}])
         duckdb_col = duckdb_cursor.sql("select [NULL, [5], [-245]] as '0'").df()
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_cursor.sql("drop view if exists tbl")
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_value_upgrade(self, pandas, duckdb_cursor):
-        x = pandas.DataFrame([{'0': [['5'], [34], [-245]]}])
+        x = pandas.DataFrame([{"0": [["5"], [34], [-245]]}])
         duckdb_rel = duckdb_cursor.sql("select [['5'], ['34'], ['-245']] as '0'")
         duckdb_col = duckdb_rel.df()
         converted_col = duckdb_cursor.sql("select * from x").df()
         pandas.testing.assert_frame_equal(duckdb_col, converted_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_list_column_value_upgrade(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
                 [[1, 25, 300]],
                 [[500, 345, 30]],
-                [[50, 'a', 67]],
+                [[50, "a", 67]],
             ]
         )
-        x.rename(columns={0: 'a'}, inplace=True)
+        x.rename(columns={0: "a"}, inplace=True)
         converted_col = duckdb_cursor.sql("select * from x").df()
         duckdb_cursor.sql(
             """
@@ -498,29 +498,29 @@ class TestResolveObjectColumns(object):
         print(converted_col.columns)
         pandas.testing.assert_frame_equal(converted_col, duckdb_col)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_ubigint_object_conversion(self, pandas, duckdb_cursor):
         # UBIGINT + TINYINT would result in HUGEINT, but conversion to HUGEINT is not supported yet from pandas->duckdb
         # So this instead becomes a DOUBLE
         data = [18446744073709551615, 0]
-        x = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
+        x = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
         converted_col = duckdb_cursor.sql("select * from x").df()
-        if pandas.backend == 'numpy_nullable':
-            float64 = np.dtype('float64')
-            assert isinstance(converted_col['0'].dtype, float64.__class__) == True
+        if pandas.backend == "numpy_nullable":
+            float64 = np.dtype("float64")
+            assert isinstance(converted_col["0"].dtype, float64.__class__)
         else:
-            uint64 = np.dtype('uint64')
-            assert isinstance(converted_col['0'].dtype, uint64.__class__) == True
+            uint64 = np.dtype("uint64")
+            assert isinstance(converted_col["0"].dtype, uint64.__class__)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_double_object_conversion(self, pandas, duckdb_cursor):
         data = [18446744073709551616, 0]
-        x = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
+        x = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
         converted_col = duckdb_cursor.sql("select * from x").df()
-        double_dtype = np.dtype('float64')
-        assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
+        double_dtype = np.dtype("float64")
+        assert isinstance(converted_col["0"].dtype, double_dtype.__class__)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="older numpy raises a warning when running with Pyodide",
@@ -551,51 +551,51 @@ class TestResolveObjectColumns(object):
             (9, 18, 0),
         ]
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numpy_stringliterals(self, pandas, duckdb_cursor):
         df = pandas.DataFrame({"x": list(map(np.str_, range(3)))})
 
         res = duckdb_cursor.execute("select * from df").fetchall()
-        assert res == [('0',), ('1',), ('2',)]
+        assert res == [("0",), ("1",), ("2",)]
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_integer_conversion_fail(self, pandas, duckdb_cursor):
         data = [2**10000, 0]
-        x = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
+        x = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
         converted_col = duckdb_cursor.sql("select * from x").df()
-        print(converted_col['0'])
-        double_dtype = np.dtype('object')
-        assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
+        print(converted_col["0"])
+        double_dtype = np.dtype("object")
+        assert isinstance(converted_col["0"].dtype, double_dtype.__class__)
 
     # Most of the time numpy.datetime64 is just a wrapper around a datetime.datetime object
     # But to support arbitrary precision, it can fall back to using an `int` internally
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])  # Which we don't support yet
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])  # Which we don't support yet
     def test_numpy_datetime(self, pandas, duckdb_cursor):
         numpy = pytest.importorskip("numpy")
 
         data = []
-        data += [numpy.datetime64('2022-12-10T21:38:24.578696')] * standard_vector_size
-        data += [numpy.datetime64('2022-02-21T06:59:23.324812')] * standard_vector_size
-        data += [numpy.datetime64('1974-06-05T13:12:01.000000')] * standard_vector_size
-        data += [numpy.datetime64('2049-01-13T00:24:31.999999')] * standard_vector_size
-        x = pandas.DataFrame({'dates': pandas.Series(data=data, dtype='object')})
+        data += [numpy.datetime64("2022-12-10T21:38:24.578696")] * standard_vector_size
+        data += [numpy.datetime64("2022-02-21T06:59:23.324812")] * standard_vector_size
+        data += [numpy.datetime64("1974-06-05T13:12:01.000000")] * standard_vector_size
+        data += [numpy.datetime64("2049-01-13T00:24:31.999999")] * standard_vector_size
+        x = pandas.DataFrame({"dates": pandas.Series(data=data, dtype="object")})
         res = duckdb_cursor.sql("select distinct * from x").df()
-        assert len(res['dates'].__array__()) == 4
+        assert len(res["dates"].__array__()) == 4
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_numpy_datetime_int_internally(self, pandas, duckdb_cursor):
         numpy = pytest.importorskip("numpy")
 
-        data = [numpy.datetime64('2022-12-10T21:38:24.0000000000001')]
-        x = pandas.DataFrame({'dates': pandas.Series(data=data, dtype='object')})
+        data = [numpy.datetime64("2022-12-10T21:38:24.0000000000001")]
+        x = pandas.DataFrame({"dates": pandas.Series(data=data, dtype="object")})
         with pytest.raises(
             duckdb.ConversionException,
             match=re.escape("Conversion Error: Unimplemented type for cast (BIGINT -> TIMESTAMP)"),
         ):
             rel = duckdb.query_df(x, "x", "create table dates as select dates::TIMESTAMP WITHOUT TIME ZONE from x")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_fallthrough_object_conversion(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
@@ -605,10 +605,10 @@ class TestResolveObjectColumns(object):
             ]
         )
         duckdb_col = duckdb_cursor.sql("select * from x").df()
-        df_expected_res = pandas.DataFrame({'0': pandas.Series(['4', '2', '0'])})
+        df_expected_res = pandas.DataFrame({"0": pandas.Series(["4", "2", "0"])})
         pandas.testing.assert_frame_equal(duckdb_col, df_expected_res)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal(self, pandas, duckdb_cursor):
         # DuckDB uses DECIMAL where possible, so all the 'float' types here are actually DECIMAL
         reference_query = """
@@ -623,15 +623,16 @@ class TestResolveObjectColumns(object):
             ) tbl(a, b, c);
         """
         duckdb_cursor.execute(reference_query)
-        # Because of this we need to wrap these native floats as DECIMAL for this test, to avoid these decimals being "upgraded" to DOUBLE
+        # Because of this we need to wrap these native floats as DECIMAL for this test, to avoid these decimals being
+        # "upgraded" to DOUBLE
         x = pandas.DataFrame(
             {
-                '0': ConvertStringToDecimal([5, '12.0', '-123.0', '-234234.0', None, '1.234'], pandas),
-                '1': ConvertStringToDecimal(
-                    [5002340, 13, '-12.0000000005', '7453324234.0', None, '-324234234'], pandas
+                "0": ConvertStringToDecimal([5, "12.0", "-123.0", "-234234.0", None, "1.234"], pandas),
+                "1": ConvertStringToDecimal(
+                    [5002340, 13, "-12.0000000005", "7453324234.0", None, "-324234234"], pandas
                 ),
-                '2': ConvertStringToDecimal(
-                    ['-234234234234.0', '324234234.00000005', -128, 345345, '1E5', '1324234359'], pandas
+                "2": ConvertStringToDecimal(
+                    ["-234234234234.0", "324234234.00000005", -128, 345345, "1E5", "1324234359"], pandas
                 ),
             }
         )
@@ -640,10 +641,10 @@ class TestResolveObjectColumns(object):
 
         assert conversion == reference
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_coverage(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
-            {'0': [Decimal("nan"), Decimal("+nan"), Decimal("-nan"), Decimal("inf"), Decimal("+inf"), Decimal("-inf")]}
+            {"0": [Decimal("nan"), Decimal("+nan"), Decimal("-nan"), Decimal("inf"), Decimal("+inf"), Decimal("-inf")]}
         )
         conversion = duckdb_cursor.sql("select * from x").fetchall()
         print(conversion[0][0].__class__)
@@ -655,12 +656,12 @@ class TestResolveObjectColumns(object):
         assert math.isinf(conversion[3][0])
         assert math.isinf(conversion[4][0])
         assert math.isinf(conversion[5][0])
-        assert str(conversion) == '[(nan,), (nan,), (nan,), (inf,), (inf,), (inf,)]'
+        assert str(conversion) == "[(nan,), (nan,), (nan,), (inf,), (inf,), (inf,)]"
 
     # Test that the column 'offset' is actually used when converting,
 
     @pytest.mark.parametrize(
-        'pandas', [NumpyPandas(), ArrowPandas()]
+        "pandas", [NumpyPandas(), ArrowPandas()]
     )  # and that the same 2048 (STANDARD_VECTOR_SIZE) values are not being scanned over and over again
     def test_multiple_chunks(self, pandas, duckdb_cursor):
         data = []
@@ -668,13 +669,13 @@ class TestResolveObjectColumns(object):
         data += [datetime.date(2022, 9, 14) for x in range(standard_vector_size)]
         data += [datetime.date(2022, 9, 15) for x in range(standard_vector_size)]
         data += [datetime.date(2022, 9, 16) for x in range(standard_vector_size)]
-        x = pandas.DataFrame({'dates': pandas.Series(data=data, dtype='object')})
+        x = pandas.DataFrame({"dates": pandas.Series(data=data, dtype="object")})
         res = duckdb_cursor.sql("select distinct * from x").df()
-        assert len(res['dates'].__array__()) == 4
+        assert len(res["dates"].__array__()) == 4
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_multiple_chunks_aggregate(self, pandas, duckdb_cursor):
-        duckdb_cursor.execute(f"SET GLOBAL pandas_analyze_sample=4096")
+        duckdb_cursor.execute("SET GLOBAL pandas_analyze_sample=4096")
         duckdb_cursor.execute(
             "create table dates as select '2022-09-14'::DATE + INTERVAL (i::INTEGER) DAY as i from range(4096) tbl(i);"
         )
@@ -683,8 +684,8 @@ class TestResolveObjectColumns(object):
         date_df = res.copy()
 
         # Convert the dataframe to datetime
-        date_df['i'] = pandas.to_datetime(res['i']).dt.date
-        assert str(date_df['i'].dtype) == 'object'
+        date_df["i"] = pandas.to_datetime(res["i"]).dt.date
+        assert str(date_df["i"].dtype) == "object"
 
         expected_res = [
             (
@@ -707,10 +708,10 @@ class TestResolveObjectColumns(object):
         assert expected_res == actual_res
 
         # Now interleave nulls into the dataframe
-        duckdb_cursor.execute('drop table dates')
-        for i in range(0, len(res['i']), 2):
-            res.loc[i, 'i'] = None
-        duckdb_cursor.execute('create table dates as select * from res')
+        duckdb_cursor.execute("drop table dates")
+        for i in range(0, len(res["i"]), 2):
+            res.loc[i, "i"] = None
+        duckdb_cursor.execute("create table dates as select * from res")
 
         expected_res = [
             (
@@ -721,8 +722,8 @@ class TestResolveObjectColumns(object):
         ]
         # Convert the dataframe to datetime
         date_df = res.copy()
-        date_df['i'] = pandas.to_datetime(res['i']).dt.date
-        assert str(date_df['i'].dtype) == 'object'
+        date_df["i"] = pandas.to_datetime(res["i"]).dt.date
+        assert str(date_df["i"].dtype) == "object"
 
         actual_res = duckdb_cursor.sql(
             """
@@ -736,47 +737,47 @@ class TestResolveObjectColumns(object):
 
         assert expected_res == actual_res
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_mixed_object_types(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             {
-                'nested': pandas.Series(
-                    data=[{'a': 1, 'b': 2}, [5, 4, 3], {'key': [1, 2, 3], 'value': ['a', 'b', 'c']}], dtype='object'
+                "nested": pandas.Series(
+                    data=[{"a": 1, "b": 2}, [5, 4, 3], {"key": [1, 2, 3], "value": ["a", "b", "c"]}], dtype="object"
                 ),
             }
         )
         res = duckdb_cursor.sql("select * from x").df()
-        assert res['nested'].dtype == np.dtype('object')
+        assert res["nested"].dtype == np.dtype("object")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_deeply_nested_in_struct(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             [
                 {
                     # STRUCT(b STRUCT(x VARCHAR, y VARCHAR))
-                    'a': {'b': {'x': 'A', 'y': 'B'}}
+                    "a": {"b": {"x": "A", "y": "B"}}
                 },
                 {
                     # STRUCT(b STRUCT(x VARCHAR))
-                    'a': {'b': {'x': 'A'}}
+                    "a": {"b": {"x": "A"}}
                 },
             ]
         )
         # The dataframe has incompatible struct schemas in the nested child
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
         res = duckdb_cursor.sql("select * from x").fetchall()
-        assert res == [({'b': {'x': 'A', 'y': 'B'}},), ({'b': {'x': 'A'}},)]
+        assert res == [({"b": {"x": "A", "y": "B"}},), ({"b": {"x": "A"}},)]
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_struct_deeply_nested_in_list(self, pandas, duckdb_cursor):
         x = pandas.DataFrame(
             {
-                'a': [
+                "a": [
                     [
                         # STRUCT(x VARCHAR, y VARCHAR)[]
-                        {'x': 'A', 'y': 'B'},
+                        {"x": "A", "y": "B"},
                         # STRUCT(x VARCHAR)[]
-                        {'x': 'A'},
+                        {"x": "A"},
                     ]
                 ]
             }
@@ -784,16 +785,16 @@ class TestResolveObjectColumns(object):
         # The dataframe has incompatible struct schemas in the nested child
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
         res = duckdb_cursor.sql("select * from x").fetchall()
-        assert res == [([{'x': 'A', 'y': 'B'}, {'x': 'A'}],)]
+        assert res == [([{"x": "A", "y": "B"}, {"x": "A"}],)]
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_analyze_sample_too_small(self, pandas, duckdb_cursor):
         data = [1 for _ in range(9)] + [[1, 2, 3]] + [1 for _ in range(9991)]
-        x = pandas.DataFrame({'a': pandas.Series(data=data)})
+        x = pandas.DataFrame({"a": pandas.Series(data=data)})
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             res = duckdb_cursor.sql("select * from x").df()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_zero_fractional(self, pandas, duckdb_cursor):
         decimals = pandas.DataFrame(
             data={
@@ -826,7 +827,7 @@ class TestResolveObjectColumns(object):
 
         assert conversion == reference
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_incompatible(self, pandas, duckdb_cursor):
         reference_query = """
             CREATE TABLE tbl AS SELECT * FROM (
@@ -842,10 +843,10 @@ class TestResolveObjectColumns(object):
         duckdb_cursor.execute(reference_query)
         x = pandas.DataFrame(
             {
-                '0': ConvertStringToDecimal(['5', '12.0', '-123.0', '-234234.0', None, '1.234'], pandas),
-                '1': ConvertStringToDecimal([5002340, 13, '-12.0000000005', 7453324234, None, '-324234234'], pandas),
-                '2': ConvertStringToDecimal(
-                    [-234234234234, '324234234.00000005', -128, 345345, 0, '1324234359'], pandas
+                "0": ConvertStringToDecimal(["5", "12.0", "-123.0", "-234234.0", None, "1.234"], pandas),
+                "1": ConvertStringToDecimal([5002340, 13, "-12.0000000005", 7453324234, None, "-324234234"], pandas),
+                "2": ConvertStringToDecimal(
+                    [-234234234234, "324234234.00000005", -128, 345345, 0, "1324234359"], pandas
                 ),
             }
         )
@@ -857,7 +858,7 @@ class TestResolveObjectColumns(object):
         print(conversion)
 
     @pytest.mark.parametrize(
-        'pandas', [NumpyPandas(), ArrowPandas()]
+        "pandas", [NumpyPandas(), ArrowPandas()]
     )  # result: [('1E-28',), ('10000000000000000000000000.0',)]
     def test_numeric_decimal_combined(self, pandas, duckdb_cursor):
         decimals = pandas.DataFrame(
@@ -878,7 +879,7 @@ class TestResolveObjectColumns(object):
         print(conversion)
 
     # result: [('1234.0',), ('123456789.0',), ('1234567890123456789.0',), ('0.1234567890123456789',)]
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_varying_sizes(self, pandas, duckdb_cursor):
         decimals = pandas.DataFrame(
             data={
@@ -906,7 +907,7 @@ class TestResolveObjectColumns(object):
         print(reference)
         print(conversion)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_fallback_to_double(self, pandas, duckdb_cursor):
         # The widths of these decimal values are bigger than the max supported width for DECIMAL
         data = [
@@ -927,7 +928,7 @@ class TestResolveObjectColumns(object):
         assert conversion == reference
         assert isinstance(conversion[0][0], float)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_double_mixed(self, pandas, duckdb_cursor):
         data = [
             Decimal("1.234"),
@@ -959,7 +960,7 @@ class TestResolveObjectColumns(object):
         assert conversion == reference
         assert isinstance(conversion[0][0], float)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_numeric_decimal_out_of_range(self, pandas, duckdb_cursor):
         data = [Decimal("1.234567890123456789012345678901234567"), Decimal("123456789012345678901234567890123456.0")]
         decimals = pandas.DataFrame(data={"0": data})

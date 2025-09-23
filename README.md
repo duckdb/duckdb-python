@@ -66,22 +66,22 @@ git fetch --all
 
 ### Submodule update hook
 
-If you'll be switching between branches that are have the submodule set to different refs, then make your life 
-easier and add the git hooks in the .githooks directory to your local config: 
+If you'll be switching between branches that are have the submodule set to different refs, then make your life
+easier and add the git hooks in the .githooks directory to your git hooks:
 ```shell
-git config --local core.hooksPath .githooks/
+cp .githooks/post-checkout .git/hooks/
 ```
 
 
 ### Editable installs (general)
 
   It's good to be aware of the following when performing an editable install:
-- `uv sync` or `uv run [tool]` perform an editable install by default. We have 
-  configured the project so that scikit-build-core will use a persistent build-dir, but since the build itself 
-  happens in an isolated, ephemeral environment, cmake's paths will point to non-existing directories. CMake itself 
+- `uv sync` or `uv run [tool]` perform an editable install by default. We have
+  configured the project so that scikit-build-core will use a persistent build-dir, but since the build itself
+  happens in an isolated, ephemeral environment, cmake's paths will point to non-existing directories. CMake itself
   will be missing.
-- You should install all development dependencies, and then build the project without build isolation, in two separate 
-  steps. After this you can happily keep building and running, as long as you don't forget to pass in the 
+- You should install all development dependencies, and then build the project without build isolation, in two separate
+  steps. After this you can happily keep building and running, as long as you don't forget to pass in the
   `--no-build-isolation` flag.
 
 ```bash
@@ -93,9 +93,9 @@ uv sync --no-build-isolation
 
 ### Editable installs (IDEs)
 
-  If you're using an IDE then life is a little simpler. You install build dependencies and the project in the two 
-  steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental 
-  compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency 
+  If you're using an IDE then life is a little simpler. You install build dependencies and the project in the two
+  steps outlined above, and from that point on you can rely on e.g. CLion's cmake capabilities to do incremental
+  compilation and editable rebuilds. This will skip scikit-build-core's build backend and all of uv's dependency
   management, so for "real" builds you better revert to the CLI. However, this should work fine for coding and debugging.
 
 
@@ -139,7 +139,7 @@ uv run --no-build-isolation pytest ./tests --verbose --ignore=./tests/slow
 COVERAGE=1 uv run --no-build-isolation coverage run -m pytest ./tests --verbose
 ```
 
-  The `COVERAGE` env var will compile the extension with `--coverage`, allowing us to collect coverage stats of C++ 
+  The `COVERAGE` env var will compile the extension with `--coverage`, allowing us to collect coverage stats of C++
   code as well as Python code.
 
   Check coverage for Python code:
@@ -148,7 +148,7 @@ uvx coverage html -d htmlcov-python
 uvx coverage report --format=markdown
 ```
 
-  Check coverage for C++ code (note: this will clutter your project dir with html files, consider saving them in some 
+  Check coverage for C++ code (note: this will clutter your project dir with html files, consider saving them in some
   other place):
 ```bash
 uvx gcovr \
@@ -275,7 +275,7 @@ versioning scheme.
   ```toml
   [tool.scikit-build]
   metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
-  
+
   [tool.setuptools_scm]
   version_scheme = "duckdb_packaging._setuptools_scm_version:version_scheme"
   ```

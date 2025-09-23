@@ -274,7 +274,8 @@ build = [
     "setuptools_scm>=8.0",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
-    "ruff>=0.11.13",
+    "pre-commit",
+    "ruff>=0.13.0",
     {include-group = "stubdeps"},
     {include-group = "build"},
     {include-group = "test"},
@@ -312,14 +313,15 @@ branch = true
 source = ["duckdb"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 indent-width = 4
 target-version = "py39"
 fix = true
-fixable = ["ALL"]
-exclude = ['external/duckdb']
+exclude = ['external/duckdb', 'sqllogic']
 
 [tool.ruff.lint]
+fixable = ["ALL"]
+exclude = ['*.pyi']
 select = [
     "ANN", # flake8-annotations
     "B", # flake8-bugbear
@@ -328,10 +330,9 @@ select = [
     "E", # pycodestyle
     "EM", # flake8-errmsg
     "F", # pyflakes
-    "FA", # flake8-future-annotations
     "FBT001", # flake8-boolean-trap
     "I", # isort
-    "ICN", # flake8-import-conventions
+    #"ICN", # flake8-import-conventions
     "INT", # flake8-gettext
     "PERF", # perflint
     "PIE", # flake8-pie
@@ -342,15 +343,15 @@ select = [
     "SIM", # flake8-simplify
     "TCH", # flake8-type-checking
     "TD", # flake8-todos
-    "TID", # flake8-tidy-imports
+    #"TID", # flake8-tidy-imports
     "TRY", # tryceratops
     "UP", # pyupgrade
     "W", # pycodestyle
 ]
-ignore = []
-
-[tool.ruff.lint.pycodestyle]
-max-doc-length = 88
+ignore = [
+    "C901", # ignore function complexity
+    "ANN002", "ANN003", # don't require type annotations for *args and **kwargs
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -360,6 +361,35 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-type-checking]
 strict = true
+
+[tool.ruff.lint.per-file-ignores]
+"duckdb/experimental/spark/**.py" = [
+    # Ignore boolean positional args in the Spark API
+    'FBT001'
+]
+"duckdb_packaging/**.py" = [
+    # ignore all performance-related rules for duckdb_packaging
+    'PERF'
+]
+"tests/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in tests
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107',
+    # No need for type hinting in tests
+    'ANN001', 'ANN201', 'ANN202'
+]
+"tests/fast/spark/**.py" = [
+    "E402"
+]
+"tests/spark_namespace/**.py" = [
+    # we need * imports for Spark
+    'F403'
+]
+"scripts/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in scripts
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205',
+    # No need for type hinting in scripts
+    'ANN001', 'ANN201'
+]
 
 [tool.ruff.format]
 docstring-code-format = true

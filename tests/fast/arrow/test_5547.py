@@ -1,9 +1,10 @@
-import duckdb
 import pandas as pd
-from pandas.testing import assert_frame_equal
 import pytest
+from pandas.testing import assert_frame_equal
 
-pa = pytest.importorskip('pyarrow')
+import duckdb
+
+pa = pytest.importorskip("pyarrow")
 
 
 def test_5547():
@@ -12,12 +13,12 @@ def test_5547():
     tbl = pa.Table.from_pandas(
         pd.DataFrame.from_records(
             [
-                dict(
-                    id=i,
-                    nested=dict(
-                        a=i,
-                    ),
-                )
+                {
+                    "id": i,
+                    "nested": {
+                        "a": i,
+                    },
+                }
                 for i in range(num_rows)
             ]
         )

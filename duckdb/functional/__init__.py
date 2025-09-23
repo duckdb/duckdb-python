@@ -1,17 +1,3 @@
-from _duckdb.functional import (
-	FunctionNullHandling,
-	PythonUDFType,
-	SPECIAL,
-	DEFAULT,
-	NATIVE,
-	ARROW
-)
+from _duckdb.functional import ARROW, DEFAULT, NATIVE, SPECIAL, FunctionNullHandling, PythonUDFType  # noqa: D104
 
-__all__ = [
-	"FunctionNullHandling",
-	"PythonUDFType",
-	"SPECIAL",
-	"DEFAULT",
-	"NATIVE",
-	"ARROW"
-]
+__all__ = ["ARROW", "DEFAULT", "NATIVE", "SPECIAL", "FunctionNullHandling", "PythonUDFType"]
