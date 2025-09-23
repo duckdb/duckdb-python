@@ -107,9 +107,6 @@ elseif(UNIX AND NOT APPLE)
     "LINKER:--export-dynamic-symbol=PyInit__duckdb")
 endif()
 
-# if(MSVC) target_link_options(_duckdb PRIVATE "/INCLUDE:duckdb_adbc_init")
-# else() target_link_options(_duckdb PRIVATE "-Wl,-u,duckdb_adbc_init") endif()
-
 # ────────────────────────────────────────────
 # Put the object file in the correct place
 # ────────────────────────────────────────────
