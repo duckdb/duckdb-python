@@ -1010,7 +1010,7 @@ static void RegisterExpectedResultType(py::handle &m) {
 /**
  * Fwd declaration of duckdb_adbc_init (the entrypoint of our ADBC driver) that must be exported.
  */
-extern "C" PYBIND11_EXPORT extern void duckdb_adbc_init(void);
+extern "C" PYBIND11_EXPORT void duckdb_adbc_init(void);
 
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	// Take address to force duckdb_adbc_init symbol inclusion
