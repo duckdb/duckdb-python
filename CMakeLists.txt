@@ -105,6 +105,9 @@ elseif(UNIX AND NOT APPLE)
   target_link_options(
     _duckdb PRIVATE "LINKER:--export-dynamic-symbol=duckdb_adbc_init"
     "LINKER:--export-dynamic-symbol=PyInit__duckdb")
+elseif(WIN32)
+  target_link_options(_duckdb PRIVATE "/EXPORT:duckdb_adbc_init"
+                      "/EXPORT:PyInit__duckdb")
 endif()
 
 # ────────────────────────────────────────────
