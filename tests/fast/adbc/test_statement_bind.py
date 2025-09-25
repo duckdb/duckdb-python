@@ -1,8 +1,12 @@
+import sys
+
 import adbc_driver_manager
 import pyarrow as pa
 import pytest
 
 import adbc_driver_duckdb.dbapi
+
+xfail = pytest.mark.xfail
 
 
 def _import(handle):
@@ -72,6 +76,7 @@ class TestADBCStatementBind:
             result_values = result.chunk(0)
             assert result_values == expected_result
 
+    @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
     def test_multiple_parameters(self):
         int_data = pa.array([5])
         varchar_data = pa.array(["not a short string"])
@@ -163,6 +168,7 @@ class TestADBCStatementBind:
             ):
                 statement.execute_query()
 
+    @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
     def test_not_enough_parameters(self):
         data = pa.record_batch(
             [["not a short string"]],
