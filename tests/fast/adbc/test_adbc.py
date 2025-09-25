@@ -1,24 +1,21 @@
 import datetime
+import sys
 from pathlib import Path
 
+import adbc_driver_manager.dbapi
 import numpy as np
+import pyarrow
 import pytest
 
-import duckdb
+import adbc_driver_duckdb.dbapi
 
-adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
-adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
-
-pyarrow = pytest.importorskip("pyarrow")
-
-# When testing local, if you build via BUILD_PYTHON=1 make, you need to manually set up the
-# dylib duckdb path.
-driver_path = duckdb.duckdb.__file__
+xfail = pytest.mark.xfail
+driver_path = adbc_driver_duckdb.driver_path()
 
 
 @pytest.fixture
 def duck_conn():
-    with adbc_driver_manager.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
+    with adbc_driver_manager.dbapi.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
 
@@ -32,7 +29,7 @@ def example_table():
     )
 
 
-@pytest.mark.xfail
+@xfail(sys.platform == "win32", reason="adbc-driver-manager.adbc_get_info() returns an empty dict on windows")
 def test_connection_get_info(duck_conn):
     assert duck_conn.adbc_get_info() != {}
 
@@ -45,6 +42,9 @@ def test_connection_get_table_types(duck_conn):
     assert duck_conn.adbc_get_table_types() == ["BASE TABLE"]
 
 
+@xfail(
+    sys.platform == "win32", reason="adbc-driver-manager.adbc_get_objects() returns an invalid schema dict on windows"
+)
 def test_connection_get_objects(duck_conn):
     with duck_conn.cursor() as cursor:
         cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
@@ -66,6 +66,9 @@ def test_connection_get_objects(duck_conn):
     assert depth_all.schema == depth_catalogs.schema
 
 
+@xfail(
+    sys.platform == "win32", reason="adbc-driver-manager.adbc_get_objects() returns an invalid schema dict on windows"
+)
 def test_connection_get_objects_filters(duck_conn):
     with duck_conn.cursor() as cursor:
         cursor.execute("CREATE TABLE getobjects (ints BIGINT PRIMARY KEY)")
@@ -98,7 +101,7 @@ def test_commit(tmp_path):
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
-    with adbc_driver_manager.connect(
+    with adbc_driver_manager.dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -108,7 +111,7 @@ def test_commit(tmp_path):
             cur.adbc_ingest("ingest", table, "create")
 
     # Check Data is not there
-    with adbc_driver_manager.connect(
+    with adbc_driver_manager.dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -118,7 +121,7 @@ def test_commit(tmp_path):
         with conn.cursor() as cur:
             # This errors because the table does not exist
             with pytest.raises(
-                adbc_driver_manager_lib.InternalError,
+                adbc_driver_manager._lib.InternalError,
                 match=r"Table with name ingest does not exist!",
             ):
                 cur.execute("SELECT count(*) from ingest")
@@ -127,7 +130,7 @@ def test_commit(tmp_path):
 
     # This now works because we enabled autocommit
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -204,6 +207,7 @@ def test_statement_query(duck_conn):
         assert cursor.fetch_arrow_table().to_pylist() == [{"foo": 1}]
 
 
+@xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
 def test_insertion(duck_conn):
     table = example_table()
     reader = table.to_reader()
@@ -221,7 +225,7 @@ def test_insertion(duck_conn):
     # Test Append
     with duck_conn.cursor() as cursor:
         with pytest.raises(
-            adbc_driver_manager_lib.InternalError,
+            adbc_driver_manager.InternalError,
             match=r'Table with name "ingest_table" already exists!',
         ):
             cursor.adbc_ingest("ingest_table", table, "create")
@@ -230,6 +234,7 @@ def test_insertion(duck_conn):
         assert cursor.fetch_arrow_table().to_pydict() == {"count_star()": [8]}
 
 
+@xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
 def test_read(duck_conn):
     with duck_conn.cursor() as cursor:
         filename = Path(__file__).parent / ".." / "data" / "category.csv"
@@ -299,7 +304,7 @@ def test_large_chunk(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -325,7 +330,7 @@ def test_dictionary_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -353,7 +358,7 @@ def test_ree_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.connect(
+        adbc_driver_manager.dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,

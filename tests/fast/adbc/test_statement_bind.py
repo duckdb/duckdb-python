@@ -1,10 +1,12 @@
+import sys
+
+import adbc_driver_manager
+import pyarrow as pa
 import pytest
 
-pa = pytest.importorskip("pyarrow")
-adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+import adbc_driver_duckdb.dbapi
 
-adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb.dbapi")
-con = adbc_driver_duckdb.connect()
+xfail = pytest.mark.xfail
 
 
 def _import(handle):
@@ -33,7 +35,7 @@ class TestADBCStatementBind:
             names=["ints"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? * 2 as i")
@@ -55,7 +57,7 @@ class TestADBCStatementBind:
             names=["ints"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? * 2 as i")
@@ -74,6 +76,7 @@ class TestADBCStatementBind:
             result_values = result.chunk(0)
             assert result_values == expected_result
 
+    @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
     def test_multiple_parameters(self):
         int_data = pa.array([5])
         varchar_data = pa.array(["not a short string"])
@@ -90,7 +93,7 @@ class TestADBCStatementBind:
             names=["ints", "strings", "bools"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a, ? as b, ? as c")
@@ -120,7 +123,7 @@ class TestADBCStatementBind:
         # Create the RecordBatch
         record_batch = pa.RecordBatch.from_arrays([struct_array], schema=schema)
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a")
@@ -143,7 +146,7 @@ class TestADBCStatementBind:
             names=["ints", "strings"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a")
@@ -165,13 +168,14 @@ class TestADBCStatementBind:
             ):
                 statement.execute_query()
 
+    @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
     def test_not_enough_parameters(self):
         data = pa.record_batch(
             [["not a short string"]],
             names=["strings"],
         )
 
-        con = adbc_driver_duckdb.connect()
+        con = adbc_driver_duckdb.dbapi.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? as a, ? as b")
