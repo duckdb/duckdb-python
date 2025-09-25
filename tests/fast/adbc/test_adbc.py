@@ -8,8 +8,6 @@ import pytest
 
 import adbc_driver_duckdb.dbapi
 
-# When testing local, if you build via BUILD_PYTHON=1 make, you need to manually set up the
-# dylib duckdb path.
 driver_path = adbc_driver_duckdb.driver_path()
 
 
@@ -29,7 +27,6 @@ def example_table():
     )
 
 
-@pytest.mark.xfail
 def test_connection_get_info(duck_conn):
     assert duck_conn.adbc_get_info() != {}
 

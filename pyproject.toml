@@ -225,7 +225,7 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "pyarrow",
 ]
 test = [ # dependencies used for running tests
-    "adbc-driver-manager",
+    "adbc-driver-manager<1.8.0",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
