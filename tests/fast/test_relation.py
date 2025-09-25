@@ -1,6 +1,5 @@
 import duckdb
 import numpy as np
-import platform
 import tempfile
 import os
 import pandas as pd
@@ -527,13 +526,6 @@ class TestRelation(object):
             2048,
             5000,
             1000000,
-            pytest.param(
-                10000000,
-                marks=pytest.mark.skipif(
-                    condition=platform.system() == "Emscripten",
-                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
-                ),
-            ),
         ],
     )
     def test_materialized_relation(self, duckdb_cursor, num_rows):

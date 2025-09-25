@@ -57,7 +57,7 @@ jobs:
         uv export --only-group test --no-emit-project --output-file pylock.toml --directory {project} &&
         uv pip install -r pylock.toml
       CIBW_TEST_COMMAND: >
-        uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
+        uv run -v pytest -n 2 ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
 
     steps:
       - name: Checkout DuckDB Python
