@@ -288,15 +288,15 @@ class TestReplacementScan(object):
                 WHERE a < 3
             )
             SELECT * FROM (
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
                 JOIN cte2 ON cte1.a = cte2.a
                 JOIN (
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM df
                     JOIN cte3 ON df.a = cte3.a
@@ -309,6 +309,7 @@ class TestReplacementScan(object):
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
+    @pytest.mark.xfail(reason="Bug in DuckDB core (MRE at #19154)")
     def test_same_name_cte(self, duckdb_cursor):
         query = """
             WITH df AS (
@@ -417,8 +418,8 @@ class TestReplacementScan(object):
                 WITH cte1 AS (
                     SELECT * FROM df
                 )
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
@@ -434,8 +435,8 @@ class TestReplacementScan(object):
                         SELECT * FROM df
                         WHERE a < 3
                     )
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM (
                         SELECT * FROM df
