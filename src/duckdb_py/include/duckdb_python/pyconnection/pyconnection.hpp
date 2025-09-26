@@ -28,6 +28,7 @@
 
 namespace duckdb {
 struct BoundParameterData;
+struct DuckDBPyModuleState;
 
 enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
 
@@ -172,8 +173,7 @@ public:
 	case_insensitive_set_t registered_objects;
 
 public:
-	explicit DuckDBPyConnection() {
-	}
+	DuckDBPyConnection();
 	~DuckDBPyConnection();
 
 public:
@@ -190,8 +190,16 @@ public:
 	static std::string FormattedPythonVersion();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static void SetDefaultConnection(shared_ptr<DuckDBPyConnection> conn);
+	static shared_ptr<DuckDBPyConnection> GetDefaultConnection();
+	static void ClearDefaultConnection();
+	static void ClearImportCache();
 	static PythonImportCache *ImportCache();
 	static bool IsInteractive();
+
+	// Instance methods for optimized module state access
+	bool IsJupyterInstance() const;
+	bool IsInteractiveInstance() const;
+	std::string FormattedPythonVersionInstance() const;
 
 	unique_ptr<DuckDBPyRelation> ReadCSV(const py::object &name, py::kwargs &kwargs);
 
@@ -337,11 +345,6 @@ public:
 	py::list ListFilesystems();
 	bool FileSystemIsRegistered(const string &name);
 
-	//! Default connection to an in-memory database
-	static DefaultConnectionHolder default_connection;
-	//! Caches and provides an interface to get frequently used modules+subtypes
-	static shared_ptr<PythonImportCache> import_cache;
-
 	static bool IsPandasDataframe(const py::object &object);
 	static PyArrowObjectType GetArrowType(const py::handle &obj);
 	static bool IsAcceptedArrowObject(const py::object &object);
@@ -357,10 +360,6 @@ private:
 	                               bool side_effects);
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
-
-	static PythonEnvironmentType environment;
-	static std::string formatted_python_version;
-	static void DetectEnvironment();
 };
 
 template <typename T>
