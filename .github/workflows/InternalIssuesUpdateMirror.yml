@@ -10,7 +10,7 @@ on:
 
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
-  TITLE_PREFIX: "[ducklake/#${{ github.event.issue.number || github.event.discussion.number }}]"
+  TITLE_PREFIX: "[duckdb-python/#${{ github.event.issue.number || github.event.discussion.number }}]"
 
 jobs:
   update_mirror_issue:
@@ -32,7 +32,7 @@ jobs:
       - name: Add comment with status to mirror issue
         run: |
           if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
-            gh issue comment --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --body "The issue has been ${{ github.event.action }} (https://github.com/duckdb/ducklake/issues/${{ github.event.issue.number || github.event.discussion.number }})."
+            gh issue comment --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --body "The issue has been ${{ github.event.action }} (https://github.com/duckdb/duckdb-python/issues/${{ github.event.issue.number || github.event.discussion.number }})."
           fi
 
       - name: Add closed label to mirror issue
