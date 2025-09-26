@@ -32,7 +32,7 @@ from duckdb.value.constant import (
     IntervalValue,
     TimestampValue,
     TimestampSecondValue,
-    TimestampMilisecondValue,
+    TimestampMillisecondValue,
     TimestampNanosecondValue,
     TimestampTimeZoneValue,
     TimeValue,
