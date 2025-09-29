@@ -123,6 +123,13 @@ if.env.COVERAGE = false
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 
+[[tool.scikit-build.overrides]]
+if.platform-system = "^win32"
+cmake.args = [
+   "-G", "Ninja",
+   "--log-level=DEBUG",
+]
+
 [tool.scikit-build.sdist]
 include = [
     "README.md",
@@ -388,4 +395,5 @@ before-build = ["yum install -y ccache"]
 before-build = ["brew install ccache"]
 
 [tool.cibuildwheel.windows]
-before-build = ["choco install ccache"]
+# Strawberry ccache is already installed on the cibuildwheel images
+before-build = []
