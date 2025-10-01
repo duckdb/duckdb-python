@@ -23,7 +23,7 @@ class TestADBCConnectionGetInfo:
         expected_result = pa.array(
             [
                 "duckdb",
-                "v" + duckdb.duckdb_version,  # don't hardcode this, as it will change every version
+                "v" + duckdb.__duckdb_version__,  # don't hardcode this, as it will change every version
                 "ADBC DuckDB Driver",
                 "(unknown)",
                 "(unknown)",

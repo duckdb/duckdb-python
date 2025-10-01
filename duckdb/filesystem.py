@@ -21,9 +21,9 @@ class ModifiedMemoryFileSystem(MemoryFileSystem):
     # defer to the original implementation that doesn't hardcode the protocol
     _strip_protocol: typing.Callable[[str], str] = classmethod(AbstractFileSystem._strip_protocol.__func__)  # type: ignore[assignment]
 
-    def add_file(self, obj: io.IOBase | BytesIOWrapper, path: str) -> None:
+    def add_file(self, obj: io.IOBase | BytesIOWrapper | object, path: str) -> None:
         """Add a file to the filesystem."""
-        if not isinstance(obj, io.IOBase):
+        if not (hasattr(obj, "read") and hasattr(obj, "seek")):
             msg = "Can not read from a non file-like object"
             raise TypeError(msg)
         if isinstance(obj, io.TextIOBase):

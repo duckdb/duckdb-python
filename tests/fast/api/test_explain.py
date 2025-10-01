@@ -15,9 +15,6 @@ class TestExplain:
         res = duckdb_cursor.sql("select 42").explain("STANDARD")
         assert isinstance(res, str)
 
-        res = duckdb_cursor.sql("select 42").explain(duckdb.STANDARD)
-        assert isinstance(res, str)
-
         res = duckdb_cursor.sql("select 42").explain(duckdb.ExplainType.STANDARD)
         assert isinstance(res, str)
 

@@ -224,7 +224,7 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         # Binary type
         if dtype == "Binary":
             bin_value = value["Binary"]
-            assert isinstance(bin_value, bytes), f"A {dtype} should be bytes but got {type(bin_value)}"
+            assert isinstance(bin_value, list), f"A {dtype} should be a list but got {type(bin_value)}"
             binary_data = bytes(bin_value)
             escaped = "".join(f"\\x{b:02x}" for b in binary_data)
             return f"'{escaped}'::BLOB"
