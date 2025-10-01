@@ -1412,13 +1412,13 @@ def write_csv(
     write_partition_columns: bool | None = None,
 ) -> None: ...
 
-__formatted_python_version__: str = "3.11"
-__git_revision__: str = "b8a06e4a22"
-__interactive__: bool = False
-__jupyter__: bool = False
-__standard_vector_size__: int = 2048
-__version__: str = "1.4.0"
+__formatted_python_version__: str
+__git_revision__: str
+__interactive__: bool
+__jupyter__: bool
+__standard_vector_size__: int
+__version__: str
 _clean_default_connection: pytyping.Any  # value = <capsule object>
-apilevel: str = "2.0"
-paramstyle: str = "qmark"
-threadsafety: int = 1
+apilevel: str
+paramstyle: str
+threadsafety: int
