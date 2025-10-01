@@ -320,8 +320,8 @@ warn_unreachable = true
 pretty = true
 python_version = "3.9"
 exclude = [
-    "duckdb/experimental/",
-    "duckdb/query_graph/",
+    "duckdb/experimental/", # not checking the pyspark API
+    "duckdb/query_graph/",  # old and unmaintained (should probably remove)
 ]
 
 [[tool.mypy.overrides]]
