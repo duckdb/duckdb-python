@@ -1,8 +1,8 @@
 # ruff: noqa: D100
-from typing import Callable
+import typing
 
 
-def vectorized(func: Callable) -> Callable:
+def vectorized(func: typing.Callable[..., typing.Any]) -> typing.Callable[..., typing.Any]:
     """Decorate a function with annotated function parameters.
 
     This allows DuckDB to infer that the function should be provided with pyarrow arrays and should expect

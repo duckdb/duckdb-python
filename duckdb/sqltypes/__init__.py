@@ -1,8 +1,6 @@
-"""DuckDB's SQL types. DEPRECATED. Please use `duckdb.sqltypes` instead."""
+"""DuckDB's SQL types."""
 
-import warnings
-
-from duckdb.sqltypes import (
+from _duckdb._sqltypes import (
     BIGINT,
     BIT,
     BLOB,
@@ -63,9 +61,3 @@ __all__ = [
     "VARCHAR",
     "DuckDBPyType",
 ]
-
-warnings.warn(
-    "`duckdb.typing` is deprecated and will be removed in a future version. Please use `duckdb.sqltypes` instead.",
-    DeprecationWarning,
-    stacklevel=2,
-)

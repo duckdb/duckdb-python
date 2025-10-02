@@ -39,7 +39,7 @@ static void DefineBaseTypes(py::handle &m) {
 }
 
 void DuckDBPyTyping::Initialize(py::module_ &parent) {
-	auto m = parent.def_submodule("typing", "This module contains classes and methods related to typing");
+	auto m = parent.def_submodule("_sqltypes", "This module contains classes and methods related to typing");
 	DuckDBPyType::Initialize(m);
 
 	DefineBaseTypes(m);

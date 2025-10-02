@@ -92,7 +92,6 @@ class TestReadCSV:
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
-    @pytest.mark.skip(reason="Issue #6011 needs to be fixed first, header=False doesn't work correctly")
     def test_header_false(self, duckdb_cursor):
         duckdb_cursor.read_csv(TestFile("category.csv"), header=False)
 
@@ -383,13 +382,13 @@ class TestReadCSV:
     def test_filelike_non_readable(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
         obj = 5
-        with pytest.raises(ValueError, match="Can not read from a non file-like object"):
+        with pytest.raises(TypeError, match="Can not read from a non file-like object"):
             duckdb_cursor.read_csv(obj).fetchall()
 
     def test_filelike_none(self, duckdb_cursor):
         _ = pytest.importorskip("fsspec")
         obj = None
-        with pytest.raises(ValueError, match="Can not read from a non file-like object"):
+        with pytest.raises(TypeError, match="Can not read from a non file-like object"):
             duckdb_cursor.read_csv(obj).fetchall()
 
     @pytest.mark.skip(reason="depends on garbage collector behaviour, and sporadically breaks in CI")

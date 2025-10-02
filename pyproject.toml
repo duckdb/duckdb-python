@@ -78,6 +78,7 @@ metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 cmake = true
 packages.duckdb = "duckdb"
 packages.adbc_driver_duckdb = "adbc_driver_duckdb"
+packages._duckdb-stubs = "_duckdb-stubs"
 
 [tool.scikit-build.cmake.define]
 CORE_EXTENSIONS = "core_functions;json;parquet;icu;jemalloc"
@@ -135,11 +136,12 @@ include = [
     "CMakeLists.txt",
     "cmake/**",
 
-    # Source code
+    # Source code and stubs
     "src/**",
     "duckdb/**",
     "duckdb_packaging/**",
     "adbc_driver_duckdb/**",
+    "_duckdb-stubs/*.pyi",
 
     # Generated during sdist build, contains git describe string for duckdb
     "duckdb_packaging/duckdb_version.txt",
@@ -219,6 +221,8 @@ torchvision = [ { index = "pytorch-cpu" } ]
 
 [dependency-groups] # used for development only, requires pip >=25.1.0
 stubdeps = [ # dependencies used for typehints in the stubs
+    "pybind11-stubgen",
+    "mypy",
     "fsspec",
     "pandas",
     "polars",
@@ -309,6 +313,32 @@ filterwarnings = [
     "ignore:distutils Version classes are deprecated:DeprecationWarning",
     "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
 ]
+
+[tool.mypy]
+packages = ["duckdb", "_duckdb"]
+strict = true
+warn_unreachable = true
+pretty = true
+python_version = "3.9"
+exclude = [
+    "duckdb/experimental/", # not checking the pyspark API
+    "duckdb/query_graph/",  # old and unmaintained (should probably remove)
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "fsspec.*",
+    "pandas",
+    "polars",
+    "pyarrow.*",
+    "torch",
+    "tensorflow",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "duckdb.filesystem"
+disallow_subclassing_any = false
 
 [tool.coverage.run]
 branch = true

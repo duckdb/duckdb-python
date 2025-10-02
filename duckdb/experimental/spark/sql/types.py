@@ -22,7 +22,7 @@ from typing import (
 )
 
 import duckdb
-from duckdb.typing import DuckDBPyType
+from duckdb.sqltypes import DuckDBPyType
 
 from ..exception import ContributionsAcceptedError
 

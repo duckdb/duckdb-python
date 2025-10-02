@@ -1,6 +1,6 @@
 from typing import cast  # noqa: D100
 
-from duckdb.typing import DuckDBPyType
+from duckdb.sqltypes import DuckDBPyType
 
 from .types import (
     ArrayType,
