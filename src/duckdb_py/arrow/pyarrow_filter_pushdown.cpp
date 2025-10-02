@@ -160,6 +160,15 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	}
 }
 
+static py::list TransformInList(const InFilter &in) {
+	py::list res;
+	ClientProperties default_properties;
+	for (auto &val : in.values) {
+		res.append(PythonObject::FromValue(val, val.type(), default_properties));
+	}
+	return res;
+}
+
 py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_ref, const string &timezone_config,
                                     const ArrowType &type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
@@ -282,17 +291,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 	}
 	case TableFilterType::IN_FILTER: {
 		auto &in_filter = filter.Cast<InFilter>();
-		ConjunctionOrFilter or_filter;
-		value_set_t unique_values;
-		for (const auto &value : in_filter.values) {
-			if (unique_values.find(value) == unique_values.end()) {
-				unique_values.insert(value);
-			}
-		}
-		for (const auto &value : unique_values) {
-			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
-		}
-		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+		auto constant_field = field(py::tuple(py::cast(column_ref)));
+		auto in_list = TransformInList(in_filter);
+		return constant_field.attr("isin")(std::move(in_list));
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
 		//! Ignore dynamic filters for now, not necessary for correctness
