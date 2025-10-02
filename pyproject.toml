@@ -136,11 +136,12 @@ include = [
     "CMakeLists.txt",
     "cmake/**",
 
-    # Source code
+    # Source code and stubs
     "src/**",
     "duckdb/**",
     "duckdb_packaging/**",
     "adbc_driver_duckdb/**",
+    "_duckdb-stubs/*.pyi",
 
     # Generated during sdist build, contains git describe string for duckdb
     "duckdb_packaging/duckdb_version.txt",
