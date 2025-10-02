@@ -25,7 +25,7 @@ See Also:
     - DuckDB Type System: https://duckdb.org/docs/sql/data_types/overview
 """
 
-import duckdb.typing as duckdb_typing
+from duckdb import sqltypes
 
 
 class DBAPITypeObject:
@@ -42,16 +42,16 @@ class DBAPITypeObject:
         types: A list of DuckDBPyType instances that belong to this type category.
 
     Example:
-        >>> string_types = DBAPITypeObject([duckdb_typing.VARCHAR, duckdb_typing.CHAR])
-        >>> result = duckdb_typing.VARCHAR == string_types  # True
-        >>> result = duckdb_typing.INTEGER == string_types  # False
+        >>> string_types = DBAPITypeObject([sqltypes.VARCHAR, sqltypes.CHAR])
+        >>> result = sqltypes.VARCHAR == string_types  # True
+        >>> result = sqltypes.INTEGER == string_types  # False
 
     Note:
         This follows the DB API 2.0 specification where type objects are compared
         using equality operators rather than isinstance() checks.
     """
 
-    def __init__(self, types: list[duckdb_typing.DuckDBPyType]) -> None:
+    def __init__(self, types: list[sqltypes.DuckDBPyType]) -> None:
         """Initialize a DB API type object.
 
         Args:
@@ -73,10 +73,10 @@ class DBAPITypeObject:
             True if other is a DuckDBPyType in this category, False otherwise.
 
         Example:
-            >>> NUMBER == duckdb_typing.INTEGER  # True
-            >>> NUMBER == duckdb_typing.VARCHAR  # False
+            >>> NUMBER == sqltypes.INTEGER  # True
+            >>> NUMBER == sqltypes.VARCHAR  # False
         """
-        if isinstance(other, duckdb_typing.DuckDBPyType):
+        if isinstance(other, sqltypes.DuckDBPyType):
             return other in self.types
         return False
 
@@ -95,7 +95,7 @@ class DBAPITypeObject:
 
 # Define the standard DB API 2.0 type objects for DuckDB
 
-STRING = DBAPITypeObject([duckdb_typing.VARCHAR])
+STRING = DBAPITypeObject([sqltypes.VARCHAR])
 """
 STRING type object for text-based database columns.
 
@@ -114,20 +114,20 @@ Example:
 
 NUMBER = DBAPITypeObject(
     [
-        duckdb_typing.TINYINT,
-        duckdb_typing.UTINYINT,
-        duckdb_typing.SMALLINT,
-        duckdb_typing.USMALLINT,
-        duckdb_typing.INTEGER,
-        duckdb_typing.UINTEGER,
-        duckdb_typing.BIGINT,
-        duckdb_typing.UBIGINT,
-        duckdb_typing.HUGEINT,
-        duckdb_typing.UHUGEINT,
-        duckdb_typing.DuckDBPyType("BIGNUM"),
-        duckdb_typing.DuckDBPyType("DECIMAL"),
-        duckdb_typing.FLOAT,
-        duckdb_typing.DOUBLE,
+        sqltypes.TINYINT,
+        sqltypes.UTINYINT,
+        sqltypes.SMALLINT,
+        sqltypes.USMALLINT,
+        sqltypes.INTEGER,
+        sqltypes.UINTEGER,
+        sqltypes.BIGINT,
+        sqltypes.UBIGINT,
+        sqltypes.HUGEINT,
+        sqltypes.UHUGEINT,
+        sqltypes.DuckDBPyType("BIGNUM"),
+        sqltypes.DuckDBPyType("DECIMAL"),
+        sqltypes.FLOAT,
+        sqltypes.DOUBLE,
     ]
 )
 """
@@ -162,14 +162,14 @@ Example:
 
 DATETIME = DBAPITypeObject(
     [
-        duckdb_typing.DATE,
-        duckdb_typing.TIME,
-        duckdb_typing.TIME_TZ,
-        duckdb_typing.TIMESTAMP,
-        duckdb_typing.TIMESTAMP_TZ,
-        duckdb_typing.TIMESTAMP_NS,
-        duckdb_typing.TIMESTAMP_MS,
-        duckdb_typing.TIMESTAMP_S,
+        sqltypes.DATE,
+        sqltypes.TIME,
+        sqltypes.TIME_TZ,
+        sqltypes.TIMESTAMP,
+        sqltypes.TIMESTAMP_TZ,
+        sqltypes.TIMESTAMP_NS,
+        sqltypes.TIMESTAMP_MS,
+        sqltypes.TIMESTAMP_S,
     ]
 )
 """
@@ -201,7 +201,7 @@ Example:
     >>> cursor.description[2][1] == DATETIME  # Check if third column is date/time
 """
 
-BINARY = DBAPITypeObject([duckdb_typing.BLOB])
+BINARY = DBAPITypeObject([sqltypes.BLOB])
 """
 BINARY type object for binary data database columns.
 

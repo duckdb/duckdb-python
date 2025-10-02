@@ -1,7 +1,5 @@
-from io import StringIO, TextIOBase  # noqa: D100
-from typing import Any, Union
+"""StringIO buffer wrapper.
 
-"""
 BSD 3-Clause License
 
 Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team
@@ -35,10 +33,16 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+from io import StringIO, TextIOBase
+from typing import Any, Union
 
-class BytesIOWrapper:  # noqa: D101
-    # Wrapper that wraps a StringIO buffer and reads bytes from it
-    # Created for compat with pyarrow read_csv
+
+class BytesIOWrapper:
+    """Wrapper that wraps a StringIO buffer and reads bytes from it.
+
+    Created for compat with pyarrow read_csv.
+    """
+
     def __init__(self, buffer: Union[StringIO, TextIOBase], encoding: str = "utf-8") -> None:  # noqa: D107
         self.buffer = buffer
         self.encoding = encoding

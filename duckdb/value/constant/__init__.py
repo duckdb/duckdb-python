@@ -1,7 +1,7 @@
 # ruff: noqa: D101, D104, D105, D107, ANN401
 from typing import Any
 
-from duckdb.typing import (
+from duckdb.sqltypes import (
     BIGINT,
     BIT,
     BLOB,
