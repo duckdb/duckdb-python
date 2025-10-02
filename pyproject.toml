@@ -314,7 +314,7 @@ filterwarnings = [
 ]
 
 [tool.mypy]
-packages = ["duckdb"]
+packages = ["duckdb", "_duckdb"]
 strict = true
 warn_unreachable = true
 pretty = true
@@ -329,8 +329,9 @@ module = [
     "fsspec.*",
     "pandas",
     "polars",
-    "pyarrow",
+    "pyarrow.*",
     "torch",
+    "tensorflow",
 ]
 ignore_missing_imports = true
 
