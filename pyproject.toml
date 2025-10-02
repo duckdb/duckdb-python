@@ -123,6 +123,15 @@ if.env.COVERAGE = false
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 
+[[tool.scikit-build.overrides]]
+if.platform-system = "^win32"
+if.abi-flags = "t"
+inherit.cmake.define = "append"
+# /DPy_GIL_DISABLED: needed else the build will try to link python314.lib
+# CMAKE_..._FLAGS_INIT not FLAGS: otherwise, msbuild will disable important defaults such as /EHsc
+cmake.define.CMAKE_C_FLAGS_INIT="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
+cmake.define.CMAKE_CXX_FLAGS_INIT="/DPy_MOD_GIL_USED /DPy_GIL_DISABLED"
+
 [tool.scikit-build.sdist]
 include = [
     "README.md",

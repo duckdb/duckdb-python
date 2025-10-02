@@ -45,9 +45,6 @@ jobs:
           - { minimal: true, python: cp311 }
           - { minimal: true, python: cp312 }
           - { minimal: true, platform: { arch: universal2 } }
-          # Windows+cp314t disabled due to test failures in CI. 
-          # TODO: Diagnose why tests fail (access violations) in some configurations
-          - { python: cp314t, platform: { os: windows-2025 } }  
 
     runs-on: ${{ matrix.platform.os }}
     env:
@@ -84,13 +81,13 @@ jobs:
       # Install Astral UV, which will be used as build-frontend for cibuildwheel
       - uses: astral-sh/setup-uv@v6
         with:
-          version: "0.8.16"
+          version: "0.8.22"
           enable-cache: false
           cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
           python-version: ${{ matrix.python }}
 
       - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
-        uses: pypa/cibuildwheel@v3.1
+        uses: pypa/cibuildwheel@v3.2
         env:
           CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
