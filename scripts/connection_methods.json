@@ -108,6 +108,51 @@
 		"return": "DuckDBPyConnection"
 	},
 	{
+		"name": "create_table_function",
+		"function": "RegisterTableFunction",
+		"docs": "Register a table valued function via Callable",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			},
+			{
+				"name": "callable",
+				"type": "Callable"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "parameters",
+				"type": "Optional[Any]",
+				"default": "None"
+			},
+			{
+				"name": "schema",
+				"type": "Optional[Any]",
+				"default": "None"
+			},
+			{
+				"name": "type",
+				"type": "Optional[PythonTVFType]",
+				"default": "PythonTVFType.TUPLES"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
+		"name": "unregister_table_function",
+		"function": "UnregisterTableFunction",
+		"docs": "Unregister a table valued function",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
 		"name": [
 			"sqltype",
 			"dtype",

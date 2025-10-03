@@ -393,12 +393,62 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
 	                                       null_handling, exception_handling, side_effects);
 	CreateScalarFunctionInfo info(scalar_function);
-
 	context.RegisterFunction(info);
 
 	auto dependency = make_uniq<ExternalDependency>();
 	dependency->AddDependency("function", PythonDependencyItem::Create(udf));
 	registered_functions[name] = std::move(dependency);
+
+	return shared_from_this();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterTableFunction(const string &name,
+                                                                         const py::function &function,
+                                                                         const py::object &parameters,
+                                                                         const py::object &schema,
+                                                                         PythonTVFType type) {
+
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
+
+	if (context.transaction.HasActiveTransaction()) {
+		context.CancelTransaction();
+	}
+
+	if (registered_table_functions.find(name) != registered_table_functions.end()) {
+		throw NotImplementedException("A table function by the name of '%s' is already registered, "
+		                              "please unregister it first",
+		                              name);
+	}
+
+	auto table_function = CreateTableFunctionFromCallable(name, function, parameters, schema, type);
+	CreateTableFunctionInfo info(table_function);
+
+	// re-registration: changing the callable to another
+	info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+
+	context.RegisterFunction(info);
+
+	auto dependency = make_uniq<ExternalDependency>();
+	dependency->AddDependency("function", PythonDependencyItem::Create(function));
+	registered_table_functions[name] = std::move(dependency);
+
+	return shared_from_this();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterTableFunction(const string &name) {
+	auto entry = registered_table_functions.find(name);
+	if (entry == registered_table_functions.end()) {
+		throw InvalidInputException(
+		    "No table function by the name of '%s' was found in the list of registered table functions", name);
+	}
+
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
+
+	// Remove from our registry.
+	// TODO: Callable still exists in the function catalog, since duckdb doesn't (yet?) support removal
+	registered_table_functions.erase(entry);
 
 	return shared_from_this();
 }
@@ -410,6 +460,14 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
+
+	connection_module.def("create_table_function", &DuckDBPyConnection::RegisterTableFunction,
+	                      "Register a table valued function via Callable", py::arg("name"), py::arg("callable"),
+	                      py::arg("parameters") = py::none(), py::arg("schema") = py::none(),
+	                      py::arg("type") = PythonTVFType::TUPLES);
+
+	connection_module.def("unregister_table_function", &DuckDBPyConnection::UnregisterTableFunction,
+	                      "Unregister a table valued function", py::arg("name"));
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
@@ -1575,7 +1633,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const py::object &quer
 		}
 		if (res->type == QueryResultType::STREAM_RESULT) {
 			auto &stream_result = res->Cast<StreamQueryResult>();
-			res = stream_result.Materialize();
+			{
+				// Release the GIL, as Materialize *may* need the GIL (TVFs, for instance)
+				D_ASSERT(py::gil_check());
+				py::gil_scoped_release release;
+				res = stream_result.Materialize();
+			}
 		}
 		auto &materialized_result = res->Cast<MaterializedQueryResult>();
 		relation = make_shared_ptr<MaterializedRelation>(connection.context, materialized_result.TakeCollection(),
@@ -1826,6 +1889,7 @@ void DuckDBPyConnection::Close() {
 	// https://peps.python.org/pep-0249/#Connection.close
 	cursors.ClearCursors();
 	registered_functions.clear();
+	registered_table_functions.clear();
 }
 
 void DuckDBPyConnection::Interrupt() {
