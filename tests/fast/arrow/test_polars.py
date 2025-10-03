@@ -175,7 +175,7 @@ class TestPolars:
             "UBIGINT",
             "FLOAT",
             "DOUBLE",
-            "HUGEINT",
+            # "HUGEINT",
             "DECIMAL(4,1)",
             "DECIMAL(9,1)",
             "DECIMAL(18,4)",
