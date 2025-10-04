@@ -176,9 +176,14 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         if dtype.startswith("{'Decimal'") or dtype == "Decimal":
             decimal_value = value["Decimal"]
             assert isinstance(decimal_value, list), (
-                f"A {dtype} should be a two member list but got {type(decimal_value)}"
+                f"A {dtype} should be a two or three member list but got {type(decimal_value)}"
             )
-            return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1]))
+            if len(decimal_value) == 2:  # pre-polars 1.34.0
+                return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1]))
+            assert len(decimal_value) == 3, (  # since polars 1.34.0
+                f"A {dtype} should be a two or three member list but got {len(decimal_value)} member list"
+            )
+            return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[2]))
 
         # Datetime with microseconds since epoch
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
