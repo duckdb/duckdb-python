@@ -277,8 +277,8 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         for record_batch in iter(results.read_next_batch, None):
             if predicate is not None and duck_predicate is None:
                 # We have a predicate, but did not manage to push it down, we fallback here
-                yield pl.from_arrow(record_batch).filter(predicate)  # type: ignore[arg-type,misc]
+                yield pl.from_arrow(record_batch).filter(predicate)  # type: ignore[arg-type,misc,unused-ignore]
             else:
-                yield pl.from_arrow(record_batch)  # type: ignore[misc]
+                yield pl.from_arrow(record_batch)  # type: ignore[misc,unused-ignore]
 
     return register_io_source(source_generator, schema=schema)
