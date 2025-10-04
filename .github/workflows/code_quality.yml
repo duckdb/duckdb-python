@@ -19,7 +19,7 @@ defaults:
 
 jobs:
   run_checks:
-    name: Run linting and formatting
+    name: Run linting, formatting and static type checker
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
