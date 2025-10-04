@@ -632,27 +632,24 @@ class TestPolars:
         with pytest.raises(AssertionError, match="The col name of a Column should be a str but got"):
             _pl_tree_to_sql(json.loads(bad_type_expr))
 
-    def test_old_dec(self):
-        bad_key_expr = """
-        {
-            "BinaryExpr": {
-                "left": { "Column": "foo" },
-                "middle": "Gt",
-                "right": { "Literal": { "Int": 5 } }
-            }
-        }
+    def test_decimal_scale(self):
+        scalar_decimal_no_scale = """
+          { "Scalar": {
+            "Decimal": [
+              1,
+              0
+            ]
+          } }
         """
-        with pytest.raises(KeyError, match="'op'"):
-            _pl_tree_to_sql(json.loads(bad_key_expr))
+        assert _pl_tree_to_sql(json.loads(scalar_decimal_no_scale)) == "1"
 
-        bad_type_expr = """
-        {
-            "BinaryExpr": {
-                "left": { "Column": [ "foo" ]  },
-                "op": "Gt",
-                "right": { "Literal": { "Int": 5 } }
-            }
-        }
+        scalar_decimal_scale = """
+          { "Scalar": {
+            "Decimal": [
+              1,
+              38,
+              0
+            ]
+          } }
         """
-        with pytest.raises(AssertionError, match="The col name of a Column should be a str but got"):
-            _pl_tree_to_sql(json.loads(bad_type_expr))
+        assert _pl_tree_to_sql(json.loads(scalar_decimal_scale)) == "1"

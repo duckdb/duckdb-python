@@ -179,7 +179,7 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             assert isinstance(decimal_value, list), (
                 f"A {dtype} should be a two or three member list but got {type(decimal_value)}"
             )
-            assert 2 >= len(decimal_value) <= 3, (
+            assert 2 <= len(decimal_value) <= 3, (
                 f"A {dtype} should be a two or three member list but got {len(decimal_value)} member list"
             )
             return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[-1]))
