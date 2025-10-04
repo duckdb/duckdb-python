@@ -1,4 +1,5 @@
 import datetime
+import json
 
 import pytest
 
@@ -8,7 +9,7 @@ pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
 
-from duckdb.polars_io import _predicate_to_expression  # noqa: E402
+from duckdb.polars_io import _pl_tree_to_sql, _predicate_to_expression  # noqa: E402
 
 
 def valid_filter(filter):
@@ -605,3 +606,53 @@ class TestPolars:
         correct = duckdb_cursor.execute("FROM t").fetchall()
 
         assert res == correct
+
+    def test_invalid_expr_json(self):
+        bad_key_expr = """
+        {
+            "BinaryExpr": {
+                "left": { "Column": "foo" },
+                "middle": "Gt",
+                "right": { "Literal": { "Int": 5 } }
+            }
+        }
+        """
+        with pytest.raises(KeyError, match="'op'"):
+            _pl_tree_to_sql(json.loads(bad_key_expr))
+
+        bad_type_expr = """
+        {
+            "BinaryExpr": {
+                "left": { "Column": [ "foo" ]  },
+                "op": "Gt",
+                "right": { "Literal": { "Int": 5 } }
+            }
+        }
+        """
+        with pytest.raises(AssertionError, match="The col name of a Column should be a str but got"):
+            _pl_tree_to_sql(json.loads(bad_type_expr))
+
+    def test_old_dec(self):
+        bad_key_expr = """
+        {
+            "BinaryExpr": {
+                "left": { "Column": "foo" },
+                "middle": "Gt",
+                "right": { "Literal": { "Int": 5 } }
+            }
+        }
+        """
+        with pytest.raises(KeyError, match="'op'"):
+            _pl_tree_to_sql(json.loads(bad_key_expr))
+
+        bad_type_expr = """
+        {
+            "BinaryExpr": {
+                "left": { "Column": [ "foo" ]  },
+                "op": "Gt",
+                "right": { "Literal": { "Int": 5 } }
+            }
+        }
+        """
+        with pytest.raises(AssertionError, match="The col name of a Column should be a str but got"):
+            _pl_tree_to_sql(json.loads(bad_type_expr))

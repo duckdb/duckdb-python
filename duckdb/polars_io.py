@@ -1,5 +1,6 @@
 from __future__ import annotations  # noqa: D100
 
+import contextlib
 import datetime
 import json
 import typing
@@ -178,12 +179,10 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             assert isinstance(decimal_value, list), (
                 f"A {dtype} should be a two or three member list but got {type(decimal_value)}"
             )
-            if len(decimal_value) == 2:  # pre-polars 1.34.0
-                return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1]))
-            assert len(decimal_value) == 3, (  # since polars 1.34.0
+            assert 2 >= len(decimal_value) <= 3, (
                 f"A {dtype} should be a two or three member list but got {len(decimal_value)} member list"
             )
-            return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[2]))
+            return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[-1]))
 
         # Datetime with microseconds since epoch
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
@@ -265,7 +264,8 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             relation_final = relation_final.limit(n_rows)
         if predicate is not None:
             # We have a predicate, if possible, we push it down to DuckDB
-            duck_predicate = _predicate_to_expression(predicate)
+            with contextlib.suppress(AssertionError, KeyError):
+                duck_predicate = _predicate_to_expression(predicate)
         # Try to pushdown filter, if one exists
         if duck_predicate is not None:
             relation_final = relation_final.filter(duck_predicate)
