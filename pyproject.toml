@@ -323,6 +323,7 @@ python_version = "3.9"
 exclude = [
     "duckdb/experimental/", # not checking the pyspark API
     "duckdb/query_graph/",  # old and unmaintained (should probably remove)
+    "tests", "scripts",
 ]
 
 [[tool.mypy.overrides]]
