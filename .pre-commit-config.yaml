@@ -23,6 +23,12 @@ repos:
     rev: v1.17.1
     hooks:
       - id: mypy
+        # Match all files under duckdb/ or _duckdb-stubs/,
+        # but not under duckdb/experimental/ or duckdb/query_graph/
+        files: ^(duckdb/(?!experimental/|query_graph/)|_duckdb-stubs/)
+        args: ["--config-file", "pyproject.toml"]
+        language: system
+        entry: uv run mypy
 
   - repo: local
     hooks:

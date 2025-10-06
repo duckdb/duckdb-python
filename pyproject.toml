@@ -316,6 +316,7 @@ filterwarnings = [
 
 [tool.mypy]
 packages = ["duckdb", "_duckdb"]
+mypy_path = ["_duckdb-stubs"]
 strict = true
 warn_unreachable = true
 pretty = true
@@ -323,13 +324,18 @@ python_version = "3.9"
 exclude = [
     "duckdb/experimental/", # not checking the pyspark API
     "duckdb/query_graph/",  # old and unmaintained (should probably remove)
+    "tests",
+    "scripts",
+    "sqlogic",
 ]
 
 [[tool.mypy.overrides]]
 module = [
     "fsspec.*",
+    "numpy",
     "pandas",
     "polars",
+    "polars.io.plugins",
     "pyarrow.*",
     "torch",
     "tensorflow",
