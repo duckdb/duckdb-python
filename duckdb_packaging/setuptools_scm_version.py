@@ -133,10 +133,7 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
 
     # Bump version and format according to PEP440
     distance = int(distance or 0)
-    if distance == 0 and not version.dirty:
-        pep440_version = _tag_to_version(str(version))
-    else:
-        pep440_version = _bump_dev_version(str(version), distance)
+    pep440_version = _tag_to_version(str(version)) if distance == 0 else _bump_dev_version(str(version), distance)
     if commit_hash:
         pep440_version += f"+g{commit_hash.lower()}"
 
