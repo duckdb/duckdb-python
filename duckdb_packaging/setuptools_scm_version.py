@@ -132,7 +132,11 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
         version = version.replace("-rc", "rc")
 
     # Bump version and format according to PEP440
-    pep440_version = _bump_dev_version(version, int(distance or 0))
+    distance = int(distance or 0)
+    if distance == 0 and not version.dirty:
+        pep440_version = _tag_to_version(str(version))
+    else:
+        pep440_version = _bump_dev_version(str(version), distance)
     if commit_hash:
         pep440_version += f"+g{commit_hash.lower()}"
 
