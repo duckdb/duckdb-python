@@ -22,7 +22,7 @@ except ImportError:
 
     # Only install mock after we've failed to import pandas for conftest.py
     class MockPandas:
-        def __getattr__(self, name):
+        def __getattr__(self, name: str) -> object:
             pytest.skip("pandas not available", allow_module_level=True)
 
     sys.modules["pandas"] = MockPandas()
@@ -56,10 +56,10 @@ def pytest_addoption(parser):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
-    """Convert pandas requirement exceptions to skips"""
+    """Convert pandas requirement exceptions to skips."""
     outcome = yield
 
-    # TODO: Remove skip when Pandas releases for 3.14. After, consider bumping to 3.15
+    # TODO: Remove skip when Pandas releases for 3.14. After, consider bumping to 3.15  # noqa: TD002,TD003
     if sys.version_info[:2] == (3, 14):
         try:
             outcome.get_result()
@@ -67,7 +67,7 @@ def pytest_runtest_call(item):
             if "'pandas' is required for this operation but it was not installed" in str(e):
                 pytest.skip("pandas not available - test requires pandas functionality")
             else:
-                raise e
+                raise
 
 
 def pytest_collection_modifyitems(config, items):
