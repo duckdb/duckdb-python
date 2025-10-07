@@ -56,18 +56,39 @@ def pytest_addoption(parser):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_call(item):
-    """Convert pandas requirement exceptions to skips."""
+    """Convert pandas requirement exceptions and missing pyarrow imports to skips."""
     outcome = yield
 
     # TODO: Remove skip when Pandas releases for 3.14. After, consider bumping to 3.15  # noqa: TD002,TD003
     if sys.version_info[:2] == (3, 14):
         try:
             outcome.get_result()
-        except duckdb.InvalidInputException as e:
-            if "'pandas' is required for this operation but it was not installed" in str(e):
-                pytest.skip("pandas not available - test requires pandas functionality")
+        except (duckdb.InvalidInputException, ImportError) as e:
+            if isinstance(e, ImportError) and e.name == "pyarrow":
+                pytest.skip(f"pyarrow not available - {item.name} requires pyarrow")
+            elif "'pandas' is required for this operation but it was not installed" in str(e):
+                pytest.skip(f"pandas not available - {item.name} requires pandas functionality")
             else:
                 raise
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    """Wrap module collection to catch pyarrow import errors on Python 3.14.
+
+    If we're on Python 3.14 and a test module raises ModuleNotFoundError
+    for 'pyarrow', mark the entire module as xfailed rather than failing collection.
+    """
+    outcome = yield
+    result = outcome.get_result()
+
+    if sys.version_info[:2] == (3, 14):
+        # Only handle failures from module collectors
+        if result.failed and collector.__class__.__name__ == "Module":
+            longrepr = str(result.longrepr)
+            if "ModuleNotFoundError: No module named 'pyarrow'" in longrepr:
+                result.outcome = "skipped"
+                result.longrepr = f"XFAIL: pyarrow not available {collector.name} ({longrepr.strip()})"
 
 
 def pytest_collection_modifyitems(config, items):
