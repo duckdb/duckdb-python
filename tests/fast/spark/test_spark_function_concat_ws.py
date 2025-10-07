@@ -1,11 +1,11 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+from spark_namespace.sql.functions import col, concat_ws
 from spark_namespace.sql.types import Row
-from spark_namespace.sql.functions import concat_ws, col
 
 
-class TestReplaceEmpty(object):
+class TestReplaceEmpty:
     def test_replace_empty(self, spark):
         data = [
             ("firstRowFirstColumn", "firstRowSecondColumn"),

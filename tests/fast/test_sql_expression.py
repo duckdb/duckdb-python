@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 from duckdb import (
     ColumnExpression,
     ConstantExpression,
@@ -7,9 +8,8 @@ from duckdb import (
 )
 
 
-class TestSQLExpression(object):
+class TestSQLExpression:
     def test_sql_expression_basic(self, duckdb_cursor):
-
         # Test simple constant expressions
         expr = SQLExpression("42")
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
@@ -17,7 +17,7 @@ class TestSQLExpression(object):
 
         expr = SQLExpression("'hello'")
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
-        assert rel.fetchall() == [('hello',)]
+        assert rel.fetchall() == [("hello",)]
 
         expr = SQLExpression("NULL")
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
@@ -43,14 +43,13 @@ class TestSQLExpression(object):
         # Test function calls
         expr = SQLExpression("UPPER('test')")
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
-        assert rel.fetchall() == [('TEST',)]
+        assert rel.fetchall() == [("TEST",)]
 
         expr = SQLExpression("CONCAT('hello', ' ', 'world')")
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
-        assert rel.fetchall() == [('hello world',)]
+        assert rel.fetchall() == [("hello world",)]
 
     def test_sql_expression_with_columns(self, duckdb_cursor):
-
         # Create a test table
         duckdb_cursor.execute(
             """
@@ -75,12 +74,12 @@ class TestSQLExpression(object):
 
         expr = SQLExpression("UPPER(b)")
         rel2 = rel.select(expr)
-        assert rel2.fetchall() == [('ONE',), ('TWO',), ('THREE',)]
+        assert rel2.fetchall() == [("ONE",), ("TWO",), ("THREE",)]
 
         # Test complex expressions
         expr = SQLExpression("CASE WHEN a > 1 THEN b ELSE 'default' END")
         rel2 = rel.select(expr)
-        assert rel2.fetchall() == [('default',), ('two',), ('three',)]
+        assert rel2.fetchall() == [("default",), ("two",), ("three",)]
 
         # Test combining with other expression types
         expr1 = SQLExpression("a + 5")
@@ -122,8 +121,8 @@ class TestSQLExpression(object):
         rel = duckdb_cursor.table("test_alias")
         expr = SQLExpression("a + 10").alias("a_plus_10")
         rel2 = rel.select(expr, "b")
-        assert rel2.fetchall() == [(11, 'one'), (12, 'two')]
-        assert rel2.columns == ['a_plus_10', 'b']
+        assert rel2.fetchall() == [(11, "one"), (12, "two")]
+        assert rel2.columns == ["a_plus_10", "b"]
 
     def test_sql_expression_in_filter(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -142,18 +141,18 @@ class TestSQLExpression(object):
         # Test filter with SQL expression
         expr = SQLExpression("a > 2")
         rel2 = rel.filter(expr)
-        assert rel2.fetchall() == [(3, 'three'), (4, 'four')]
+        assert rel2.fetchall() == [(3, "three"), (4, "four")]
 
         # Test complex filter
         expr = SQLExpression("a % 2 = 0 AND b LIKE '%o%'")
         rel2 = rel.filter(expr)
-        assert rel2.fetchall() == [(2, 'two'), (4, 'four')]
+        assert rel2.fetchall() == [(2, "two"), (4, "four")]
 
         # Test combining with other expression types
         expr1 = SQLExpression("a > 1")
         expr2 = ColumnExpression("b") == ConstantExpression("four")
         rel2 = rel.filter(expr1 & expr2)
-        assert rel2.fetchall() == [(4, 'four')]
+        assert rel2.fetchall() == [(4, "four")]
 
     def test_sql_expression_in_aggregates(self, duckdb_cursor):
         duckdb_cursor.execute(
@@ -176,14 +175,14 @@ class TestSQLExpression(object):
 
         # Test aggregation with group by
         expr = SQLExpression("SUM(c)")
-        rel2 = rel.aggregate([expr, "b"]).sort('b')
+        rel2 = rel.aggregate([expr, "b"]).sort("b")
         result = rel2.fetchall()
-        assert result == [(30, 'group1'), (70, 'group2')]
+        assert result == [(30, "group1"), (70, "group2")]
 
         # Test multiple aggregations
         expr1 = SQLExpression("SUM(a)").alias("sum_a")
         expr2 = SQLExpression("AVG(c)").alias("avg_c")
-        rel2 = rel.aggregate([expr1, expr2], "b").sort('sum_a', 'avg_c')
+        rel2 = rel.aggregate([expr1, expr2], "b").sort("sum_a", "avg_c")
         result = rel2.fetchall()
         result.sort()
         assert result == [(3, 15.0), (7, 35.0)]

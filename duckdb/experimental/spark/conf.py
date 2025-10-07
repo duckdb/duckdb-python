@@ -1,44 +1,45 @@
-from typing import Optional, List, Tuple
+from typing import Optional  # noqa: D100
+
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 
-class SparkConf:
-    def __init__(self):
+class SparkConf:  # noqa: D101
+    def __init__(self) -> None:  # noqa: D107
         raise NotImplementedError
 
-    def contains(self, key: str) -> bool:
+    def contains(self, key: str) -> bool:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def get(self, key: str, defaultValue: Optional[str] = None) -> Optional[str]:
+    def get(self, key: str, defaultValue: Optional[str] = None) -> Optional[str]:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def getAll(self) -> List[Tuple[str, str]]:
+    def getAll(self) -> list[tuple[str, str]]:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def set(self, key: str, value: str) -> "SparkConf":
+    def set(self, key: str, value: str) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setAll(self, pairs: List[Tuple[str, str]]) -> "SparkConf":
+    def setAll(self, pairs: list[tuple[str, str]]) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setAppName(self, value: str) -> "SparkConf":
+    def setAppName(self, value: str) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setExecutorEnv(
-        self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[List[Tuple[str, str]]] = None
+    def setExecutorEnv(  # noqa: D102
+        self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[list[tuple[str, str]]] = None
     ) -> "SparkConf":
         raise ContributionsAcceptedError
 
-    def setIfMissing(self, key: str, value: str) -> "SparkConf":
+    def setIfMissing(self, key: str, value: str) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setMaster(self, value: str) -> "SparkConf":
+    def setMaster(self, value: str) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def setSparkHome(self, value: str) -> "SparkConf":
+    def setSparkHome(self, value: str) -> "SparkConf":  # noqa: D102
         raise ContributionsAcceptedError
 
-    def toDebugString(self) -> str:
+    def toDebugString(self) -> str:  # noqa: D102
         raise ContributionsAcceptedError
 
 

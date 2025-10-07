@@ -1,20 +1,30 @@
-import duckdb
-import polars as pl
-from typing import Iterator, Optional
+from __future__ import annotations  # noqa: D100
 
-from polars.io.plugins import register_io_source
-from duckdb import SQLExpression
-import json
-from decimal import Decimal
+import contextlib
 import datetime
+import json
+import typing
+from decimal import Decimal
 
-def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
-    """
-    Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
-    
+import polars as pl
+from polars.io.plugins import register_io_source
+
+import duckdb
+
+if typing.TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    import typing_extensions
+
+_ExpressionTree: typing_extensions.TypeAlias = typing.Dict[str, typing.Union[str, int, "_ExpressionTree", typing.Any]]  # noqa: UP006
+
+
+def _predicate_to_expression(predicate: pl.Expr) -> duckdb.Expression | None:
+    """Convert a Polars predicate expression to a DuckDB-compatible SQL expression.
+
     Parameters:
         predicate (pl.Expr): A Polars expression (e.g., col("foo") > 5)
-    
+
     Returns:
         SQLExpression: A DuckDB SQL expression string equivalent.
         None: If conversion fails.
@@ -25,20 +35,19 @@ def _predicate_to_expression(predicate: pl.Expr) -> Optional[SQLExpression]:
     """
     # Serialize the Polars expression tree to JSON
     tree = json.loads(predicate.meta.serialize(format="json"))
-    
+
     try:
         # Convert the tree to SQL
         sql_filter = _pl_tree_to_sql(tree)
-        return SQLExpression(sql_filter)
-    except:
+        return duckdb.SQLExpression(sql_filter)
+    except Exception:
         # If the conversion fails, we return None
         return None
 
 
 def _pl_operation_to_sql(op: str) -> str:
-    """
-    Map Polars binary operation strings to SQL equivalents.
-    
+    """Map Polars binary operation strings to SQL equivalents.
+
     Example:
         >>> _pl_operation_to_sql("Eq")
         '='
@@ -55,12 +64,11 @@ def _pl_operation_to_sql(op: str) -> str:
             "Or": "OR",
         }[op]
     except KeyError:
-        raise NotImplementedError(op)
+        raise NotImplementedError(op)  # noqa: B904
 
 
 def _escape_sql_identifier(identifier: str) -> str:
-    """
-    Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
+    """Escape SQL identifiers by doubling any double quotes and wrapping in double quotes.
 
     Example:
         >>> _escape_sql_identifier('column"name')
@@ -70,16 +78,15 @@ def _escape_sql_identifier(identifier: str) -> str:
     return f'"{escaped}"'
 
 
-def _pl_tree_to_sql(tree: dict) -> str:
-    """
-    Recursively convert a Polars expression tree (as JSON) to a SQL string.
-    
+def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
+    """Recursively convert a Polars expression tree (as JSON) to a SQL string.
+
     Parameters:
         tree (dict): JSON-deserialized expression tree from Polars
-    
+
     Returns:
         str: SQL expression string
-    
+
     Example:
         Input tree:
         {
@@ -92,36 +99,51 @@ def _pl_tree_to_sql(tree: dict) -> str:
         Output: "(foo > 5)"
     """
     [node_type] = tree.keys()
-    subtree = tree[node_type]
 
     if node_type == "BinaryExpr":
         # Binary expressions: left OP right
-        return (
-                "(" +
-                " ".join((
-                    _pl_tree_to_sql(subtree['left']),
-                    _pl_operation_to_sql(subtree['op']),
-                    _pl_tree_to_sql(subtree['right'])
-                )) +
-                ")"
-        )
+        bin_expr_tree = tree[node_type]
+        assert isinstance(bin_expr_tree, dict), f"A {node_type} should be a dict but got {type(bin_expr_tree)}"
+        lhs, op, rhs = bin_expr_tree["left"], bin_expr_tree["op"], bin_expr_tree["right"]
+        assert isinstance(lhs, dict), f"LHS of a {node_type} should be a dict but got {type(lhs)}"
+        assert isinstance(op, str), f"The op of a {node_type} should be a str but got {type(op)}"
+        assert isinstance(rhs, dict), f"RHS of a {node_type} should be a dict but got {type(rhs)}"
+        return f"({_pl_tree_to_sql(lhs)} {_pl_operation_to_sql(op)} {_pl_tree_to_sql(rhs)})"
     if node_type == "Column":
         # A reference to a column name
         # Wrap in quotes to handle special characters
-        return _escape_sql_identifier(subtree)
+        col_name = tree[node_type]
+        assert isinstance(col_name, str), f"The col name of a {node_type} should be a str but got {type(col_name)}"
+        return _escape_sql_identifier(col_name)
 
     if node_type in ("Literal", "Dyn"):
         # Recursively process dynamic or literal values
-        return _pl_tree_to_sql(subtree)
+        val_tree = tree[node_type]
+        assert isinstance(val_tree, dict), f"A {node_type} should be a dict but got {type(val_tree)}"
+        return _pl_tree_to_sql(val_tree)
 
     if node_type == "Int":
         # Direct integer literals
-        return str(subtree)
+        int_literal = tree[node_type]
+        assert isinstance(int_literal, (int, str)), (
+            f"The value of an Int should be an int or str but got {type(int_literal)}"
+        )
+        return str(int_literal)
 
     if node_type == "Function":
         # Handle boolean functions like IsNull, IsNotNull
-        inputs = subtree["input"]
-        func_dict = subtree["function"]
+        func_tree = tree[node_type]
+        assert isinstance(func_tree, dict), f"A {node_type} should be a dict but got {type(func_tree)}"
+        inputs = func_tree["input"]
+        assert isinstance(inputs, list), f"A {node_type} should have a list of dicts as input but got {type(inputs)}"
+        input_tree = inputs[0]
+        assert isinstance(input_tree, dict), (
+            f"A {node_type} should have a list of dicts as input but got {type(input_tree)}"
+        )
+        func_dict = func_tree["function"]
+        assert isinstance(func_dict, dict), (
+            f"A {node_type} should have a function dict as input but got {type(func_dict)}"
+        )
 
         if "Boolean" in func_dict:
             func = func_dict["Boolean"]
@@ -131,80 +153,107 @@ def _pl_tree_to_sql(tree: dict) -> str:
                 return f"({arg_sql} IS NULL)"
             if func == "IsNotNull":
                 return f"({arg_sql} IS NOT NULL)"
-            raise NotImplementedError(f"Boolean function not supported: {func}")
+            msg = f"Boolean function not supported: {func}"
+            raise NotImplementedError(msg)
 
-        raise NotImplementedError(f"Unsupported function type: {func_dict}")
+        msg = f"Unsupported function type: {func_dict}"
+        raise NotImplementedError(msg)
 
     if node_type == "Scalar":
         # Detect format: old style (dtype/value) or new style (direct type key)
-        if "dtype" in subtree and "value" in subtree:
-            dtype = str(subtree["dtype"])
-            value = subtree["value"]
+        scalar_tree = tree[node_type]
+        assert isinstance(scalar_tree, dict), f"A {node_type} should be a dict but got {type(scalar_tree)}"
+        if "dtype" in scalar_tree and "value" in scalar_tree:
+            dtype = str(scalar_tree["dtype"])
+            value = scalar_tree["value"]
         else:
             # New style: dtype is the single key in the dict
-            dtype = next(iter(subtree.keys()))
-            value = subtree
+            dtype = next(iter(scalar_tree.keys()))
+            value = scalar_tree
+        assert isinstance(dtype, str), f"A {node_type} should have a str dtype but got  {type(dtype)}"
+        assert isinstance(value, dict), f"A {node_type} should have a dict value but got {type(value)}"
 
         # Decimal support
         if dtype.startswith("{'Decimal'") or dtype == "Decimal":
-            decimal_value = value['Decimal']
-            decimal_value = Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[1])
-            return str(decimal_value)
+            decimal_value = value["Decimal"]
+            assert isinstance(decimal_value, list), (
+                f"A {dtype} should be a two or three member list but got {type(decimal_value)}"
+            )
+            assert 2 <= len(decimal_value) <= 3, (
+                f"A {dtype} should be a two or three member list but got {len(decimal_value)} member list"
+            )
+            return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[-1]))
 
         # Datetime with microseconds since epoch
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
-            micros = value['Datetime'][0]
-            dt_timestamp = datetime.datetime.fromtimestamp(micros / 1_000_000, tz=datetime.UTC)
-            return f"'{str(dt_timestamp)}'::TIMESTAMP"
+            micros = value["Datetime"]
+            assert isinstance(micros, list), f"A {dtype} should be a one member list but got {type(micros)}"
+            dt_timestamp = datetime.datetime.fromtimestamp(micros[0] / 1_000_000, tz=datetime.timezone.utc)
+            return f"'{dt_timestamp!s}'::TIMESTAMP"
 
         # Match simple numeric/boolean types
-        if dtype in ("Int8", "Int16", "Int32", "Int64",
-                     "UInt8", "UInt16", "UInt32", "UInt64",
-                     "Float32", "Float64", "Boolean"):
+        if dtype in (
+            "Int8",
+            "Int16",
+            "Int32",
+            "Int64",
+            "UInt8",
+            "UInt16",
+            "UInt32",
+            "UInt64",
+            "Float32",
+            "Float64",
+            "Boolean",
+        ):
             return str(value[dtype])
 
         # Time type
         if dtype == "Time":
             nanoseconds = value["Time"]
+            assert isinstance(nanoseconds, int), f"A {dtype} should be an int but got {type(nanoseconds)}"
             seconds = nanoseconds // 1_000_000_000
             microseconds = (nanoseconds % 1_000_000_000) // 1_000
-            dt_time = (datetime.datetime.min + datetime.timedelta(
-                seconds=seconds, microseconds=microseconds
-            )).time()
+            dt_time = (datetime.datetime.min + datetime.timedelta(seconds=seconds, microseconds=microseconds)).time()
             return f"'{dt_time}'::TIME"
 
         # Date type
         if dtype == "Date":
             days_since_epoch = value["Date"]
+            assert isinstance(days_since_epoch, (float, int)), (
+                f"A {dtype} should be a number but got {type(days_since_epoch)}"
+            )
             date = datetime.date(1970, 1, 1) + datetime.timedelta(days=days_since_epoch)
             return f"'{date}'::DATE"
 
         # Binary type
         if dtype == "Binary":
-            binary_data = bytes(value["Binary"])
-            escaped = ''.join(f'\\x{b:02x}' for b in binary_data)
+            bin_value = value["Binary"]
+            assert isinstance(bin_value, list), f"A {dtype} should be a list but got {type(bin_value)}"
+            binary_data = bytes(bin_value)
+            escaped = "".join(f"\\x{b:02x}" for b in binary_data)
             return f"'{escaped}'::BLOB"
 
         # String type
         if dtype == "String" or dtype == "StringOwned":
             # Some new formats may store directly under StringOwned
-            string_val = value.get("StringOwned", value.get("String", None))
+            string_val: object | None = value.get("StringOwned", value.get("String", None))
             return f"'{string_val}'"
 
+        msg = f"Unsupported scalar type {dtype!s}, with value {value}"
+        raise NotImplementedError(msg)
 
-        raise NotImplementedError(f"Unsupported scalar type {str(dtype)}, with value {value}")
+    msg = f"Node type: {node_type} is not implemented. {tree[node_type]}"
+    raise NotImplementedError(msg)
 
-    raise NotImplementedError(f"Node type: {node_type} is not implemented. {subtree}")
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
-    """
-    A polars IO plugin for DuckDB.
-    """
+    """A polars IO plugin for DuckDB."""
+
     def source_generator(
-        with_columns: Optional[list[str]],
-        predicate: Optional[pl.Expr],
-        n_rows: Optional[int],
-        batch_size: Optional[int],
+        with_columns: list[str] | None,
+        predicate: pl.Expr | None,
+        n_rows: int | None,
+        batch_size: int | None,
     ) -> Iterator[pl.DataFrame]:
         duck_predicate = None
         relation_final = relation
@@ -215,7 +264,8 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             relation_final = relation_final.limit(n_rows)
         if predicate is not None:
             # We have a predicate, if possible, we push it down to DuckDB
-            duck_predicate = _predicate_to_expression(predicate)
+            with contextlib.suppress(AssertionError, KeyError):
+                duck_predicate = _predicate_to_expression(predicate)
         # Try to pushdown filter, if one exists
         if duck_predicate is not None:
             relation_final = relation_final.filter(duck_predicate)
@@ -223,15 +273,12 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             results = relation_final.fetch_arrow_reader()
         else:
             results = relation_final.fetch_arrow_reader(batch_size)
-        while True:
-            try:
-                record_batch = results.read_next_batch()
-                if predicate is not None and duck_predicate is None:
-                    # We have a predicate, but did not manage to push it down, we fallback here
-                    yield pl.from_arrow(record_batch).filter(predicate)
-                else:
-                    yield pl.from_arrow(record_batch)
-            except StopIteration:
-                break
+
+        for record_batch in iter(results.read_next_batch, None):
+            if predicate is not None and duck_predicate is None:
+                # We have a predicate, but did not manage to push it down, we fallback here
+                yield pl.from_arrow(record_batch).filter(predicate)  # type: ignore[arg-type,misc,unused-ignore]
+            else:
+                yield pl.from_arrow(record_batch)  # type: ignore[misc,unused-ignore]
 
     return register_io_source(source_generator, schema=schema)

@@ -1,16 +1,17 @@
 import itertools
 import pathlib
-import pytest
 import random
 import re
 import typing
 import warnings
-import glob
+
+import pytest
+
 from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
 SQLLOGIC_TEST_PARAMETER = "test_script_path"
-DUCKDB_ROOT_DIR = (pathlib.Path(__file__).parent.parent / 'external' / 'duckdb').resolve()
+DUCKDB_ROOT_DIR = (pathlib.Path(__file__).parent.parent / "external" / "duckdb").resolve()
 
 
 def pytest_addoption(parser: pytest.Parser):
@@ -65,8 +66,8 @@ def pytest_keyboard_interrupt(excinfo: pytest.ExceptionInfo):
     # Ensure all tests are properly cleaned up on keyboard interrupt
     from .test_sqllogic import test_sqllogic
 
-    if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
-        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
+    if hasattr(test_sqllogic, "executor") and test_sqllogic.executor:
+        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, "connection"):
             test_sqllogic.executor.database.connection.interrupt()
         test_sqllogic.executor.cleanup()
         test_sqllogic.executor = None
@@ -90,7 +91,7 @@ def get_test_id(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Confi
     return str(path.relative_to(root_dir.parent))
 
 
-def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Config) -> typing.List[typing.Any]:
+def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Config) -> list[typing.Any]:
     # Tests are tagged with the their category (i.e., name of their parent directory)
     category = path.parent.name
 
@@ -126,11 +127,9 @@ def create_parameters_from_paths(paths, root_dir: pathlib.Path, config: pytest.C
 
 
 def scan_for_test_scripts(root_dir: pathlib.Path, config: pytest.Config) -> typing.Iterator[typing.Any]:
-    """
-    Scans for .test files in the given directory and its subdirectories.
+    """Scans for .test files in the given directory and its subdirectories.
     Returns an iterator of pytest parameters (argument, id and marks).
-    """
-
+    """  # noqa: D205
     # TODO: Add tests from extensions
     test_script_extensions = [".test", ".test_slow", ".test_coverage"]
     it = itertools.chain.from_iterable(root_dir.rglob(f"*{ext}") for ext in test_script_extensions)
@@ -142,7 +141,7 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     if metafunc.definition.name != SQLLOGIC_TEST_CASE_NAME:
         return
 
-    test_dirs: typing.List[pathlib.Path] = metafunc.config.getoption("test_dirs")
+    test_dirs: list[pathlib.Path] = metafunc.config.getoption("test_dirs")
     test_glob: typing.Optional[pathlib.Path] = metafunc.config.getoption("path")
 
     parameters = []
@@ -165,14 +164,12 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     metafunc.parametrize(SQLLOGIC_TEST_PARAMETER, parameters)
 
 
-def determine_test_offsets(config: pytest.Config, num_tests: int) -> typing.Tuple[int, int]:
-    """
-    If start_offset and end_offset are specified, then these are used.
+def determine_test_offsets(config: pytest.Config, num_tests: int) -> tuple[int, int]:
+    """If start_offset and end_offset are specified, then these are used.
     start_offset defaults to 0. end_offset defaults to and is capped to the last test index.
     start_offset_percentage and end_offset_percentage are used to calculate the start and end offsets based on the total number of tests.
     This is done in a way that a test run to 25% and another test run starting at 25% do not overlap by excluding the 25th percent test.
-    """
-
+    """  # noqa: D205
     start_offset = config.getoption("start_offset")
     end_offset = config.getoption("end_offset")
     start_offset_percentage = config.getoption("start_offset_percentage")
@@ -182,16 +179,20 @@ def determine_test_offsets(config: pytest.Config, num_tests: int) -> typing.Tupl
     percentage_specified = start_offset_percentage is not None or end_offset_percentage is not None
 
     if index_specified and percentage_specified:
-        raise ValueError("You can only specify either start/end offsets or start/end offset percentages, not both")
+        msg = "You can only specify either start/end offsets or start/end offset percentages, not both"
+        raise ValueError(msg)
 
     if start_offset is not None and start_offset < 0:
-        raise ValueError("--start-offset must be a non-negative integer")
+        msg = "--start-offset must be a non-negative integer"
+        raise ValueError(msg)
 
     if start_offset_percentage is not None and (start_offset_percentage < 0 or start_offset_percentage > 100):
-        raise ValueError("--start-offset-percentage must be between 0 and 100")
+        msg = "--start-offset-percentage must be between 0 and 100"
+        raise ValueError(msg)
 
     if end_offset_percentage is not None and (end_offset_percentage < 0 or end_offset_percentage > 100):
-        raise ValueError("--end-offset-percentage must be between 0 and 100")
+        msg = "--end-offset-percentage must be between 0 and 100"
+        raise ValueError(msg)
 
     if start_offset is None:
         if start_offset_percentage is not None:
@@ -200,9 +201,8 @@ def determine_test_offsets(config: pytest.Config, num_tests: int) -> typing.Tupl
             start_offset = 0
 
     if end_offset is not None and end_offset < start_offset:
-        raise ValueError(
-            f"--end-offset ({end_offset}) must be greater than or equal to the start offset ({start_offset})"
-        )
+        msg = f"--end-offset ({end_offset}) must be greater than or equal to the start offset ({start_offset})"
+        raise ValueError(msg)
 
     if end_offset is None:
         if end_offset_percentage is not None:
@@ -271,9 +271,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
 
 
 def pytest_runtest_setup(item: pytest.Item):
-    """
-    Show the test index after the test name
-    """
+    """Show the test index after the test name."""
 
     def get_from_tuple_list(tuples, key):
         for t in tuples:

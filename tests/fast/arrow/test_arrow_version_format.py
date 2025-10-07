@@ -1,15 +1,17 @@
-import duckdb
-import pytest
 from decimal import Decimal
+
+import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 
 
-class TestArrowDecimalTypes(object):
+class TestArrowDecimalTypes:
     def test_decimal_v1_5(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
-        duckdb_cursor.execute(f"SET arrow_output_version = 1.5")
-        decimal_32 = pa.Table.from_pylist(
+        duckdb_cursor.execute("SET arrow_output_version = 1.5")
+        decimal_32 = pa.Table.from_pylist(  # noqa: F841
             [
                 {"data": Decimal("100.20")},
                 {"data": Decimal("110.21")},
@@ -19,9 +21,10 @@ class TestArrowDecimalTypes(object):
             pa.schema([("data", pa.decimal32(5, 2))]),
         )
         col_type = duckdb_cursor.execute("FROM decimal_32").fetch_arrow_table().schema.field("data").type
-        assert col_type.bit_width == 32 and pa.types.is_decimal(col_type)
+        assert col_type.bit_width == 32
+        assert pa.types.is_decimal(col_type)
 
-        decimal_64 = pa.Table.from_pylist(
+        decimal_64 = pa.Table.from_pylist(  # noqa: F841
             [
                 {"data": Decimal("1000.231")},
                 {"data": Decimal("1100.231")},
@@ -31,31 +34,34 @@ class TestArrowDecimalTypes(object):
             pa.schema([("data", pa.decimal64(16, 3))]),
         )
         col_type = duckdb_cursor.execute("FROM decimal_64").fetch_arrow_table().schema.field("data").type
-        assert col_type.bit_width == 64 and pa.types.is_decimal(col_type)
-        for version in ['1.0', '1.1', '1.2', '1.3', '1.4']:
+        assert col_type.bit_width == 64
+        assert pa.types.is_decimal(col_type)
+        for version in ["1.0", "1.1", "1.2", "1.3", "1.4"]:
             duckdb_cursor.execute(f"SET arrow_output_version = {version}")
             result = duckdb_cursor.execute("FROM decimal_32").fetch_arrow_table()
             col_type = result.schema.field("data").type
-            assert col_type.bit_width == 128 and pa.types.is_decimal(col_type)
+            assert col_type.bit_width == 128
+            assert pa.types.is_decimal(col_type)
             assert result.to_pydict() == {
-                'data': [Decimal('100.20'), Decimal('110.21'), Decimal('31.20'), Decimal('500.20')]
+                "data": [Decimal("100.20"), Decimal("110.21"), Decimal("31.20"), Decimal("500.20")]
             }
 
             result = duckdb_cursor.execute("FROM decimal_64").fetch_arrow_table()
             col_type = result.schema.field("data").type
-            assert col_type.bit_width == 128 and pa.types.is_decimal(col_type)
+            assert col_type.bit_width == 128
+            assert pa.types.is_decimal(col_type)
             assert result.to_pydict() == {
-                'data': [Decimal('1000.231'), Decimal('1100.231'), Decimal('999999999999.231'), Decimal('500.200')]
+                "data": [Decimal("1000.231"), Decimal("1100.231"), Decimal("999999999999.231"), Decimal("500.200")]
             }
 
     def test_invalide_opt(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
         with pytest.raises(duckdb.NotImplementedException, match="unrecognized"):
-            duckdb_cursor.execute(f"SET arrow_output_version = 999.9")
+            duckdb_cursor.execute("SET arrow_output_version = 999.9")
 
     def test_view_v1_4(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
-        duckdb_cursor.execute(f"SET arrow_output_version = 1.5")
+        duckdb_cursor.execute("SET arrow_output_version = 1.5")
         duckdb_cursor.execute("SET produce_arrow_string_view=True")
         duckdb_cursor.execute("SET arrow_output_list_view=True")
         col_type = duckdb_cursor.execute("SELECT 'string' as data ").fetch_arrow_table().schema.field("data").type
@@ -63,14 +69,14 @@ class TestArrowDecimalTypes(object):
         col_type = duckdb_cursor.execute("SELECT ['string'] as data ").fetch_arrow_table().schema.field("data").type
         assert pa.types.is_list_view(col_type)
 
-        for version in ['1.0', '1.1', '1.2', '1.3']:
+        for version in ["1.0", "1.1", "1.2", "1.3"]:
             duckdb_cursor.execute(f"SET arrow_output_version = {version}")
             col_type = duckdb_cursor.execute("SELECT 'string' as data ").fetch_arrow_table().schema.field("data").type
             assert not pa.types.is_string_view(col_type)
             col_type = duckdb_cursor.execute("SELECT ['string'] as data ").fetch_arrow_table().schema.field("data").type
             assert not pa.types.is_list_view(col_type)
 
-        for version in ['1.4', '1.5']:
+        for version in ["1.4", "1.5"]:
             duckdb_cursor.execute(f"SET arrow_output_version = {version}")
             col_type = duckdb_cursor.execute("SELECT 'string' as data ").fetch_arrow_table().schema.field("data").type
             assert pa.types.is_string_view(col_type)
@@ -80,7 +86,7 @@ class TestArrowDecimalTypes(object):
 
         duckdb_cursor.execute("SET produce_arrow_string_view=False")
         duckdb_cursor.execute("SET arrow_output_list_view=False")
-        for version in ['1.4', '1.5']:
+        for version in ["1.4", "1.5"]:
             duckdb_cursor.execute(f"SET arrow_output_version = {version}")
             col_type = duckdb_cursor.execute("SELECT 'string' as data ").fetch_arrow_table().schema.field("data").type
             assert not pa.types.is_string_view(col_type)

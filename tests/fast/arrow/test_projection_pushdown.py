@@ -1,11 +1,9 @@
-import duckdb
-import os
 import pytest
 
 
-class TestArrowProjectionPushdown(object):
+class TestArrowProjectionPushdown:
     def test_projection_pushdown_no_filter(self, duckdb_cursor):
-        pa = pytest.importorskip("pyarrow")
+        pytest.importorskip("pyarrow")
         ds = pytest.importorskip("pyarrow.dataset")
 
         duckdb_cursor.execute(
@@ -27,8 +25,8 @@ class TestArrowProjectionPushdown(object):
         assert duckdb_cursor.execute("SELECT sum(c) FROM arrow_table").fetchall() == [(333,)]
 
         # RecordBatch does not use projection pushdown, test that this also still works
-        record_batch = arrow_table.to_batches()[0]
+        record_batch = arrow_table.to_batches()[0]  # noqa: F841
         assert duckdb_cursor.execute("SELECT sum(c) FROM record_batch").fetchall() == [(333,)]
 
-        arrow_dataset = ds.dataset(arrow_table)
+        arrow_dataset = ds.dataset(arrow_table)  # noqa: F841
         assert duckdb_cursor.execute("SELECT sum(c) FROM arrow_dataset").fetchall() == [(333,)]

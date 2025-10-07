@@ -1,16 +1,18 @@
-import duckdb
-import numpy as np
+# ruff: noqa: F841
+import datetime
+import gc
+import os
 import platform
 import tempfile
-import os
+
+import numpy as np
 import pandas as pd
 import pytest
 from conftest import ArrowPandas, NumpyPandas
-import datetime
-import gc
-from duckdb import ColumnExpression
 
-from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+import duckdb
+from duckdb import ColumnExpression
+from duckdb.typing import BIGINT, BOOLEAN, TINYINT, VARCHAR
 
 
 @pytest.fixture(scope="session")
@@ -25,11 +27,11 @@ def get_relation(conn):
     return conn.from_df(test_df)
 
 
-class TestRelation(object):
+class TestRelation:
     def test_csv_auto(self):
         conn = duckdb.connect()
         df_rel = get_relation(conn)
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         test_df.to_csv(temp_file_name, index=False)
 
@@ -37,10 +39,10 @@ class TestRelation(object):
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_view(self, duckdb_cursor, pandas):
-        def create_view(duckdb_cursor):
-            df_in = pandas.DataFrame({'numbers': [1, 2, 3, 4, 5]})
+        def create_view(duckdb_cursor) -> None:
+            df_in = pandas.DataFrame({"numbers": [1, 2, 3, 4, 5]})
             rel = duckdb_cursor.query("select * from df_in")
             rel.to_view("my_view")
 
@@ -49,9 +51,10 @@ class TestRelation(object):
             # The df_in object is no longer reachable
             rel1 = duckdb_cursor.query("select * from df_in")
         # But it **is** reachable through our 'my_view' VIEW
-        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an ExternalDependency on the dataframe object
-        # We then created a VIEW from that Relation, which in turn copied this 'df_in' TableRef into the ViewCatalogEntry
-        # Because of this, the df_in object will stay alive for as long as our 'my_view' entry exists.
+        # Because a Relation was created that references the df_in, the 'df_in' TableRef was injected with an
+        # ExternalDependency on the dataframe object. We then created a VIEW from that Relation, which in turn copied
+        # this 'df_in' TableRef into the ViewCatalogEntry. Because of this, the df_in object will stay alive for as
+        # long as our 'my_view' entry exists.
         rel2 = duckdb_cursor.query("select * from my_view")
         res = rel2.fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,)]
@@ -59,23 +62,23 @@ class TestRelation(object):
     def test_filter_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.filter('i > 1').execute().fetchall() == [(2, 'two'), (3, 'three'), (4, 'four')]
+        assert rel.filter("i > 1").execute().fetchall() == [(2, "two"), (3, "three"), (4, "four")]
 
     def test_projection_operator_single(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.project('i').execute().fetchall() == [(1,), (2,), (3,), (4,)]
+        assert rel.project("i").execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
     def test_projection_operator_double(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.order('j').execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
+        assert rel.order("j").execute().fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
 
     def test_limit_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.limit(2).execute().fetchall() == [(1, 'one'), (2, 'two')]
-        assert rel.limit(2, offset=1).execute().fetchall() == [(2, 'two'), (3, 'three')]
+        assert rel.limit(2).execute().fetchall() == [(1, "one"), (2, "two")]
+        assert rel.limit(2, offset=1).execute().fetchall() == [(2, "two"), (3, "three")]
 
     def test_intersect_operator(self):
         conn = duckdb.connect()
@@ -86,23 +89,23 @@ class TestRelation(object):
         rel = conn.from_df(test_df)
         rel_2 = conn.from_df(test_df_2)
 
-        assert rel.intersect(rel_2).order('i').execute().fetchall() == [(3,), (4,)]
+        assert rel.intersect(rel_2).order("i").execute().fetchall() == [(3,), (4,)]
 
     def test_aggregate_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.aggregate("sum(i)").execute().fetchall() == [(10,)]
-        assert rel.aggregate("j, sum(i)").order('#2').execute().fetchall() == [
-            ('one', 1),
-            ('two', 2),
-            ('three', 3),
-            ('four', 4),
+        assert rel.aggregate("j, sum(i)").order("#2").execute().fetchall() == [
+            ("one", 1),
+            ("two", 2),
+            ("three", 3),
+            ("four", 4),
         ]
 
     def test_relation_fetch_df_chunk(self, duckdb_cursor):
         duckdb_cursor.execute(f"create table tbl as select * from range({duckdb.__standard_vector_size__ * 3})")
 
-        rel = duckdb_cursor.table('tbl')
+        rel = duckdb_cursor.table("tbl")
         # default arguments
         df1 = rel.fetch_df_chunk()
         assert len(df1) == duckdb.__standard_vector_size__
@@ -111,43 +114,43 @@ class TestRelation(object):
         assert len(df2) == duckdb.__standard_vector_size__ * 2
 
         duckdb_cursor.execute(
-            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"
+            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"  # noqa: E501
         )
 
-        rel = duckdb_cursor.table('dates')
+        rel = duckdb_cursor.table("dates")
         # default arguments
         df1 = rel.fetch_df_chunk()
         assert len(df1) == duckdb.__standard_vector_size__
-        assert df1['a'][0].__class__ == pd.Timestamp
+        assert df1["a"][0].__class__ == pd.Timestamp
 
         # date as object
         df1 = rel.fetch_df_chunk(date_as_object=True)
         assert len(df1) == duckdb.__standard_vector_size__
-        assert df1['a'][0].__class__ == datetime.date
+        assert df1["a"][0].__class__ == datetime.date
 
         # vectors and date as object
         df1 = rel.fetch_df_chunk(2, date_as_object=True)
         assert len(df1) == duckdb.__standard_vector_size__ * 2
-        assert df1['a'][0].__class__ == datetime.date
+        assert df1["a"][0].__class__ == datetime.date
 
     def test_distinct_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.distinct().order('all').execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
+        assert rel.distinct().order("all").execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_union_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
         print(rel.union(rel).execute().fetchall())
         assert rel.union(rel).execute().fetchall() == [
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three'),
-            (4, 'four'),
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three'),
-            (4, 'four'),
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+            (4, "four"),
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+            (4, "four"),
         ]
 
     def test_join_operator(self):
@@ -156,11 +159,11 @@ class TestRelation(object):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel2 = conn.from_df(test_df)
-        assert rel.join(rel2, 'i').execute().fetchall() == [
-            (1, 'one', 'one'),
-            (2, 'two', 'two'),
-            (3, 'three', 'three'),
-            (4, 'four', 'four'),
+        assert rel.join(rel2, "i").execute().fetchall() == [
+            (1, "one", "one"),
+            (2, "two", "two"),
+            (3, "three", "three"),
+            (4, "four", "four"),
         ]
 
     def test_except_operator(self):
@@ -176,10 +179,10 @@ class TestRelation(object):
         rel = conn.from_df(test_df)
         rel.create("test_df")
         assert conn.query("select * from test_df").execute().fetchall() == [
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three'),
-            (4, 'four'),
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+            (4, "four"),
         ]
 
     def test_create_view_operator(self):
@@ -188,31 +191,31 @@ class TestRelation(object):
         rel = conn.from_df(test_df)
         rel.create_view("test_df")
         assert conn.query("select * from test_df").execute().fetchall() == [
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three'),
-            (4, 'four'),
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+            (4, "four"),
         ]
 
     def test_update_relation(self, duckdb_cursor):
         duckdb_cursor.sql("create table tbl (a varchar default 'test', b int)")
-        duckdb_cursor.table('tbl').insert(['hello', 21])
-        duckdb_cursor.table('tbl').insert(['hello', 42])
+        duckdb_cursor.table("tbl").insert(["hello", 21])
+        duckdb_cursor.table("tbl").insert(["hello", 42])
         # UPDATE tbl SET a = DEFAULT where b = 42
-        duckdb_cursor.table('tbl').update(
-            {'a': duckdb.DefaultExpression()}, condition=duckdb.ColumnExpression('b') == 42
+        duckdb_cursor.table("tbl").update(
+            {"a": duckdb.DefaultExpression()}, condition=duckdb.ColumnExpression("b") == 42
         )
-        assert duckdb_cursor.table('tbl').fetchall() == [('hello', 21), ('test', 42)]
+        assert duckdb_cursor.table("tbl").fetchall() == [("hello", 21), ("test", 42)]
 
-        rel = duckdb_cursor.table('tbl')
-        with pytest.raises(duckdb.InvalidInputException, match='Please provide at least one set expression'):
+        rel = duckdb_cursor.table("tbl")
+        with pytest.raises(duckdb.InvalidInputException, match="Please provide at least one set expression"):
             rel.update({})
         with pytest.raises(
-            duckdb.InvalidInputException, match='Please provide the column name as the key of the dictionary'
+            duckdb.InvalidInputException, match="Please provide the column name as the key of the dictionary"
         ):
             rel.update({1: 21})
-        with pytest.raises(duckdb.BinderException, match='Referenced update column c not found in table!'):
-            rel.update({'c': 21})
+        with pytest.raises(duckdb.BinderException, match="Referenced update column c not found in table!"):
+            rel.update({"c": 21})
         with pytest.raises(
             duckdb.InvalidInputException, match="Please provide 'set' as a dictionary of column name to Expression"
         ):
@@ -221,11 +224,11 @@ class TestRelation(object):
             duckdb.InvalidInputException,
             match="Please provide an object of type Expression as the value, not <class 'set'>",
         ):
-            rel.update({'a': {21}})
+            rel.update({"a": {21}})
 
     def test_value_relation(self, duckdb_cursor):
         # Needs at least one input
-        with pytest.raises(duckdb.InvalidInputException, match='Could not create a ValueRelation without any inputs'):
+        with pytest.raises(duckdb.InvalidInputException, match="Could not create a ValueRelation without any inputs"):
             duckdb_cursor.values()
 
         # From a list of (python) values
@@ -233,28 +236,28 @@ class TestRelation(object):
         assert rel.fetchall() == [(1, 2, 3)]
 
         # From an Expression
-        rel = duckdb_cursor.values(duckdb.ConstantExpression('test'))
-        assert rel.fetchall() == [('test',)]
+        rel = duckdb_cursor.values(duckdb.ConstantExpression("test"))
+        assert rel.fetchall() == [("test",)]
 
         # From multiple Expressions
         rel = duckdb_cursor.values(
-            duckdb.ConstantExpression('1'), duckdb.ConstantExpression('2'), duckdb.ConstantExpression('3')
+            duckdb.ConstantExpression("1"), duckdb.ConstantExpression("2"), duckdb.ConstantExpression("3")
         )
-        assert rel.fetchall() == [('1', '2', '3')]
+        assert rel.fetchall() == [("1", "2", "3")]
 
         # From Expressions mixed with random values
-        with pytest.raises(duckdb.InvalidInputException, match='Please provide arguments of type Expression!'):
+        with pytest.raises(duckdb.InvalidInputException, match="Please provide arguments of type Expression!"):
             rel = duckdb_cursor.values(
-                duckdb.ConstantExpression('1'),
-                {'test'},
-                duckdb.ConstantExpression('3'),
+                duckdb.ConstantExpression("1"),
+                {"test"},
+                duckdb.ConstantExpression("3"),
             )
 
         # From Expressions mixed with values that *can* be autocast to Expression
         rel = duckdb_cursor.values(
-            duckdb.ConstantExpression('1'),
+            duckdb.ConstantExpression("1"),
             2,
-            duckdb.ConstantExpression('3'),
+            duckdb.ConstantExpression("3"),
         )
 
         const = duckdb.ConstantExpression
@@ -264,21 +267,21 @@ class TestRelation(object):
 
         # From mismatching tuples of Expressions
         with pytest.raises(
-            duckdb.InvalidInputException, match='Mismatch between length of tuples in input, expected 3 but found 2'
+            duckdb.InvalidInputException, match="Mismatch between length of tuples in input, expected 3 but found 2"
         ):
             rel = duckdb_cursor.values((const(1), const(2), const(3)), (const(5), const(4)))
 
         # From an empty tuple
-        with pytest.raises(duckdb.InvalidInputException, match='Please provide a non-empty tuple'):
+        with pytest.raises(duckdb.InvalidInputException, match="Please provide a non-empty tuple"):
             rel = duckdb_cursor.values(())
 
         # Mixing tuples with Expressions
-        with pytest.raises(duckdb.InvalidInputException, match='Expected objects of type tuple'):
+        with pytest.raises(duckdb.InvalidInputException, match="Expected objects of type tuple"):
             rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
 
         # Using Expressions that can't be resolved:
         with pytest.raises(duckdb.BinderException, match='Referenced column "a" not found in FROM clause!'):
-            duckdb_cursor.values(duckdb.ColumnExpression('a'))
+            duckdb_cursor.values(duckdb.ColumnExpression("a"))
 
     def test_insert_into_operator(self):
         conn = duckdb.connect()
@@ -290,23 +293,23 @@ class TestRelation(object):
         rel.insert_into("test_table3")
 
         # Inserting elements into table_3
-        print(conn.values([5, 'five']).insert_into("test_table3"))
+        print(conn.values([5, "five"]).insert_into("test_table3"))
         rel_3 = conn.table("test_table3")
-        rel_3.insert([6, 'six'])
+        rel_3.insert([6, "six"])
 
         assert rel_3.execute().fetchall() == [
-            (1, 'one'),
-            (2, 'two'),
-            (3, 'three'),
-            (4, 'four'),
-            (5, 'five'),
-            (6, 'six'),
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+            (4, "four"),
+            (5, "five"),
+            (6, "six"),
         ]
 
     def test_write_csv_operator(self):
         conn = duckdb.connect()
         df_rel = get_relation(conn)
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df_rel.write_csv(temp_file_name)
 
         csv_rel = duckdb.from_csv_auto(temp_file_name)
@@ -316,8 +319,8 @@ class TestRelation(object):
         duckdb_cursor.sql("create schema not_main;")
         duckdb_cursor.sql("create table not_main.tbl as select * from range(10) t(a)")
 
-        duckdb_cursor.table('not_main.tbl').update({'a': 21}, condition=ColumnExpression('a') == 5)
-        res = duckdb_cursor.table('not_main.tbl').fetchall()
+        duckdb_cursor.table("not_main.tbl").update({"a": 21}, condition=ColumnExpression("a") == 5)
+        res = duckdb_cursor.table("not_main.tbl").fetchall()
         assert res == [(0,), (1,), (2,), (3,), (4,), (21,), (6,), (7,), (8,), (9,)]
 
     def test_table_update_with_catalog(self, duckdb_cursor):
@@ -325,8 +328,8 @@ class TestRelation(object):
         duckdb_cursor.sql("create schema pg.not_main;")
         duckdb_cursor.sql("create table pg.not_main.tbl as select * from range(10) t(a)")
 
-        duckdb_cursor.table('pg.not_main.tbl').update({'a': 21}, condition=ColumnExpression('a') == 5)
-        res = duckdb_cursor.table('pg.not_main.tbl').fetchall()
+        duckdb_cursor.table("pg.not_main.tbl").update({"a": 21}, condition=ColumnExpression("a") == 5)
+        res = duckdb_cursor.table("pg.not_main.tbl").fetchall()
         assert res == [(0,), (1,), (2,), (3,), (4,), (21,), (6,), (7,), (8,), (9,)]
 
     def test_get_attr_operator(self):
@@ -335,50 +338,50 @@ class TestRelation(object):
         rel = conn.table("test")
         assert rel.alias == "test"
         assert rel.type == "TABLE_RELATION"
-        assert rel.columns == ['i']
-        assert rel.types == ['INTEGER']
+        assert rel.columns == ["i"]
+        assert rel.types == ["INTEGER"]
 
     def test_query_fail(self):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(TypeError, match='incompatible function arguments'):
+        with pytest.raises(TypeError, match="incompatible function arguments"):
             rel.query("select j from test")
 
     def test_execute_fail(self):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(TypeError, match='incompatible function arguments'):
+        with pytest.raises(TypeError, match="incompatible function arguments"):
             rel.execute("select j from test")
 
     def test_df_proj(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.project(test_df, 'i')
+        rel = duckdb.project(test_df, "i")
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
     def test_relation_lifetime(self, duckdb_cursor):
         def create_relation(con):
-            df = pd.DataFrame({'a': [1, 2, 3]})
+            df = pd.DataFrame({"a": [1, 2, 3]})
             return con.sql("select * from df")
 
         assert create_relation(duckdb_cursor).fetchall() == [(1,), (2,), (3,)]
 
         def create_simple_join(con):
-            df1 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [1, 2, 3]})
-            df2 = pd.DataFrame({'a': ['a', 'b', 'c'], 'b': [4, 5, 6]})
+            df1 = pd.DataFrame({"a": ["a", "b", "c"], "b": [1, 2, 3]})
+            df2 = pd.DataFrame({"a": ["a", "b", "c"], "b": [4, 5, 6]})
 
             return con.sql("select * from df1 JOIN df2 USING (a, a)")
 
-        assert create_simple_join(duckdb_cursor).fetchall() == [('a', 1, 4), ('b', 2, 5), ('c', 3, 6)]
+        assert create_simple_join(duckdb_cursor).fetchall() == [("a", 1, 4), ("b", 2, 5), ("c", 3, 6)]
 
         def create_complex_join(con):
-            df1 = pd.DataFrame({'a': [1], '1': [1]})
-            df2 = pd.DataFrame({'a': [1], '2': [2]})
-            df3 = pd.DataFrame({'a': [1], '3': [3]})
-            df4 = pd.DataFrame({'a': [1], '4': [4]})
-            df5 = pd.DataFrame({'a': [1], '5': [5]})
-            df6 = pd.DataFrame({'a': [1], '6': [6]})
+            df1 = pd.DataFrame({"a": [1], "1": [1]})
+            df2 = pd.DataFrame({"a": [1], "2": [2]})
+            df3 = pd.DataFrame({"a": [1], "3": [3]})
+            df4 = pd.DataFrame({"a": [1], "4": [4]})
+            df5 = pd.DataFrame({"a": [1], "5": [5]})
+            df6 = pd.DataFrame({"a": [1], "6": [6]})
             query = "select * from df1"
             for i in range(5):
                 query += f" JOIN df{i + 2} USING (a, a)"
@@ -407,7 +410,7 @@ class TestRelation(object):
         assert projection.columns == ["c2", "c4"]
 
         # select bigint, tinyint and a type that isn't there
-        projection = rel.select_types([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
+        projection = rel.select_types([BIGINT, "tinyint", con.struct_type({"a": VARCHAR, "b": TINYINT})])
         assert projection.columns == ["c0", "c1"]
 
         ## select with empty projection list, not possible
@@ -420,30 +423,30 @@ class TestRelation(object):
 
     def test_df_alias(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.alias(test_df, 'dfzinho')
+        rel = duckdb.alias(test_df, "dfzinho")
         assert rel.alias == "dfzinho"
 
     def test_df_filter(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.filter(test_df, 'i > 1')
-        assert rel.execute().fetchall() == [(2, 'two'), (3, 'three'), (4, 'four')]
+        rel = duckdb.filter(test_df, "i > 1")
+        assert rel.execute().fetchall() == [(2, "two"), (3, "three"), (4, "four")]
 
     def test_df_order_by(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.order(test_df, 'j')
-        assert rel.execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
+        rel = duckdb.order(test_df, "j")
+        assert rel.execute().fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
 
     def test_df_distinct(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.distinct(test_df).order('i')
-        assert rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
+        rel = duckdb.distinct(test_df).order("i")
+        assert rel.execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_df_write_csv(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         duckdb.write_csv(test_df, temp_file_name)
         csv_rel = duckdb.from_csv_auto(temp_file_name)
-        assert csv_rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
+        assert csv_rel.execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_join_types(self):
         test_df1 = pd.DataFrame.from_dict({"i": [1, 2, 3, 4]})
@@ -452,9 +455,9 @@ class TestRelation(object):
         rel1 = con.from_df(test_df1)
         rel2 = con.from_df(test_df2)
 
-        assert rel1.join(rel2, 'i=j', 'inner').aggregate('count()').fetchone()[0] == 2
+        assert rel1.join(rel2, "i=j", "inner").aggregate("count()").fetchone()[0] == 2
 
-        assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4
+        assert rel1.join(rel2, "i=j", "left").aggregate("count()").fetchone()[0] == 4
 
     def test_fetchnumpy(self):
         start, stop = -1000, 2000
@@ -482,21 +485,21 @@ class TestRelation(object):
                 assert len(res["a"]) == size
             assert np.all(res["a"] == np.arange(start, start + size))
 
-        with pytest.raises(duckdb.ConversionException, match="Conversion Error.*out of range.*"):
+        with pytest.raises(duckdb.ConversionException, match=r"Conversion Error.*out of range.*"):
             # invalid conversion of negative integer to UINTEGER
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
     def test_close(self):
-        def counter():
+        def counter() -> int:
             counter.count += 1
             return 42
 
         counter.count = 0
         conn = duckdb.connect()
-        conn.create_function('my_counter', counter, [], BIGINT)
+        conn.create_function("my_counter", counter, [], BIGINT)
 
         # Create a relation
-        rel = conn.sql('select my_counter()')
+        rel = conn.sql("select my_counter()")
         # Execute the relation once
         rel.fetchall()
         assert counter.count == 1
@@ -508,20 +511,20 @@ class TestRelation(object):
         assert counter.count == 2
 
         # Verify that the query is run at least once if it's closed before it was executed.
-        rel = conn.sql('select my_counter()')
+        rel = conn.sql("select my_counter()")
         rel.close()
         assert counter.count == 3
 
     def test_relation_print(self):
         con = duckdb.connect()
         con.execute("Create table t1 as select * from range(1000000)")
-        rel1 = con.table('t1')
+        rel1 = con.table("t1")
         text1 = str(rel1)
-        assert '? rows' in text1
-        assert '>9999 rows' in text1
+        assert "? rows" in text1
+        assert ">9999 rows" in text1
 
     @pytest.mark.parametrize(
-        'num_rows',
+        "num_rows",
         [
             1024,
             2048,
@@ -531,7 +534,8 @@ class TestRelation(object):
                 10000000,
                 marks=pytest.mark.skipif(
                     condition=platform.system() == "Emscripten",
-                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not thrown reliably",
+                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not "
+                    "thrown reliably",
                 ),
             ),
         ],
@@ -541,7 +545,7 @@ class TestRelation(object):
         query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
         rel = duckdb_cursor.sql(query)
         res = rel.fetchone()
-        assert res != None
+        assert res is not None
 
         res = rel.fetchmany(num_rows)
         assert len(res) == num_rows - 1
@@ -551,11 +555,11 @@ class TestRelation(object):
         res = rel.fetchmany(5)
         assert len(res) == 0
         res = rel.fetchone()
-        assert res == None
+        assert res is None
 
         rel.execute()
         res = rel.fetchone()
-        assert res != None
+        assert res is not None
 
         res = rel.fetchall()
         assert len(res) == num_rows - 1
@@ -563,7 +567,7 @@ class TestRelation(object):
         assert len(res) == num_rows
 
         rel = duckdb_cursor.sql(query)
-        projection = rel.select('column0')
+        projection = rel.select("column0")
         assert projection.fetchall() == [(42,) for _ in range(num_rows)]
 
         filtered = rel.filter("column1 != 'test'")
@@ -575,71 +579,71 @@ class TestRelation(object):
         ):
             rel.insert([1, 2, 3, 4])
 
-        query_rel = rel.query('x', "select 42 from x where column0 != 42")
+        query_rel = rel.query("x", "select 42 from x where column0 != 42")
         assert query_rel.fetchall() == []
 
         distinct_rel = rel.distinct()
-        assert distinct_rel.fetchall() == [(42, 'test', 'this is a long string', True)]
+        assert distinct_rel.fetchall() == [(42, "test", "this is a long string", True)]
 
         limited_rel = rel.limit(50)
         assert len(limited_rel.fetchall()) == 50
 
         # Using parameters also results in a MaterializedRelation
         materialized_one = duckdb_cursor.sql("select * from range(?)", params=[10]).project(
-            ColumnExpression('range').cast(str).alias('range')
+            ColumnExpression("range").cast(str).alias("range")
         )
         materialized_two = duckdb_cursor.sql("call repeat('a', 5)")
-        joined_rel = materialized_one.join(materialized_two, 'range != a')
+        joined_rel = materialized_one.join(materialized_two, "range != a")
         res = joined_rel.fetchall()
         assert len(res) == 50
 
         relation = duckdb_cursor.sql("select a from materialized_two")
-        assert relation.fetchone() == ('a',)
+        assert relation.fetchone() == ("a",)
 
         described = materialized_one.describe()
         res = described.fetchall()
-        assert res == [('count', '10'), ('mean', None), ('stddev', None), ('min', '0'), ('max', '9'), ('median', None)]
+        assert res == [("count", "10"), ("mean", None), ("stddev", None), ("min", "0"), ("max", "9"), ("median", None)]
 
         unioned_rel = materialized_one.union(materialized_two)
         res = unioned_rel.fetchall()
         assert res == [
-            ('0',),
-            ('1',),
-            ('2',),
-            ('3',),
-            ('4',),
-            ('5',),
-            ('6',),
-            ('7',),
-            ('8',),
-            ('9',),
-            ('a',),
-            ('a',),
-            ('a',),
-            ('a',),
-            ('a',),
+            ("0",),
+            ("1",),
+            ("2",),
+            ("3",),
+            ("4",),
+            ("5",),
+            ("6",),
+            ("7",),
+            ("8",),
+            ("9",),
+            ("a",),
+            ("a",),
+            ("a",),
+            ("a",),
+            ("a",),
         ]
 
         except_rel = unioned_rel.except_(materialized_one)
         res = except_rel.fetchall()
-        assert res == [tuple('a') for _ in range(5)]
+        assert res == [tuple("a") for _ in range(5)]
 
-        intersect_rel = unioned_rel.intersect(materialized_one).order('range')
+        intersect_rel = unioned_rel.intersect(materialized_one).order("range")
         res = intersect_rel.fetchall()
-        assert res == [('0',), ('1',), ('2',), ('3',), ('4',), ('5',), ('6',), ('7',), ('8',), ('9',)]
+        assert res == [("0",), ("1",), ("2",), ("3",), ("4",), ("5",), ("6",), ("7",), ("8",), ("9",)]
 
     def test_materialized_relation_view(self, duckdb_cursor):
-        def create_view(duckdb_cursor):
+        def create_view(duckdb_cursor) -> None:
             duckdb_cursor.sql(
                 """
                 create table tbl(a varchar);
                 insert into tbl values ('test') returning *
             """
-            ).to_view('vw')
+            ).to_view("vw")
 
         create_view(duckdb_cursor)
         res = duckdb_cursor.sql("select * from vw").fetchone()
-        assert res == ('test',)
+        assert res == ("test",)
 
     def test_materialized_relation_view2(self, duckdb_cursor):
         # This creates a MaterializedRelation
@@ -651,21 +655,22 @@ class TestRelation(object):
         # Create a VIEW that contains a ColumnDataRef
         rel.create_view("test", True)
         # Override the existing relation, the original MaterializedRelation has now gone out of scope
-        # The VIEW still works because the CDC that is being referenced is kept alive through the MaterializedDependency item
+        # The VIEW still works because the CDC that is being referenced is kept alive through the
+        # MaterializedDependency item
         rel = duckdb_cursor.sql("select * from test")
         res = rel.fetchall()
-        assert res == [([2], ['Alice'])]
+        assert res == [([2], ["Alice"])]
 
     def test_serialized_materialized_relation(self, tmp_database):
         con = duckdb.connect(tmp_database)
 
-        def create_view(con, view_name: str):
+        def create_view(con, view_name: str) -> None:
             rel = con.sql("select 'this is not a small string ' || range::varchar from range(?)", params=[10])
             rel.to_view(view_name)
 
-        expected = [(f'this is not a small string {i}',) for i in range(10)]
+        expected = [(f"this is not a small string {i}",) for i in range(10)]
 
-        create_view(con, 'vw')
+        create_view(con, "vw")
         res = con.sql("select * from vw").fetchall()
         assert res == expected
 

@@ -1,13 +1,14 @@
-import duckdb
-import pandas as pd
 import numpy
+import pandas as pd
 import pytest
+
+import duckdb
 
 
 def check_category_equal(category):
     df_in = pd.DataFrame(
         {
-            'x': pd.Categorical(category, ordered=True),
+            "x": pd.Categorical(category, ordered=True),
         }
     )
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
@@ -23,7 +24,7 @@ def check_create_table(category):
     conn = duckdb.connect()
 
     conn.execute("PRAGMA enable_verification")
-    df_in = pd.DataFrame({'x': pd.Categorical(category, ordered=True), 'y': pd.Categorical(category, ordered=True)})
+    df_in = pd.DataFrame({"x": pd.Categorical(category, ordered=True), "y": pd.Categorical(category, ordered=True)})
 
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
@@ -39,7 +40,7 @@ def check_create_table(category):
     conn.execute("INSERT INTO t1 VALUES ('2','2')")
 
     res = conn.execute("SELECT x FROM t1 where x = '1'").fetchall()
-    assert res == [('1',)]
+    assert res == [("1",)]
 
     res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x)").fetchall()
     assert res == conn.execute("SELECT x FROM t1").fetchall()
@@ -54,29 +55,29 @@ def check_create_table(category):
     conn.execute("DROP TABLE t1")
 
 
-class TestCategory(object):
+class TestCategory:
     def test_category_simple(self, duckdb_cursor):
-        df_in = pd.DataFrame({'float': [1.0, 2.0, 1.0], 'int': pd.Series([1, 2, 1], dtype="category")})
+        df_in = pd.DataFrame({"float": [1.0, 2.0, 1.0], "int": pd.Series([1, 2, 1], dtype="category")})
 
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         print(duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall())
-        print(df_out['int'])
-        assert numpy.all(df_out['float'] == numpy.array([1.0, 2.0, 1.0]))
-        assert numpy.all(df_out['int'] == numpy.array([1, 2, 1]))
+        print(df_out["int"])
+        assert numpy.all(df_out["float"] == numpy.array([1.0, 2.0, 1.0]))
+        assert numpy.all(df_out["int"] == numpy.array([1, 2, 1]))
 
     def test_category_nulls(self, duckdb_cursor):
-        df_in = pd.DataFrame({'int': pd.Series([1, 2, None], dtype="category")})
+        df_in = pd.DataFrame({"int": pd.Series([1, 2, None], dtype="category")})
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         print(duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall())
-        assert df_out['int'][0] == 1
-        assert df_out['int'][1] == 2
-        assert pd.isna(df_out['int'][2])
+        assert df_out["int"][0] == 1
+        assert df_out["int"][1] == 2
+        assert pd.isna(df_out["int"][2])
 
     def test_category_string(self, duckdb_cursor):
-        check_category_equal(['foo', 'bla', 'zoo', 'foo', 'foo', 'bla'])
+        check_category_equal(["foo", "bla", "zoo", "foo", "foo", "bla"])
 
     def test_category_string_null(self, duckdb_cursor):
-        check_category_equal(['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla'])
+        check_category_equal(["foo", "bla", None, "zoo", "foo", "foo", None, "bla"])
 
     def test_category_string_null_bug_4747(self, duckdb_cursor):
         check_category_equal([str(i) for i in range(160)] + [None])
@@ -84,51 +85,49 @@ class TestCategory(object):
     def test_categorical_fetchall(self, duckdb_cursor):
         df_in = pd.DataFrame(
             {
-                'x': pd.Categorical(['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla'], ordered=True),
+                "x": pd.Categorical(["foo", "bla", None, "zoo", "foo", "foo", None, "bla"], ordered=True),
             }
         )
         assert duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall() == [
-            ('foo',),
-            ('bla',),
+            ("foo",),
+            ("bla",),
             (None,),
-            ('zoo',),
-            ('foo',),
-            ('foo',),
+            ("zoo",),
+            ("foo",),
+            ("foo",),
             (None,),
-            ('bla',),
+            ("bla",),
         ]
 
     def test_category_string_uint8(self, duckdb_cursor):
-        category = []
-        for i in range(10):
-            category.append(str(i))
+        category = [str(i) for i in range(10)]
         check_create_table(category)
 
     def test_empty_categorical(self, duckdb_cursor):
-        empty_categoric_df = pd.DataFrame({'category': pd.Series(dtype='category')})
+        empty_categoric_df = pd.DataFrame({"category": pd.Series(dtype="category")})  # noqa: F841
         duckdb_cursor.execute("CREATE TABLE test AS SELECT * FROM empty_categoric_df")
-        res = duckdb_cursor.table('test').fetchall()
+        res = duckdb_cursor.table("test").fetchall()
         assert res == []
 
         with pytest.raises(duckdb.ConversionException, match="Could not convert string 'test' to UINT8"):
             duckdb_cursor.execute("insert into test VALUES('test')")
         duckdb_cursor.execute("insert into test VALUES(NULL)")
-        res = duckdb_cursor.table('test').fetchall()
+        res = duckdb_cursor.table("test").fetchall()
         assert res == [(None,)]
 
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()
-        categories = ['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla']
+        categories = ["foo", "bla", None, "zoo", "foo", "foo", None, "bla"]
         result = categories * 256
         categories = result * 2
         df_result = pd.DataFrame(
             {
-                'x': pd.Categorical(result, ordered=True),
+                "x": pd.Categorical(result, ordered=True),
             }
         )
         df_in = pd.DataFrame(
             {
-                'x': pd.Categorical(categories, ordered=True),
+                "x": pd.Categorical(categories, ordered=True),
             }
         )
         con.register("data", df_in)
@@ -146,8 +145,8 @@ class TestCategory(object):
     def test_category_mix(self, duckdb_cursor):
         df_in = pd.DataFrame(
             {
-                'float': [1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 0.0],
-                'x': pd.Categorical(['foo', 'bla', None, 'zoo', 'foo', 'foo', None, 'bla'], ordered=True),
+                "float": [1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 0.0],
+                "x": pd.Categorical(["foo", "bla", None, "zoo", "foo", "foo", None, "bla"], ordered=True),
             }
         )
 

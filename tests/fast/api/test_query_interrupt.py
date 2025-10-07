@@ -1,10 +1,11 @@
-import duckdb
-import time
-import pytest
-
+import _thread as thread
 import platform
 import threading
-import _thread as thread
+import time
+
+import pytest
+
+import duckdb
 
 
 def send_keyboard_interrupt():
@@ -14,7 +15,7 @@ def send_keyboard_interrupt():
     thread.interrupt_main()
 
 
-class TestQueryInterruption(object):
+class TestQueryInterruption:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="Emscripten builds cannot use threads",
@@ -25,11 +26,11 @@ class TestQueryInterruption(object):
         # Start the thread
         thread.start()
         try:
-            res = con.execute('select count(*) from range(100000000000)').fetchall()
+            con.execute("select count(*) from range(100000000000)").fetchall()
         except RuntimeError:
             # If this is not reached, we could not cancel the query before it completed
             # indicating that the query interruption functionality is broken
             assert True
         except KeyboardInterrupt:
-            pytest.fail()
+            pytest.fail("Interrupted by user")
         thread.join()
