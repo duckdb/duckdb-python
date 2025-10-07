@@ -1,0 +1,45 @@
+name: Code Quality Checks
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        type: string
+        description: Git ref of the DuckDB python package
+        required: false
+  workflow_call:
+    inputs:
+      git_ref:
+        type: string
+        description: Git ref of the DuckDB python package
+        required: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run_checks:
+    name: Run linting, formatting and static type checker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install Astral UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.14"
+          python-version: 3.9
+
+      - name: pre-commit (cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: pre-commit (--all-files)
+        run: |
+          uvx pre-commit run --show-diff-on-failure --color=always --all-files

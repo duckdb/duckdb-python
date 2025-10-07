@@ -12,25 +12,29 @@ This module wraps the scikit-build-core build backend because:
 
 Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 """
-import sys
-import os
+
 import subprocess
+import sys
 from pathlib import Path
-from typing import Optional, Dict, List, Union
+from typing import Optional, Union
+
+from scikit_build_core.build import (
+    build_editable,
+    get_requires_for_build_editable,
+    get_requires_for_build_sdist,
+    get_requires_for_build_wheel,
+    prepare_metadata_for_build_editable,
+    prepare_metadata_for_build_wheel,
+)
+from scikit_build_core.build import (
+    build_sdist as skbuild_build_sdist,
+)
 from scikit_build_core.build import (
     build_wheel as skbuild_build_wheel,
-    build_editable,
-    build_sdist as skbuild_build_sdist,
-    get_requires_for_build_wheel,
-    get_requires_for_build_sdist,
-    get_requires_for_build_editable,
-    prepare_metadata_for_build_wheel,
-    prepare_metadata_for_build_editable,
 )
 
-from duckdb_packaging._versioning import create_git_tag, pep440_to_git_tag, get_git_describe, strip_post_from_version
-from duckdb_packaging.setuptools_scm_version import forced_version_from_env, MAIN_BRANCH_VERSIONING
-
+from duckdb_packaging._versioning import get_git_describe, pep440_to_git_tag, strip_post_from_version
+from duckdb_packaging.setuptools_scm_version import MAIN_BRANCH_VERSIONING, forced_version_from_env
 
 _DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
 _LOGGING_FORMAT = "[duckdb_pytooling.build_backend] {}"
@@ -39,14 +43,13 @@ _SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
 _FORCED_PEP440_VERSION = forced_version_from_env()
 
 
-def _log(msg: str, is_error: bool=False) -> None:
+def _log(msg: str) -> None:
     """Log a message with build backend prefix.
 
     Args:
         msg: The message to log.
-        is_error: If True, log to stderr; otherwise log to stdout.
     """
-    print(_LOGGING_FORMAT.format(msg), flush=True, file=sys.stderr if is_error else sys.stdout)
+    print(_LOGGING_FORMAT.format(msg), flush=True, file=sys.stderr)
 
 
 def _in_git_repository() -> bool:
@@ -70,10 +73,11 @@ def _in_sdist() -> bool:
 def _duckdb_submodule_path() -> Path:
     """Verify that the duckdb submodule is checked out and usable and return its path."""
     if not _in_git_repository():
-        raise RuntimeError("Not in a git repository, no duckdb submodule present")
+        msg = "Not in a git repository, no duckdb submodule present"
+        raise RuntimeError(msg)
     # search the duckdb submodule
     gitmodules_path = Path(".gitmodules")
-    modules = dict()
+    modules = {}
     with gitmodules_path.open("r") as f:
         cur_module_path = None
         cur_module_reponame = None
@@ -84,15 +88,16 @@ def _duckdb_submodule_path() -> Path:
                     cur_module_reponame = None
                     cur_module_path = None
             elif line.strip().startswith("path"):
-                cur_module_path = line.split('=')[-1].strip()
+                cur_module_path = line.split("=")[-1].strip()
             elif line.strip().startswith("url"):
-                basename = os.path.basename(line.split('=')[-1].strip())
+                basename = Path(line.split("=")[-1].strip()).name
                 cur_module_reponame = basename[:-4] if basename.endswith(".git") else basename
         if cur_module_reponame is not None and cur_module_path is not None:
             modules[cur_module_reponame] = cur_module_path
 
     if "duckdb" not in modules:
-        raise RuntimeError("DuckDB submodule missing")
+        msg = "DuckDB submodule missing"
+        raise RuntimeError(msg)
 
     duckdb_path = modules["duckdb"]
     # now check that the submodule is usable
@@ -101,9 +106,11 @@ def _duckdb_submodule_path() -> Path:
     status = status.decode("ascii", "replace")
     for line in status.splitlines():
         if line.startswith("-"):
-            raise RuntimeError(f"Duckdb submodule not initialized: {line}")
+            msg = f"Duckdb submodule not initialized: {line}"
+            raise RuntimeError(msg)
         if line.startswith("U"):
-            raise RuntimeError(f"Duckdb submodule has merge conflicts: {line}")
+            msg = f"Duckdb submodule has merge conflicts: {line}"
+            raise RuntimeError(msg)
         if line.startswith("+"):
             _log(f"WARNING: Duckdb submodule not clean: {line}")
     # all good
@@ -115,7 +122,7 @@ def _version_file_path() -> Path:
     return package_dir / _DUCKDB_VERSION_FILENAME
 
 
-def _write_duckdb_long_version(long_version: str)-> None:
+def _write_duckdb_long_version(long_version: str) -> None:
     """Write the given version string to a file in the same directory as this module."""
     _version_file_path().write_text(long_version, encoding="utf-8")
 
@@ -125,9 +132,7 @@ def _read_duckdb_long_version() -> str:
     return _version_file_path().read_text(encoding="utf-8").strip()
 
 
-def _skbuild_config_add(
-        key: str, value: Union[List, str], config_settings: Dict[str, Union[List[str],str]], fail_if_exists: bool=False
-):
+def _skbuild_config_add(key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]]) -> None:
     """Add or modify a configuration setting for scikit-build-core.
 
     This function handles adding values to scikit-build-core configuration settings,
@@ -137,10 +142,9 @@ def _skbuild_config_add(
         key: The configuration key to set (will be prefixed with 'skbuild.' if needed).
         value: The value to add (string or list).
         config_settings: The configuration dictionary to modify.
-        fail_if_exists: If True, raise an error if the key already exists.
 
     Raises:
-        RuntimeError: If fail_if_exists is True and key exists, or on type mismatches.
+        RuntimeError: If this would overwrite an existing value, or on type mismatches.
         AssertionError: If config_settings is None.
 
     Behavior Rules:
@@ -163,22 +167,19 @@ def _skbuild_config_add(
     val_is_list = isinstance(value, list)
     if not key_exists:
         config_settings[store_key] = value
-    elif fail_if_exists:
-        raise RuntimeError(f"{key} already present in config and may not be overridden")
     elif key_exists_as_list and val_is_list:
         config_settings[store_key].extend(value)
     elif key_exists_as_list and val_is_str:
         config_settings[store_key].append(value)
     elif key_exists_as_str and val_is_str:
-        _log(f"WARNING: overriding existing value in {store_key}")
-        config_settings[store_key] = value
+        msg = f"{key} already present in config and may not be overridden"
+        raise RuntimeError(msg)
     else:
-        raise RuntimeError(
-            f"Type mismatch: cannot set {store_key} ({type(config_settings[store_key])}) to `{value}` ({type(value)})"
-        )
+        msg = f"Type mismatch: cannot set {store_key} ({type(config_settings[store_key])}) to `{value}` ({type(value)})"
+        raise RuntimeError(msg)
 
 
-def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[List[str],str]]] = None) -> str:
+def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str], str]]] = None) -> str:
     """Build a source distribution using the DuckDB submodule.
 
     This function extracts the DuckDB version from either the git submodule and saves it
@@ -196,7 +197,8 @@ def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[
         RuntimeError: If not in a git repository or DuckDB submodule issues.
     """
     if not _in_git_repository():
-        raise RuntimeError("Not in a git repository, can't create an sdist")
+        msg = "Not in a git repository, can't create an sdist"
+        raise RuntimeError(msg)
     submodule_path = _duckdb_submodule_path()
     if _FORCED_PEP440_VERSION is not None:
         duckdb_version = pep440_to_git_tag(strip_post_from_version(_FORCED_PEP440_VERSION))
@@ -207,9 +209,9 @@ def build_sdist(sdist_directory: str, config_settings: Optional[Dict[str, Union[
 
 
 def build_wheel(
-        wheel_directory: str,
-        config_settings: Optional[Dict[str, Union[List[str],str]]] = None,
-        metadata_directory: Optional[str] = None,
+    wheel_directory: str,
+    config_settings: Optional[dict[str, Union[list[str], str]]] = None,
+    metadata_directory: Optional[str] = None,
 ) -> str:
     """Build a wheel from either git submodule or extracted sdist sources.
 
@@ -232,7 +234,8 @@ def build_wheel(
     duckdb_version = None
     if not _in_git_repository():
         if not _in_sdist():
-            raise RuntimeError("Not in a git repository nor in an sdist, can't build a wheel")
+            msg = "Not in a git repository nor in an sdist, can't build a wheel"
+            raise RuntimeError(msg)
         _log("Building duckdb wheel from sdist. Reading duckdb version from file.")
         config_settings = config_settings or {}
         duckdb_version = _read_duckdb_long_version()
@@ -241,22 +244,21 @@ def build_wheel(
 
     # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
     if duckdb_version is not None:
-        _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings, fail_if_exists=True)
+        _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings)
         _log(f"{_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE} set to {duckdb_version}")
     else:
         _log("No explicit DuckDB submodule version provided. Letting CMake figure it out.")
-
 
     return skbuild_build_wheel(wheel_directory, config_settings=config_settings, metadata_directory=metadata_directory)
 
 
 __all__ = [
-    "build_wheel",
-    "build_sdist",
     "build_editable",
-    "get_requires_for_build_wheel",
-    "get_requires_for_build_sdist",
+    "build_sdist",
+    "build_wheel",
     "get_requires_for_build_editable",
-    "prepare_metadata_for_build_wheel",
+    "get_requires_for_build_sdist",
+    "get_requires_for_build_wheel",
     "prepare_metadata_for_build_editable",
+    "prepare_metadata_for_build_wheel",
 ]

@@ -3,47 +3,35 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
-    Row,
-    ArrayType,
-    MapType,
-)
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
 from spark_namespace.sql.functions import (
-    sum,
-    avg,
-    max,
-    min,
-    stddev_samp,
-    stddev,
-    std,
-    stddev_pop,
-    var_pop,
-    var_samp,
-    variance,
-    mean,
-    mode,
-    median,
-    product,
-    count,
-    skewness,
     any_value,
     approx_count_distinct,
+    avg,
+    col,
     covar_pop,
     covar_samp,
     first,
     last,
+    max,
+    median,
+    mode,
+    product,
+    skewness,
+    std,
+    stddev,
+    stddev_pop,
+    stddev_samp,
+    sum,
+    var_pop,
+    var_samp,
+    variance,
+)
+from spark_namespace.sql.types import (
+    Row,
 )
 
 
-class TestDataFrameGroupBy(object):
+class TestDataFrameGroupBy:
     def test_group_by(self, spark):
         simpleData = [
             ("James", "Sales", "NY", 90000, 34, 10000),
@@ -62,40 +50,49 @@ class TestDataFrameGroupBy(object):
 
         df2 = df.groupBy("department").sum("salary").sort("department")
         res = df2.collect()
-        expected = "[Row(department='Finance', sum(salary)=351000), Row(department='Marketing', sum(salary)=171000), Row(department='Sales', sum(salary)=257000)]"
+        expected = (
+            "[Row(department='Finance', sum(salary)=351000), Row(department='Marketing', sum(salary)=171000), "
+            "Row(department='Sales', sum(salary)=257000)]"
+        )
         assert str(res) == expected
 
         df2 = df.groupBy("department").count().sort("department")
         res = df2.collect()
         assert (
-            str(res)
-            == "[Row(department='Finance', count=4), Row(department='Marketing', count=2), Row(department='Sales', count=3)]"
+            str(res) == "[Row(department='Finance', count=4), Row(department='Marketing', count=2), "
+            "Row(department='Sales', count=3)]"
         )
 
         df2 = df.groupBy("department").min("salary").sort("department")
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', min(salary)=79000), Row(department='Marketing', min(salary)=80000), Row(department='Sales', min(salary)=81000)]"
+            == "[Row(department='Finance', min(salary)=79000), Row(department='Marketing', min(salary)=80000), "
+            "Row(department='Sales', min(salary)=81000)]"
         )
 
         df2 = df.groupBy("department").max("salary").sort("department")
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', max(salary)=99000), Row(department='Marketing', max(salary)=91000), Row(department='Sales', max(salary)=90000)]"
+            == "[Row(department='Finance', max(salary)=99000), Row(department='Marketing', max(salary)=91000), "
+            "Row(department='Sales', max(salary)=90000)]"
         )
 
         df2 = df.groupBy("department").avg("salary").sort("department")
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', avg(salary)=87750.0), Row(department='Marketing', avg(salary)=85500.0), Row(department='Sales', avg(salary)=85666.66666666667)]"
+            == "[Row(department='Finance', avg(salary)=87750.0), Row(department='Marketing', avg(salary)=85500.0), "
+            "Row(department='Sales', avg(salary)=85666.66666666667)]"
         )
 
         df2 = df.groupBy("department").mean("salary").sort("department")
         res = df2.collect()
-        expected_res_str = "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
+        expected_res_str = (
+            "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', "
+            "mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
+        )
         if USE_ACTUAL_SPARK:
             expected_res_str = expected_res_str.replace("mean(", "avg(")
         assert str(res) == expected_res_str
@@ -103,8 +100,12 @@ class TestDataFrameGroupBy(object):
         df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()
         assert (
-            str(res)
-            == "[Row(department='Finance', state='CA', sum(salary)=189000, sum(bonus)=47000), Row(department='Finance', state='NY', sum(salary)=162000, sum(bonus)=34000), Row(department='Marketing', state='CA', sum(salary)=80000, sum(bonus)=18000), Row(department='Marketing', state='NY', sum(salary)=91000, sum(bonus)=21000), Row(department='Sales', state='CA', sum(salary)=81000, sum(bonus)=23000), Row(department='Sales', state='NY', sum(salary)=176000, sum(bonus)=30000)]"
+            str(res) == "[Row(department='Finance', state='CA', sum(salary)=189000, sum(bonus)=47000), "
+            "Row(department='Finance', state='NY', sum(salary)=162000, sum(bonus)=34000), "
+            "Row(department='Marketing', state='CA', sum(salary)=80000, sum(bonus)=18000), "
+            "Row(department='Marketing', state='NY', sum(salary)=91000, sum(bonus)=21000), "
+            "Row(department='Sales', state='CA', sum(salary)=81000, sum(bonus)=23000), "
+            "Row(department='Sales', state='NY', sum(salary)=176000, sum(bonus)=30000)]"
         )
 
         df2 = (
@@ -122,7 +123,11 @@ class TestDataFrameGroupBy(object):
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA', distinct_state=2), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, sum_bonus=39000, max_bonus=21000, any_state='CA', distinct_state=2), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY', distinct_state=2)]"
+            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, "
+            "any_state='CA', distinct_state=2), Row(department='Marketing', sum_salary=171000, avg_salary=85500.0, "
+            "sum_bonus=39000, max_bonus=21000, any_state='CA', distinct_state=2), Row(department='Sales', "
+            "sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY', "
+            "distinct_state=2)]"
         )
 
         df2 = (
@@ -141,7 +146,9 @@ class TestDataFrameGroupBy(object):
         print(str(res))
         assert (
             str(res)
-            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, any_state='CA'), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, sum_bonus=53000, max_bonus=23000, any_state='NY')]"
+            == "[Row(department='Finance', sum_salary=351000, avg_salary=87750.0, sum_bonus=81000, max_bonus=24000, "
+            "any_state='CA'), Row(department='Sales', sum_salary=257000, avg_salary=85666.66666666667, "
+            "sum_bonus=53000, max_bonus=23000, any_state='NY')]"
         )
 
         df = spark.createDataFrame(
@@ -170,12 +177,12 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupBy(["name", "age"]).count().sort("name").collect()
         assert (
-            str(res)
-            == "[Row(name='1', age=2, count=1), Row(name='2', age=2, count=1), Row(name='3', age=2, count=1), Row(name='4', age=5, count=1)]"
+            str(res) == "[Row(name='1', age=2, count=1), Row(name='2', age=2, count=1), Row(name='3', age=2, count=1), "
+            "Row(name='4', age=5, count=1)]"
         )
 
         res = df.groupBy("name").count().columns
-        assert res == ['name', 'count']
+        assert res == ["name", "count"]
 
     def test_group_by_first_and_last(self, spark):
         df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
@@ -188,7 +195,7 @@ class TestDataFrameGroupBy(object):
             .collect()
         )
 
-        assert res == [Row(name='Alice', first_age=None, last_age=2), Row(name='Bob', first_age=5, last_age=5)]
+        assert res == [Row(name="Alice", first_age=None, last_age=2), Row(name="Bob", first_age=5, last_age=5)]
 
     def test_standard_deviations(self, spark):
         df = spark.createDataFrame(
@@ -265,7 +272,7 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupBy("course").agg(median("earnings").alias("m")).collect()
 
-        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', m=22000), Row(course='dotNET', m=10000)]
+        assert sorted(res, key=lambda x: x.course) == [Row(course="Java", m=22000), Row(course="dotNET", m=10000)]
 
     def test_group_by_mode(self, spark):
         df = spark.createDataFrame(
@@ -282,17 +289,17 @@ class TestDataFrameGroupBy(object):
 
         res = df.groupby("course").agg(mode("year").alias("mode")).collect()
 
-        assert sorted(res, key=lambda x: x.course) == [Row(course='Java', mode=2012), Row(course='dotNET', mode=2012)]
+        assert sorted(res, key=lambda x: x.course) == [Row(course="Java", mode=2012), Row(course="dotNET", mode=2012)]
 
     def test_group_by_product(self, spark):
-        df = spark.range(1, 10).toDF('x').withColumn('mod3', col('x') % 3)
-        res = df.groupBy('mod3').agg(product('x').alias('product')).orderBy("mod3").collect()
+        df = spark.range(1, 10).toDF("x").withColumn("mod3", col("x") % 3)
+        res = df.groupBy("mod3").agg(product("x").alias("product")).orderBy("mod3").collect()
         assert res == [Row(mod3=0, product=162), Row(mod3=1, product=28), Row(mod3=2, product=80)]
 
     def test_group_by_skewness(self, spark):
         df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
         res = df.groupBy("group").agg(skewness(df.c).alias("v")).collect()
-        # FIXME: Why is this different?
+        # TODO: Why is this different?  # noqa: TD002, TD003
         if USE_ACTUAL_SPARK:
             assert pytest.approx(res[0].v) == 0.7071067811865475
         else:

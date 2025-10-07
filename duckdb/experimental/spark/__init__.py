@@ -1,7 +1,6 @@
-from .sql import SparkSession, DataFrame
-from .conf import SparkConf
+from .conf import SparkConf  # noqa: D104
 from .context import SparkContext
-from ._globals import _NoValue
 from .exception import ContributionsAcceptedError
+from .sql import DataFrame, SparkSession
 
-__all__ = ["SparkSession", "DataFrame", "SparkConf", "SparkContext", "ContributionsAcceptedError"]
+__all__ = ["ContributionsAcceptedError", "DataFrame", "SparkConf", "SparkContext", "SparkSession"]

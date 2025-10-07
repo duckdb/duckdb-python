@@ -1,8 +1,8 @@
-import duckdb
 import pytest
 
+import duckdb
 
-tf = pytest.importorskip('tensorflow')
+tf = pytest.importorskip("tensorflow")
 
 
 def test_tf():
@@ -14,16 +14,16 @@ def test_tf():
     # Test from connection
     duck_tf = con.execute("select * from t").tf()
     duck_numpy = con.sql("select * from t").fetchnumpy()
-    tf.math.equal(duck_tf['a'], tf.convert_to_tensor(duck_numpy['a']))
-    tf.math.equal(duck_tf['b'], tf.convert_to_tensor(duck_numpy['b']))
+    tf.math.equal(duck_tf["a"], tf.convert_to_tensor(duck_numpy["a"]))
+    tf.math.equal(duck_tf["b"], tf.convert_to_tensor(duck_numpy["b"]))
 
     # Test from relation
     duck_tf = con.sql("select * from t").tf()
-    tf.math.equal(duck_tf['a'], tf.convert_to_tensor(duck_numpy['a']))
-    tf.math.equal(duck_tf['b'], tf.convert_to_tensor(duck_numpy['b']))
+    tf.math.equal(duck_tf["a"], tf.convert_to_tensor(duck_numpy["a"]))
+    tf.math.equal(duck_tf["b"], tf.convert_to_tensor(duck_numpy["b"]))
 
     # Test all Numeric Types
-    numeric_types = ['TINYINT', 'SMALLINT', 'BIGINT', 'HUGEINT', 'FLOAT', 'DOUBLE', 'DECIMAL(4,1)', 'UTINYINT']
+    numeric_types = ["TINYINT", "SMALLINT", "BIGINT", "HUGEINT", "FLOAT", "DOUBLE", "DECIMAL(4,1)", "UTINYINT"]
 
     for supported_type in numeric_types:
         con = duckdb.connect()
@@ -31,5 +31,5 @@ def test_tf():
         con.execute("insert into t values (1,2), (3,4)")
         duck_tf = con.sql("select * from t").tf()
         duck_numpy = con.sql("select * from t").fetchnumpy()
-        tf.math.equal(duck_tf['a'], tf.convert_to_tensor(duck_numpy['a']))
-        tf.math.equal(duck_tf['b'], tf.convert_to_tensor(duck_numpy['b']))
+        tf.math.equal(duck_tf["a"], tf.convert_to_tensor(duck_numpy["a"]))
+        tf.math.equal(duck_tf["b"], tf.convert_to_tensor(duck_numpy["b"]))

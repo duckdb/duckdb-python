@@ -2,24 +2,13 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
-import duckdb
-import re
 
 
-class TestDataFrameOrderBy(object):
+class TestDataFrameOrderBy:
     def test_order_by(self, spark):
         simpleData = [
             ("James", "Sales", "NY", 90000, 34, 10000),
@@ -38,15 +27,15 @@ class TestDataFrameOrderBy(object):
         df2 = df.sort("department", "state")
         res1 = df2.collect()
         assert res1 == [
-            Row(employee_name='Maria', department='Finance', state='CA', salary=90000, age=24, bonus=23000),
-            Row(employee_name='Raman', department='Finance', state='CA', salary=99000, age=40, bonus=24000),
-            Row(employee_name='Scott', department='Finance', state='NY', salary=83000, age=36, bonus=19000),
-            Row(employee_name='Jen', department='Finance', state='NY', salary=79000, age=53, bonus=15000),
-            Row(employee_name='Jeff', department='Marketing', state='CA', salary=80000, age=25, bonus=18000),
-            Row(employee_name='Kumar', department='Marketing', state='NY', salary=91000, age=50, bonus=21000),
-            Row(employee_name='Robert', department='Sales', state='CA', salary=81000, age=30, bonus=23000),
-            Row(employee_name='James', department='Sales', state='NY', salary=90000, age=34, bonus=10000),
-            Row(employee_name='Michael', department='Sales', state='NY', salary=86000, age=56, bonus=20000),
+            Row(employee_name="Maria", department="Finance", state="CA", salary=90000, age=24, bonus=23000),
+            Row(employee_name="Raman", department="Finance", state="CA", salary=99000, age=40, bonus=24000),
+            Row(employee_name="Scott", department="Finance", state="NY", salary=83000, age=36, bonus=19000),
+            Row(employee_name="Jen", department="Finance", state="NY", salary=79000, age=53, bonus=15000),
+            Row(employee_name="Jeff", department="Marketing", state="CA", salary=80000, age=25, bonus=18000),
+            Row(employee_name="Kumar", department="Marketing", state="NY", salary=91000, age=50, bonus=21000),
+            Row(employee_name="Robert", department="Sales", state="CA", salary=81000, age=30, bonus=23000),
+            Row(employee_name="James", department="Sales", state="NY", salary=90000, age=34, bonus=10000),
+            Row(employee_name="Michael", department="Sales", state="NY", salary=86000, age=56, bonus=20000),
         ]
 
         df2 = df.sort(col("department"), col("state"))
@@ -60,15 +49,15 @@ class TestDataFrameOrderBy(object):
         df2 = df.sort(df.department.asc(), df.state.desc())
         res1 = df2.collect()
         assert res1 == [
-            Row(employee_name='Scott', department='Finance', state='NY', salary=83000, age=36, bonus=19000),
-            Row(employee_name='Jen', department='Finance', state='NY', salary=79000, age=53, bonus=15000),
-            Row(employee_name='Maria', department='Finance', state='CA', salary=90000, age=24, bonus=23000),
-            Row(employee_name='Raman', department='Finance', state='CA', salary=99000, age=40, bonus=24000),
-            Row(employee_name='Kumar', department='Marketing', state='NY', salary=91000, age=50, bonus=21000),
-            Row(employee_name='Jeff', department='Marketing', state='CA', salary=80000, age=25, bonus=18000),
-            Row(employee_name='James', department='Sales', state='NY', salary=90000, age=34, bonus=10000),
-            Row(employee_name='Michael', department='Sales', state='NY', salary=86000, age=56, bonus=20000),
-            Row(employee_name='Robert', department='Sales', state='CA', salary=81000, age=30, bonus=23000),
+            Row(employee_name="Scott", department="Finance", state="NY", salary=83000, age=36, bonus=19000),
+            Row(employee_name="Jen", department="Finance", state="NY", salary=79000, age=53, bonus=15000),
+            Row(employee_name="Maria", department="Finance", state="CA", salary=90000, age=24, bonus=23000),
+            Row(employee_name="Raman", department="Finance", state="CA", salary=99000, age=40, bonus=24000),
+            Row(employee_name="Kumar", department="Marketing", state="NY", salary=91000, age=50, bonus=21000),
+            Row(employee_name="Jeff", department="Marketing", state="CA", salary=80000, age=25, bonus=18000),
+            Row(employee_name="James", department="Sales", state="NY", salary=90000, age=34, bonus=10000),
+            Row(employee_name="Michael", department="Sales", state="NY", salary=86000, age=56, bonus=20000),
+            Row(employee_name="Robert", department="Sales", state="CA", salary=81000, age=30, bonus=23000),
         ]
 
         df2 = df.sort(col("department").asc(), col("state").desc())
@@ -94,15 +83,15 @@ class TestDataFrameOrderBy(object):
         )
         res = df2.collect()
         assert res == [
-            Row(employee_name='Maria', department='Finance', state='CA', salary=90000, age=24, bonus=23000),
-            Row(employee_name='Raman', department='Finance', state='CA', salary=99000, age=40, bonus=24000),
-            Row(employee_name='Scott', department='Finance', state='NY', salary=83000, age=36, bonus=19000),
-            Row(employee_name='Jen', department='Finance', state='NY', salary=79000, age=53, bonus=15000),
-            Row(employee_name='Jeff', department='Marketing', state='CA', salary=80000, age=25, bonus=18000),
-            Row(employee_name='Kumar', department='Marketing', state='NY', salary=91000, age=50, bonus=21000),
-            Row(employee_name='James', department='Sales', state='NY', salary=90000, age=34, bonus=10000),
-            Row(employee_name='Michael', department='Sales', state='NY', salary=86000, age=56, bonus=20000),
-            Row(employee_name='Robert', department='Sales', state='CA', salary=81000, age=30, bonus=23000),
+            Row(employee_name="Maria", department="Finance", state="CA", salary=90000, age=24, bonus=23000),
+            Row(employee_name="Raman", department="Finance", state="CA", salary=99000, age=40, bonus=24000),
+            Row(employee_name="Scott", department="Finance", state="NY", salary=83000, age=36, bonus=19000),
+            Row(employee_name="Jen", department="Finance", state="NY", salary=79000, age=53, bonus=15000),
+            Row(employee_name="Jeff", department="Marketing", state="CA", salary=80000, age=25, bonus=18000),
+            Row(employee_name="Kumar", department="Marketing", state="NY", salary=91000, age=50, bonus=21000),
+            Row(employee_name="James", department="Sales", state="NY", salary=90000, age=34, bonus=10000),
+            Row(employee_name="Michael", department="Sales", state="NY", salary=86000, age=56, bonus=20000),
+            Row(employee_name="Robert", department="Sales", state="CA", salary=81000, age=30, bonus=23000),
         ]
 
     def test_null_ordering(self, spark):
@@ -130,56 +119,56 @@ class TestDataFrameOrderBy(object):
 
         res = df.orderBy("value1", "value2").collect()
         assert res == [
-            Row(value1=None, value2='A'),
-            Row(value1=2, value2='A'),
+            Row(value1=None, value2="A"),
+            Row(value1=2, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
         ]
 
         res = df.orderBy("value1", "value2", ascending=True).collect()
         assert res == [
-            Row(value1=None, value2='A'),
-            Row(value1=2, value2='A'),
+            Row(value1=None, value2="A"),
+            Row(value1=2, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
         ]
 
         res = df.orderBy("value1", "value2", ascending=False).collect()
         assert res == [
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=2, value2='A'),
-            Row(value1=None, value2='A'),
+            Row(value1=2, value2="A"),
+            Row(value1=None, value2="A"),
         ]
 
         res = df.orderBy(df.value1, df.value2).collect()
         assert res == [
-            Row(value1=None, value2='A'),
-            Row(value1=2, value2='A'),
+            Row(value1=None, value2="A"),
+            Row(value1=2, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
         ]
 
         res = df.orderBy(df.value1.asc(), df.value2.asc()).collect()
         assert res == [
-            Row(value1=None, value2='A'),
-            Row(value1=2, value2='A'),
+            Row(value1=None, value2="A"),
+            Row(value1=2, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
         ]
 
         res = df.orderBy(df.value1.desc(), df.value2.desc()).collect()
         assert res == [
-            Row(value1=3, value2='A'),
+            Row(value1=3, value2="A"),
             Row(value1=3, value2=None),
-            Row(value1=2, value2='A'),
-            Row(value1=None, value2='A'),
+            Row(value1=2, value2="A"),
+            Row(value1=None, value2="A"),
         ]
 
         res = df.orderBy(df.value1, df.value2, ascending=[True, False]).collect()
         assert res == [
-            Row(value1=None, value2='A'),
-            Row(value1=2, value2='A'),
+            Row(value1=None, value2="A"),
+            Row(value1=2, value2="A"),
             Row(value1=3, value2="A"),
             Row(value1=3, value2=None),
         ]
