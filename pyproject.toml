@@ -442,7 +442,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 manylinux-pypy_x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 manylinux-pypy_aarch64-image = "manylinux_2_28"
-enable = ["cpython-freethreading", "cpython-prerelease"]
+enable = ["cpython-prerelease"]
 
 [tool.cibuildwheel.linux]
 before-build = ["yum install -y ccache"]
