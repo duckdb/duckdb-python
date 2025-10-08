@@ -85,7 +85,7 @@ jobs:
           cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
 
       - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
-        uses: pypa/cibuildwheel@v3.0
+        uses: pypa/cibuildwheel@v3.2
         env:
           CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
