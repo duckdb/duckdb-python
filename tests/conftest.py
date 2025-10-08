@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from importlib import import_module
 from pathlib import Path
@@ -33,6 +34,46 @@ def import_pandas():
         return pandas
     else:
         pytest.skip("Couldn't import pandas")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    """Convert missing pyarrow imports to skips.
+
+    TODO(evertlammerts): Remove skip when pyarrow releases for 3.14.
+        https://github.com/duckdblabs/duckdb-internal/issues/6182
+    """
+    outcome = yield
+    if sys.version_info[:2] == (3, 14):
+        try:
+            outcome.get_result()
+        except ImportError as e:
+            if e.name == "pyarrow":
+                pytest.skip(f"pyarrow not available - {item.name} requires pyarrow")
+            else:
+                raise
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_make_collect_report(collector):
+    """Wrap module collection to catch pyarrow import errors on Python 3.14.
+
+    If we're on Python 3.14 and a test module raises ModuleNotFoundError
+    for 'pyarrow', mark the entire module as xfailed rather than failing collection.
+
+    TODO(evertlammerts): Remove skip when pyarrow releases for 3.14.
+        https://github.com/duckdblabs/duckdb-internal/issues/6182
+    """
+    outcome = yield
+    result = outcome.get_result()
+
+    if sys.version_info[:2] == (3, 14):
+        # Only handle failures from module collectors
+        if result.failed and collector.__class__.__name__ == "Module":
+            longrepr = str(result.longrepr)
+            if "ModuleNotFoundError: No module named 'pyarrow'" in longrepr:
+                result.outcome = "skipped"
+                result.longrepr = f"XFAIL: pyarrow not available {collector.name} ({longrepr.strip()})"
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
