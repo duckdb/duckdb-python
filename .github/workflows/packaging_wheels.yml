@@ -53,7 +53,7 @@ jobs:
         uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
         uv pip install -r pylock.toml
       CIBW_TEST_COMMAND: >
-        uv run -v pytest --rootdir $PWD -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
+        uv run -v pytest --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
 
     steps:
       - name: Checkout DuckDB Python
