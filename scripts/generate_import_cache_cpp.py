@@ -151,10 +151,10 @@ class ModuleFile:
 
 //! Note: This class is generated using scripts.
 //! If you need to add a new object to the cache you must:
-//! 1. adjust tools/pythonpkg/scripts/imports.py
-//! 2. run python3 tools/pythonpkg/scripts/generate_import_cache_json.py
-//! 3. run python3 tools/pythonpkg/scripts/generate_import_cache_cpp.py
-//! 4. run make format-main (the generator doesn't respect the formatting rules ;))
+//! 1. adjust scripts/imports.py
+//! 2. run python scripts/generate_import_cache_json.py
+//! 3. run python scripts/generate_import_cache_cpp.py
+//! 4. run pre-commit to fix formatting errors
 
 namespace duckdb {{
 {self.get_classes()}
@@ -230,7 +230,7 @@ import_cache_path.write_text(import_cache_file)
 
 
 def get_module_file_path_includes(files: list[ModuleFile]):
-    template = '#include "duckdb_python/import_cache/modules/{}'
+    template = '#include "duckdb_python/import_cache/modules/{}"'
     return "\n".join(template.format(f.file_name) for f in files)
 
 
