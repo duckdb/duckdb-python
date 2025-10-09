@@ -26,10 +26,10 @@ bool PyUnionType::check_(const py::handle &object) {
 	if (types_loaded && py::isinstance(object, import_cache.types.UnionType())) {
 		return true;
 	}
-	// for all py3: isinstance(typing.get_origin(object), typing.Union)
+	// for all py3: typing.get_origin(object) is typing.Union
 	auto get_origin_func = import_cache.typing.get_origin();
 	auto origin = get_origin_func(object);
-	if (py::isinstance(origin, import_cache.typing.Union())) {
+	if (origin.is(import_cache.typing.Union())) {
 		return true;
 	}
 	return false;
