@@ -48,12 +48,12 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     env:
       CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
-      CIBW_TEST_SOURCES: tests
+      CIBW_TEST_SOURCES: tests pyproject.toml
       CIBW_BEFORE_TEST: >
         uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
         uv pip install -r pylock.toml
       CIBW_TEST_COMMAND: >
-        uv run -v pytest -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
+        uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
 
     steps:
       - name: Checkout DuckDB Python
