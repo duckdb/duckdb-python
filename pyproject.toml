@@ -234,7 +234,7 @@ test = [ # dependencies used for running tests
     "pytest-reraise",
     "pytest-timeout",
     "pytest-xdist",
-    "pytest-randomly",
+    #"pytest-randomly",
     "pytest-timestamper",
     "mypy",
     "coverage",

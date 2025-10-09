@@ -80,7 +80,7 @@ jobs:
           # run tests
           tests_root="${{ github.workspace }}/tests"
           tests_dir="${tests_root}${{ inputs.testsuite == 'fast' && '/fast' || '/' }}"
-          uv run --verbose pytest $tests_dir --verbose --ignore=${tests_root}/stubs
+          uv run --verbose pytest -n 4 $tests_dir --verbose
 
       - id: versioning
         run: |

@@ -50,10 +50,10 @@ jobs:
       CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
       CIBW_TEST_SOURCES: tests
       CIBW_BEFORE_TEST: >
-        uv export --only-group test --no-emit-project --output-file pylock.toml --directory {project} &&
+        uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
         uv pip install -r pylock.toml
       CIBW_TEST_COMMAND: >
-        uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
+        uv run -v pytest -n 4 ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose
 
     steps:
       - name: Checkout DuckDB Python

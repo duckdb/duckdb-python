@@ -79,9 +79,9 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ inputs.testsuite }}" == "all" ]]; then
-            uv run coverage run -m pytest ./tests --ignore=./tests/stubs
+            uv run coverage run -m pytest -n 4 ./tests
           elif [[ "${{ inputs.testsuite }}" == "fast" ]]; then
-            uv run coverage run -m pytest ./tests/fast
+            uv run coverage run -m pytest -n 4 ./tests/fast
           else
             echo "Invalid testsuite!"
             exit 1
