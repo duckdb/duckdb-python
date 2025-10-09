@@ -65,15 +65,16 @@ def pytest_make_collect_report(collector):
         https://github.com/duckdblabs/duckdb-internal/issues/6182
     """
     outcome = yield
-    result = outcome.get_result()
+    report: pytest.CollectReport = outcome.get_result()
 
     if sys.version_info[:2] == (3, 14):
         # Only handle failures from module collectors
-        if result.failed and collector.__class__.__name__ == "Module":
-            longrepr = str(result.longrepr)
-            if "ModuleNotFoundError: No module named 'pyarrow'" in longrepr:
-                result.outcome = "skipped"
-                result.longrepr = f"XFAIL: pyarrow not available {collector.name} ({longrepr.strip()})"
+        if report.failed and collector.__class__.__name__ == "Module":
+            longreprtext = report.longreprtext
+            if "ModuleNotFoundError: No module named 'pyarrow'" in longreprtext:
+                report.outcome = "skipped"
+                reason = f"XFAIL: [pyarrow not available] {longreprtext}"
+                report.longrepr = (report.fspath, None, reason)
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
