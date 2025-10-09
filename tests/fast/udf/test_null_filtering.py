@@ -5,7 +5,7 @@ from typing import Any, NamedTuple
 import pytest
 
 import duckdb
-from duckdb.typing import (
+from duckdb.sqltypes import (
     BIGINT,
     BLOB,
     BOOLEAN,
@@ -24,6 +24,7 @@ from duckdb.typing import (
     UTINYINT,
     UUID,
     VARCHAR,
+    DuckDBPyType,
 )
 
 pd = pytest.importorskip("pandas")
@@ -31,7 +32,7 @@ pa = pytest.importorskip("pyarrow", "18.0.0")
 
 
 class Candidate(NamedTuple):
-    type: duckdb.typing.DuckDBPyType
+    type: DuckDBPyType
     variant_one: Any
     variant_two: Any
 

@@ -305,7 +305,7 @@ dev = [ # tooling like uv will install this automatically when syncing the envir
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q"
+addopts = "-ra --numprocesses 4 --dist loadfile"
 testpaths = ["tests"]
 filterwarnings = [
     "error",

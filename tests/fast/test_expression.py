@@ -13,7 +13,7 @@ from duckdb import (
     LambdaExpression,
     StarExpression,
 )
-from duckdb.typing import INTEGER, TIMESTAMP, VARCHAR
+from duckdb.sqltypes import INTEGER, TIMESTAMP, TINYINT, VARCHAR
 from duckdb.value.constant import IntegerValue, Value
 
 pytestmark = pytest.mark.skipif(
@@ -804,7 +804,7 @@ class TestExpression:
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
             rel2.fetchall()
 
-        val = duckdb.Value(100, duckdb.typing.TINYINT)
+        val = duckdb.Value(100, TINYINT)
         expr2 = ColumnExpression("salary") * val
         rel3 = rel.select(expr2)
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):

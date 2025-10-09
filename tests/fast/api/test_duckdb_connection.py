@@ -4,7 +4,6 @@ import pytest
 from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
-import duckdb.typing
 
 pa = pytest.importorskip("pyarrow")
 

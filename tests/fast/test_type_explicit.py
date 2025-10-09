@@ -1,4 +1,5 @@
 import duckdb
+import duckdb.sqltypes as duckdb_types
 
 
 class TestMap:
@@ -9,7 +10,7 @@ class TestMap:
 
         # By using an explicit duckdb.Value with an array type, we should convert the input as an array
         # and get an array (tuple) back
-        typ = duckdb.array_type(duckdb.typing.BIGINT, 2)
+        typ = duckdb.array_type(duckdb_types.BIGINT, 2)
         val = duckdb.Value((1, 2), typ)
         res = con.sql("SELECT $arg", params={"arg": val}).fetchall()[0][0]
         assert res == (1, 2)
