@@ -1,8 +1,7 @@
 import duckdb
-import pandas as pd
 
 
-class TestUnion(object):
+class TestUnion:
     def test_union_by_all(self):
         connection = duckdb.connect()
 
@@ -44,8 +43,8 @@ class TestUnion(object):
             (13, 14, 15, 16, 17),
         ]
 
-        df_1 = connection.execute("FROM tbl1").df()
-        df_2 = connection.execute("FROM tbl2").df()
+        df_1 = connection.execute("FROM tbl1").df()  # noqa: F841
+        df_2 = connection.execute("FROM tbl2").df()  # noqa: F841
 
         query = """
 			select

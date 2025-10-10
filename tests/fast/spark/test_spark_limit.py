@@ -7,7 +7,7 @@ from spark_namespace.sql.types import (
 )
 
 
-class TestDataFrameLimit(object):
+class TestDataFrameLimit:
     def test_dataframe_limit(self, spark):
         df = spark.sql("select * from range(100000)")
         df2 = df.limit(10)

@@ -1,23 +1,13 @@
-from _duckdb.functional import (
-	FunctionNullHandling,
-	PythonUDFType,
-	PythonTVFType,
-	SPECIAL,
-	DEFAULT,
-	NATIVE,
-	ARROW,
-	TUPLES,
-	ARROW_TABLE
-)
+"""DuckDB function constants and types. DEPRECATED: please use `duckdb.func` instead."""
 
-__all__ = [
-	"FunctionNullHandling",
-	"PythonUDFType",
-	"PythonTVFType",
-	"SPECIAL",
-	"DEFAULT",
-	"NATIVE",
-	"ARROW",
-	"TUPLES",
-	"ARROW_TABLE"
-]
+import warnings
+
+from duckdb.func import ARROW, DEFAULT, NATIVE, SPECIAL, FunctionNullHandling, PythonTVFType, PythonUDFType
+
+__all__ = ["ARROW", "DEFAULT", "NATIVE", "SPECIAL", "FunctionNullHandling", "PythonTVFType", "PythonUDFType"]
+
+warnings.warn(
+    "`duckdb.functional` is deprecated and will be removed in a future version. Please use `duckdb.func` instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)

@@ -1,77 +1,70 @@
+import datetime
+import decimal
+import uuid
+
+import pytest
+
 import duckdb
-from pytest import raises
-from duckdb import NotImplementedException, InvalidInputException
+from duckdb import InvalidInputException, NotImplementedException
+from duckdb.typing import (
+    BIGINT,
+    BIT,
+    BLOB,
+    BOOLEAN,
+    DATE,
+    DOUBLE,
+    FLOAT,
+    HUGEINT,
+    INTEGER,
+    INTERVAL,
+    SMALLINT,
+    SQLNULL,
+    TIME,
+    TIMESTAMP,
+    TINYINT,
+    UBIGINT,
+    UHUGEINT,
+    UINTEGER,
+    USMALLINT,
+    UTINYINT,
+    UUID,
+    VARCHAR,
+)
 from duckdb.value.constant import (
-    Value,
-    NullValue,
-    BooleanValue,
-    UnsignedBinaryValue,
-    UnsignedShortValue,
-    UnsignedIntegerValue,
-    UnsignedLongValue,
     BinaryValue,
-    ShortValue,
-    IntegerValue,
-    LongValue,
-    HugeIntegerValue,
-    UnsignedHugeIntegerValue,
-    FloatValue,
-    DoubleValue,
-    DecimalValue,
-    StringValue,
-    UUIDValue,
     BitValue,
     BlobValue,
+    BooleanValue,
     DateValue,
+    DecimalValue,
+    DoubleValue,
+    FloatValue,
+    HugeIntegerValue,
+    IntegerValue,
     IntervalValue,
-    TimestampValue,
-    TimestampSecondValue,
+    LongValue,
+    NullValue,
+    ShortValue,
+    StringValue,
     TimestampMilisecondValue,
     TimestampNanosecondValue,
-    TimestampTimeZoneValue,
+    TimestampSecondValue,
+    TimestampValue,
     TimeValue,
-    TimeTimeZoneValue,
-)
-import uuid
-import datetime
-import pytest
-import decimal
-
-from duckdb.typing import (
-    SQLNULL,
-    BOOLEAN,
-    TINYINT,
-    UTINYINT,
-    SMALLINT,
-    USMALLINT,
-    INTEGER,
-    UINTEGER,
-    BIGINT,
-    UBIGINT,
-    HUGEINT,
-    UHUGEINT,
-    UUID,
-    FLOAT,
-    DOUBLE,
-    DATE,
-    TIMESTAMP,
-    TIMESTAMP_MS,
-    TIMESTAMP_NS,
-    TIMESTAMP_S,
-    TIME,
-    TIME_TZ,
-    TIMESTAMP_TZ,
-    VARCHAR,
-    BLOB,
-    BIT,
-    INTERVAL,
+    UnsignedBinaryValue,
+    UnsignedHugeIntegerValue,
+    UnsignedIntegerValue,
+    UnsignedLongValue,
+    UnsignedShortValue,
+    UUIDValue,
+    Value,
 )
 
 
-class TestValue(object):
+class TestValue:
     # This excludes timezone aware values, as those are a pain to test
     @pytest.mark.parametrize(
-        'item',
+        "item",
         [
             (BOOLEAN, BooleanValue(True), True),
             (UTINYINT, UnsignedBinaryValue(129), 129),
@@ -88,17 +81,17 @@ class TestValue(object):
             (DOUBLE, DoubleValue(0.23234234234), 0.23234234234),
             (
                 duckdb.decimal_type(12, 8),
-                DecimalValue(decimal.Decimal('1234.12345678'), 12, 8),
-                decimal.Decimal('1234.12345678'),
+                DecimalValue(decimal.Decimal("1234.12345678"), 12, 8),
+                decimal.Decimal("1234.12345678"),
             ),
-            (VARCHAR, StringValue('this is a long string'), 'this is a long string'),
+            (VARCHAR, StringValue("this is a long string"), "this is a long string"),
             (
                 UUID,
-                UUIDValue(uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
-                uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff'),
+                UUIDValue(uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff")),
+                uuid.UUID("ffffffff-ffff-ffff-ffff-ffffffffffff"),
             ),
-            (BIT, BitValue(b'010101010101'), '010101010101'),
-            (BLOB, BlobValue(b'\x00\x00\x00a'), b'\x00\x00\x00a'),
+            (BIT, BitValue(b"010101010101"), "010101010101"),
+            (BLOB, BlobValue(b"\x00\x00\x00a"), b"\x00\x00\x00a"),
             (DATE, DateValue(datetime.date(2000, 5, 4)), datetime.date(2000, 5, 4)),
             (INTERVAL, IntervalValue(datetime.timedelta(days=5)), datetime.timedelta(days=5)),
             (
@@ -116,10 +109,10 @@ class TestValue(object):
         expected_value = item[2]
 
         con = duckdb.connect()
-        observed_type = con.execute('select typeof(a) from (select $1) tbl(a)', [value_object]).fetchall()[0][0]
+        observed_type = con.execute("select typeof(a) from (select $1) tbl(a)", [value_object]).fetchall()[0][0]
         assert observed_type == str(expected_type)
 
-        con.execute('select $1', [value_object])
+        con.execute("select $1", [value_object])
         result = con.fetchone()
         result = result[0]
         assert result == expected_value
@@ -129,10 +122,10 @@ class TestValue(object):
 
         con = duckdb.connect()
         with pytest.raises(duckdb.ConversionException, match="Can't losslessly convert"):
-            con.execute('select $1', [value]).fetchall()
+            con.execute("select $1", [value]).fetchall()
 
     @pytest.mark.parametrize(
-        'value',
+        "value",
         [
             TimestampSecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
             TimestampMilisecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
@@ -142,12 +135,12 @@ class TestValue(object):
     def test_timestamp_sec_not_supported(self, value):
         con = duckdb.connect()
         with pytest.raises(
-            duckdb.NotImplementedException, match="Conversion from 'datetime' to type .* is not implemented yet"
+            duckdb.NotImplementedException, match=r"Conversion from 'datetime' to type .* is not implemented yet"
         ):
-            con.execute('select $1', [value]).fetchall()
+            con.execute("select $1", [value]).fetchall()
 
     @pytest.mark.parametrize(
-        'target_type,test_value,expected_conversion_success',
+        ("target_type", "test_value", "expected_conversion_success"),
         [
             (TINYINT, 0, True),
             (TINYINT, 255, False),
@@ -187,11 +180,12 @@ class TestValue(object):
         value = Value(test_value, target_type)
         con = duckdb.connect()
 
-        work = lambda: con.execute('select typeof(a) from (select $1) tbl(a)', [value]).fetchall()
+        def work():
+            return con.execute("select typeof(a) from (select $1) tbl(a)", [value]).fetchall()
 
         if expected_conversion_success:
             res = work()
             assert str(target_type) == res[0][0]
         else:
-            with raises((NotImplementedException, InvalidInputException)):
+            with pytest.raises((NotImplementedException, InvalidInputException)):
                 work()

@@ -7,7 +7,7 @@ from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
 
-class TestsSparkFunctionsNull(object):
+class TestsSparkFunctionsNull:
     def test_coalesce(self, spark):
         data = [
             (None, 2),
@@ -62,7 +62,7 @@ class TestsSparkFunctionsNull(object):
             ],
             ["a", "b", "c"],
         )
-        res = df.select(F.nvl2(df.a, df.b, df.c).alias('r')).collect()
+        res = df.select(F.nvl2(df.a, df.b, df.c).alias("r")).collect()
         assert res == [Row(r=6), Row(r=9)]
 
     def test_ifnull(self, spark):
@@ -92,7 +92,7 @@ class TestsSparkFunctionsNull(object):
             ],
             ["a", "b"],
         )
-        res = df.select(F.nullif(df.a, df.b).alias('r')).collect()
+        res = df.select(F.nullif(df.a, df.b).alias("r")).collect()
         assert res == [Row(r=None), Row(r=1)]
 
     def test_isnull(self, spark):

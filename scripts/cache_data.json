@@ -7,7 +7,19 @@
             "pyarrow.dataset",
             "pyarrow.Table",
             "pyarrow.RecordBatchReader",
-            "pyarrow.ipc"
+            "pyarrow.ipc",
+            "pyarrow.scalar",
+            "pyarrow.date32",
+            "pyarrow.time64",
+            "pyarrow.timestamp",
+            "pyarrow.uint8",
+            "pyarrow.uint16",
+            "pyarrow.uint32",
+            "pyarrow.uint64",
+            "pyarrow.binary_view",
+            "pyarrow.decimal32",
+            "pyarrow.decimal64",
+            "pyarrow.decimal128"
         ]
     },
     "pyarrow.dataset": {
@@ -709,5 +721,77 @@
         "name": "duckdb_source",
         "children": [],
         "required": false
+    },
+    "pyarrow.scalar": {
+        "type": "attribute",
+        "full_path": "pyarrow.scalar",
+        "name": "scalar",
+        "children": []
+    },
+    "pyarrow.date32": {
+        "type": "attribute",
+        "full_path": "pyarrow.date32",
+        "name": "date32",
+        "children": []
+    },
+    "pyarrow.time64": {
+        "type": "attribute",
+        "full_path": "pyarrow.time64",
+        "name": "time64",
+        "children": []
+    },
+    "pyarrow.timestamp": {
+        "type": "attribute",
+        "full_path": "pyarrow.timestamp",
+        "name": "timestamp",
+        "children": []
+    },
+    "pyarrow.uint8": {
+        "type": "attribute",
+        "full_path": "pyarrow.uint8",
+        "name": "uint8",
+        "children": []
+    },
+    "pyarrow.uint16": {
+        "type": "attribute",
+        "full_path": "pyarrow.uint16",
+        "name": "uint16",
+        "children": []
+    },
+    "pyarrow.uint32": {
+        "type": "attribute",
+        "full_path": "pyarrow.uint32",
+        "name": "uint32",
+        "children": []
+    },
+    "pyarrow.uint64": {
+        "type": "attribute",
+        "full_path": "pyarrow.uint64",
+        "name": "uint64",
+        "children": []
+    },
+    "pyarrow.binary_view": {
+        "type": "attribute",
+        "full_path": "pyarrow.binary_view",
+        "name": "binary_view",
+        "children": []
+    },
+    "pyarrow.decimal32": {
+        "type": "attribute",
+        "full_path": "pyarrow.decimal32",
+        "name": "decimal32",
+        "children": []
+    },
+    "pyarrow.decimal64": {
+        "type": "attribute",
+        "full_path": "pyarrow.decimal64",
+        "name": "decimal64",
+        "children": []
+    },
+    "pyarrow.decimal128": {
+        "type": "attribute",
+        "full_path": "pyarrow.decimal128",
+        "name": "decimal128",
+        "children": []
     }
 }

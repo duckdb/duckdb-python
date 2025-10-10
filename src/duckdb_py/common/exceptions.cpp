@@ -310,6 +310,12 @@ void PyThrowException(ErrorData &error, PyObject *http_exception) {
 	}
 }
 
+static void UnsetPythonException() {
+	if (PyErr_Occurred()) {
+		PyErr_Clear();
+	}
+}
+
 /**
  * @see https://peps.python.org/pep-0249/#exceptions
  */
@@ -381,6 +387,7 @@ void RegisterExceptions(const py::module &m) {
 			}
 		} catch (const duckdb::Exception &ex) {
 			duckdb::ErrorData error(ex);
+			UnsetPythonException();
 			PyThrowException(error, HTTP_EXCEPTION.ptr());
 		} catch (const py::builtin_exception &ex) {
 			// These represent Python exceptions, we don't want to catch these
@@ -391,6 +398,7 @@ void RegisterExceptions(const py::module &m) {
 				// we need to pass non-DuckDB exceptions through as-is
 				throw;
 			}
+			UnsetPythonException();
 			PyThrowException(error, HTTP_EXCEPTION.ptr());
 		}
 	});

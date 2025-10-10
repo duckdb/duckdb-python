@@ -1,11 +1,12 @@
-import duckdb
 import pytest
 
+import duckdb
 
-class TestDuckDBExecute(object):
+
+class TestDuckDBExecute:
     def test_execute_basic(self, duckdb_cursor):
-        duckdb_cursor.execute('create table t as select 5')
-        res = duckdb_cursor.table('t').fetchall()
+        duckdb_cursor.execute("create table t as select 5")
+        res = duckdb_cursor.table("t").fetchall()
         assert res == [(5,)]
 
     def test_execute_many_basic(self, duckdb_cursor):
@@ -19,11 +20,11 @@ class TestDuckDBExecute(object):
         """,
             (99,),
         )
-        res = duckdb_cursor.table('t').fetchall()
+        res = duckdb_cursor.table("t").fetchall()
         assert res == [(99,)]
 
     @pytest.mark.parametrize(
-        'rowcount',
+        "rowcount",
         [
             50,
             2048,
@@ -40,7 +41,7 @@ class TestDuckDBExecute(object):
                 yield min(2048, rowcount - count)
                 count += 2048
 
-        # FIXME: perhaps we want to test with different buffer sizes?
+        # TODO: perhaps we want to test with different buffer sizes?  # noqa: TD002, TD003
         # duckdb_cursor.execute("set streaming_buffer_size='1mb'")
         duckdb_cursor.execute(f"create table tbl as from range({rowcount})")
         duckdb_cursor.execute("select * from tbl")
@@ -53,7 +54,7 @@ class TestDuckDBExecute(object):
 
         # Prepared parameter used in a statement that is not the last
         with pytest.raises(
-            duckdb.NotImplementedException, match='Prepared parameters are only supported for the last statement'
+            duckdb.NotImplementedException, match="Prepared parameters are only supported for the last statement"
         ):
             duckdb_cursor.execute(
                 """
@@ -67,17 +68,16 @@ class TestDuckDBExecute(object):
         to_insert = [[1], [2], [3]]
 
         def to_insert_from_generator(what):
-            for x in what:
-                yield x
+            yield from what
 
         gen = to_insert_from_generator(to_insert)
         duckdb_cursor.execute("CREATE TABLE unittest_generator (a INTEGER);")
         duckdb_cursor.executemany("INSERT into unittest_generator (a) VALUES (?)", gen)
-        assert duckdb_cursor.table('unittest_generator').fetchall() == [(1,), (2,), (3,)]
+        assert duckdb_cursor.table("unittest_generator").fetchall() == [(1,), (2,), (3,)]
 
     def test_execute_multiple_statements(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
-        df = pd.DataFrame({'a': [5, 6, 7, 8]})
+        df = pd.DataFrame({"a": [5, 6, 7, 8]})  # noqa: F841
         sql = """
             select * from df;
             select * from VALUES (1),(2),(3),(4) t(a);

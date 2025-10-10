@@ -1,10 +1,8 @@
-from typing import TYPE_CHECKING, List, Optional, Union, cast
-
-from ..exception import ContributionsAcceptedError
-from .types import StructType
-
+from typing import TYPE_CHECKING, Optional, Union, cast  # noqa: D100
 
 from ..errors import PySparkNotImplementedError, PySparkTypeError
+from ..exception import ContributionsAcceptedError
+from .types import StructType
 
 PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
@@ -14,19 +12,19 @@ if TYPE_CHECKING:
     from duckdb.experimental.spark.sql.session import SparkSession
 
 
-class DataFrameWriter:
-    def __init__(self, dataframe: "DataFrame"):
+class DataFrameWriter:  # noqa: D101
+    def __init__(self, dataframe: "DataFrame") -> None:  # noqa: D107
         self.dataframe = dataframe
 
-    def saveAsTable(self, table_name: str) -> None:
+    def saveAsTable(self, table_name: str) -> None:  # noqa: D102
         relation = self.dataframe.relation
         relation.create(table_name)
 
-    def parquet(
+    def parquet(  # noqa: D102
         self,
         path: str,
         mode: Optional[str] = None,
-        partitionBy: Union[str, List[str], None] = None,
+        partitionBy: Union[str, list[str], None] = None,
         compression: Optional[str] = None,
     ) -> None:
         relation = self.dataframe.relation
@@ -37,7 +35,7 @@ class DataFrameWriter:
 
         relation.write_parquet(path, compression=compression)
 
-    def csv(
+    def csv(  # noqa: D102
         self,
         path: str,
         mode: Optional[str] = None,
@@ -57,7 +55,7 @@ class DataFrameWriter:
         encoding: Optional[str] = None,
         emptyValue: Optional[str] = None,
         lineSep: Optional[str] = None,
-    ):
+    ) -> None:
         if mode not in (None, "overwrite"):
             raise NotImplementedError
         if escapeQuotes:
@@ -88,13 +86,13 @@ class DataFrameWriter:
         )
 
 
-class DataFrameReader:
-    def __init__(self, session: "SparkSession"):
+class DataFrameReader:  # noqa: D101
+    def __init__(self, session: "SparkSession") -> None:  # noqa: D107
         self.session = session
 
-    def load(
+    def load(  # noqa: D102
         self,
-        path: Optional[Union[str, List[str]]] = None,
+        path: Optional[Union[str, list[str]]] = None,
         format: Optional[str] = None,
         schema: Optional[Union[StructType, str]] = None,
         **options: OptionalPrimitiveType,
@@ -102,7 +100,7 @@ class DataFrameReader:
         from duckdb.experimental.spark.sql.dataframe import DataFrame
 
         if not isinstance(path, str):
-            raise ImportError
+            raise TypeError
         if options:
             raise ContributionsAcceptedError
 
@@ -123,15 +121,15 @@ class DataFrameReader:
         if schema:
             if not isinstance(schema, StructType):
                 raise ContributionsAcceptedError
-            schema = cast(StructType, schema)
+            schema = cast("StructType", schema)
             types, names = schema.extract_types_and_names()
             df = df._cast_types(types)
             df = df.toDF(names)
         raise NotImplementedError
 
-    def csv(
+    def csv(  # noqa: D102
         self,
-        path: Union[str, List[str]],
+        path: Union[str, list[str]],
         schema: Optional[Union[StructType, str]] = None,
         sep: Optional[str] = None,
         encoding: Optional[str] = None,
@@ -225,7 +223,7 @@ class DataFrameReader:
         dtype = None
         names = None
         if schema:
-            schema = cast(StructType, schema)
+            schema = cast("StructType", schema)
             dtype, names = schema.extract_types_and_names()
 
         rel = self.session.conn.read_csv(
@@ -247,13 +245,15 @@ class DataFrameReader:
             df = df.toDF(*names)
         return df
 
-    def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":
+    def parquet(self, *paths: str, **options: "OptionalPrimitiveType") -> "DataFrame":  # noqa: D102
         input = list(paths)
         if len(input) != 1:
-            raise NotImplementedError("Only single paths are supported for now")
+            msg = "Only single paths are supported for now"
+            raise NotImplementedError(msg)
         option_amount = len(options.keys())
         if option_amount != 0:
-            raise ContributionsAcceptedError("Options are not supported")
+            msg = "Options are not supported"
+            raise ContributionsAcceptedError(msg)
         path = input[0]
         rel = self.session.conn.read_parquet(path)
         from ..sql.dataframe import DataFrame
@@ -263,7 +263,7 @@ class DataFrameReader:
 
     def json(
         self,
-        path: Union[str, List[str]],
+        path: Union[str, list[str]],
         schema: Optional[Union[StructType, str]] = None,
         primitivesAsString: Optional[Union[bool, str]] = None,
         prefersDecimal: Optional[Union[bool, str]] = None,
@@ -289,8 +289,7 @@ class DataFrameReader:
         modifiedAfter: Optional[Union[bool, str]] = None,
         allowNonNumericNumbers: Optional[Union[bool, str]] = None,
     ) -> "DataFrame":
-        """
-        Loads JSON files and returns the results as a :class:`DataFrame`.
+        """Loads JSON files and returns the results as a :class:`DataFrame`.
 
         `JSON Lines <http://jsonlines.org/>`_ (newline-delimited JSON) is supported by default.
         For JSON (one record per file), set the ``multiLine`` parameter to ``true``.
@@ -321,16 +320,16 @@ class DataFrameReader:
 
             .. # noqa
 
-        Examples
+        Examples:
         --------
         Write a DataFrame into a JSON file and read it back.
 
         >>> import tempfile
         >>> with tempfile.TemporaryDirectory() as d:
         ...     # Write a DataFrame into a JSON file
-        ...     spark.createDataFrame(
-        ...         [{"age": 100, "name": "Hyukjin Kwon"}]
-        ...     ).write.mode("overwrite").format("json").save(d)
+        ...     spark.createDataFrame([{"age": 100, "name": "Hyukjin Kwon"}]).write.mode(
+        ...         "overwrite"
+        ...     ).format("json").save(d)
         ...
         ...     # Read the JSON file as a DataFrame.
         ...     spark.read.json(d).show()
@@ -340,102 +339,89 @@ class DataFrameReader:
         |100|Hyukjin Kwon|
         +---+------------+
         """
-
         if schema is not None:
-            raise ContributionsAcceptedError("The 'schema' option is not supported")
+            msg = "The 'schema' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if primitivesAsString is not None:
-            raise ContributionsAcceptedError(
-                "The 'primitivesAsString' option is not supported"
-            )
+            msg = "The 'primitivesAsString' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if prefersDecimal is not None:
-            raise ContributionsAcceptedError(
-                "The 'prefersDecimal' option is not supported"
-            )
+            msg = "The 'prefersDecimal' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowComments is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowComments' option is not supported"
-            )
+            msg = "The 'allowComments' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowUnquotedFieldNames is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowUnquotedFieldNames' option is not supported"
-            )
+            msg = "The 'allowUnquotedFieldNames' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowSingleQuotes is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowSingleQuotes' option is not supported"
-            )
+            msg = "The 'allowSingleQuotes' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowNumericLeadingZero is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowNumericLeadingZero' option is not supported"
-            )
+            msg = "The 'allowNumericLeadingZero' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowBackslashEscapingAnyCharacter is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowBackslashEscapingAnyCharacter' option is not supported"
-            )
+            msg = "The 'allowBackslashEscapingAnyCharacter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if mode is not None:
-            raise ContributionsAcceptedError("The 'mode' option is not supported")
+            msg = "The 'mode' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if columnNameOfCorruptRecord is not None:
-            raise ContributionsAcceptedError(
-                "The 'columnNameOfCorruptRecord' option is not supported"
-            )
+            msg = "The 'columnNameOfCorruptRecord' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if dateFormat is not None:
-            raise ContributionsAcceptedError("The 'dateFormat' option is not supported")
+            msg = "The 'dateFormat' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if timestampFormat is not None:
-            raise ContributionsAcceptedError(
-                "The 'timestampFormat' option is not supported"
-            )
+            msg = "The 'timestampFormat' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if multiLine is not None:
-            raise ContributionsAcceptedError("The 'multiLine' option is not supported")
+            msg = "The 'multiLine' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowUnquotedControlChars is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowUnquotedControlChars' option is not supported"
-            )
+            msg = "The 'allowUnquotedControlChars' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if lineSep is not None:
-            raise ContributionsAcceptedError("The 'lineSep' option is not supported")
+            msg = "The 'lineSep' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if samplingRatio is not None:
-            raise ContributionsAcceptedError(
-                "The 'samplingRatio' option is not supported"
-            )
+            msg = "The 'samplingRatio' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if dropFieldIfAllNull is not None:
-            raise ContributionsAcceptedError(
-                "The 'dropFieldIfAllNull' option is not supported"
-            )
+            msg = "The 'dropFieldIfAllNull' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if encoding is not None:
-            raise ContributionsAcceptedError("The 'encoding' option is not supported")
+            msg = "The 'encoding' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if locale is not None:
-            raise ContributionsAcceptedError("The 'locale' option is not supported")
+            msg = "The 'locale' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if pathGlobFilter is not None:
-            raise ContributionsAcceptedError(
-                "The 'pathGlobFilter' option is not supported"
-            )
+            msg = "The 'pathGlobFilter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if recursiveFileLookup is not None:
-            raise ContributionsAcceptedError(
-                "The 'recursiveFileLookup' option is not supported"
-            )
+            msg = "The 'recursiveFileLookup' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if modifiedBefore is not None:
-            raise ContributionsAcceptedError(
-                "The 'modifiedBefore' option is not supported"
-            )
+            msg = "The 'modifiedBefore' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if modifiedAfter is not None:
-            raise ContributionsAcceptedError(
-                "The 'modifiedAfter' option is not supported"
-            )
+            msg = "The 'modifiedAfter' option is not supported"
+            raise ContributionsAcceptedError(msg)
         if allowNonNumericNumbers is not None:
-            raise ContributionsAcceptedError(
-                "The 'allowNonNumericNumbers' option is not supported"
-            )
+            msg = "The 'allowNonNumericNumbers' option is not supported"
+            raise ContributionsAcceptedError(msg)
 
         if isinstance(path, str):
             path = [path]
-        if  isinstance(path, list):
+        if isinstance(path, list):
             if len(path) == 1:
                 rel = self.session.conn.read_json(path[0])
                 from .dataframe import DataFrame
 
                 df = DataFrame(rel, self.session)
                 return df
-            raise PySparkNotImplementedError(
-                message="Only a single path is supported for now"
-            )
+            raise PySparkNotImplementedError(message="Only a single path is supported for now")
         else:
             raise PySparkTypeError(
                 error_class="NOT_STR_OR_LIST_OF_RDD",
@@ -446,4 +432,4 @@ class DataFrameReader:
             )
 
 
-__all__ = ["DataFrameWriter", "DataFrameReader"]
+__all__ = ["DataFrameReader", "DataFrameWriter"]

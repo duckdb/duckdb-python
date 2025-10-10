@@ -1,4 +1,5 @@
 import warnings
+
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
@@ -6,11 +7,11 @@ from datetime import date, datetime
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
-from spark_namespace.sql.types import Row
 from spark_namespace.sql.functions import col
+from spark_namespace.sql.types import Row
 
 
-class TestsSparkFunctionsDate(object):
+class TestsSparkFunctionsDate:
     def test_date_trunc(self, spark):
         df = spark.createDataFrame(
             [(datetime(2019, 1, 23, 14, 34, 9, 87539),)],
@@ -145,43 +146,43 @@ class TestsSparkFunctionsDate(object):
         assert result[0].second_num == 45
 
     def test_unix_date(self, spark):
-        df = spark.createDataFrame([('1970-01-02',)], ['t'])
-        res = df.select(F.unix_date(df.t.cast("date")).alias('n')).collect()
+        df = spark.createDataFrame([("1970-01-02",)], ["t"])
+        res = df.select(F.unix_date(df.t.cast("date")).alias("n")).collect()
         assert res == [Row(n=1)]
 
     def test_unix_micros(self, spark):
-        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
-        res = df.select(F.unix_micros(df.t.cast("timestamp")).alias('n')).collect()
+        df = spark.createDataFrame([("2015-07-22 10:00:00+00:00",)], ["t"])
+        res = df.select(F.unix_micros(df.t.cast("timestamp")).alias("n")).collect()
         assert res == [Row(n=1437559200000000)]
 
     def test_unix_millis(self, spark):
-        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
-        res = df.select(F.unix_millis(df.t.cast("timestamp")).alias('n')).collect()
+        df = spark.createDataFrame([("2015-07-22 10:00:00+00:00",)], ["t"])
+        res = df.select(F.unix_millis(df.t.cast("timestamp")).alias("n")).collect()
         assert res == [Row(n=1437559200000)]
 
     def test_unix_seconds(self, spark):
-        df = spark.createDataFrame([('2015-07-22 10:00:00+00:00',)], ['t'])
-        res = df.select(F.unix_seconds(df.t.cast("timestamp")).alias('n')).collect()
+        df = spark.createDataFrame([("2015-07-22 10:00:00+00:00",)], ["t"])
+        res = df.select(F.unix_seconds(df.t.cast("timestamp")).alias("n")).collect()
         assert res == [Row(n=1437559200)]
 
     def test_weekday(self, spark):
-        df = spark.createDataFrame([('2015-04-08',)], ['dt'])
-        res = df.select(F.weekday(df.dt.cast("date")).alias('day')).collect()
+        df = spark.createDataFrame([("2015-04-08",)], ["dt"])
+        res = df.select(F.weekday(df.dt.cast("date")).alias("day")).collect()
         assert res == [Row(day=2)]
 
     def test_to_date(self, spark):
-        df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
-        res = df.select(F.to_date(df.t).alias('date')).collect()
+        df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
+        res = df.select(F.to_date(df.t).alias("date")).collect()
         assert res == [Row(date=date(1997, 2, 28))]
 
     def test_to_timestamp(self, spark):
-        df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
-        res = df.select(F.to_timestamp(df.t).alias('dt')).collect()
+        df = spark.createDataFrame([("1997-02-28 10:30:00",)], ["t"])
+        res = df.select(F.to_timestamp(df.t).alias("dt")).collect()
         assert res == [Row(dt=datetime(1997, 2, 28, 10, 30))]
 
     def test_to_timestamp_ltz(self, spark):
         df = spark.createDataFrame([("2016-12-31",)], ["e"])
-        res = df.select(F.to_timestamp_ltz(df.e).alias('r')).collect()
+        res = df.select(F.to_timestamp_ltz(df.e).alias("r")).collect()
 
         assert res == [Row(r=datetime(2016, 12, 31, 0, 0))]
 
@@ -194,15 +195,15 @@ class TestsSparkFunctionsDate(object):
         if USE_ACTUAL_SPARK:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=DeprecationWarning)
-                res = df.select(F.to_timestamp_ntz(df.e).alias('r')).collect()
+                res = df.select(F.to_timestamp_ntz(df.e).alias("r")).collect()
         else:
-            res = df.select(F.to_timestamp_ntz(df.e).alias('r')).collect()
+            res = df.select(F.to_timestamp_ntz(df.e).alias("r")).collect()
         assert res == [Row(r=datetime(2016, 4, 8, 0, 0))]
 
     def test_last_day(self, spark):
-        df = spark.createDataFrame([('1997-02-10',)], ['d'])
+        df = spark.createDataFrame([("1997-02-10",)], ["d"])
 
-        res = df.select(F.last_day(df.d.cast("date")).alias('date')).collect()
+        res = df.select(F.last_day(df.d.cast("date")).alias("date")).collect()
         assert res == [Row(date=date(1997, 2, 28))]
 
     def test_add_months(self, spark):
@@ -219,12 +220,12 @@ class TestsSparkFunctionsDate(object):
         assert result[0].with_col == date(2024, 7, 12)
 
     def test_date_diff(self, spark):
-        df = spark.createDataFrame([('2015-04-08', '2015-05-10')], ["d1", "d2"])
+        df = spark.createDataFrame([("2015-04-08", "2015-05-10")], ["d1", "d2"])
 
-        result_data = df.select(F.date_diff(col("d2").cast('DATE'), col("d1").cast('DATE')).alias("diff")).collect()
+        result_data = df.select(F.date_diff(col("d2").cast("DATE"), col("d1").cast("DATE")).alias("diff")).collect()
         assert result_data[0]["diff"] == -32
 
-        result_data = df.select(F.date_diff(col("d1").cast('DATE'), col("d2").cast('DATE')).alias("diff")).collect()
+        result_data = df.select(F.date_diff(col("d1").cast("DATE"), col("d2").cast("DATE")).alias("diff")).collect()
         assert result_data[0]["diff"] == 32
 
     def test_try_to_timestamp(self, spark):

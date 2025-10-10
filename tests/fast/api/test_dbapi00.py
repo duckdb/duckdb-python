@@ -2,17 +2,16 @@
 
 import numpy
 import pytest
-import duckdb
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 
 
 def assert_result_equal(result):
     assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
 
 
-class TestSimpleDBAPI(object):
+class TestSimpleDBAPI:
     def test_regular_selection(self, duckdb_cursor, integers):
-        duckdb_cursor.execute('SELECT * FROM integers')
+        duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchall()
         assert_result_equal(result)
 
@@ -20,9 +19,7 @@ class TestSimpleDBAPI(object):
         # Get truth-value
         truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
 
-        duckdb_cursor.execute('Select * from integers')
-        # by default 'size' is 1
-        arraysize = 1
+        duckdb_cursor.execute("Select * from integers")
         list_of_results = []
         while True:
             res = duckdb_cursor.fetchmany()
@@ -40,7 +37,7 @@ class TestSimpleDBAPI(object):
     def test_fetchmany(self, duckdb_cursor, integers):
         # Get truth value
         truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
-        duckdb_cursor.execute('select * from integers')
+        duckdb_cursor.execute("select * from integers")
         list_of_results = []
         arraysize = 3
         expected_iteration_count = 1 + (int)(truth_value / arraysize) + (1 if truth_value % arraysize else 0)
@@ -63,8 +60,8 @@ class TestSimpleDBAPI(object):
         assert len(res) == 0
 
     def test_fetchmany_too_many(self, duckdb_cursor, integers):
-        truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
-        duckdb_cursor.execute('select * from integers')
+        truth_value = len(duckdb_cursor.execute("select * from integers").fetchall())
+        duckdb_cursor.execute("select * from integers")
         res = duckdb_cursor.fetchmany(truth_value * 5)
         assert len(res) == truth_value
         assert_result_equal(res)
@@ -74,48 +71,48 @@ class TestSimpleDBAPI(object):
         assert len(res) == 0
 
     def test_numpy_selection(self, duckdb_cursor, integers, timestamps):
-        duckdb_cursor.execute('SELECT * FROM integers')
+        duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchnumpy()
         arr = numpy.ma.masked_array(numpy.arange(11))
         arr.mask = [False] * 10 + [True]
-        numpy.testing.assert_array_equal(result['i'], arr, "Incorrect result returned")
-        duckdb_cursor.execute('SELECT * FROM timestamps')
+        numpy.testing.assert_array_equal(result["i"], arr, "Incorrect result returned")
+        duckdb_cursor.execute("SELECT * FROM timestamps")
         result = duckdb_cursor.fetchnumpy()
-        arr = numpy.array(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None], dtype="datetime64[ms]")
+        arr = numpy.array(["1992-10-03 18:34:45", "2010-01-01 00:00:01", None], dtype="datetime64[ms]")
         arr = numpy.ma.masked_array(arr)
         arr.mask = [False, False, True]
-        numpy.testing.assert_array_equal(result['t'], arr, "Incorrect result returned")
+        numpy.testing.assert_array_equal(result["t"], arr, "Incorrect result returned")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps):
         import datetime
 
         from packaging.version import Version
 
         # I don't know when this exactly changed, but 2.0.3 does not support this, recent versions do
-        if Version(pandas.__version__) <= Version('2.0.3'):
+        if Version(pandas.__version__) <= Version("2.0.3"):
             pytest.skip("The resulting dtype is 'object' when given a Series with dtype Int32DType")
 
-        duckdb_cursor.execute('SELECT * FROM integers')
+        duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchdf()
         array = numpy.ma.masked_array(numpy.arange(11))
         array.mask = [False] * 10 + [True]
-        arr = {'i': pandas.Series(array.data, dtype=pandas.Int32Dtype)}
-        arr['i'][array.mask] = pandas.NA
+        arr = {"i": pandas.Series(array.data, dtype=pandas.Int32Dtype)}
+        arr["i"][array.mask] = pandas.NA
         arr = pandas.DataFrame(arr)
         pandas.testing.assert_frame_equal(result, arr)
 
-        duckdb_cursor.execute('SELECT * FROM timestamps')
+        duckdb_cursor.execute("SELECT * FROM timestamps")
         result = duckdb_cursor.fetchdf()
         df = pandas.DataFrame(
             {
-                't': pandas.Series(
+                "t": pandas.Series(
                     data=[
                         datetime.datetime(year=1992, month=10, day=3, hour=18, minute=34, second=45),
                         datetime.datetime(year=2010, month=1, day=1, hour=0, minute=0, second=1),
                         None,
                     ],
-                    dtype='datetime64[us]',
+                    dtype="datetime64[us]",
                 )
             }
         )

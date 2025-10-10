@@ -1,5 +1,6 @@
-import numpy as np
 import os
+
+import numpy as np
 import pytest
 
 try:
@@ -8,8 +9,7 @@ try:
     can_run = True
 except ImportError:
     can_run = False
-from conftest import NumpyPandas, ArrowPandas
-
+from conftest import ArrowPandas, NumpyPandas
 
 psutil = pytest.importorskip("psutil")
 
@@ -31,43 +31,43 @@ def from_df(pandas, duckdb_cursor):
 
 def from_arrow(pandas, duckdb_cursor):
     data = pa.array(np.random.rand(1_000_000), type=pa.float32())
-    arrow_table = pa.Table.from_arrays([data], ['a'])
+    arrow_table = pa.Table.from_arrays([data], ["a"])
     duckdb_cursor.from_arrow(arrow_table)
 
 
 def arrow_replacement(pandas, duckdb_cursor):
     data = pa.array(np.random.rand(1_000_000), type=pa.float32())
-    arrow_table = pa.Table.from_arrays([data], ['a'])
+    arrow_table = pa.Table.from_arrays([data], ["a"])  # noqa: F841
     duckdb_cursor.query("select sum(a) from arrow_table").fetchall()
 
 
 def pandas_replacement(pandas, duckdb_cursor):
-    df = pandas.DataFrame({"x": np.random.rand(1_000_000)})
+    df = pandas.DataFrame({"x": np.random.rand(1_000_000)})  # noqa: F841
     duckdb_cursor.query("select sum(x) from df").fetchall()
 
 
-class TestRelationDependencyMemoryLeak(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+class TestRelationDependencyMemoryLeak:
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_from_arrow_leak(self, pandas, duckdb_cursor):
         if not can_run:
             return
         check_memory(from_arrow, pandas, duckdb_cursor)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_from_df_leak(self, pandas, duckdb_cursor):
         check_memory(from_df, pandas, duckdb_cursor)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_arrow_replacement_scan_leak(self, pandas, duckdb_cursor):
         if not can_run:
             return
         check_memory(arrow_replacement, pandas, duckdb_cursor)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_pandas_replacement_scan_leak(self, pandas, duckdb_cursor):
         check_memory(pandas_replacement, pandas, duckdb_cursor)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_view_leak(self, pandas, duckdb_cursor):
         rel = from_df(pandas, duckdb_cursor)
         rel.create_view("bla")

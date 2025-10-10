@@ -1,33 +1,39 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
-import os
+from enum import Enum
+from pathlib import Path
+from typing import Callable
 
 import cxxheaderparser.parser
-import cxxheaderparser.visitor
 import cxxheaderparser.preprocessor
-from typing import List, Dict
+import cxxheaderparser.visitor
 
-scripts_folder = os.path.dirname(os.path.abspath(__file__))
+scripts_folder = Path(__file__).parent
 
 
 class FunctionParam:
-    def __init__(self, name: str, proto: str):
+    def __init__(self, name: str, proto: str) -> None:
         self.proto = proto
         self.name = name
 
 
+class ReturnType(Enum):
+    VOID = 0
+    OTHER = 1
+
+
 class ConnectionMethod:
-    def __init__(self, name: str, params: List[FunctionParam], is_void: bool):
+    def __init__(self, name: str, params: list[FunctionParam], return_type: ReturnType) -> None:
         self.name = name
         self.params = params
-        self.is_void = is_void
+        self.return_type = return_type
 
 
 class Visitor:
-    def __init__(self, class_name: str):
+    def __init__(self, class_name: str) -> None:
         self.methods_dict = {}
         self.class_name = class_name
 
-    def __getattr__(self, name):
+    def __getattr__(self, name) -> Callable[[...], bool]:
         return lambda *state: True
 
     def on_class_start(self, state):
@@ -36,8 +42,9 @@ class Visitor:
 
     def on_class_method(self, state, node):
         name = node.name.format()
-        return_type = node.return_type
-        is_void = return_type and return_type.format() == "void"
+        return_type = ReturnType.VOID
+        if node.return_type and node.return_type.format() == "void":
+            return_type = ReturnType.OTHER
         params = [
             FunctionParam(
                 x.name,
@@ -46,24 +53,27 @@ class Visitor:
             for x in node.parameters
         ]
 
-        self.methods_dict[name] = ConnectionMethod(name, params, is_void)
+        self.methods_dict[name] = ConnectionMethod(name, params, return_type)
 
 
-def get_methods(class_name: str) -> Dict[str, ConnectionMethod]:
+def get_methods(class_name: str) -> dict[str, ConnectionMethod]:
     CLASSES = {
-        "DuckDBPyConnection": os.path.join(
-            scripts_folder,
-            "..",
-            "src",
-            "include",
-            "duckdb_python",
-            "pyconnection",
-            "pyconnection.hpp",
-        ),
-        "DuckDBPyRelation": os.path.join(scripts_folder, "..", "src", "include", "duckdb_python", "pyrelation.hpp"),
+        "DuckDBPyConnection": Path(scripts_folder)
+        / ".."
+        / "src"
+        / "duckdb_py"
+        / "include"
+        / "duckdb_python"
+        / "pyconnection"
+        / "pyconnection.hpp",
+        "DuckDBPyRelation": Path(scripts_folder)
+        / ".."
+        / "src"
+        / "duckdb_py"
+        / "include"
+        / "duckdb_python"
+        / "pyrelation.hpp",
     }
-    # Create a dictionary to store method names and prototypes
-    methods_dict = {}
 
     path = CLASSES[class_name]
 

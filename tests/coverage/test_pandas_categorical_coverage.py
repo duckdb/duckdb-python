@@ -1,7 +1,7 @@
-import duckdb
-import numpy
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas
+
+import duckdb
 
 
 def check_result_list(res):
@@ -15,17 +15,17 @@ def check_create_table(category, pandas):
     conn.execute("PRAGMA enable_verification")
     df_in = pandas.DataFrame(
         {
-            'x': pandas.Categorical(category, ordered=True),
-            'y': pandas.Categorical(category, ordered=True),
-            'z': category,
+            "x": pandas.Categorical(category, ordered=True),
+            "y": pandas.Categorical(category, ordered=True),
+            "z": category,
         }
     )
 
-    category.append('bla')
+    category.append("bla")
 
-    df_in_diff = pandas.DataFrame(
+    df_in_diff = pandas.DataFrame(  # noqa: F841
         {
-            'k': pandas.Categorical(category, ordered=True),
+            "k": pandas.Categorical(category, ordered=True),
         }
     )
 
@@ -44,7 +44,7 @@ def check_create_table(category, pandas):
     conn.execute("INSERT INTO t1 VALUES ('2','2','2')")
 
     res = conn.execute("SELECT x FROM t1 where x = '1'").fetchall()
-    assert res == [('1',)]
+    assert res == [("1",)]
 
     res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x) order by t1.x").fetchall()
     assert res == conn.execute("SELECT x FROM t1 order by t1.x").fetchall()
@@ -68,18 +68,14 @@ def check_create_table(category, pandas):
     conn.execute("DROP TABLE t1")
 
 
-# TODO: extend tests with ArrowPandas
-class TestCategory(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+# TODO: extend tests with ArrowPandas  # noqa: TD002, TD003
+class TestCategory:
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint16(self, duckdb_cursor, pandas):
-        category = []
-        for i in range(300):
-            category.append(str(i))
+        category = [str(i) for i in range(300)]
         check_create_table(category, pandas)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_category_string_uint32(self, duckdb_cursor, pandas):
-        category = []
-        for i in range(70000):
-            category.append(str(i))
+        category = [str(i) for i in range(70000)]
         check_create_table(category, pandas)

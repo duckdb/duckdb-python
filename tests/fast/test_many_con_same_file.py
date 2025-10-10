@@ -1,6 +1,9 @@
-import duckdb
-import os
+import contextlib
+from pathlib import Path
+
 import pytest
+
+import duckdb
 
 
 def get_tables(con):
@@ -11,10 +14,8 @@ def get_tables(con):
 
 
 def test_multiple_writes():
-    try:
-        os.remove("test.db")
-    except:
-        pass
+    with contextlib.suppress(Exception):
+        Path("test.db").unlink()
     con1 = duckdb.connect("test.db")
     con2 = duckdb.connect("test.db")
     con1.execute("CREATE TABLE foo1 as SELECT 1 as a, 2 as b")
@@ -23,15 +24,13 @@ def test_multiple_writes():
     con1.close()
     con3 = duckdb.connect("test.db")
     tbls = get_tables(con3)
-    assert tbls == ['bar1', 'foo1']
+    assert tbls == ["bar1", "foo1"]
     del con1
     del con2
     del con3
 
-    try:
-        os.remove("test.db")
-    except:
-        pass
+    with contextlib.suppress(Exception):
+        Path("test.db").unlink()
 
 
 def test_multiple_writes_memory():
@@ -41,9 +40,9 @@ def test_multiple_writes_memory():
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
     con3 = duckdb.connect(":memory:")
     tbls = get_tables(con1)
-    assert tbls == ['foo1']
+    assert tbls == ["foo1"]
     tbls = get_tables(con2)
-    assert tbls == ['bar1']
+    assert tbls == ["bar1"]
     tbls = get_tables(con3)
     assert tbls == []
     del con1
@@ -58,7 +57,7 @@ def test_multiple_writes_named_memory():
     con2.execute("CREATE TABLE bar1 as SELECT 2 as a, 3 as b")
     con3 = duckdb.connect(":memory:1")
     tbls = get_tables(con3)
-    assert tbls == ['bar1', 'foo1']
+    assert tbls == ["bar1", "foo1"]
     del con1
     del con2
     del con3
@@ -70,17 +69,17 @@ def test_diff_config():
         duckdb.ConnectionException,
         match="Can't open a connection to same database file with a different configuration than existing connections",
     ):
-        con2 = duckdb.connect("test.db", True)
+        duckdb.connect("test.db", True)
     con1.close()
     del con1
 
 
 def test_diff_config_extended():
-    con1 = duckdb.connect("test.db", config={'null_order': 'NULLS FIRST'})
+    con1 = duckdb.connect("test.db", config={"null_order": "NULLS FIRST"})
     with pytest.raises(
         duckdb.ConnectionException,
         match="Can't open a connection to same database file with a different configuration than existing connections",
     ):
-        con2 = duckdb.connect("test.db")
+        duckdb.connect("test.db")
     con1.close()
     del con1
