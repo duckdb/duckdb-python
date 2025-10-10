@@ -44,9 +44,22 @@ jobs:
           - { minimal: true, python: cp310 }
           - { minimal: true, python: cp311 }
           - { minimal: true, python: cp312 }
+          - { minimal: true, python: cp313 }
           - { minimal: true, platform: { arch: universal2 } }
     runs-on: ${{ matrix.platform.os }}
     env:
+      ### cibuildwheel configuration
+      #
+      # This is somewhat brittle, so be careful with changes. Some notes for our future selves (and others):
+      # - cibw will change its cwd to a temp dir and create a separate venv for testing. It then installs the wheel it
+      #   built into that venv, and run the CIBW_TEST_COMMAND. We have to install all dependencies ourselves, and make
+      #   sure that the pytest config in pyproject.toml is available.
+      # - CIBW_BEFORE_TEST installs the test dependencies by exporting them into a pylock.toml. At the time of writing,
+      #   `uv sync --no-install-project` had problems correctly resolving dependencies using resolution environments
+      #   across all platforms we build for. This might be solved in newer uv versions.
+      # - CIBW_TEST_COMMAND specifies pytest conf from pyproject.toml. --confcutdir is needed to prevent pytest from
+      #   traversing the full filesystem, which produces an error on Windows.
+      # - CIBW_TEST_SKIP we always skip tests for *-macosx_universal2 builds, because we run tests for arm64 and x86_64.
       CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
       CIBW_TEST_SOURCES: tests
       CIBW_BEFORE_TEST: >

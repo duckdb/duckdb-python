@@ -233,8 +233,6 @@ test = [ # dependencies used for running tests
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
-    "pytest-xdist",
-    #"pytest-randomly",
     "pytest-timestamper",
     "mypy",
     "coverage",
@@ -305,7 +303,7 @@ dev = [ # tooling like uv will install this automatically when syncing the envir
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra --numprocesses 4 --dist loadfile --verbose"
+addopts = "-ra --verbose"
 testpaths = ["tests"]
 filterwarnings = [
     "error",
