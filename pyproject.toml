@@ -350,7 +350,7 @@ line-length = 120
 indent-width = 4
 target-version = "py39"
 fix = true
-exclude = ['external/duckdb', 'sqllogic']
+exclude = ['external/duckdb']
 
 [tool.ruff.lint]
 fixable = ["ALL"]
