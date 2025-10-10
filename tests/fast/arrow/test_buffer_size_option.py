@@ -1,7 +1,7 @@
 import pytest
 
 import duckdb
-from duckdb.typing import VARCHAR
+from duckdb.sqltypes import VARCHAR
 
 pa = pytest.importorskip("pyarrow")
 
@@ -13,21 +13,21 @@ class TestArrowBufferSize:
         # All small string
         res = con.query("select 'bla'").fetch_arrow_table()
         assert res[0][0].type == pa.string()
-        res = con.query("select 'bla'").record_batch()
+        res = con.query("select 'bla'").fetch_record_batch()
         assert res.schema[0].type == pa.string()
 
         # All Large String
         con.execute("SET arrow_large_buffer_size=True")
         res = con.query("select 'bla'").fetch_arrow_table()
         assert res[0][0].type == pa.large_string()
-        res = con.query("select 'bla'").record_batch()
+        res = con.query("select 'bla'").fetch_record_batch()
         assert res.schema[0].type == pa.large_string()
 
         # All small string again
         con.execute("SET arrow_large_buffer_size=False")
         res = con.query("select 'bla'").fetch_arrow_table()
         assert res[0][0].type == pa.string()
-        res = con.query("select 'bla'").record_batch()
+        res = con.query("select 'bla'").fetch_record_batch()
         assert res.schema[0].type == pa.string()
 
     def test_arrow_buffer_size_udf(self):

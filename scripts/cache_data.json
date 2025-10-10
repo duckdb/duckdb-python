@@ -622,7 +622,8 @@
         "full_path": "typing",
         "name": "typing",
         "children": [
-            "typing._UnionGenericAlias"
+            "typing.Union",
+            "typing.get_origin"
         ]
     },
     "typing._UnionGenericAlias": {
@@ -792,6 +793,18 @@
         "type": "attribute",
         "full_path": "pyarrow.decimal128",
         "name": "decimal128",
+        "children": []
+    },
+    "typing.get_origin": {
+        "type": "attribute",
+        "full_path": "typing.get_origin",
+        "name": "get_origin",
+        "children": []
+    },
+    "typing.Union": {
+        "type": "attribute",
+        "full_path": "typing.Union",
+        "name": "Union",
         "children": []
     }
 }

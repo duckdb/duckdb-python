@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 import duckdb
-from duckdb.typing import (
+from duckdb.sqltypes import (
     BIGINT,
     BLOB,
     BOOLEAN,

@@ -47,7 +47,7 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "fsspec",  # used in duckdb.filesystem
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
     "pandas",  # used for pandas dataframes all over the place
-    "pyarrow", # used for pyarrow support
+    "pyarrow; python_version < '3.14'", # used for pyarrow support
     "adbc-driver-manager", # for the adbc driver
 ]
 
@@ -226,13 +226,14 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "fsspec",
     "pandas",
     "polars",
-    "pyarrow",
+    "pyarrow; python_version < '3.14'",
 ]
 test = [ # dependencies used for running tests
     "adbc-driver-manager",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
+    "pytest-timestamper",
     "mypy",
     "coverage",
     "gcovr",
@@ -248,8 +249,8 @@ test = [ # dependencies used for running tests
     "urllib3",
     "fsspec>=2022.11.0",
     "pandas>=2.0.0",
-    "pyarrow>=18.0.0",
-    "torch>=2.2.2; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13'",
+    "pyarrow>=18.0.0; python_version < '3.14'",
+    "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' )",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and python_version < '3.12'",
@@ -265,7 +266,7 @@ scripts = [ # dependencies used for running scripts
     "pandas",
     "pcpp",
     "polars",
-    "pyarrow",
+    "pyarrow; python_version < '3.14'",
     "pytz"
 ]
 pypi = [ # dependencies used by the pypi cleanup script
@@ -302,7 +303,7 @@ dev = [ # tooling like uv will install this automatically when syncing the envir
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q"
+addopts = "-ra --verbose"
 testpaths = ["tests"]
 filterwarnings = [
     "error",

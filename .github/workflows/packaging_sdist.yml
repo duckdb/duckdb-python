@@ -56,9 +56,9 @@ jobs:
         run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
 
       - name: Install Astral UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "0.7.14"
+          version: "0.9.0"
           python-version: 3.11
 
       - name: Build sdist
@@ -80,7 +80,7 @@ jobs:
           # run tests
           tests_root="${{ github.workspace }}/tests"
           tests_dir="${tests_root}${{ inputs.testsuite == 'fast' && '/fast' || '/' }}"
-          uv run --verbose pytest $tests_dir --verbose --ignore=${tests_root}/stubs
+          uv run --verbose pytest -c ${{ github.workspace }}/pyproject.toml $tests_dir
 
       - id: versioning
         run: |

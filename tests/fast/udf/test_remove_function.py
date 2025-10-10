@@ -1,7 +1,7 @@
 import pytest
 
 import duckdb
-from duckdb.typing import BIGINT, VARCHAR
+from duckdb.sqltypes import BIGINT, VARCHAR
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")

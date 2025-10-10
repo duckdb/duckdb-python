@@ -20,17 +20,16 @@ bool PyGenericAlias::check_(const py::handle &object) {
 // NOLINTNEXTLINE(readability-identifier-naming)
 bool PyUnionType::check_(const py::handle &object) {
 	auto types_loaded = ModuleIsLoaded<TypesCacheItem>();
-	auto typing_loaded = ModuleIsLoaded<TypingCacheItem>();
-
-	if (!types_loaded && !typing_loaded) {
-		return false;
-	}
-
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
+
+	// for >= py310: isinstance(object, types.UnionType)
 	if (types_loaded && py::isinstance(object, import_cache.types.UnionType())) {
 		return true;
 	}
-	if (typing_loaded && py::isinstance(object, import_cache.typing._UnionGenericAlias())) {
+	// for all py3: typing.get_origin(object) is typing.Union
+	auto get_origin_func = import_cache.typing.get_origin();
+	auto origin = get_origin_func(object);
+	if (origin.is(import_cache.typing.Union())) {
 		return true;
 	}
 	return false;

@@ -13,10 +13,10 @@
 
 //! Note: This class is generated using scripts.
 //! If you need to add a new object to the cache you must:
-//! 1. adjust tools/pythonpkg/scripts/imports.py
-//! 2. run python3 tools/pythonpkg/scripts/generate_import_cache_json.py
-//! 3. run python3 tools/pythonpkg/scripts/generate_import_cache_cpp.py
-//! 4. run make format-main (the generator doesn't respect the formatting rules ;))
+//! 1. adjust scripts/imports.py
+//! 2. run python scripts/generate_import_cache_json.py
+//! 3. run python scripts/generate_import_cache_cpp.py
+//! 4. run pre-commit to fix formatting errors
 
 namespace duckdb {
 
@@ -26,12 +26,13 @@ public:
 	static constexpr const char *Name = "typing";
 
 public:
-	TypingCacheItem() : PythonImportCacheItem("typing"), _UnionGenericAlias("_UnionGenericAlias", this) {
+	TypingCacheItem() : PythonImportCacheItem("typing"), Union("Union", this), get_origin("get_origin", this) {
 	}
 	~TypingCacheItem() override {
 	}
 
-	PythonImportCacheItem _UnionGenericAlias;
+	PythonImportCacheItem Union;
+	PythonImportCacheItem get_origin;
 };
 
 } // namespace duckdb

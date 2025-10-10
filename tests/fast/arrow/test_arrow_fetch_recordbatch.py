@@ -234,7 +234,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         relation = duckdb_cursor.table("t")
-        record_batch_reader = relation.record_batch()
+        record_batch_reader = relation.fetch_record_batch()
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 3000
 
