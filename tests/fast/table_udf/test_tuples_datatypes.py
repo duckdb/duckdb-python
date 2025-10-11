@@ -1,5 +1,3 @@
-import pytest
-
 import duckdb
 import duckdb.sqltypes as sqltypes
 
@@ -36,7 +34,7 @@ def test_hugeint_params(tmp_path):
         )
 
         huge_val = 9223372036854775808
-        result = conn.sql(f"SELECT * FROM hugeint_func(?)", params=(huge_val,)).fetchall()
+        result = conn.sql("SELECT * FROM hugeint_func(?)", params=(huge_val,)).fetchall()
         assert result[0][0] == huge_val
         assert result[0][1] == huge_val + 1
 
@@ -74,5 +72,5 @@ def test_uuid_params(tmp_path):
         )
 
         test_uuid = "550e8400-e29b-41d4-a716-446655440000"
-        result = conn.sql(f"SELECT * FROM uuid_func(?::uuid)", params=(test_uuid,)).fetchall()
+        result = conn.sql("SELECT * FROM uuid_func(?::uuid)", params=(test_uuid,)).fetchall()
         assert str(result[0][0]) == test_uuid

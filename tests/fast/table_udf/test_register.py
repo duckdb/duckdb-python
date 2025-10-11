@@ -109,7 +109,7 @@ def test_replace_after_unregister(tmp_path):
 
 
 def test_multiple_replacements(tmp_path):
-    """Replacing Table UDFs multiple times"""
+    """Replacing Table UDFs multiple times."""
     with duckdb.connect(tmp_path / "test.db") as conn:
         schema = {"value": sqltypes.INTEGER}
 
@@ -131,7 +131,7 @@ def test_multiple_replacements(tmp_path):
 
 
 def test_replacement_with_different_schemas(tmp_path):
-    """Changing schema with replacements"""
+    """Changing schema with replacements."""
     with duckdb.connect(tmp_path / "test.db") as conn:
 
         def func_v1():
@@ -184,7 +184,7 @@ def test_replacement_2(tmp_path):
 
 
 def test_sql_drop_table_function(tmp_path):
-    """Documents current behavior - that dropping functions has no effect on Table UDFs"""
+    """Documents current behavior - that dropping functions has no effect on Table UDFs."""
     with duckdb.connect(tmp_path / "test.db") as conn:
 
         def test_func():
@@ -197,7 +197,7 @@ def test_sql_drop_table_function(tmp_path):
         assert result[0][0] == "test_value"
         assert result[0][1] == 1
 
-        with pytest.raises(Exception):
+        with pytest.raises(duckdb.CatalogException):
             conn.execute("DROP FUNCTION test_func")
 
         result = conn.execute("SELECT * FROM test_func()").fetchall()
@@ -306,7 +306,6 @@ def test_unregister_multi(tmp_path):
 
         cursor1.unregister_table_function("shared_func")
 
-        # TODO: Decide whether to keep this unregister behavior
         result1 = cursor1.execute("SELECT * FROM shared_func()").fetchall()
         assert result1[0][0] == "test_data"
 

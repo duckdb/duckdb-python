@@ -177,7 +177,7 @@ def test_kwargs(tmp_path):
 
 
 def test_large_2(tmp_path):
-    """Aggregation and filtering"""
+    """Aggregation and filtering."""
     with duckdb.connect(tmp_path / "test.db") as conn:
         count = 500000
 
@@ -235,7 +235,8 @@ def test_error(tmp_path):
     with duckdb.connect(tmp_path / "test.db") as conn:
 
         def error_function():
-            raise ValueError("Intentional")
+            error_message = "Intentional Error"
+            raise ValueError(error_message)
 
         schema = {"name": sqltypes.VARCHAR, "id": sqltypes.INTEGER}
 

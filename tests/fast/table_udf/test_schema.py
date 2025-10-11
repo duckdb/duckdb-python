@@ -1,6 +1,6 @@
 """Test schema validation for table-valued functions."""
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -141,28 +141,32 @@ def test_invalid_schema_none(tmp_path):
     def gen_function():
         return [("test", 1)]
 
-    with duckdb.connect(tmp_path / "test.duckdb") as conn:
-        with pytest.raises(duckdb.InvalidInputException, match="Table functions require a schema"):
-            conn.create_table_function(
-                name="gen_function",
-                callable=gen_function,
-                schema=None,
-                type="tuples",
-            )
+    with (
+        duckdb.connect(tmp_path / "test.duckdb") as conn,
+        pytest.raises(duckdb.InvalidInputException, match="Table functions require a schema"),
+    ):
+        conn.create_table_function(
+            name="gen_function",
+            callable=gen_function,
+            schema=None,
+            type="tuples",
+        )
 
 
 def test_invalid_schema_empty_dict(tmp_path):
     def gen_function():
         return [("test", 1)]
 
-    with duckdb.connect(tmp_path / "test.duckdb") as conn:
-        with pytest.raises(duckdb.InvalidInputException, match="schema cannot be empty"):
-            conn.create_table_function(
-                name="gen_function",
-                callable=gen_function,
-                schema={},
-                type="tuples",
-            )
+    with (
+        duckdb.connect(tmp_path / "test.duckdb") as conn,
+        pytest.raises(duckdb.InvalidInputException, match="schema cannot be empty"),
+    ):
+        conn.create_table_function(
+            name="gen_function",
+            callable=gen_function,
+            schema={},
+            type="tuples",
+        )
 
 
 def test_invalid_schema_list_format(tmp_path):
@@ -207,7 +211,7 @@ def test_invalid_schema_string_value(tmp_path):
         # String types should be rejected
         schema = {"name": "VARCHAR", "id": "INT"}
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,
@@ -223,7 +227,7 @@ def test_invalid_schema_integer_value(tmp_path):
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         schema = {"name": sqltypes.VARCHAR, "id": 123}
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,
@@ -239,7 +243,7 @@ def test_invalid_schema_none_value(tmp_path):
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         schema = {"name": sqltypes.VARCHAR, "id": None}
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,
@@ -258,7 +262,7 @@ def test_invalid_schema_mixed_types(tmp_path):
         # Mix of DuckDBPyType and string - should reject strings
         schema = {"name": sqltypes.VARCHAR, "id": "INT", "value": sqltypes.DOUBLE}
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,
@@ -274,7 +278,7 @@ def test_invalid_schema_python_type(tmp_path):
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         schema = {"name": str, "id": int}
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,
@@ -399,7 +403,7 @@ def test_schema_invalid_type(tmp_path):
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         schema = {"name": sqltypes.VARCHAR, "id": 123}  # int is not valid
 
-        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb.sqltype"):
+        with pytest.raises(duckdb.InvalidInputException, match="must be a duckdb\\.sqltype"):
             conn.create_table_function(
                 name="gen_function",
                 callable=gen_function,

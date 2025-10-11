@@ -1,5 +1,3 @@
-"""Test Arrow Table UDF schema validation"""
-
 import pytest
 
 import duckdb
@@ -19,7 +17,7 @@ def simple_arrow_table(count: int = 10):
 
 
 def test_arrow_correct_schema(tmp_path):
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         conn.create_table_function(
@@ -35,7 +33,7 @@ def test_arrow_correct_schema(tmp_path):
 
 
 def test_arrow_more_columns(tmp_path):
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         # table has 3 cols, but declare only 2
@@ -54,7 +52,7 @@ def test_arrow_more_columns(tmp_path):
 
 
 def test_arrow_fewer_columns(tmp_path):
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         # table has 3 columns, but declare 4
@@ -78,7 +76,7 @@ def test_arrow_fewer_columns(tmp_path):
 
 
 def test_arrow_type_mismatch(tmp_path):
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         conn.create_table_function(
@@ -100,7 +98,7 @@ def test_arrow_type_mismatch(tmp_path):
 
 
 def test_arrow_name_mismatch_allowed(tmp_path):
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         conn.create_table_function(

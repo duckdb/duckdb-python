@@ -1,4 +1,4 @@
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -25,8 +25,8 @@ def simple_arrow_table(count: int):
 
 def arrow_all_types(count: int):
     pa = pytest.importorskip("pyarrow")
-    from decimal import Decimal
     from datetime import datetime, timedelta, timezone
+    from decimal import Decimal
 
     now = datetime.now(timezone.utc)
     data = {
@@ -81,10 +81,7 @@ ALL_TYPES_SCHEMA = {
 
 
 def test_arrow_small(tmp_path):
-    """Defines and creates a Table UDF with only positional parameters, verifies that it works
-    and verifies it fails from another connection scope.
-    """
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         conn.create_table_function(
@@ -117,7 +114,7 @@ def test_arrow_small(tmp_path):
 
 def test_arrow_large_1(tmp_path):
     """tests: more rows, aggregation, limits, named parameters, parameters."""
-    pa = pytest.importorskip("pyarrow")
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         n = 2048 * 1000
@@ -201,8 +198,8 @@ def test_arrowbatched_sql_relation(tmp_path):
 
 
 def test_arrow_types(tmp_path):
-    """Return many types from an arrow table UDF, and verify the results are correct"""
-    pa = pytest.importorskip("pyarrow")
+    """Return many types from an arrow table UDF, and verify the results are correct."""
+    pytest.importorskip("pyarrow")
 
     with duckdb.connect(tmp_path / "test.duckdb") as conn:
         conn.create_table_function(
