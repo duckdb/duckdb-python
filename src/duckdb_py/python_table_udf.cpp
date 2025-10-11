@@ -13,24 +13,25 @@
 
 namespace duckdb {
 
-struct PyTVFInfo : public TableFunctionInfo {
+struct PyTableUDFInfo : public TableFunctionInfo {
 	py::function callable;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
-	PythonTVFType return_type;
+	PythonTableUDFType return_type;
 
-	PyTVFInfo(py::function callable_p, vector<LogicalType> types_p, vector<string> names_p, PythonTVFType return_type_p)
+	PyTableUDFInfo(py::function callable_p, vector<LogicalType> types_p, vector<string> names_p,
+	               PythonTableUDFType return_type_p)
 	    : callable(std::move(callable_p)), return_types(std::move(types_p)), return_names(std::move(names_p)),
 	      return_type(return_type_p) {
 	}
 
-	~PyTVFInfo() override {
+	~PyTableUDFInfo() override {
 		py::gil_scoped_acquire acquire;
 		callable = py::function();
 	}
 };
 
-struct PyTVFBindData : public TableFunctionData {
+struct PyTableUDFBindData : public TableFunctionData {
 	string func_name;
 	vector<Value> args;
 	named_parameter_map_t kwargs;
@@ -38,8 +39,8 @@ struct PyTVFBindData : public TableFunctionData {
 	vector<string> return_names;
 	PythonObjectContainer python_objects; // Holds the callable
 
-	PyTVFBindData(string func_name, vector<Value> args, named_parameter_map_t kwargs, vector<LogicalType> return_types,
-	              vector<string> return_names, py::function callable)
+	PyTableUDFBindData(string func_name, vector<Value> args, named_parameter_map_t kwargs,
+	                   vector<LogicalType> return_types, vector<string> return_names, py::function callable)
 	    : func_name(std::move(func_name)), args(std::move(args)), kwargs(std::move(kwargs)),
 	      return_types(std::move(return_types)), return_names(std::move(return_names)) {
 		// gil acquired inside push
@@ -47,28 +48,28 @@ struct PyTVFBindData : public TableFunctionData {
 	}
 };
 
-struct PyTVFTuplesGlobalState : public GlobalTableFunctionState {
+struct PyTableUDFTuplesGlobalState : public GlobalTableFunctionState {
 	PythonObjectContainer python_objects;
 	bool iterator_exhausted = false;
 
-	PyTVFTuplesGlobalState() : iterator_exhausted(false) {
+	PyTableUDFTuplesGlobalState() : iterator_exhausted(false) {
 	}
 };
 
-struct PyTVFArrowGlobalState : public GlobalTableFunctionState {
+struct PyTableUDFArrowGlobalState : public GlobalTableFunctionState {
 	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_factory;
 	unique_ptr<FunctionData> arrow_bind_data;
 	unique_ptr<GlobalTableFunctionState> arrow_global_state;
 	PythonObjectContainer python_objects;
 	idx_t num_columns;
 
-	PyTVFArrowGlobalState() {
+	PyTableUDFArrowGlobalState() {
 	}
 };
 
-static void PyTVFTuplesScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-	auto &gs = input.global_state->Cast<PyTVFTuplesGlobalState>();
-	auto &bd = input.bind_data->Cast<PyTVFBindData>();
+static void PyTableUDFTuplesScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+	auto &gs = input.global_state->Cast<PyTableUDFTuplesGlobalState>();
+	auto &bd = input.bind_data->Cast<PyTableUDFBindData>();
 
 	if (gs.iterator_exhausted) {
 		output.SetCardinality(0);
@@ -107,60 +108,55 @@ static void PyTVFTuplesScanFunction(ClientContext &context, TableFunctionInput &
 	output.SetCardinality(row_idx);
 }
 
-struct PyTVFArrowLocalState : public LocalTableFunctionState {
+struct PyTableUDFArrowLocalState : public LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> arrow_local_state;
 
-	explicit PyTVFArrowLocalState(unique_ptr<LocalTableFunctionState> arrow_local)
+	explicit PyTableUDFArrowLocalState(unique_ptr<LocalTableFunctionState> arrow_local)
 	    : arrow_local_state(std::move(arrow_local)) {
 	}
 };
 
-static void PyTVFArrowScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
+static void PyTableUDFArrowScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	// Delegates to ArrowScanFunction
-	auto &gs = input.global_state->Cast<PyTVFArrowGlobalState>();
-	auto &ls = input.local_state->Cast<PyTVFArrowLocalState>();
+	auto &gs = input.global_state->Cast<PyTableUDFArrowGlobalState>();
+	auto &ls = input.local_state->Cast<PyTableUDFArrowLocalState>();
 
 	TableFunctionInput arrow_input(gs.arrow_bind_data.get(), ls.arrow_local_state.get(), gs.arrow_global_state.get());
 	ArrowTableFunction::ArrowScanFunction(context, arrow_input, output);
 }
 
-static unique_ptr<PyTVFBindData> PyTVFBindInternal(ClientContext &context, TableFunctionBindInput &in,
-                                                   vector<LogicalType> &return_types, vector<string> &return_names) {
-	// Disable progress bar to prevent GIL deadlock with Jupyter
-	// TODO: Decide if this is still needed - was a problem when fully materializing, but switched to streaming
-	ClientConfig::GetConfig(context).enable_progress_bar = false;
-	ClientConfig::GetConfig(context).system_progress_bar_disable_reason =
-	    "Table Valued Functions do not support the progress bar";
-
+static unique_ptr<PyTableUDFBindData> PyTableUDFBindInternal(ClientContext &context, TableFunctionBindInput &in,
+                                                             vector<LogicalType> &return_types,
+                                                             vector<string> &return_names) {
 	if (!in.info) {
 		throw InvalidInputException("Table function '%s' missing function info", in.table_function.name);
 	}
 
-	auto &tvf_info = in.info->Cast<PyTVFInfo>();
-	return_types = tvf_info.return_types;
-	return_names = tvf_info.return_names;
+	auto &tableudf_info = in.info->Cast<PyTableUDFInfo>();
+	return_types = tableudf_info.return_types;
+	return_names = tableudf_info.return_names;
 
 	// Acquire gil before copying py::function
 	py::gil_scoped_acquire gil;
-	return make_uniq<PyTVFBindData>(in.table_function.name, in.inputs, in.named_parameters, return_types, return_names,
-	                                tvf_info.callable);
+	return make_uniq<PyTableUDFBindData>(in.table_function.name, in.inputs, in.named_parameters, return_types,
+	                                     return_names, tableudf_info.callable);
 }
 
-static unique_ptr<FunctionData> PyTVFTuplesBindFunction(ClientContext &context, TableFunctionBindInput &in,
-                                                        vector<LogicalType> &return_types,
-                                                        vector<string> &return_names) {
-	auto bd = PyTVFBindInternal(context, in, return_types, return_names);
+static unique_ptr<FunctionData> PyTableUDFTuplesBindFunction(ClientContext &context, TableFunctionBindInput &in,
+                                                             vector<LogicalType> &return_types,
+                                                             vector<string> &return_names) {
+	auto bd = PyTableUDFBindInternal(context, in, return_types, return_names);
 	return std::move(bd);
 }
 
-static unique_ptr<FunctionData> PyTVFArrowBindFunction(ClientContext &context, TableFunctionBindInput &in,
-                                                       vector<LogicalType> &return_types,
-                                                       vector<string> &return_names) {
-	auto bd = PyTVFBindInternal(context, in, return_types, return_names);
+static unique_ptr<FunctionData> PyTableUDFArrowBindFunction(ClientContext &context, TableFunctionBindInput &in,
+                                                            vector<LogicalType> &return_types,
+                                                            vector<string> &return_names) {
+	auto bd = PyTableUDFBindInternal(context, in, return_types, return_names);
 	return std::move(bd);
 }
 
-static py::object CallPythonTVF(ClientContext &context, PyTVFBindData &bd) {
+static py::object CallPythonTableUDF(ClientContext &context, PyTableUDFBindData &bd) {
 	py::gil_scoped_acquire gil;
 
 	// positional arguments
@@ -187,14 +183,15 @@ static py::object CallPythonTVF(ClientContext &context, PyTVFBindData &bd) {
 	return result;
 }
 
-static unique_ptr<GlobalTableFunctionState> PyTVFTuplesInitGlobal(ClientContext &context, TableFunctionInitInput &in) {
-	auto &bd = in.bind_data->Cast<PyTVFBindData>();
-	auto gs = make_uniq<PyTVFTuplesGlobalState>();
+static unique_ptr<GlobalTableFunctionState> PyTableUDFTuplesInitGlobal(ClientContext &context,
+                                                                       TableFunctionInitInput &in) {
+	auto &bd = in.bind_data->Cast<PyTableUDFBindData>();
+	auto gs = make_uniq<PyTableUDFTuplesGlobalState>();
 
 	{
 		py::gil_scoped_acquire gil;
 		// const_cast is safe here - we only read from python_objects, not modify bind_data structure
-		py::object result = CallPythonTVF(context, const_cast<PyTVFBindData &>(bd));
+		py::object result = CallPythonTableUDF(context, const_cast<PyTableUDFBindData &>(bd));
 		try {
 			py::iterator it = py::iter(result);
 			gs->python_objects.Push(std::move(it));
@@ -207,17 +204,17 @@ static unique_ptr<GlobalTableFunctionState> PyTVFTuplesInitGlobal(ClientContext 
 	return std::move(gs);
 }
 
-static unique_ptr<GlobalTableFunctionState> PyTVFArrowInitGlobal(ClientContext &context, TableFunctionInitInput &in) {
-	auto &bd = in.bind_data->Cast<PyTVFBindData>();
-	auto gs = make_uniq<PyTVFArrowGlobalState>();
+static unique_ptr<GlobalTableFunctionState> PyTableUDFArrowInitGlobal(ClientContext &context,
+                                                                      TableFunctionInitInput &in) {
+	auto &bd = in.bind_data->Cast<PyTableUDFBindData>();
+	auto gs = make_uniq<PyTableUDFArrowGlobalState>();
 
 	{
 		py::gil_scoped_acquire gil;
 
-		py::object result = CallPythonTVF(context, const_cast<PyTVFBindData &>(bd));
+		py::object result = CallPythonTableUDF(context, const_cast<PyTableUDFBindData &>(bd));
 		PyObject *ptr = result.ptr();
 
-		// TODO: Should we verify this is an arrow table, or just fail later
 		gs->python_objects.Push(std::move(result));
 
 		gs->arrow_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties(),
@@ -232,7 +229,7 @@ static unique_ptr<GlobalTableFunctionState> PyTVFArrowInitGlobal(ClientContext &
 
 	TableFunctionRef empty_ref;
 	duckdb::TableFunction dummy_tf;
-	dummy_tf.name = "PyTVFArrowWrapper";
+	dummy_tf.name = "PyTableUDFArrowWrapper";
 
 	named_parameter_map_t named_params;
 	vector<LogicalType> input_types;
@@ -274,9 +271,9 @@ static unique_ptr<GlobalTableFunctionState> PyTVFArrowInitGlobal(ClientContext &
 	return std::move(gs);
 }
 
-static unique_ptr<LocalTableFunctionState> PyTVFArrowInitLocal(ExecutionContext &context, TableFunctionInitInput &in,
-                                                               GlobalTableFunctionState *gstate) {
-	auto &gs = gstate->Cast<PyTVFArrowGlobalState>();
+static unique_ptr<LocalTableFunctionState>
+PyTableUDFArrowInitLocal(ExecutionContext &context, TableFunctionInitInput &in, GlobalTableFunctionState *gstate) {
+	auto &gs = gstate->Cast<PyTableUDFArrowGlobalState>();
 
 	vector<column_t> all_columns;
 	for (idx_t i = 0; i < gs.num_columns; i++) {
@@ -287,14 +284,14 @@ static unique_ptr<LocalTableFunctionState> PyTVFArrowInitLocal(ExecutionContext 
 	auto arrow_local_state =
 	    ArrowTableFunction::ArrowScanInitLocalInternal(context.client, arrow_init, gs.arrow_global_state.get());
 
-	return make_uniq<PyTVFArrowLocalState>(std::move(arrow_local_state));
+	return make_uniq<PyTableUDFArrowLocalState>(std::move(arrow_local_state));
 }
 
 duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const std::string &name,
                                                                           const py::function &callable,
                                                                           const py::object &parameters,
                                                                           const py::object &schema,
-                                                                          PythonTVFType type) {
+                                                                          PythonTableUDFType type) {
 
 	// Schema
 	if (schema.is_none()) {
@@ -303,17 +300,39 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 
 	vector<LogicalType> types;
 	vector<string> names;
-	for (auto c : py::iter(schema)) {
-		auto item = py::cast<py::object>(c);
-		if (py::isinstance<py::str>(item)) {
-			throw InvalidInputException("Invalid schema format: expected [name, type] pairs, got string '%s'",
-			                            py::str(item).cast<std::string>());
+
+	// Schema must be dict format: {"col1": DuckDBPyType, "col2": DuckDBPyType}
+	if (!py::isinstance<py::dict>(schema)) {
+		throw InvalidInputException("Table function '%s' schema must be a dict mapping column names to duckdb.sqltypes "
+		                            "(e.g., {\"col1\": INTEGER, \"col2\": VARCHAR})",
+		                            name);
+	}
+
+	auto schema_dict = py::cast<py::dict>(schema);
+	for (auto item : schema_dict) {
+		// schema is a dict of str => DuckDBPyType
+
+		string col_name = py::str(item.first);
+		names.emplace_back(col_name);
+
+		auto type_obj = py::cast<py::object>(item.second);
+
+		// Check for string BEFORE DuckDBPyType because pybind11 has implicit conversion from str to DuckDBPyType
+		if (py::isinstance<py::str>(type_obj)) {
+			throw InvalidInputException("Invalid schema format: type for column '%s' must be a duckdb.sqltype (e.g., "
+			                            "INTEGER, VARCHAR), not a string. "
+			                            "Use sqltypes.%s instead of \"%s\"",
+			                            col_name, py::str(type_obj).cast<std::string>().c_str(),
+			                            py::str(type_obj).cast<std::string>().c_str());
 		}
-		if (!py::hasattr(item, "__getitem__") || py::len(item) < 2) {
-			throw InvalidInputException("Invalid schema format: each schema item must be a [name, type] pair");
+
+		if (!py::isinstance<DuckDBPyType>(type_obj)) {
+			throw InvalidInputException(
+			    "Invalid schema format: type for column '%s' must be a duckdb.sqltype (e.g., INTEGER, VARCHAR), got %s",
+			    col_name, py::str(type_obj.get_type()).cast<std::string>());
 		}
-		names.emplace_back(py::str(item[py::int_(0)]));
-		types.emplace_back(TransformStringToLogicalType(py::str(item[py::int_(1)])));
+		auto pytype = py::cast<shared_ptr<DuckDBPyType>>(type_obj);
+		types.emplace_back(pytype->Type());
 	}
 
 	if (types.empty()) {
@@ -322,20 +341,20 @@ duckdb::TableFunction DuckDBPyConnection::CreateTableFunctionFromCallable(const 
 
 	duckdb::TableFunction tf;
 	switch (type) {
-	case PythonTVFType::TUPLES:
-		tf =
-		    duckdb::TableFunction(name, {}, +PyTVFTuplesScanFunction, +PyTVFTuplesBindFunction, +PyTVFTuplesInitGlobal);
+	case PythonTableUDFType::TUPLES:
+		tf = duckdb::TableFunction(name, {}, PyTableUDFTuplesScanFunction, PyTableUDFTuplesBindFunction,
+		                           PyTableUDFTuplesInitGlobal);
 		break;
-	case PythonTVFType::ARROW_TABLE:
-		tf = duckdb::TableFunction(name, {}, +PyTVFArrowScanFunction, +PyTVFArrowBindFunction, +PyTVFArrowInitGlobal,
-		                           +PyTVFArrowInitLocal);
+	case PythonTableUDFType::ARROW_TABLE:
+		tf = duckdb::TableFunction(name, {}, PyTableUDFArrowScanFunction, PyTableUDFArrowBindFunction,
+		                           PyTableUDFArrowInitGlobal, PyTableUDFArrowInitLocal);
 		break;
 	default:
 		throw InvalidInputException("Unknown return type for table function '%s'", name);
 	}
 
 	// Store the Python callable and schema
-	tf.function_info = make_shared_ptr<PyTVFInfo>(callable, types, names, type);
+	tf.function_info = make_shared_ptr<PyTableUDFInfo>(callable, types, names, type);
 
 	// args
 	tf.varargs = LogicalType::ANY;

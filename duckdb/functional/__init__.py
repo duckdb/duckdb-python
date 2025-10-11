@@ -2,9 +2,9 @@
 
 import warnings
 
-from duckdb.func import ARROW, DEFAULT, NATIVE, SPECIAL, FunctionNullHandling, PythonTVFType, PythonUDFType
+from duckdb.func import ARROW, DEFAULT, NATIVE, SPECIAL, FunctionNullHandling, PythonTableUDFType, PythonUDFType
 
-__all__ = ["ARROW", "DEFAULT", "NATIVE", "SPECIAL", "FunctionNullHandling", "PythonTVFType", "PythonUDFType"]
+__all__ = ["ARROW", "DEFAULT", "NATIVE", "SPECIAL", "FunctionNullHandling", "PythonTableUDFType", "PythonUDFType"]
 
 warnings.warn(
     "`duckdb.functional` is deprecated and will be removed in a future version. Please use `duckdb.func` instead.",

@@ -1,9 +1,10 @@
-"""Test Arrow TVF schema validation"""
+"""Test Arrow Table UDF schema validation"""
 
 import pytest
 
 import duckdb
-from duckdb.functional import PythonTVFType
+import duckdb.sqltypes as sqltypes
+from duckdb.functional import PythonTableUDFType
 
 
 def simple_arrow_table(count: int = 10):
@@ -24,8 +25,8 @@ def test_arrow_correct_schema(tmp_path):
         conn.create_table_function(
             "arrow_func",
             simple_arrow_table,
-            schema=[("id", "BIGINT"), ("value", "BIGINT"), ("name", "VARCHAR")],
-            type=PythonTVFType.ARROW_TABLE,
+            schema={"id": sqltypes.BIGINT, "value": sqltypes.BIGINT, "name": sqltypes.VARCHAR},
+            type=PythonTableUDFType.ARROW_TABLE,
         )
 
         result = conn.execute("SELECT * FROM arrow_func(5)").fetchall()
@@ -41,19 +42,15 @@ def test_arrow_more_columns(tmp_path):
         conn.create_table_function(
             "arrow_func",
             simple_arrow_table,
-            schema=[("x", "BIGINT"), ("y", "BIGINT")],  # Missing third column
-            type=PythonTVFType.ARROW_TABLE,
+            schema={"x": sqltypes.BIGINT, "y": sqltypes.BIGINT},  # Missing third column
+            type=PythonTableUDFType.ARROW_TABLE,
         )
 
         with pytest.raises(duckdb.InvalidInputException) as exc_info:
             conn.execute("SELECT * FROM arrow_func(5)").fetchall()
 
         error_msg = str(exc_info.value).lower()
-        assert (
-            "schema mismatch" in error_msg
-            or "3 columns" in error_msg
-            or "2 were declared" in error_msg
-        )
+        assert "schema mismatch" in error_msg or "3 columns" in error_msg or "2 were declared" in error_msg
 
 
 def test_arrow_fewer_columns(tmp_path):
@@ -64,24 +61,20 @@ def test_arrow_fewer_columns(tmp_path):
         conn.create_table_function(
             "arrow_func",
             simple_arrow_table,
-            schema=[
-                ("id", "BIGINT"),
-                ("value", "BIGINT"),
-                ("name", "VARCHAR"),
-                ("extra", "INT"),  # Extra column that doesn't exist
-            ],
-            type=PythonTVFType.ARROW_TABLE,
+            schema={
+                "id": sqltypes.BIGINT,
+                "value": sqltypes.BIGINT,
+                "name": sqltypes.VARCHAR,
+                "extra": sqltypes.INTEGER,  # Extra column that doesn't exist
+            },
+            type=PythonTableUDFType.ARROW_TABLE,
         )
 
         with pytest.raises(duckdb.InvalidInputException) as exc_info:
             conn.execute("SELECT * FROM arrow_func(5)").fetchall()
 
         error_msg = str(exc_info.value).lower()
-        assert (
-            "schema mismatch" in error_msg
-            or "3 columns" in error_msg
-            or "4 were declared" in error_msg
-        )
+        assert "schema mismatch" in error_msg or "3 columns" in error_msg or "4 were declared" in error_msg
 
 
 def test_arrow_type_mismatch(tmp_path):
@@ -91,12 +84,12 @@ def test_arrow_type_mismatch(tmp_path):
         conn.create_table_function(
             "arrow_func",
             simple_arrow_table,
-            schema=[
-                ("id", "VARCHAR"),  # Wrong type - should be BIGINT
-                ("value", "BIGINT"),
-                ("name", "VARCHAR"),
-            ],
-            type=PythonTVFType.ARROW_TABLE,
+            schema={
+                "id": sqltypes.VARCHAR,  # Wrong type - should be BIGINT
+                "value": sqltypes.BIGINT,
+                "name": sqltypes.VARCHAR,
+            },
+            type=PythonTableUDFType.ARROW_TABLE,
         )
 
         with pytest.raises(duckdb.InvalidInputException) as exc_info:
@@ -113,12 +106,12 @@ def test_arrow_name_mismatch_allowed(tmp_path):
         conn.create_table_function(
             "arrow_func",
             simple_arrow_table,
-            schema=[
-                ("a", "BIGINT"),  # Arrow has 'id'
-                ("b", "BIGINT"),  # Arrow has 'value'
-                ("c", "VARCHAR"),  # Arrow has 'name'
-            ],
-            type=PythonTVFType.ARROW_TABLE,
+            schema={
+                "a": sqltypes.BIGINT,  # Arrow has 'id'
+                "b": sqltypes.BIGINT,  # Arrow has 'value'
+                "c": sqltypes.VARCHAR,  # Arrow has 'name'
+            },
+            type=PythonTableUDFType.ARROW_TABLE,
         )
 
         result = conn.execute("SELECT * FROM arrow_func(3)").fetchall()

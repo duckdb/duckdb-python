@@ -10,9 +10,9 @@ void DuckDBPyFunctional::Initialize(py::module_ &parent) {
 	    .value("ARROW", duckdb::PythonUDFType::ARROW)
 	    .export_values();
 
-	py::enum_<duckdb::PythonTVFType>(m, "PythonTVFType")
-	    .value("TUPLES", duckdb::PythonTVFType::TUPLES)
-	    .value("ARROW_TABLE", duckdb::PythonTVFType::ARROW_TABLE)
+	py::enum_<duckdb::PythonTableUDFType>(m, "PythonTableUDFType")
+	    .value("TUPLES", duckdb::PythonTableUDFType::TUPLES)
+	    .value("ARROW_TABLE", duckdb::PythonTableUDFType::ARROW_TABLE)
 	    .export_values();
 
 	py::enum_<duckdb::FunctionNullHandling>(m, "FunctionNullHandling")

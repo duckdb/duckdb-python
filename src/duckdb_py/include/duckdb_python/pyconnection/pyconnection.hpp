@@ -23,7 +23,7 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
-#include "duckdb_python/pybind11/conversions/python_tvf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_table_udf_type_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
@@ -236,9 +236,9 @@ public:
 	                  bool side_effects = false);
 
 	shared_ptr<DuckDBPyConnection> RegisterTableFunction(const string &name, const py::function &function,
-	                                                     const py::object &parameters = py::none(),
-	                                                     const py::object &schema = py::none(),
-	                                                     PythonTVFType type = PythonTVFType::TUPLES);
+	                                                     const py::object &schema,
+	                                                     PythonTableUDFType type = PythonTableUDFType::TUPLES,
+	                                                     const py::object &parameters = py::none());
 
 	shared_ptr<DuckDBPyConnection> UnregisterTableFunction(const string &name);
 
@@ -368,7 +368,7 @@ private:
 
 	duckdb::TableFunction CreateTableFunctionFromCallable(const std::string &name, const py::function &callable,
 	                                                      const py::object &parameters, const py::object &schema,
-	                                                      PythonTVFType type);
+	                                                      PythonTableUDFType type);
 
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);

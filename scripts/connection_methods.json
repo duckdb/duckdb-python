@@ -134,8 +134,8 @@
 			},
 			{
 				"name": "type",
-				"type": "Optional[PythonTVFType]",
-				"default": "PythonTVFType.TUPLES"
+				"type": "Optional[PythonTableUDFType]",
+				"default": "PythonTableUDFType.TUPLES"
 			}
 		],
 		"return": "DuckDBPyConnection"
@@ -457,7 +457,6 @@
 			"fetch_record_batch",
 			"arrow"
 		],
-
 		"function": "FetchRecordBatchReader",
 		"docs": "Fetch an Arrow RecordBatchReader following execute()",
 		"args": [

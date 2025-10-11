@@ -402,11 +402,9 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterTableFunction(const string &name,
-                                                                         const py::function &function,
-                                                                         const py::object &parameters,
-                                                                         const py::object &schema,
-                                                                         PythonTVFType type) {
+shared_ptr<DuckDBPyConnection>
+DuckDBPyConnection::RegisterTableFunction(const string &name, const py::function &function, const py::object &schema,
+                                          PythonTableUDFType type, const py::object &parameters) {
 
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
@@ -462,12 +460,12 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	connection_module.def("create_table_function", &DuckDBPyConnection::RegisterTableFunction,
-	                      "Register a table valued function via Callable", py::arg("name"), py::arg("callable"),
-	                      py::arg("parameters") = py::none(), py::arg("schema") = py::none(),
-	                      py::arg("type") = PythonTVFType::TUPLES);
+	                      "Register a table user defined function via Callable", py::arg("name"), py::arg("callable"),
+	                      py::arg("schema"), py::kw_only(), py::arg("type") = PythonTableUDFType::TUPLES,
+	                      py::arg("parameters") = py::none());
 
 	connection_module.def("unregister_table_function", &DuckDBPyConnection::UnregisterTableFunction,
-	                      "Unregister a table valued function", py::arg("name"));
+	                      "Unregister a table user defined function", py::arg("name"));
 
 	InitializeConnectionMethods(connection_module);
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
