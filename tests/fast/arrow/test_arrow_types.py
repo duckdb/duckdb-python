@@ -1,11 +1,12 @@
-import duckdb
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 ds = pytest.importorskip("pyarrow.dataset")
 
 
-class TestArrowTypes(object):
+class TestArrowTypes:
     def test_null_type(self, duckdb_cursor):
         schema = pa.schema([("data", pa.null())])
         inputs = [pa.array([None, None, None], type=pa.null())]
@@ -17,17 +18,17 @@ class TestArrowTypes(object):
         inputs = [pa.array([None, None, None], type=pa.null())]
         arrow_table = pa.Table.from_arrays(inputs, schema=schema)
 
-        assert rel['data'] == arrow_table['data']
+        assert rel["data"] == arrow_table["data"]
 
     def test_invalid_struct(self, duckdb_cursor):
         empty_struct_type = pa.struct([])
 
         # Create an empty array with the defined struct type
         empty_array = pa.array([], type=empty_struct_type)
-        arrow_table = pa.Table.from_arrays([empty_array], schema=pa.schema([("data", empty_struct_type)]))
+        arrow_table = pa.Table.from_arrays([empty_array], schema=pa.schema([("data", empty_struct_type)]))  # noqa: F841
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='Attempted to convert a STRUCT with no fields to DuckDB which is not supported',
+            match="Attempted to convert a STRUCT with no fields to DuckDB which is not supported",
         ):
             duckdb_cursor.sql("select * from arrow_table").fetchall()
 
@@ -39,9 +40,6 @@ class TestArrowTypes(object):
         arrow_table = pa.Table.from_arrays([sparse_union_array], schema=pa.schema([("data", sparse_union_array.type)]))
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='Attempted to convert a UNION with no fields to DuckDB which is not supported',
+            match="Attempted to convert a UNION with no fields to DuckDB which is not supported",
         ):
-            duckdb_cursor.register('invalid_union', arrow_table)
-
-            res = duckdb_cursor.sql("select * from invalid_union").fetchall()
-            print(res)
+            duckdb_cursor.register("invalid_union", arrow_table)

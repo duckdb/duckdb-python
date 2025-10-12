@@ -1,12 +1,12 @@
 # test fetchdf with various types
-import numpy
 import pytest
-import duckdb
 from conftest import NumpyPandas
 
+import duckdb
 
-class TestType(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas()])
+
+class TestType:
+    @pytest.mark.parametrize("pandas", [NumpyPandas()])
     def test_fetchdf(self, pandas):
         con = duckdb.connect()
         con.execute("CREATE TABLE items(item VARCHAR)")
@@ -14,7 +14,7 @@ class TestType(object):
         res = con.execute("SELECT item FROM items").fetchdf()
         assert isinstance(res, pandas.core.frame.DataFrame)
 
-        df = pandas.DataFrame({'item': ['jeans', '', None]})
+        df = pandas.DataFrame({"item": ["jeans", "", None]})
 
         print(res)
         print(df)

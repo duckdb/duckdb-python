@@ -21,6 +21,7 @@
 #include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb_python/module_state.hpp"
+#include "duckdb/common/adbc/adbc-init.hpp"
 
 #include "duckdb.hpp"
 
@@ -1018,6 +1019,29 @@ static void RegisterExpectedResultType(py::handle &m) {
 	expected_return_type.export_values();
 }
 
+// ######################################################################
+// Symbol exports
+//
+// We want to limit the symbols we export to only the absolute minimum.
+// This means we compile with -fvisibility=hidden to hide all symbols,
+// and then explicitly export only the symbols we want.
+//
+// Right now we export two symbols only:
+// - duckdb_adbc_init: the entrypoint for our ADBC driver
+// - PyInit__duckdb: the entrypoint for the python extension
+//
+// All symbols that need exporting must be added to both the list below
+// AND to CMakeLists.txt.
+extern "C" {
+PYBIND11_EXPORT void *_force_symbol_inclusion() {
+	static void *symbols[] = {
+	    // Add functions to export here
+	    (void *)&duckdb_adbc_init,
+	};
+	return symbols;
+}
+};
+
 // Only mark mod_gil_not_used for 3.14t or later
 // This is to not add support for 3.13t
 // Py_GIL_DISABLED check is not strictly necessary
@@ -1028,11 +1052,15 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m, py::mod_gil_not_used(),
 PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m,
                 py::multiple_interpreters::not_supported()) { // NOLINT
 #endif
-
 	// Initialize module state completely during initialization
 	// PEP 489 wants calls for state to be module local, but currently
-	// static via g_module_state. 
+	// static via g_module_state.
 	InitializeModuleState(m);
+
+	// DO NOT REMOVE: the below forces that we include all symbols we want to export
+	volatile auto *keep_alive = _force_symbol_inclusion();
+	(void)keep_alive;
+	// END
 
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)

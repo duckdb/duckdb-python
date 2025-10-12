@@ -19,12 +19,11 @@
 from typing import (
     Any,
     Callable,
-    List,
     Optional,
-    Tuple,
     TypeVar,
     Union,
 )
+
 try:
     from typing import Literal, Protocol
 except ImportError:
@@ -57,24 +56,21 @@ AtomicValue = TypeVar(
     float,
 )
 
-RowLike = TypeVar("RowLike", List[Any], Tuple[Any, ...], types.Row)
+RowLike = TypeVar("RowLike", list[Any], tuple[Any, ...], types.Row)
 
 SQLBatchedUDFType = Literal[100]
 
 
 class SupportsOpen(Protocol):
-    def open(self, partition_id: int, epoch_id: int) -> bool:
-        ...
+    def open(self, partition_id: int, epoch_id: int) -> bool: ...
 
 
 class SupportsProcess(Protocol):
-    def process(self, row: types.Row) -> None:
-        ...
+    def process(self, row: types.Row) -> None: ...
 
 
 class SupportsClose(Protocol):
-    def close(self, error: Exception) -> None:
-        ...
+    def close(self, error: Exception) -> None: ...
 
 
 class UserDefinedFunctionLike(Protocol):
@@ -83,11 +79,8 @@ class UserDefinedFunctionLike(Protocol):
     deterministic: bool
 
     @property
-    def returnType(self) -> types.DataType:
-        ...
+    def returnType(self) -> types.DataType: ...
 
-    def __call__(self, *args: ColumnOrName) -> Column:
-        ...
+    def __call__(self, *args: ColumnOrName) -> Column: ...
 
-    def asNondeterministic(self) -> "UserDefinedFunctionLike":
-        ...
+    def asNondeterministic(self) -> "UserDefinedFunctionLike": ...

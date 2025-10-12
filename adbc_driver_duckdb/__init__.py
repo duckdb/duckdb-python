@@ -19,11 +19,10 @@
 
 import enum
 import functools
+import importlib
 import typing
 
 import adbc_driver_manager
-
-__all__ = ["StatementOptions", "connect"]
 
 
 class StatementOptions(enum.Enum):
@@ -36,12 +35,16 @@ class StatementOptions(enum.Enum):
 def connect(path: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabase:
     """Create a low level ADBC connection to DuckDB."""
     if path is None:
-        return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init")
-    return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init", path=path)
+        return adbc_driver_manager.AdbcDatabase(driver=driver_path(), entrypoint="duckdb_adbc_init")
+    return adbc_driver_manager.AdbcDatabase(driver=driver_path(), entrypoint="duckdb_adbc_init", path=path)
 
 
 @functools.cache
-def _driver_path() -> str:
-    import duckdb
-
-    return duckdb.duckdb.__file__
+def driver_path() -> str:
+    """Get the path to the DuckDB ADBC driver."""
+    duckdb_module_spec = importlib.util.find_spec("_duckdb")
+    if duckdb_module_spec is None:
+        msg = "Could not find duckdb shared library. Did you pip install duckdb?"
+        raise ImportError(msg)
+    print(f"Found duckdb shared library at {duckdb_module_spec.origin}")
+    return duckdb_module_spec.origin

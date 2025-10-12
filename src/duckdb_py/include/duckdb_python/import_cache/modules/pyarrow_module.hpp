@@ -56,7 +56,10 @@ public:
 public:
 	PyarrowCacheItem()
 	    : PythonImportCacheItem("pyarrow"), dataset(), Table("Table", this),
-	      RecordBatchReader("RecordBatchReader", this), ipc(this) {
+	      RecordBatchReader("RecordBatchReader", this), ipc(this), scalar("scalar", this), date32("date32", this),
+	      time64("time64", this), timestamp("timestamp", this), uint8("uint8", this), uint16("uint16", this),
+	      uint32("uint32", this), uint64("uint64", this), binary_view("binary_view", this),
+	      decimal32("decimal32", this), decimal64("decimal64", this), decimal128("decimal128", this) {
 	}
 	~PyarrowCacheItem() override {
 	}
@@ -65,6 +68,18 @@ public:
 	PythonImportCacheItem Table;
 	PythonImportCacheItem RecordBatchReader;
 	PyarrowIpcCacheItem ipc;
+	PythonImportCacheItem scalar;
+	PythonImportCacheItem date32;
+	PythonImportCacheItem time64;
+	PythonImportCacheItem timestamp;
+	PythonImportCacheItem uint8;
+	PythonImportCacheItem uint16;
+	PythonImportCacheItem uint32;
+	PythonImportCacheItem uint64;
+	PythonImportCacheItem binary_view;
+	PythonImportCacheItem decimal32;
+	PythonImportCacheItem decimal64;
+	PythonImportCacheItem decimal128;
 };
 
 } // namespace duckdb

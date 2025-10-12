@@ -1,6 +1,8 @@
-import duckdb
-import os
+from pathlib import Path
+
 import pytest
+
+import duckdb
 
 pyarrow = pytest.importorskip("pyarrow")
 np = pytest.importorskip("numpy")
@@ -8,13 +10,13 @@ pyarrow.parquet = pytest.importorskip("pyarrow.parquet")
 pyarrow.dataset = pytest.importorskip("pyarrow.dataset")
 
 
-class TestArrowDataset(object):
+class TestArrowDataset:
     def test_parallel_dataset(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -28,7 +30,7 @@ class TestArrowDataset(object):
         rel = duckdb_conn.from_arrow(userdata_parquet_dataset)
 
         assert (
-            rel.filter("first_name=\'Jose\' and salary > 134708.82").aggregate('count(*)').execute().fetchone()[0] == 12
+            rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 12
         )
 
     def test_parallel_dataset_register(self, duckdb_cursor):
@@ -36,7 +38,7 @@ class TestArrowDataset(object):
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -47,7 +49,7 @@ class TestArrowDataset(object):
             format="parquet",
         )
 
-        rel = duckdb_conn.register("dataset", userdata_parquet_dataset)
+        duckdb_conn.register("dataset", userdata_parquet_dataset)
 
         assert (
             duckdb_conn.execute(
@@ -61,7 +63,7 @@ class TestArrowDataset(object):
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'userdata1.parquet')
+        parquet_filename = str(Path(__file__).parent / "data" / "userdata1.parquet")
 
         userdata_parquet_dataset = pyarrow.dataset.dataset(
             [
@@ -72,16 +74,16 @@ class TestArrowDataset(object):
             format="parquet",
         )
 
-        rel = duckdb_conn.register("dataset", userdata_parquet_dataset)
+        duckdb_conn.register("dataset", userdata_parquet_dataset)
 
         query = duckdb_conn.execute("SELECT * FROM dataset order by id")
         record_batch_reader = query.fetch_record_batch(2048)
 
-        arrow_table = record_batch_reader.read_all()
+        arrow_table = record_batch_reader.read_all()  # noqa: F841
         # reorder since order of rows isn't deterministic
-        df = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
+        df = userdata_parquet_dataset.to_table().to_pandas().sort_values("id").reset_index(drop=True)
         # turn it into an arrow table
-        arrow_table_2 = pyarrow.Table.from_pandas(df)
+        arrow_table_2 = pyarrow.Table.from_pandas(df)  # noqa: F841
         result_1 = duckdb_conn.execute("select * from arrow_table order by all").fetchall()
 
         result_2 = duckdb_conn.execute("select * from arrow_table_2 order by all").fetchall()
@@ -90,11 +92,11 @@ class TestArrowDataset(object):
 
     def test_ducktyping(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
-        dataset = CustomDataset()
+        dataset = CustomDataset()  # noqa: F841
         query = duckdb_conn.execute("SELECT b FROM dataset WHERE a < 5")
         record_batch_reader = query.fetch_record_batch(2048)
         arrow_table = record_batch_reader.read_all()
-        assert arrow_table.equals(CustomDataset.DATA[:5].select(['b']))
+        assert arrow_table.equals(CustomDataset.DATA[:5].select(["b"]))
 
 
 class CustomDataset(pyarrow.dataset.Dataset):
@@ -102,7 +104,7 @@ class CustomDataset(pyarrow.dataset.Dataset):
     SCHEMA = pyarrow.schema([pyarrow.field("a", pyarrow.int64(), True), pyarrow.field("b", pyarrow.float64(), True)])
     DATA = pyarrow.Table.from_arrays([pyarrow.array(range(100)), pyarrow.array(np.arange(100) * 1.0)], schema=SCHEMA)
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def scanner(self, **kwargs):
@@ -114,7 +116,7 @@ class CustomDataset(pyarrow.dataset.Dataset):
 
 
 class CustomScanner(pyarrow.dataset.Scanner):
-    def __init__(self, filter=None, columns=None, **kwargs):
+    def __init__(self, filter=None, columns=None, **kwargs) -> None:
         self.filter = filter
         self.columns = columns
         self.kwargs = kwargs

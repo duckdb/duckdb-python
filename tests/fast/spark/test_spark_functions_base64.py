@@ -5,7 +5,7 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace.sql import functions as F
 
 
-class TestSparkFunctionsBase64(object):
+class TestSparkFunctionsBase64:
     def test_base64(self, spark):
         data = [
             ("quack",),
@@ -40,4 +40,4 @@ class TestSparkFunctionsBase64(object):
             .select("decoded_value")
             .collect()
         )
-        assert res[0].decoded_value == b'quack'
+        assert res[0].decoded_value == b"quack"

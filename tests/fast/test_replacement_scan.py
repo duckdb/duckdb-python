@@ -1,6 +1,9 @@
-import duckdb
-import os
+# ruff: noqa: F841
+from pathlib import Path
+
 import pytest
+
+import duckdb
 
 pa = pytest.importorskip("pyarrow")
 pl = pytest.importorskip("polars")
@@ -8,13 +11,13 @@ pd = pytest.importorskip("pandas")
 
 
 def using_table(con, to_scan, object_name):
-    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
-    exec(f"result = con.table(object_name)", globals(), local_scope)
+    local_scope = {"con": con, object_name: to_scan, "object_name": object_name}
+    exec("result = con.table(object_name)", globals(), local_scope)
     return local_scope["result"]
 
 
 def using_sql(con, to_scan, object_name):
-    local_scope = {'con': con, object_name: to_scan, 'object_name': object_name}
+    local_scope = {"con": con, object_name: to_scan, "object_name": object_name}
     exec(f"result = con.sql('select * from \"{object_name}\"')", globals(), local_scope)
     return local_scope["result"]
 
@@ -60,40 +63,40 @@ global_polars_df = pl.DataFrame(
 
 
 def from_pandas():
-    df = pd.DataFrame({'a': [1, 2, 3]})
+    df = pd.DataFrame({"a": [1, 2, 3]})
     return df
 
 
 def from_arrow():
-    schema = pa.schema([('field_1', pa.int64())])
+    schema = pa.schema([("field_1", pa.int64())])
     df = pa.RecordBatchReader.from_batches(schema, [pa.RecordBatch.from_arrays([pa.array([1, 2, 3])], schema=schema)])
     return df
 
 
 def create_relation(conn, query: str) -> duckdb.DuckDBPyRelation:
-    df = pd.DataFrame({'a': [1, 2, 3]})
+    df = pd.DataFrame({"a": [1, 2, 3]})
     return conn.sql(query)
 
 
-class TestReplacementScan(object):
+class TestReplacementScan:
     def test_csv_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'integers.csv')
-        res = con.execute("select count(*) from '%s'" % (filename))
+        filename = str(Path(__file__).parent / "data" / "integers.csv")
+        res = con.execute(f"select count(*) from '{filename}'")
         assert res.fetchone()[0] == 2
 
     def test_parquet_replacement(self):
         con = duckdb.connect()
-        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', 'binary_string.parquet')
-        res = con.execute("select count(*) from '%s'" % (filename))
+        filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
+        res = con.execute(f"select count(*) from '{filename}'")
         assert res.fetchone()[0] == 3
 
-    @pytest.mark.parametrize('get_relation', [using_table, using_sql])
+    @pytest.mark.parametrize("get_relation", [using_table, using_sql])
     @pytest.mark.parametrize(
-        'fetch_method',
+        "fetch_method",
         [fetch_polars, fetch_df, fetch_arrow, fetch_arrow_table, fetch_arrow_record_batch, fetch_relation],
     )
-    @pytest.mark.parametrize('object_name', ['tbl', 'table', 'select', 'update'])
+    @pytest.mark.parametrize("object_name", ["tbl", "table", "select", "update"])
     def test_table_replacement_scans(self, duckdb_cursor, get_relation, fetch_method, object_name):
         base_rel = duckdb_cursor.values([1, 2, 3])
         to_scan = fetch_method(base_rel)
@@ -105,29 +108,29 @@ class TestReplacementScan(object):
 
     def test_scan_global(self, duckdb_cursor):
         duckdb_cursor.execute("set python_enable_replacements=false")
-        with pytest.raises(duckdb.CatalogException, match='Table with name global_polars_df does not exist'):
+        with pytest.raises(duckdb.CatalogException, match="Table with name global_polars_df does not exist"):
             # We set the depth to look for global variables to 0 so it's never found
             duckdb_cursor.sql("select * from global_polars_df")
         duckdb_cursor.execute("set python_enable_replacements=true")
         # Now the depth is 1, which is enough to locate the variable
         rel = duckdb_cursor.sql("select * from global_polars_df")
         res = rel.fetchone()
-        assert res == (1, 'banana', 5, 'beetle')
+        assert res == (1, "banana", 5, "beetle")
 
     def test_scan_local(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
-        def inner_func(duckdb_cursor):
+        def inner_func(duckdb_cursor) -> None:
             duckdb_cursor.execute("set python_enable_replacements=false")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
+            with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
                 # We set the depth to look for local variables to 0 so it's never found
                 duckdb_cursor.sql("select * from df")
             duckdb_cursor.execute("set python_enable_replacements=true")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
+            with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
                 # Here it's still not found, because it's not visible to this frame
                 duckdb_cursor.sql("select * from df")
 
-            df = pd.DataFrame({'a': [4, 5, 6]})
+            df = pd.DataFrame({"a": [4, 5, 6]})
             duckdb_cursor.execute("set python_enable_replacements=true")
             # We can find the newly defined 'df' with depth 1
             rel = duckdb_cursor.sql("select * from df")
@@ -137,12 +140,13 @@ class TestReplacementScan(object):
         inner_func(duckdb_cursor)
 
     def test_scan_local_unlimited(self, duckdb_cursor):
-        df = pd.DataFrame({'a': [1, 2, 3]})
+        df = pd.DataFrame({"a": [1, 2, 3]})
 
-        def inner_func(duckdb_cursor):
+        def inner_func(duckdb_cursor) -> None:
             duckdb_cursor.execute("set python_enable_replacements=true")
-            with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
-                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined in this function
+            with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
+                # We set the depth to look for local variables to 1 so it's still not found because it wasn't defined
+                # in this function
                 duckdb_cursor.sql("select * from df")
             duckdb_cursor.execute("set python_scan_all_frames=true")
             # Now we can find 'df' because we also scan the previous frame(s)
@@ -155,37 +159,37 @@ class TestReplacementScan(object):
 
     def test_replacement_scan_relapi(self):
         con = duckdb.connect()
-        pyrel1 = con.query('from (values (42), (84), (120)) t(i)')
+        pyrel1 = con.query("from (values (42), (84), (120)) t(i)")
         assert isinstance(pyrel1, duckdb.DuckDBPyRelation)
         assert pyrel1.fetchall() == [(42,), (84,), (120,)]
 
-        pyrel2 = con.query('from pyrel1 limit 2')
+        pyrel2 = con.query("from pyrel1 limit 2")
         assert isinstance(pyrel2, duckdb.DuckDBPyRelation)
         assert pyrel2.fetchall() == [(42,), (84,)]
 
-        pyrel3 = con.query('select i + 100 from pyrel2')
-        assert type(pyrel3) == duckdb.DuckDBPyRelation
+        pyrel3 = con.query("select i + 100 from pyrel2")
+        assert type(pyrel3) is duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(142,), (184,)]
 
     def test_replacement_scan_not_found(self):
         con = duckdb.connect()
         con.execute("set python_scan_all_frames=true")
-        with pytest.raises(duckdb.CatalogException, match='Table with name non_existant does not exist'):
-            res = con.sql("select * from non_existant").fetchall()
+        with pytest.raises(duckdb.CatalogException, match="Table with name non_existant does not exist"):
+            con.sql("select * from non_existant").fetchall()
 
     def test_replacement_scan_alias(self):
         con = duckdb.connect()
-        pyrel1 = con.query('from (values (1, 2)) t(i, j)')
-        pyrel2 = con.query('from (values (1, 10)) t(i, k)')
-        pyrel3 = con.query('from pyrel1 join pyrel2 using(i)')
-        assert type(pyrel3) == duckdb.DuckDBPyRelation
+        pyrel1 = con.query("from (values (1, 2)) t(i, j)")
+        pyrel2 = con.query("from (values (1, 10)) t(i, k)")
+        pyrel3 = con.query("from pyrel1 join pyrel2 using(i)")
+        assert type(pyrel3) is duckdb.DuckDBPyRelation
         assert pyrel3.fetchall() == [(1, 2, 10)]
 
     def test_replacement_scan_pandas_alias(self):
         con = duckdb.connect()
-        df1 = con.query('from (values (1, 2)) t(i, j)').df()
-        df2 = con.query('from (values (1, 10)) t(i, k)').df()
-        df3 = con.query('from df1 join df2 using(i)')
+        df1 = con.query("from (values (1, 2)) t(i, j)").df()
+        df2 = con.query("from (values (1, 10)) t(i, k)").df()
+        df3 = con.query("from df1 join df2 using(i)")
         assert df3.fetchall() == [(1, 2, 10)]
 
     def test_replacement_scan_after_creation(self, duckdb_cursor):
@@ -194,14 +198,15 @@ class TestReplacementScan(object):
         rel = duckdb_cursor.sql("select * from df")
 
         duckdb_cursor.execute("drop table df")
-        df = pd.DataFrame({'b': [1, 2, 3]})
+        df = pd.DataFrame({"b": [1, 2, 3]})
         res = rel.fetchall()
-        # FIXME: this should error instead, the 'df' table we relied on has been removed and replaced with a replacement scan
+        # TODO: this should error instead, the 'df' table we relied on has been removed  # noqa: TD002, TD003
+        #  and replaced with a replacement scan
         assert res == [(1,), (2,), (3,)]
 
     def test_replacement_scan_caching(self, duckdb_cursor):
         def return_rel(conn):
-            df = pd.DataFrame({'a': [1, 2, 3]})
+            df = pd.DataFrame({"a": [1, 2, 3]})
             rel = conn.sql("select * from df")
             return rel
 
@@ -220,7 +225,7 @@ class TestReplacementScan(object):
             con.execute("select count(*) from random_object").fetchone()
 
     @pytest.mark.parametrize(
-        'df_create',
+        "df_create",
         [
             from_pandas,
             from_arrow,
@@ -258,7 +263,7 @@ class TestReplacementScan(object):
         if df_create == from_arrow:
             # Because the RecordBatchReader is destructive, it's empty after the first scan
             # But we reference it multiple times, so the subsequent reads have no data to read
-            # FIXME: this should probably throw an error...
+            # TODO: this should probably throw an error...  # noqa: TD002, TD003
             assert len(res) >= 0
         else:
             assert res == [([1, 2, 3],), ([1, 2, 3],), ([1, 2, 3],)]
@@ -288,15 +293,15 @@ class TestReplacementScan(object):
                 WHERE a < 3
             )
             SELECT * FROM (
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
                 JOIN cte2 ON cte1.a = cte2.a
                 JOIN (
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM df
                     JOIN cte3 ON df.a = cte3.a
@@ -309,6 +314,7 @@ class TestReplacementScan(object):
         res = rel.fetchall()
         assert res == [(2, 2, 2)]
 
+    @pytest.mark.xfail(reason="Bug in DuckDB core (MRE at #19154)")
     def test_same_name_cte(self, duckdb_cursor):
         query = """
             WITH df AS (
@@ -332,7 +338,7 @@ class TestReplacementScan(object):
 
     def test_use_with_view(self, duckdb_cursor):
         rel = create_relation(duckdb_cursor, "select * from df")
-        rel.create_view('v1')
+        rel.create_view("v1")
 
         del rel
         rel = duckdb_cursor.sql("select * from v1")
@@ -340,14 +346,15 @@ class TestReplacementScan(object):
         assert res == [(1,), (2,), (3,)]
         duckdb_cursor.execute("drop view v1")
 
-        def create_view_in_func(con):
+        def create_view_in_func(con) -> None:
             df = pd.DataFrame({"a": [1, 2, 3]})
-            con.execute('CREATE VIEW v1 AS SELECT * FROM df')
+            con.execute("CREATE VIEW v1 AS SELECT * FROM df")
 
         create_view_in_func(duckdb_cursor)
 
-        # FIXME: this should be fixed in the future, likely by unifying the behavior of .sql and .execute
-        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist'):
+        # TODO: this should be fixed in the future, likely by unifying the behavior of  # noqa: TD002, TD003
+        #  .sql and .execute
+        with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist"):
             rel = duckdb_cursor.sql("select * from v1")
 
     def test_recursive_cte(self, duckdb_cursor):
@@ -409,7 +416,7 @@ class TestReplacementScan(object):
         """
         rel = duckdb_cursor.sql(query)
         res = rel.fetchall()
-        assert res == [(2, 'Bob', None), (3, 'Charlie', None), (4, 'David', 1.0), (5, 'Eve', 1.0)]
+        assert res == [(2, "Bob", None), (3, "Charlie", None), (4, "David", 1.0), (5, "Eve", 1.0)]
 
     def test_cte_at_different_levels(self, duckdb_cursor):
         query = """
@@ -417,8 +424,8 @@ class TestReplacementScan(object):
                 WITH cte1 AS (
                     SELECT * FROM df
                 )
-                SELECT 
-                    cte1.*, 
+                SELECT
+                    cte1.*,
                     cte2.a AS cte2_a,
                     subquery.a AS cte3_a
                 FROM cte1
@@ -434,8 +441,8 @@ class TestReplacementScan(object):
                         SELECT * FROM df
                         WHERE a < 3
                     )
-                    SELECT 
-                        df.*, 
+                    SELECT
+                        df.*,
                         cte3.a AS cte3_a
                     FROM (
                         SELECT * FROM df
@@ -459,19 +466,17 @@ class TestReplacementScan(object):
 
         ## disable external access
         con.execute("set enable_external_access=false")
-        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
-            rel = create_relation(con, "select * from df")
-            res = rel.fetchall()
+        with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist!"):
+            create_relation(con, "select * from df")
         with pytest.raises(
-            duckdb.InvalidInputException, match='Cannot change enable_external_access setting while database is running'
+            duckdb.InvalidInputException, match="Cannot change enable_external_access setting while database is running"
         ):
             con.execute("set enable_external_access=true")
 
         # Create connection with external access disabled
-        con = duckdb.connect(config={'enable_external_access': False})
-        with pytest.raises(duckdb.CatalogException, match='Table with name df does not exist!'):
-            rel = create_relation(con, "select * from df")
-            res = rel.fetchall()
+        con = duckdb.connect(config={"enable_external_access": False})
+        with pytest.raises(duckdb.CatalogException, match="Table with name df does not exist!"):
+            create_relation(con, "select * from df")
 
         # Create regular connection, disable inbetween creation and execution
         con = duckdb.connect()
@@ -486,23 +491,23 @@ class TestReplacementScan(object):
         assert res == [(1,), (2,), (3,)]
 
     def test_replacement_of_cross_connection_relation(self):
-        con1 = duckdb.connect(':memory:')
-        con2 = duckdb.connect(':memory:')
-        con1.query('create table integers(i int)')
-        con2.query('create table integers(v varchar)')
-        con1.query('insert into integers values (42)')
-        con2.query('insert into integers values (\'xxx\')')
-        rel1 = con1.query('select * from integers')
+        con1 = duckdb.connect(":memory:")
+        con2 = duckdb.connect(":memory:")
+        con1.query("create table integers(i int)")
+        con2.query("create table integers(v varchar)")
+        con1.query("insert into integers values (42)")
+        con2.query("insert into integers values ('xxx')")
+        rel1 = con1.query("select * from integers")
         with pytest.raises(
             duckdb.InvalidInputException,
-            match=r'The object was created by another Connection and can therefore not be used by this Connection.',
+            match=r"The object was created by another Connection and can therefore not be used by this Connection.",
         ):
-            con2.query('from rel1')
+            con2.query("from rel1")
 
         del con1
 
         with pytest.raises(
             duckdb.InvalidInputException,
-            match=r'The object was created by another Connection and can therefore not be used by this Connection.',
+            match=r"The object was created by another Connection and can therefore not be used by this Connection.",
         ):
-            con2.query('from rel1')
+            con2.query("from rel1")

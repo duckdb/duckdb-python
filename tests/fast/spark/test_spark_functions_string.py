@@ -7,7 +7,7 @@ from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 
 
-class TestSparkFunctionsString(object):
+class TestSparkFunctionsString:
     def test_length(self, spark):
         data = [
             ("firstRowFirstColumn",),
@@ -152,47 +152,47 @@ class TestSparkFunctionsString(object):
                     "SL",
                 )
             ],
-            ['a', 'b'],
+            ["a", "b"],
         )
 
-        res = df.select(F.btrim(df.a, df.b).alias('r')).collect()
-        assert res == [Row(r='parkSQ')]
+        res = df.select(F.btrim(df.a, df.b).alias("r")).collect()
+        assert res == [Row(r="parkSQ")]
 
-        df = spark.createDataFrame([("    SparkSQL   ",)], ['a'])
-        res = df.select(F.btrim(df.a).alias('r')).collect()
-        assert res == [Row(r='SparkSQL')]
+        df = spark.createDataFrame([("    SparkSQL   ",)], ["a"])
+        res = df.select(F.btrim(df.a).alias("r")).collect()
+        assert res == [Row(r="SparkSQL")]
 
     def test_char(self, spark):
         df = spark.createDataFrame(
             [(65,), (65 + 256,), (66 + 256,)],
             [
-                'a',
+                "a",
             ],
         )
 
-        res = df.select(F.char(df.a).alias('ch')).collect()
-        assert res == [Row(ch='A'), Row(ch='A'), Row(ch='B')]
+        res = df.select(F.char(df.a).alias("ch")).collect()
+        assert res == [Row(ch="A"), Row(ch="A"), Row(ch="B")]
 
     def test_encode(self, spark):
-        df = spark.createDataFrame([('abcd',)], ['c'])
+        df = spark.createDataFrame([("abcd",)], ["c"])
 
         res = df.select(F.encode("c", "UTF-8").alias("encoded")).collect()
-        # FIXME: Should return the same type
+        # TODO: Should return the same type  # noqa: TD002, TD003
         if USE_ACTUAL_SPARK:
-            assert res == [Row(encoded=bytearray(b'abcd'))]
+            assert res == [Row(encoded=bytearray(b"abcd"))]
         else:
-            assert res == [Row(encoded=b'abcd')]
+            assert res == [Row(encoded=b"abcd")]
 
     def test_split(self, spark):
         df = spark.createDataFrame(
-            [('oneAtwoBthreeC',)],
+            [("oneAtwoBthreeC",)],
             [
-                's',
+                "s",
             ],
         )
 
-        res = df.select(F.split(df.s, '[ABC]').alias('s')).collect()
-        assert res == [Row(s=['one', 'two', 'three', ''])]
+        res = df.select(F.split(df.s, "[ABC]").alias("s")).collect()
+        assert res == [Row(s=["one", "two", "three", ""])]
 
     def test_split_part(self, spark):
         df = spark.createDataFrame(
@@ -206,8 +206,8 @@ class TestSparkFunctionsString(object):
             ["a", "b", "c"],
         )
 
-        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
-        assert res == [Row(r='13')]
+        res = df.select(F.split_part(df.a, df.b, df.c).alias("r")).collect()
+        assert res == [Row(r="13")]
 
         # If any input is null, should return null
         df = spark.createDataFrame(
@@ -225,8 +225,8 @@ class TestSparkFunctionsString(object):
             ],
             ["a", "b", "c"],
         )
-        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
-        assert res == [Row(r=None), Row(r='11')]
+        res = df.select(F.split_part(df.a, df.b, df.c).alias("r")).collect()
+        assert res == [Row(r=None), Row(r="11")]
 
         # If partNum is out of range, should return an empty string
         df = spark.createDataFrame(
@@ -239,8 +239,8 @@ class TestSparkFunctionsString(object):
             ],
             ["a", "b", "c"],
         )
-        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
-        assert res == [Row(r='')]
+        res = df.select(F.split_part(df.a, df.b, df.c).alias("r")).collect()
+        assert res == [Row(r="")]
 
         # If partNum is negative, parts are counted backwards
         df = spark.createDataFrame(
@@ -253,8 +253,8 @@ class TestSparkFunctionsString(object):
             ],
             ["a", "b", "c"],
         )
-        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
-        assert res == [Row(r='13')]
+        res = df.select(F.split_part(df.a, df.b, df.c).alias("r")).collect()
+        assert res == [Row(r="13")]
 
         # If the delimiter is an empty string, the return should be empty
         df = spark.createDataFrame(
@@ -267,8 +267,8 @@ class TestSparkFunctionsString(object):
             ],
             ["a", "b", "c"],
         )
-        res = df.select(F.split_part(df.a, df.b, df.c).alias('r')).collect()
-        assert res == [Row(r='')]
+        res = df.select(F.split_part(df.a, df.b, df.c).alias("r")).collect()
+        assert res == [Row(r="")]
 
     def test_substr(self, spark):
         df = spark.createDataFrame(
@@ -282,7 +282,7 @@ class TestSparkFunctionsString(object):
             ["a", "b", "c"],
         )
         res = df.select(F.substr("a", "b", "c").alias("s")).collect()
-        assert res == [Row(s='k')]
+        assert res == [Row(s="k")]
 
         df = spark.createDataFrame(
             [
@@ -295,21 +295,21 @@ class TestSparkFunctionsString(object):
             ["a", "b", "c"],
         )
         res = df.select(F.substr("a", "b").alias("s")).collect()
-        assert res == [Row(s='k SQL')]
+        assert res == [Row(s="k SQL")]
 
     def test_find_in_set(self, spark):
         string_array = "abc,b,ab,c,def"
-        df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ['a', 'b'])
+        df = spark.createDataFrame([("ab", string_array), ("b,c", string_array), ("z", string_array)], ["a", "b"])
 
-        res = df.select(F.find_in_set(df.a, df.b).alias('r')).collect()
+        res = df.select(F.find_in_set(df.a, df.b).alias("r")).collect()
 
         assert res == [Row(r=3), Row(r=0), Row(r=0)]
 
     def test_initcap(self, spark):
-        df = spark.createDataFrame([('ab cd',)], ['a'])
+        df = spark.createDataFrame([("ab cd",)], ["a"])
 
-        res = df.select(F.initcap("a").alias('v')).collect()
-        assert res == [Row(v='Ab Cd')]
+        res = df.select(F.initcap("a").alias("v")).collect()
+        assert res == [Row(v="Ab Cd")]
 
     def test_left(self, spark):
         df = spark.createDataFrame(
@@ -327,11 +327,11 @@ class TestSparkFunctionsString(object):
                     -3,
                 ),
             ],
-            ['a', 'b'],
+            ["a", "b"],
         )
 
-        res = df.select(F.left(df.a, df.b).alias('r')).collect()
-        assert res == [Row(r='Spa'), Row(r=''), Row(r='')]
+        res = df.select(F.left(df.a, df.b).alias("r")).collect()
+        assert res == [Row(r="Spa"), Row(r=""), Row(r="")]
 
     def test_right(self, spark):
         df = spark.createDataFrame(
@@ -349,39 +349,39 @@ class TestSparkFunctionsString(object):
                     -3,
                 ),
             ],
-            ['a', 'b'],
+            ["a", "b"],
         )
 
-        res = df.select(F.right(df.a, df.b).alias('r')).collect()
-        assert res == [Row(r='SQL'), Row(r=''), Row(r='')]
+        res = df.select(F.right(df.a, df.b).alias("r")).collect()
+        assert res == [Row(r="SQL"), Row(r=""), Row(r="")]
 
     def test_levenshtein(self, spark):
-        df = spark.createDataFrame([("kitten", "sitting"), ("saturdays", "sunday")], ['a', 'b'])
+        df = spark.createDataFrame([("kitten", "sitting"), ("saturdays", "sunday")], ["a", "b"])
 
-        res = df.select(F.levenshtein(df.a, df.b).alias('r'), F.levenshtein(df.a, df.b, 3).alias('r_th')).collect()
+        res = df.select(F.levenshtein(df.a, df.b).alias("r"), F.levenshtein(df.a, df.b, 3).alias("r_th")).collect()
         assert res == [Row(r=3, r_th=3), Row(r=4, r_th=-1)]
 
     def test_lpad(self, spark):
         df = spark.createDataFrame(
-            [('abcd',)],
+            [("abcd",)],
             [
-                's',
+                "s",
             ],
         )
 
-        res = df.select(F.lpad(df.s, 6, '#').alias('s')).collect()
-        assert res == [Row(s='##abcd')]
+        res = df.select(F.lpad(df.s, 6, "#").alias("s")).collect()
+        assert res == [Row(s="##abcd")]
 
     def test_rpad(self, spark):
         df = spark.createDataFrame(
-            [('abcd',)],
+            [("abcd",)],
             [
-                's',
+                "s",
             ],
         )
 
-        res = df.select(F.rpad(df.s, 6, '#').alias('s')).collect()
-        assert res == [Row(s='abcd##')]
+        res = df.select(F.rpad(df.s, 6, "#").alias("s")).collect()
+        assert res == [Row(s="abcd##")]
 
     def test_printf(self, spark):
         df = spark.createDataFrame(
@@ -395,79 +395,79 @@ class TestSparkFunctionsString(object):
             ["a", "b", "c"],
         )
         res = df.select(F.printf("a", "b", "c").alias("r")).collect()
-        assert res == [Row(r='aa123cc')]
+        assert res == [Row(r="aa123cc")]
 
     @pytest.mark.parametrize("regexp_func", [F.regexp, F.regexp_like])
     def test_regexp_and_regexp_like(self, spark, regexp_func):
         df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
-        res = df.select(regexp_func('str', F.lit(r'(\d+)')).alias("m")).collect()
+        res = df.select(regexp_func("str", F.lit(r"(\d+)")).alias("m")).collect()
         assert res[0].m is True
 
         df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
-        res = df.select(regexp_func('str', F.lit(r'\d{2}b')).alias("m")).collect()
+        res = df.select(regexp_func("str", F.lit(r"\d{2}b")).alias("m")).collect()
         assert res[0].m is False
 
         df = spark.createDataFrame([("1a 2b 14m", r"(\d+)")], ["str", "regexp"])
-        res = df.select(regexp_func('str', F.col("regexp")).alias("m")).collect()
+        res = df.select(regexp_func("str", F.col("regexp")).alias("m")).collect()
         assert res[0].m is True
 
     def test_regexp_count(self, spark):
         df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
-        res = df.select(F.regexp_count('str', F.lit(r'\d+')).alias('d')).collect()
+        res = df.select(F.regexp_count("str", F.lit(r"\d+")).alias("d")).collect()
         assert res == [Row(d=3)]
-        res = df.select(F.regexp_count('str', F.lit(r'mmm')).alias('d')).collect()
+        res = df.select(F.regexp_count("str", F.lit(r"mmm")).alias("d")).collect()
         assert res == [Row(d=0)]
-        res = df.select(F.regexp_count("str", F.col("regexp")).alias('d')).collect()
+        res = df.select(F.regexp_count("str", F.col("regexp")).alias("d")).collect()
         assert res == [Row(d=3)]
 
     def test_regexp_extract(self, spark):
-        df = spark.createDataFrame([('100-200',)], ['str'])
-        res = df.select(F.regexp_extract('str', r'(\d+)-(\d+)', 1).alias('d')).collect()
-        assert res == [Row(d='100')]
+        df = spark.createDataFrame([("100-200",)], ["str"])
+        res = df.select(F.regexp_extract("str", r"(\d+)-(\d+)", 1).alias("d")).collect()
+        assert res == [Row(d="100")]
 
-        df = spark.createDataFrame([('foo',)], ['str'])
-        res = df.select(F.regexp_extract('str', r'(\d+)', 1).alias('d')).collect()
-        assert res == [Row(d='')]
+        df = spark.createDataFrame([("foo",)], ["str"])
+        res = df.select(F.regexp_extract("str", r"(\d+)", 1).alias("d")).collect()
+        assert res == [Row(d="")]
 
-        df = spark.createDataFrame([('aaaac',)], ['str'])
-        res = df.select(F.regexp_extract('str', '(a+)(b)?(c)', 2).alias('d')).collect()
-        assert res == [Row(d='')]
+        df = spark.createDataFrame([("aaaac",)], ["str"])
+        res = df.select(F.regexp_extract("str", "(a+)(b)?(c)", 2).alias("d")).collect()
+        assert res == [Row(d="")]
 
     def test_regexp_extract_all(self, spark):
         df = spark.createDataFrame([("100-200, 300-400", r"(\d+)-(\d+)")], ["str", "regexp"])
-        res = df.select(F.regexp_extract_all('str', F.lit(r'(\d+)-(\d+)')).alias('d')).collect()
-        assert res == [Row(d=['100', '300'])]
+        res = df.select(F.regexp_extract_all("str", F.lit(r"(\d+)-(\d+)")).alias("d")).collect()
+        assert res == [Row(d=["100", "300"])]
 
-        res = df.select(F.regexp_extract_all('str', F.lit(r'(\d+)-(\d+)'), 1).alias('d')).collect()
-        assert res == [Row(d=['100', '300'])]
+        res = df.select(F.regexp_extract_all("str", F.lit(r"(\d+)-(\d+)"), 1).alias("d")).collect()
+        assert res == [Row(d=["100", "300"])]
 
-        res = df.select(F.regexp_extract_all('str', F.lit(r'(\d+)-(\d+)'), 2).alias('d')).collect()
-        assert res == [Row(d=['200', '400'])]
+        res = df.select(F.regexp_extract_all("str", F.lit(r"(\d+)-(\d+)"), 2).alias("d")).collect()
+        assert res == [Row(d=["200", "400"])]
 
-        res = df.select(F.regexp_extract_all('str', F.col("regexp")).alias('d')).collect()
-        assert res == [Row(d=['100', '300'])]
+        res = df.select(F.regexp_extract_all("str", F.col("regexp")).alias("d")).collect()
+        assert res == [Row(d=["100", "300"])]
 
     def test_regexp_substr(self, spark):
         df = spark.createDataFrame([("1a 2b 14m", r"\d+")], ["str", "regexp"])
 
-        res = df.select(F.regexp_substr('str', F.lit(r'\d+')).alias('d')).collect()
-        assert res == [Row(d='1')]
+        res = df.select(F.regexp_substr("str", F.lit(r"\d+")).alias("d")).collect()
+        assert res == [Row(d="1")]
 
-        res = df.select(F.regexp_substr('str', F.lit(r'mmm')).alias('d')).collect()
+        res = df.select(F.regexp_substr("str", F.lit(r"mmm")).alias("d")).collect()
         assert res == [Row(d=None)]
 
-        res = df.select(F.regexp_substr("str", F.col("regexp")).alias('d')).collect()
-        assert res == [Row(d='1')]
+        res = df.select(F.regexp_substr("str", F.col("regexp")).alias("d")).collect()
+        assert res == [Row(d="1")]
 
     def test_repeat(self, spark):
         df = spark.createDataFrame(
-            [('ab',)],
+            [("ab",)],
             [
-                's',
+                "s",
             ],
         )
-        res = df.select(F.repeat(df.s, 3).alias('s')).collect()
-        assert res == [Row(s='ababab')]
+        res = df.select(F.repeat(df.s, 3).alias("s")).collect()
+        assert res == [Row(s="ababab")]
 
     def test_reverse(self, spark):
         data = [

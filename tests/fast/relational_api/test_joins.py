@@ -1,5 +1,6 @@
-import duckdb
 import pytest
+
+import duckdb
 from duckdb import ColumnExpression
 
 
@@ -26,62 +27,62 @@ def con():
         ) AS t(a, b))
     """
     )
-    yield conn
+    return conn
 
 
-class TestRAPIJoins(object):
+class TestRAPIJoins:
     def test_outer_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'outer')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "outer")
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, None, None), (None, None, 3, 5)]
 
     def test_inner_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'inner')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "inner")
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4)]
 
     def test_anti_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'anti')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "anti")
         res = rel.fetchall()
         # Only output the row(s) from A where the condition is false
         assert res == [(3, 2)]
 
     def test_left_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'left')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "left")
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, None, None)]
 
     def test_right_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'right')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "right")
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (None, None, 3, 5)]
 
     def test_semi_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
-        expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
-        rel = a.join(b, expr, 'semi')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
+        expr = ColumnExpression("tbl_a.b") == ColumnExpression("tbl_b.a")
+        rel = a.join(b, expr, "semi")
         res = rel.fetchall()
         assert res == [(1, 1), (2, 1)]
 
     def test_cross_join(self, con):
-        a = con.table('tbl_a')
-        b = con.table('tbl_b')
+        a = con.table("tbl_a")
+        b = con.table("tbl_b")
         rel = a.cross(b)
         res = rel.fetchall()
         assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, 1, 4), (1, 1, 3, 5), (2, 1, 3, 5), (3, 2, 3, 5)]

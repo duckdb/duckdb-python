@@ -1,11 +1,12 @@
-import pytest
-import tempfile
-
+import csv
+import datetime
 import os
 
-_ = pytest.importorskip("duckdb.experimental.spark")
-
+import pytest
+from conftest import ArrowPandas, NumpyPandas, getTimeSeriesData
 from spark_namespace import USE_ACTUAL_SPARK
+
+from duckdb import InvalidInputException, read_csv
 
 if USE_ACTUAL_SPARK:
     pytest.skip(
@@ -15,12 +16,7 @@ if USE_ACTUAL_SPARK:
         allow_module_level=True,
     )
 
-from duckdb import connect, InvalidInputException, read_csv
-from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
-from spark_namespace import USE_ACTUAL_SPARK
-import pandas._testing as tm
-import datetime
-import csv
+pytest.importorskip("duckdb.experimental.spark")
 
 
 @pytest.fixture
@@ -34,26 +30,26 @@ def df(spark):
     )
     columns = ["CourseName", "fee", "discount"]
     dataframe = spark.createDataFrame(data=simpleData, schema=columns)
-    yield dataframe
+    return dataframe
 
 
 @pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_ints(request, spark):
     pandas = request.param
-    dataframe = pandas.DataFrame({'a': [5, 3, 23, 2], 'b': [45, 234, 234, 2]})
-    yield dataframe
+    dataframe = pandas.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
+    return dataframe
 
 
 @pytest.fixture(params=[NumpyPandas(), ArrowPandas()])
 def pandas_df_strings(request, spark):
     pandas = request.param
-    dataframe = pandas.DataFrame({'a': ['string1', 'string2', 'string3']})
-    yield dataframe
+    dataframe = pandas.DataFrame({"a": ["string1", "string2", "string3"]})
+    return dataframe
 
 
-class TestSparkToCSV(object):
+class TestSparkToCSV:
     def test_basic_to_csv(self, pandas_df_ints, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
 
         df = spark.createDataFrame(pandas_df_ints)
 
@@ -64,19 +60,19 @@ class TestSparkToCSV(object):
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_sep(self, pandas_df_ints, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
 
         df = spark.createDataFrame(pandas_df_ints)
 
-        df.write.csv(temp_file_name, sep=',')
+        df.write.csv(temp_file_name, sep=",")
 
-        csv_rel = spark.read.csv(temp_file_name, sep=',')
+        csv_rel = spark.read.csv(temp_file_name, sep=",")
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_na_rep(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
-        pandas_df = pandas.DataFrame({'a': [5, None, 23, 2], 'b': [45, 234, 234, 2]})
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
+        pandas_df = pandas.DataFrame({"a": [5, None, 23, 2], "b": [45, 234, 234, 2]})
 
         df = spark.createDataFrame(pandas_df)
 
@@ -85,10 +81,10 @@ class TestSparkToCSV(object):
         csv_rel = spark.read.csv(temp_file_name, nullValue="test")
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_header(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
-        pandas_df = pandas.DataFrame({'a': [5, None, 23, 2], 'b': [45, 234, 234, 2]})
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
+        pandas_df = pandas.DataFrame({"a": [5, None, 23, 2], "b": [45, 234, 234, 2]})
 
         df = spark.createDataFrame(pandas_df)
 
@@ -97,22 +93,22 @@ class TestSparkToCSV(object):
         csv_rel = spark.read.csv(temp_file_name)
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_quotechar(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
 
-        pandas_df = pandas.DataFrame({'a': ["\'a,b,c\'", None, "hello", "bye"], 'b': [45, 234, 234, 2]})
+        pandas_df = pandas.DataFrame({"a": ["'a,b,c'", None, "hello", "bye"], "b": [45, 234, 234, 2]})
 
         df = spark.createDataFrame(pandas_df)
 
-        df.write.csv(temp_file_name, quote='\'', sep=',')
+        df.write.csv(temp_file_name, quote="'", sep=",")
 
-        csv_rel = spark.read.csv(temp_file_name, sep=',', quote='\'')
+        csv_rel = spark.read.csv(temp_file_name, sep=",", quote="'")
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_escapechar(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         pandas_df = pandas.DataFrame(
             {
                 "c_bool": [True, False],
@@ -124,13 +120,13 @@ class TestSparkToCSV(object):
 
         df = spark.createDataFrame(pandas_df)
 
-        df.write.csv(temp_file_name, quote='"', escape='!')
-        csv_rel = spark.read.csv(temp_file_name, quote='"', escape='!')
+        df.write.csv(temp_file_name, quote='"', escape="!")
+        csv_rel = spark.read.csv(temp_file_name, quote='"', escape="!")
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_date_format(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         pandas_df = pandas.DataFrame(getTimeSeriesData())
         dt_index = pandas_df.index
         pandas_df = pandas.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
@@ -143,22 +139,22 @@ class TestSparkToCSV(object):
 
         assert df.collect() == csv_rel.collect()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_to_csv_timestamp_format(self, pandas, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
-        pandas_df = pandas.DataFrame({'0': pandas.Series(data=data, dtype='object')})
+        pandas_df = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
 
         df = spark.createDataFrame(pandas_df)
 
-        df.write.csv(temp_file_name, timestampFormat='%m/%d/%Y')
+        df.write.csv(temp_file_name, timestampFormat="%m/%d/%Y")
 
-        csv_rel = spark.read.csv(temp_file_name, timestampFormat='%m/%d/%Y')
+        csv_rel = spark.read.csv(temp_file_name, timestampFormat="%m/%d/%Y")
 
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_quoting_off(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, quoteAll=None)
 
@@ -166,7 +162,7 @@ class TestSparkToCSV(object):
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_quoting_on(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, quoteAll="force")
 
@@ -174,7 +170,7 @@ class TestSparkToCSV(object):
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_quoting_quote_all(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, quoteAll=csv.QUOTE_ALL)
 
@@ -182,7 +178,7 @@ class TestSparkToCSV(object):
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_encoding_incorrect(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         with pytest.raises(
             InvalidInputException, match="Invalid Input Error: The only supported encoding option is 'UTF8"
@@ -190,7 +186,7 @@ class TestSparkToCSV(object):
             df.write.csv(temp_file_name, encoding="nope")
 
     def test_to_csv_encoding_correct(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, encoding="UTF-8")
         csv_rel = spark.read.csv(temp_file_name)
@@ -198,10 +194,11 @@ class TestSparkToCSV(object):
 
     @pytest.mark.skipif(
         USE_ACTUAL_SPARK,
-        reason="This test uses DuckDB to read the CSV. However, this does not work if Spark created it as Spark creates a folder instead of a single file.",
+        reason="This test uses DuckDB to read the CSV. However, this does not work if Spark created it as "
+        "Spark creates a folder instead of a single file.",
     )
     def test_compression_gzip(self, pandas_df_strings, spark, tmp_path):
-        temp_file_name = os.path.join(tmp_path, "temp_file.csv")
+        temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, compression="gzip")
 

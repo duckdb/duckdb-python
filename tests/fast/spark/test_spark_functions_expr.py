@@ -5,7 +5,7 @@ from spark_namespace.sql.types import Row
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 
-class TestSparkFunctionsExpr(object):
+class TestSparkFunctionsExpr:
     def test_expr(self, spark):
         df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
         res = df.select("name", F.expr("length(name)").alias("str_len")).collect()

@@ -1,12 +1,18 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 
-closed = lambda: pytest.raises(duckdb.ConnectionException, match='Connection already closed')
-no_result_set = lambda: pytest.raises(duckdb.InvalidInputException, match='No open result set')
+import duckdb
 
 
-class TestRuntimeError(object):
+def closed():
+    return pytest.raises(duckdb.ConnectionException, match="Connection already closed")
+
+
+def no_result_set():
+    return pytest.raises(duckdb.InvalidInputException, match="No open result set")
+
+
+class TestRuntimeError:
     def test_fetch_error(self):
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
@@ -20,7 +26,7 @@ class TestRuntimeError(object):
             con.execute("select i::int from tbl").df()
 
     def test_arrow_error(self):
-        pytest.importorskip('pyarrow')
+        pytest.importorskip("pyarrow")
 
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
@@ -34,83 +40,83 @@ class TestRuntimeError(object):
             con.register(py_obj, "v")
 
     def test_arrow_fetch_table_error(self):
-        pytest.importorskip('pyarrow')
+        pytest.importorskip("pyarrow")
 
         con = duckdb.connect()
         arrow_object = con.execute("select 1").fetch_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
-        with pytest.raises(duckdb.InvalidInputException, match='There is no query result'):
+        with pytest.raises(duckdb.InvalidInputException, match="There is no query result"):
             res.fetch_arrow_table()
 
     def test_arrow_record_batch_reader_error(self):
-        pytest.importorskip('pyarrow')
+        pytest.importorskip("pyarrow")
 
         con = duckdb.connect()
         arrow_object = con.execute("select 1").fetch_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
-        with pytest.raises(duckdb.ProgrammingError, match='There is no query result'):
+        with pytest.raises(duckdb.ProgrammingError, match="There is no query result"):
             res.fetch_arrow_reader(1)
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_cache_fetchall(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
-                'numbers': [1, 2, 3, 4, 5],
+                "numbers": [1, 2, 3, 4, 5],
             }
         )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+        with pytest.raises(duckdb.ProgrammingError, match="Table with name df_in does not exist"):
             # Even when we preserve ExternalDependency objects correctly, this is not supported
             # Relations only save dependencies for their immediate TableRefs,
             # so the dependency of 'x' on 'df_in' is not registered in 'rel'
             rel.fetchall()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_cache_execute(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
-                'numbers': [1, 2, 3, 4, 5],
+                "numbers": [1, 2, 3, 4, 5],
             }
         )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        with pytest.raises(duckdb.ProgrammingError, match='Table with name df_in does not exist'):
+        with pytest.raises(duckdb.ProgrammingError, match="Table with name df_in does not exist"):
             rel.execute()
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_query_error(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
-                'numbers': [1, 2, 3, 4, 5],
+                "numbers": [1, 2, 3, 4, 5],
             }
         )
         conn.execute("create view x as select * from df_in")
         rel = conn.query("select * from x")
         del df_in
-        with pytest.raises(duckdb.CatalogException, match='Table with name df_in does not exist'):
+        with pytest.raises(duckdb.CatalogException, match="Table with name df_in does not exist"):
             rel.query("bla", "select * from bla")
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_conn_broken_statement_error(self, pandas):
         conn = duckdb.connect()
         df_in = pandas.DataFrame(
             {
-                'numbers': [1, 2, 3, 4, 5],
+                "numbers": [1, 2, 3, 4, 5],
             }
         )
         conn.execute("create view x as select * from df_in")
         del df_in
-        with pytest.raises(duckdb.CatalogException, match='Table with name df_in does not exist'):
+        with pytest.raises(duckdb.CatalogException, match="Table with name df_in does not exist"):
             conn.execute("select 1; select * from x; select 3;")
 
     def test_conn_prepared_statement_error(self):
@@ -118,17 +124,17 @@ class TestRuntimeError(object):
         conn.execute("create table integers (a integer, b integer)")
         with pytest.raises(
             duckdb.InvalidInputException,
-            match='Values were not provided for the following prepared statement parameters: 2',
+            match="Values were not provided for the following prepared statement parameters: 2",
         ):
             conn.execute("select * from integers where a =? and b=?", [1])
 
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_closed_conn_exceptions(self, pandas):
         conn = duckdb.connect()
         conn.close()
         df_in = pandas.DataFrame(
             {
-                'numbers': [1, 2, 3, 4, 5],
+                "numbers": [1, 2, 3, 4, 5],
             }
         )
 

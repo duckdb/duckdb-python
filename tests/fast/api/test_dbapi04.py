@@ -1,9 +1,9 @@
 # simple DB API testcase
 
 
-class TestSimpleDBAPI(object):
+class TestSimpleDBAPI:
     def test_regular_selection(self, duckdb_cursor, integers):
-        duckdb_cursor.execute('SELECT * FROM integers')
+        duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchall()
         assert result == [
             (0,),

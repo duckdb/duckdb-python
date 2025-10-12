@@ -1,11 +1,12 @@
-import duckdb
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import ArrowPandas, NumpyPandas
 
-pyarrow = pytest.importorskip('pyarrow')
+import duckdb
+
+pyarrow = pytest.importorskip("pyarrow")
 
 
-@pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+@pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
 def test_6796(pandas):
     conn = duckdb.connect()
     input_df = pandas.DataFrame({"foo": ["bar"]})
@@ -19,9 +20,9 @@ def test_6796(pandas):
 
     # fetching directly into Pandas works
     res_df = conn.execute(query).fetch_df()
-    res_arrow = conn.execute(query).fetch_arrow_table()
+    res_arrow = conn.execute(query).fetch_arrow_table()  # noqa: F841
 
-    df_arrow_table = pyarrow.Table.from_pandas(res_df)
+    df_arrow_table = pyarrow.Table.from_pandas(res_df)  # noqa: F841
 
     result_1 = conn.execute("select * from df_arrow_table order by all").fetchall()
 

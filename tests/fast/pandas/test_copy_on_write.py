@@ -1,9 +1,11 @@
-import duckdb
+import datetime
+
 import pytest
 
+import duckdb
+
 # https://pandas.pydata.org/docs/dev/user_guide/copy_on_write.html
-pandas = pytest.importorskip('pandas', '1.5', reason='copy_on_write does not exist in earlier versions')
-import datetime
+pandas = pytest.importorskip("pandas", "1.5", reason="copy_on_write does not exist in earlier versions")
 
 
 # Make sure the variable get's properly reset even in case of error
@@ -21,11 +23,11 @@ def convert_to_result(col):
     return [(x,) for x in col]
 
 
-class TestCopyOnWrite(object):
+class TestCopyOnWrite:
     @pytest.mark.parametrize(
-        'col',
+        "col",
         [
-            ['a', 'b', 'this is a long string'],
+            ["a", "b", "this is a long string"],
             [1.2334, None, 234.12],
             [123234, -213123, 2324234],
             [datetime.date(1990, 12, 7), None, datetime.date(1940, 1, 13)],
@@ -33,14 +35,14 @@ class TestCopyOnWrite(object):
         ],
     )
     def test_copy_on_write(self, col):
-        assert pandas.options.mode.copy_on_write == True
+        assert pandas.options.mode.copy_on_write
         con = duckdb.connect()
-        df_in = pandas.DataFrame(
+        df_in = pandas.DataFrame(  # noqa: F841
             {
-                'numbers': col,
+                "numbers": col,
             }
         )
-        rel = con.sql('select * from df_in')
+        rel = con.sql("select * from df_in")
         res = rel.fetchall()
         print(res)
         expected = convert_to_result(col)

@@ -48,7 +48,7 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
     "pandas; python_version < '3.14'",  # used for pandas dataframes all over the place
     "pyarrow; python_version < '3.14'", # used for pyarrow support
-    "adbc_driver_manager; python_version < '3.14'", # for the adbc driver (TODO: this should live under the duckdb package)
+    "adbc_driver_manager; python_version < '3.14'", # for the adbc driver
 ]
 
 ######################################################################################################
@@ -77,6 +77,8 @@ metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 [tool.scikit-build.wheel]
 cmake = true
 packages.duckdb = "duckdb"
+packages.adbc_driver_duckdb = "adbc_driver_duckdb"
+packages._duckdb-stubs = "_duckdb-stubs"
 
 [tool.scikit-build.cmake.define]
 CORE_EXTENSIONS = "core_functions;json;parquet;icu;jemalloc"
@@ -133,11 +135,12 @@ include = [
     "CMakeLists.txt",
     "cmake/**",
 
-    # Source code
+    # Source code and stubs
     "src/**",
     "duckdb/**",
     "duckdb_packaging/**",
     "adbc_driver_duckdb/**",
+    "_duckdb-stubs/*.pyi",
 
     # Generated during sdist build, contains git describe string for duckdb
     "duckdb_packaging/duckdb_version.txt",
@@ -218,12 +221,15 @@ torchvision = [ { index = "pytorch-cpu" } ]
 
 [dependency-groups] # used for development only, requires pip >=25.1.0
 stubdeps = [ # dependencies used for typehints in the stubs
+    "pybind11-stubgen",
+    "mypy",
     "fsspec",
     "pandas; python_version < '3.14'",
     "polars; python_version < '3.14'",
     "pyarrow; python_version < '3.14'",
 ]
 test = [ # dependencies used for running tests
+    "adbc-driver-manager",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
@@ -275,7 +281,8 @@ build = [
     "setuptools_scm>=8.0",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
-    "ruff>=0.11.13",
+    "pre-commit",
+    "ruff>=0.13.0",
     {include-group = "stubdeps"},
     {include-group = "build"},
     {include-group = "test"},
@@ -308,19 +315,47 @@ filterwarnings = [
     "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
 ]
 
+[tool.mypy]
+packages = ["duckdb", "_duckdb"]
+strict = true
+warn_unreachable = true
+pretty = true
+python_version = "3.9"
+exclude = [
+    "duckdb/experimental/", # not checking the pyspark API
+    "duckdb/query_graph/",  # old and unmaintained (should probably remove)
+    "tests", "scripts",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "fsspec.*",
+    "pandas",
+    "polars",
+    "pyarrow.*",
+    "torch",
+    "tensorflow",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "duckdb.filesystem"
+disallow_subclassing_any = false
+
 [tool.coverage.run]
 branch = true
 source = ["duckdb"]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 indent-width = 4
 target-version = "py39"
 fix = true
-fixable = ["ALL"]
 exclude = ['external/duckdb']
 
 [tool.ruff.lint]
+fixable = ["ALL"]
+exclude = ['*.pyi']
 select = [
     "ANN", # flake8-annotations
     "B", # flake8-bugbear
@@ -329,10 +364,9 @@ select = [
     "E", # pycodestyle
     "EM", # flake8-errmsg
     "F", # pyflakes
-    "FA", # flake8-future-annotations
     "FBT001", # flake8-boolean-trap
     "I", # isort
-    "ICN", # flake8-import-conventions
+    #"ICN", # flake8-import-conventions
     "INT", # flake8-gettext
     "PERF", # perflint
     "PIE", # flake8-pie
@@ -343,15 +377,15 @@ select = [
     "SIM", # flake8-simplify
     "TCH", # flake8-type-checking
     "TD", # flake8-todos
-    "TID", # flake8-tidy-imports
+    #"TID", # flake8-tidy-imports
     "TRY", # tryceratops
     "UP", # pyupgrade
     "W", # pycodestyle
 ]
-ignore = []
-
-[tool.ruff.lint.pycodestyle]
-max-doc-length = 88
+ignore = [
+    "C901", # ignore function complexity
+    "ANN002", "ANN003", # don't require type annotations for *args and **kwargs
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -361,6 +395,35 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-type-checking]
 strict = true
+
+[tool.ruff.lint.per-file-ignores]
+"duckdb/experimental/spark/**.py" = [
+    # Ignore boolean positional args in the Spark API
+    'FBT001'
+]
+"duckdb_packaging/**.py" = [
+    # ignore all performance-related rules for duckdb_packaging
+    'PERF'
+]
+"tests/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in tests
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107',
+    # No need for type hinting in tests
+    'ANN001', 'ANN201', 'ANN202'
+]
+"tests/fast/spark/**.py" = [
+    "E402"
+]
+"tests/spark_namespace/**.py" = [
+    # we need * imports for Spark
+    'F403'
+]
+"scripts/**.py" = [
+    # No need for package, module, class, function, init etc docstrings in scripts
+    'D100', 'D101', 'D102', 'D103', 'D104', 'D105', 'D107', 'D205',
+    # No need for type hinting in scripts
+    'ANN001', 'ANN201'
+]
 
 [tool.ruff.format]
 docstring-code-format = true
@@ -380,7 +443,7 @@ manylinux-x86_64-image = "manylinux_2_28"
 manylinux-pypy_x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 manylinux-pypy_aarch64-image = "manylinux_2_28"
-enable = ["cpython-freethreading", "cpython-prerelease"]
+enable = ["cpython-prerelease"]
 
 [tool.cibuildwheel.linux]
 before-build = ["yum install -y ccache"]

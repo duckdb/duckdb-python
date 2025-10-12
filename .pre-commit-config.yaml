@@ -1,0 +1,50 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-toml
+      - id: check-added-large-files
+      - id: detect-private-key
+      - id: check-merge-conflict
+      - id: forbid-new-submodules
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.13.3
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+      # Run the formatter.
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v21.1.2    # pick the version of clang-format you want
+    hooks:
+      - id: clang-format
+        files: \.(c|cpp|cc|h|hpp|cxx|hxx)$
+
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.2
+    hooks:
+      - id: mypy
+        entry: mypy -v
+        files: ^(duckdb/|_duckdb-stubs/)
+        exclude: ^duckdb/(experimental|query_graph)/
+        additional_dependencies: [ numpy, polars ]
+
+  - repo: local
+    hooks:
+      - id: post-checkout-submodules
+        name: Update submodule post-checkout
+        entry: .githooks/post-checkout
+        language: script
+        stages: [ post-checkout ]
+        pass_filenames: false
+        always_run: true

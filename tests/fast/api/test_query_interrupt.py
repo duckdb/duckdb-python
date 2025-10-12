@@ -1,13 +1,14 @@
+import _thread as thread
 import platform
 import threading
 import time
-import _thread as thread
 
-import duckdb
 import pytest
 
+import duckdb
 
-class TestQueryInterruption(object):
+
+class TestQueryInterruption:
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten",
         reason="Emscripten builds cannot use threads",
@@ -25,8 +26,9 @@ class TestQueryInterruption(object):
         interrupt_thread = threading.Thread(target=send_keyboard_interrupt)
         interrupt_thread.start()
 
+        barrier.wait()
+
         with pytest.raises((KeyboardInterrupt, RuntimeError)):
-            barrier.wait()
-            con.execute('select * from range(1000000) t1,range(1000000) t2').fetchall()
+            con.execute("select * from range(1000000) t1,range(1000000) t2").fetchall()
 
         interrupt_thread.join()

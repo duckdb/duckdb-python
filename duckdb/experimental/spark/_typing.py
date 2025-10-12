@@ -16,10 +16,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Callable, Iterable, Sized, TypeVar, Union
-from typing_extensions import Literal, Protocol
+from collections.abc import Iterable, Sized
+from typing import Callable, TypeVar, Union
 
-from numpy import int32, int64, float32, float64, ndarray
+from numpy import float32, float64, int32, int64, ndarray
+from typing_extensions import Literal, Protocol, Self
 
 F = TypeVar("F", bound=Callable)
 T_co = TypeVar("T_co", covariant=True)
@@ -30,17 +31,14 @@ NonUDFType = Literal[0]
 
 
 class SupportsIAdd(Protocol):
-    def __iadd__(self, other: "SupportsIAdd") -> "SupportsIAdd":
-        ...
+    def __iadd__(self, other: "SupportsIAdd") -> Self: ...
 
 
 class SupportsOrdering(Protocol):
-    def __lt__(self, other: "SupportsOrdering") -> bool:
-        ...
+    def __lt__(self, other: "SupportsOrdering") -> bool: ...
 
 
-class SizedIterable(Protocol, Sized, Iterable[T_co]):
-    ...
+class SizedIterable(Protocol, Sized, Iterable[T_co]): ...
 
 
 S = TypeVar("S", bound=SupportsOrdering)

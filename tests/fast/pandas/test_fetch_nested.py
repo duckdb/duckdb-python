@@ -1,19 +1,19 @@
+import numpy as np
 import pytest
+
 import duckdb
-import sys
 
 pd = pytest.importorskip("pandas")
-import numpy as np
 
 
 def compare_results(con, query, expected):
     expected = pd.DataFrame.from_dict(expected)
 
     unsorted_res = con.query(query).df()
-    print(unsorted_res, unsorted_res['a'][0].__class__)
+    print(unsorted_res, unsorted_res["a"][0].__class__)
     df_duck = con.query("select * from unsorted_res order by all").df()
-    print(df_duck, df_duck['a'][0].__class__)
-    print(expected, expected['a'][0].__class__)
+    print(df_duck, df_duck["a"][0].__class__)
+    print(expected, expected["a"][0].__class__)
     pd.testing.assert_frame_equal(df_duck, expected)
 
 
@@ -55,7 +55,7 @@ def list_test_cases():
         }),
         ("SELECT a from (SELECT LIST(i) as a FROM range(10000) tbl(i)) as t", {
             'a': [
-                list(range(0, 10000))
+                list(range(10000))
             ]
         }),
         ("SELECT LIST(i) as a FROM range(5) tbl(i) group by i%2 order by all", {
@@ -146,13 +146,13 @@ def list_test_cases():
     return test_cases
 
 
-class TestFetchNested(object):
-    @pytest.mark.parametrize('query, expected', list_test_cases())
+class TestFetchNested:
+    @pytest.mark.parametrize(("query", "expected"), list_test_cases())
     def test_fetch_df_list(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected', [
+    @pytest.mark.parametrize(("query", "expected"), [
         ("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", {
             'a': [
                 {'a': 42, 'b': 43}
@@ -192,22 +192,11 @@ class TestFetchNested(object):
             ]
         }),
     ])
-    # fmt: on
     def test_struct_df(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected, expected_error', [
-        ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
-            'a': [
-                {
-                    '1':10,
-                    '2':9,
-                    '3':8,
-                    '4':7
-                }
-            ]
-        }, ""),
+    @pytest.mark.parametrize(("query", "expected", "expected_error"), [
         ("SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t", {
             'a': [
                 {
@@ -242,7 +231,7 @@ class TestFetchNested(object):
                 }
             ]
         }, ""),
-        ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {
+        ("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", {  # noqa: E501
             'a': [
                 {
                     '0':0,
@@ -278,7 +267,7 @@ class TestFetchNested(object):
                 }
             ]
         }, "Map keys must be unique"),
-        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': ['Jon Lajoie', 'Backstreet Boys', 'Tenacious D', 'Jon Lajoie'],
@@ -286,7 +275,7 @@ class TestFetchNested(object):
                 }
             ]
         }, "Map keys must be unique"),
-        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': ['Jon Lajoie', None, 'Tenacious D', None, None],
@@ -302,7 +291,7 @@ class TestFetchNested(object):
                 }
             ]
         }, "Map keys can not be NULL"),
-        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", {
+        ("SELECT a from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL,NULL ),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as a) as t", {  # noqa: E501
             'a': [
                 {
                     'key': [None, None, None, None, None],
@@ -311,7 +300,6 @@ class TestFetchNested(object):
             ]
         }, "Map keys can not be NULL"),
     ])
-    # fmt: on
     def test_map_df(self, duckdb_cursor, query, expected, expected_error):
         if not expected_error:
             compare_results(duckdb_cursor, query, expected)
@@ -320,7 +308,7 @@ class TestFetchNested(object):
                 compare_results(duckdb_cursor, query, expected)
 
     # fmt: off
-    @pytest.mark.parametrize('query, expected', [
+    @pytest.mark.parametrize(("query", "expected"), [
         ("""
             SELECT [
                 {'i':1,'j':2},
@@ -359,7 +347,7 @@ class TestFetchNested(object):
         }),
         ("""
             SELECT {'i':mp,'j':mp2} as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
+        """, {  # noqa: E501
             'a': [
                 {
                     'i': {
@@ -379,7 +367,7 @@ class TestFetchNested(object):
         }),
         ("""
             SELECT [mp,mp2] as a FROM (SELECT MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as mp, MAP(LIST_VALUE(1, 2, 3, 5),LIST_VALUE(10, 9, 8, 7)) as mp2) as t
-        """, {
+        """, {  # noqa: E501
             'a': [
                 [
                     {
@@ -459,6 +447,5 @@ class TestFetchNested(object):
             ]
         }),
     ])
-    # fmt: on
     def test_nested_mix(self, duckdb_cursor, query, expected):
         compare_results(duckdb_cursor, query, expected)
