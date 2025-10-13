@@ -39,7 +39,11 @@ void InitializeModuleState(py::module_ &m) {
 	SetModuleState(state_ptr);
 
 	// https://pybind11.readthedocs.io/en/stable/advanced/misc.html#module-destructors
-	auto capsule = py::capsule(state_ptr, [](void *p) { delete static_cast<DuckDBPyModuleState *>(p); });
+	auto capsule = py::capsule(state_ptr, [](void *p) {
+		auto state = static_cast<DuckDBPyModuleState *>(p);
+		DuckDBPyModuleState::SetGlobalModuleState(nullptr);
+		delete state;
+	});
 	m.attr("__duckdb_state") = capsule;
 }
 
@@ -1133,12 +1137,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m,
 	    .value("keyword", PySQLTokenType::PY_SQL_TOKEN_KEYWORD)
 	    .value("comment", PySQLTokenType::PY_SQL_TOKEN_COMMENT)
 	    .export_values();
-
-	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() {
-		DuckDBPyConnection::Cleanup();
-	};
-	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 }
 
 } // namespace duckdb
