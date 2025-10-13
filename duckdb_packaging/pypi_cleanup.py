@@ -541,7 +541,7 @@ def main() -> int:
 
         # Dry run vs delete
         password, otp, mode = None, None, CleanMode.LIST_ONLY
-        if args.dry_run:
+        if not args.dry_run:
             password, otp = load_credentials()
             mode = CleanMode.DELETE
 
