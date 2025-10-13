@@ -320,3 +320,13 @@ def timestamps(duckdb_cursor):
     cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
     yield
     cursor.execute("drop table timestamps")
+
+
+@pytest.fixture
+def num_threads_testing():
+    """Get thread count: enough to load the system, but still as fast test."""
+    import multiprocessing
+
+    cpu_count = multiprocessing.cpu_count()
+    # Use 1.5x CPU count, max 12 for CI compatibility
+    return min(12, max(4, int(cpu_count * 1.5)))

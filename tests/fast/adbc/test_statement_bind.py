@@ -1,6 +1,5 @@
 import sys
 
-import adbc_driver_manager
 import pyarrow as pa
 import pytest
 
@@ -10,6 +9,8 @@ xfail = pytest.mark.xfail
 
 
 def _import(handle):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     """Helper to import a C Data Interface handle."""
     if isinstance(handle, adbc_driver_manager.ArrowArrayStreamHandle):
         return pa.RecordBatchReader._import_from_c(handle.address)
@@ -20,6 +21,8 @@ def _import(handle):
 
 
 def _bind(stmt, batch) -> None:
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     array = adbc_driver_manager.ArrowArrayHandle()
     schema = adbc_driver_manager.ArrowSchemaHandle()
     batch._export_to_c(array.address, schema.address)
@@ -28,6 +31,8 @@ def _bind(stmt, batch) -> None:
 
 class TestADBCStatementBind:
     def test_bind_multiple_rows(self):
+        adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
         data = pa.record_batch(
             [
                 [1, 2, 3, 4],
@@ -141,6 +146,8 @@ class TestADBCStatementBind:
             assert result == struct_array
 
     def test_too_many_parameters(self):
+        adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
         data = pa.record_batch(
             [[12423], ["not a short string"]],
             names=["ints", "strings"],
@@ -170,6 +177,8 @@ class TestADBCStatementBind:
 
     @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
     def test_not_enough_parameters(self):
+        adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
         data = pa.record_batch(
             [["not a short string"]],
             names=["strings"],

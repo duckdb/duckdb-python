@@ -18,6 +18,7 @@ add_library(
   duckdb_python.cpp
   importer.cpp
   map.cpp
+  module_state.cpp
   path_like.cpp
   pyconnection.cpp
   pyexpression.cpp

@@ -20,6 +20,7 @@
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
+#include "duckdb_python/module_state.hpp"
 #include "duckdb/common/adbc/adbc-init.hpp"
 
 #include "duckdb.hpp"
@@ -31,6 +32,20 @@
 namespace py = pybind11;
 
 namespace duckdb {
+
+// Private function to initialize module state
+void InitializeModuleState(py::module_ &m) {
+	auto state_ptr = new DuckDBPyModuleState();
+	SetModuleState(state_ptr);
+
+	// https://pybind11.readthedocs.io/en/stable/advanced/misc.html#module-destructors
+	auto capsule = py::capsule(state_ptr, [](void *p) {
+		auto state = static_cast<DuckDBPyModuleState *>(p);
+		DuckDBPyModuleState::SetGlobalModuleState(nullptr);
+		delete state;
+	});
+	m.attr("__duckdb_state") = capsule;
+}
 
 enum PySQLTokenType : uint8_t {
 	PY_SQL_TOKEN_IDENTIFIER = 0,
@@ -1031,7 +1046,21 @@ PYBIND11_EXPORT void *_force_symbol_inclusion() {
 }
 };
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
+// Only mark mod_gil_not_used for 3.14t or later
+// This is to not add support for 3.13t
+// Py_GIL_DISABLED check is not strictly necessary
+#if defined(Py_GIL_DISABLED) && PY_VERSION_HEX >= 0x030e0000
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m, py::mod_gil_not_used(),
+                py::multiple_interpreters::not_supported()) { // NOLINT
+#else
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m,
+                py::multiple_interpreters::not_supported()) { // NOLINT
+#endif
+	// Initialize module state completely during initialization
+	// PEP 489 wants calls for state to be module local, but currently
+	// static via g_module_state.
+	InitializeModuleState(m);
+
 	// DO NOT REMOVE: the below forces that we include all symbols we want to export
 	volatile auto *keep_alive = _force_symbol_inclusion();
 	(void)keep_alive;
@@ -1075,9 +1104,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__version__") = std::string(DuckDB::LibraryVersion()).substr(1);
 	m.attr("__standard_vector_size__") = DuckDB::StandardVectorSize();
 	m.attr("__git_revision__") = DuckDB::SourceID();
-	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
-	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
-	m.attr("__formatted_python_version__") = DuckDBPyConnection::FormattedPythonVersion();
+	auto &module_state = GetModuleState();
+	m.attr("__interactive__") = module_state.environment != PythonEnvironmentType::NORMAL;
+	m.attr("__jupyter__") = module_state.environment == PythonEnvironmentType::JUPYTER;
+	m.attr("__formatted_python_version__") = module_state.formatted_python_version;
 	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
 	      "Retrieve the connection currently registered as the default to be used by the module");
 	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
@@ -1107,12 +1137,6 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .value("keyword", PySQLTokenType::PY_SQL_TOKEN_KEYWORD)
 	    .value("comment", PySQLTokenType::PY_SQL_TOKEN_COMMENT)
 	    .export_values();
-
-	// we need this because otherwise we try to remove registered_dfs on shutdown when python is already dead
-	auto clean_default_connection = []() {
-		DuckDBPyConnection::Cleanup();
-	};
-	m.add_object("_clean_default_connection", py::capsule(clean_default_connection));
 }
 
 } // namespace duckdb
