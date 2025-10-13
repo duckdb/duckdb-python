@@ -1,5 +1,4 @@
-"""
-Test concurrent query execution races.
+"""Test concurrent query execution races.
 
 This tests race conditions in query execution paths where GIL is released
 during query processing, as identified in pyconnection.cpp.
@@ -15,7 +14,7 @@ import duckdb
 
 
 class QueryRaceTester:
-    """Increases contention by aligning tests w a barrier"""
+    """Increases contention by aligning tests w a barrier."""
 
     def setup_barrier(self, num_threads):
         self.barrier = threading.Barrier(num_threads)
@@ -23,7 +22,7 @@ class QueryRaceTester:
     def synchronized_execute(self, db, query, description="query"):
         with db.cursor() as conn:
             self.barrier.wait()
-            result = conn.execute(query).fetchall()
+            conn.execute(query).fetchall()
             return True
 
 
@@ -33,9 +32,7 @@ def test_concurrent_prepare_execute():
     conn = duckdb.connect(":memory:")
     try:
         conn.execute("CREATE TABLE test_data (id INTEGER, value VARCHAR)")
-        conn.execute(
-            "INSERT INTO test_data SELECT i, 'value_' || i FROM range(1000) t(i)"
-        )
+        conn.execute("INSERT INTO test_data SELECT i, 'value_' || i FROM range(1000) t(i)")
 
         tester = QueryRaceTester()
         tester.setup_barrier(num_threads)
@@ -50,20 +47,14 @@ def test_concurrent_prepare_execute():
             ]
 
             query = queries[thread_id % len(queries)]
-            return tester.synchronized_execute(
-                conn, query, f"Prepared query {thread_id}"
-            )
+            return tester.synchronized_execute(conn, query, f"Prepared query {thread_id}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(prepare_and_execute, i, conn)
-                for i in range(num_threads)
-            ]
-            results = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
+            futures = [executor.submit(prepare_and_execute, i, conn) for i in range(num_threads)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-        assert len(results) == num_threads and all(results)
+        assert len(results) == num_threads
+        assert all(results)
     finally:
         conn.close()
 
@@ -93,14 +84,11 @@ def test_concurrent_pending_query_execution():
             return tester.synchronized_execute(conn, query, f"Long query {thread_id}")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(execute_long_query, i) for i in range(num_threads)
-            ]
-            results = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
+            futures = [executor.submit(execute_long_query, i) for i in range(num_threads)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
-        assert all(results) and len(results) == num_threads
+        assert all(results)
+        assert len(results) == num_threads
     finally:
         conn.close()
 
@@ -112,14 +100,10 @@ def test_execute_many_race():
 
     conn = duckdb.connect()
     try:
-        batch_data = [
-            (thread_id * 100 + i, f"name_{thread_id}_{i}") for i in range(iterations)
-        ]
+        batch_data = [(thread_id * 100 + i, f"name_{thread_id}_{i}") for i in range(iterations)]
         conn.execute("CREATE TABLE batch_data (id BIGINT, name VARCHAR)")
         conn.executemany("INSERT INTO batch_data VALUES (?, ?)", batch_data)
-        result = conn.execute(
-            f"SELECT COUNT(*) FROM batch_data WHERE name LIKE 'name_{thread_id}_%'"
-        ).fetchone()
+        result = conn.execute(f"SELECT COUNT(*) FROM batch_data WHERE name LIKE 'name_{thread_id}_%'").fetchone()
         assert result[0] == iterations
     finally:
         conn.close()
@@ -137,25 +121,16 @@ def test_query_interruption_race():
             with conn.cursor() as conn2:
                 if thread_id % 2 == 0:
                     # Fast query
-                    result = conn2.execute(
-                        "SELECT COUNT(*) FROM interrupt_test"
-                    ).fetchall()
+                    conn2.execute("SELECT COUNT(*) FROM interrupt_test").fetchall()
                     return True
                 else:
                     # Potentially slower query
-                    result = conn2.execute(
-                        "SELECT i, i*i FROM interrupt_test WHERE i % 1000 = 0 ORDER BY i"
-                    ).fetchall()
+                    conn2.execute("SELECT i, i*i FROM interrupt_test WHERE i % 1000 = 0 ORDER BY i").fetchall()
                     return True
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = [
-                executor.submit(run_interruptible_query, i) for i in range(num_threads)
-            ]
-            results = [
-                future.result()
-                for future in concurrent.futures.as_completed(futures, timeout=30)
-            ]
+            futures = [executor.submit(run_interruptible_query, i) for i in range(num_threads)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures, timeout=30)]
 
         assert all(results)
     finally:
@@ -167,12 +142,8 @@ def test_mixed_query_operations():
     thread_id = get_ident()
 
     with duckdb.connect(":memory:") as conn:
-        conn.execute(
-            "CREATE TABLE mixed_ops (id BIGINT PRIMARY KEY, data VARCHAR, num_val DOUBLE)"
-        )
-        conn.execute(
-            "INSERT INTO mixed_ops SELECT i, 'initial_' || i, i * 1.5 FROM range(1000) t(i)"
-        )
+        conn.execute("CREATE TABLE mixed_ops (id BIGINT PRIMARY KEY, data VARCHAR, num_val DOUBLE)")
+        conn.execute("INSERT INTO mixed_ops SELECT i, 'initial_' || i, i * 1.5 FROM range(1000) t(i)")
 
         queries = [
             f"SELECT COUNT(*) FROM mixed_ops WHERE id > {thread_id * 50}",

@@ -1,5 +1,4 @@
-"""
-Test module lifecycle
+"""Test module lifecycle.
 
 Reloading and unload are not expected nor required behaviors -
 these tests are to document current behavior so that changes
@@ -32,9 +31,7 @@ def test_module_reload_safety():
 
         # Verify module instance is the same (expected Python behavior)
         reload_module_id = id(sys.modules["duckdb"])
-        assert initial_module_id == reload_module_id, (
-            "importlib.reload() should reuse same module instance"
-        )
+        assert initial_module_id == reload_module_id, "importlib.reload() should reuse same module instance"
 
         # Test if old connection still works after importlib.reload()
         result2 = conn1.execute("SELECT * FROM test").fetchone()[0]
@@ -86,9 +83,9 @@ def test_dynamic_module_loading():
 
 def test_import_cache_consistency():
     """Test that import cache remains consistent across module operations."""
+    import pandas as pd
 
     import duckdb
-    import pandas as pd
 
     conn = duckdb.connect(":memory:")
 
@@ -103,7 +100,6 @@ def test_import_cache_consistency():
 
 def test_module_state_memory_safety():
     """Test memory safety of module state access patterns."""
-
     import duckdb
 
     connections = []
@@ -130,7 +126,7 @@ def test_static_cache_stress():
     import duckdb
 
     iterations = 5
-    for i in range(iterations):
+    for _ in range(iterations):
         conn = duckdb.connect(":memory:")
         result = conn.execute("SELECT 1").fetchone()
         assert result[0] == 1

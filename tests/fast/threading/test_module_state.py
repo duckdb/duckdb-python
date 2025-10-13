@@ -1,7 +1,5 @@
 from threading import get_ident
 
-import pytest
-
 import duckdb
 
 

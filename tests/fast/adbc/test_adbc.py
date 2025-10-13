@@ -2,19 +2,22 @@ import datetime
 import sys
 from pathlib import Path
 
-import adbc_driver_manager.dbapi
 import numpy as np
 import pyarrow
 import pytest
 
-import adbc_driver_duckdb.dbapi
+import adbc_driver_duckdb
+
+driver_path = adbc_driver_duckdb.driver_path()
+
 
 xfail = pytest.mark.xfail
-driver_path = adbc_driver_duckdb.driver_path()
 
 
 @pytest.fixture
 def duck_conn():
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     with adbc_driver_manager.dbapi.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
@@ -95,6 +98,8 @@ def test_connection_get_objects_filters(duck_conn):
 
 
 def test_commit(tmp_path):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     db = Path(tmp_path) / "tmp.db"
     if db.exists():
         db.unlink()
@@ -142,6 +147,8 @@ def test_commit(tmp_path):
 
 
 def test_connection_get_table_schema(duck_conn):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     with duck_conn.cursor() as cursor:
         # Test Default Schema
         cursor.execute("CREATE TABLE tableschema (ints BIGINT)")
@@ -209,6 +216,8 @@ def test_statement_query(duck_conn):
 
 @xfail(sys.platform == "win32", reason="adbc-driver-manager returns an invalid table schema on windows")
 def test_insertion(duck_conn):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     table = example_table()
     reader = table.to_reader()
 
@@ -281,6 +290,8 @@ def test_read(duck_conn):
 
 
 def test_large_chunk(tmp_path):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     num_chunks = 3
     chunk_size = 10_000
 
@@ -318,6 +329,8 @@ def test_large_chunk(tmp_path):
 
 
 def test_dictionary_data(tmp_path):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     data = ["apple", "banana", "apple", "orange", "banana", "banana"]
 
     dict_type = pyarrow.dictionary(index_type=pyarrow.int32(), value_type=pyarrow.string())
@@ -346,6 +359,8 @@ def test_dictionary_data(tmp_path):
 
 
 def test_ree_data(tmp_path):
+    adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+
     run_ends = pyarrow.array([3, 5, 6], type=pyarrow.int32())  # positions: [0-2], [3-4], [5]
     values = pyarrow.array(["apple", "banana", "orange"], type=pyarrow.string())
 

@@ -1,12 +1,9 @@
 import gc
 import random
 import time
+import uuid
 import weakref
 from threading import get_ident
-
-import uuid
-
-import pytest
 
 import duckdb
 
@@ -23,16 +20,12 @@ def test_connection_instance_cache(tmp_path):
     thread_id = get_ident()
     for i in range(10):
         with duckdb.connect(tmp_path / f"{thread_id}_{uuid.uuid4()}.db") as conn:
-            conn.execute(
-                f"CREATE TABLE IF NOT EXISTS thread_{thread_id}_data_{i} (x BIGINT)"
-            )
+            conn.execute(f"CREATE TABLE IF NOT EXISTS thread_{thread_id}_data_{i} (x BIGINT)")
             conn.execute(f"INSERT INTO thread_{thread_id}_data_{i} VALUES (100), (100)")
 
             time.sleep(random.uniform(0.0001, 0.001))
 
-            result = conn.execute(
-                f"SELECT COUNT(*) FROM thread_{thread_id}_data_{i}"
-            ).fetchone()[0]
+            result = conn.execute(f"SELECT COUNT(*) FROM thread_{thread_id}_data_{i}").fetchone()[0]
             assert result == 2, f"Iteration {i}: expected 2 rows, got {result}"
 
 
@@ -65,9 +58,7 @@ def test_cleanup():
     gc.collect()
 
     alive_refs = [ref for ref in weak_refs if ref() is not None]
-    assert len(alive_refs) <= 10, (
-        f"{len(alive_refs)} connections still alive (expected <= 10)"
-    )
+    assert len(alive_refs) <= 10, f"{len(alive_refs)} connections still alive (expected <= 10)"
 
 
 def test_default_connection():
@@ -88,9 +79,7 @@ def test_type_system():
             duckdb.type("DOUBLE"),
             duckdb.type("BOOLEAN"),
             duckdb.list_type(duckdb.type("INTEGER")),
-            duckdb.struct_type(
-                {"a": duckdb.type("INTEGER"), "b": duckdb.type("VARCHAR")}
-            ),
+            duckdb.struct_type({"a": duckdb.type("INTEGER"), "b": duckdb.type("VARCHAR")}),
         ]
 
         for t in types:
@@ -98,9 +87,7 @@ def test_type_system():
 
         if i % 5 == 0:
             with duckdb.connect(":memory:") as conn:
-                conn.execute(
-                    "CREATE TABLE test (a INTEGER, b VARCHAR, c DOUBLE, d BOOLEAN)"
-                )
+                conn.execute("CREATE TABLE test (a INTEGER, b VARCHAR, c DOUBLE, d BOOLEAN)")
                 result = conn.execute("SELECT COUNT(*) FROM test").fetchone()
                 assert result[0] == 0
 

@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""
-Tests designed to expose specific threading bugs in the DuckDB implementation.
-"""
+"""Tests designed to expose specific threading bugs in the DuckDB implementation."""
 
 import sys
 from threading import get_ident
-
-import pytest
 
 import duckdb
 
@@ -27,10 +23,9 @@ def test_gil_enabled():
 
 def test_instance_cache_race(tmp_path):
     """Test opening connections to different files."""
-
     tid = get_ident()
     with duckdb.connect(tmp_path / f"{tid}_testing.db") as conn:
         conn.execute("CREATE TABLE IF NOT EXISTS test (x INTEGER, y INTEGER)")
-        conn.execute(f"INSERT INTO test VALUES (123, 456)")
+        conn.execute("INSERT INTO test VALUES (123, 456)")
         result = conn.execute("SELECT COUNT(*) FROM test").fetchone()
         assert result[0] >= 1

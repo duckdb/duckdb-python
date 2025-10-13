@@ -1,15 +1,14 @@
-"""
-Concurrent access tests for DuckDB Python bindings with free threading support.
+"""Concurrent access tests for DuckDB Python bindings with free threading support.
 
 These tests verify that the DuckDB Python module can handle concurrent access
 from multiple threads safely, testing module state isolation, memory management,
 and connection handling under various stress conditions.
 """
 
+import concurrent.futures
 import gc
 import random
 import time
-import concurrent.futures
 
 import pytest
 
@@ -28,9 +27,7 @@ def test_shared_connection_stress(num_threads_testing):
     iterations = 10
 
     with duckdb.connect(":memory:") as connection:
-        connection.execute(
-            "CREATE TABLE stress_test (id INTEGER, thread_id INTEGER, value TEXT)"
-        )
+        connection.execute("CREATE TABLE stress_test (id INTEGER, thread_id INTEGER, value TEXT)")
 
         def worker_thread(thread_id: int) -> None:
             cursor = connection.cursor()
@@ -39,24 +36,16 @@ def test_shared_connection_stress(num_threads_testing):
                     "INSERT INTO stress_test VALUES (?, ?, ?)",
                     [i, thread_id, f"thread_{thread_id}_value_{i}"],
                 )
-                cursor.execute(
-                    "SELECT COUNT(*) FROM stress_test WHERE thread_id = ?", [thread_id]
-                ).fetchone()
+                cursor.execute("SELECT COUNT(*) FROM stress_test WHERE thread_id = ?", [thread_id]).fetchone()
                 time.sleep(random.uniform(0.0001, 0.001))
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=num_threads_testing
-        ) as executor:
-            futures = [
-                executor.submit(worker_thread, i) for i in range(num_threads_testing)
-            ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads_testing) as executor:
+            futures = [executor.submit(worker_thread, i) for i in range(num_threads_testing)]
             # Wait for all to complete, will raise if any fail
             for future in concurrent.futures.as_completed(futures):
                 future.result()
 
-        total_rows = connection.execute("SELECT COUNT(*) FROM stress_test").fetchone()[
-            0
-        ]
+        total_rows = connection.execute("SELECT COUNT(*) FROM stress_test").fetchone()[0]
         expected_rows = num_threads_testing * iterations
         assert total_rows == expected_rows
 

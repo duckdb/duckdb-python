@@ -1,9 +1,6 @@
-"""
-Test User Defined Function (UDF).
-"""
+"""Test User Defined Function (UDF)."""
 
 import concurrent.futures
-import threading
 
 import pytest
 
@@ -68,9 +65,7 @@ def test_scalar_udf_concurrent():
     def execute_scalar_udf(thread_id):
         start = thread_id * 10
         end = start + 10
-        query = (
-            f"SELECT simple_square(x) FROM numbers WHERE x BETWEEN {start} AND {end}"
-        )
+        query = f"SELECT simple_square(x) FROM numbers WHERE x BETWEEN {start} AND {end}"
         with conn.cursor() as c:
             assert c.execute(query).fetchone()[0] == (start**2)
 
@@ -78,9 +73,7 @@ def test_scalar_udf_concurrent():
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
         futures = [executor.submit(execute_scalar_udf, i) for i in range(num_threads)]
-        results = [
-            future.result() for future in concurrent.futures.as_completed(futures)
-        ]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
     conn.close()
 

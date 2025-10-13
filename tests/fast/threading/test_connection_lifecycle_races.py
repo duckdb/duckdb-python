@@ -1,11 +1,10 @@
-"""
-Test connection lifecycle races.
+"""Test connection lifecycle races.
 
 Focused on DuckDBPyConnection constructor and Close
 """
 
-import gc
 import concurrent.futures
+import gc
 
 import pytest
 
@@ -43,16 +42,9 @@ def test_concurrent_close_operations(num_threads_testing):
 
             return True
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=num_threads_testing
-        ) as executor:
-            futures = [
-                executor.submit(attempt_close_connection, conn.cursor(), i)
-                for i in range(num_threads_testing)
-            ]
-            results = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads_testing) as executor:
+            futures = [executor.submit(attempt_close_connection, conn.cursor(), i) for i in range(num_threads_testing)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
         assert all(results)
 
@@ -62,31 +54,20 @@ def test_cursor_operations_race(num_threads_testing):
     conn = duckdb.connect(":memory:")
     try:
         conn.execute("CREATE TABLE cursor_test (id INTEGER, name VARCHAR)")
-        conn.execute(
-            "INSERT INTO cursor_test SELECT i, 'name_' || i FROM range(100) t(i)"
-        )
+        conn.execute("INSERT INTO cursor_test SELECT i, 'name_' || i FROM range(100) t(i)")
 
         def cursor_operations(thread_id):
             """Perform cursor operations concurrently."""
             # Get a cursor
             cursor = conn.cursor()
-            cursor.execute(
-                f"SELECT * FROM cursor_test WHERE id % {num_threads_testing} = {thread_id}"
-            )
-            results = cursor.fetchall()
+            cursor.execute(f"SELECT * FROM cursor_test WHERE id % {num_threads_testing} = {thread_id}")
+            cursor.fetchall()
 
             return True
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=num_threads_testing
-        ) as executor:
-            futures = [
-                executor.submit(cursor_operations, i)
-                for i in range(num_threads_testing)
-            ]
-            results = [
-                future.result() for future in concurrent.futures.as_completed(futures)
-            ]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads_testing) as executor:
+            futures = [executor.submit(cursor_operations, i) for i in range(num_threads_testing)]
+            results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
         assert all(results)
     finally:
