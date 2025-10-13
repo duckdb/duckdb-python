@@ -34,7 +34,7 @@ repos:
     rev: v1.18.2
     hooks:
       - id: mypy
-        entry: mypy -v
+        entry: mypy
         files: ^(duckdb/|_duckdb-stubs/)
         exclude: ^duckdb/(experimental|query_graph)/
         additional_dependencies: [ numpy, polars ]
