@@ -15,6 +15,8 @@ from urllib3 import Retry
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging.pypi_cleanup import (  # noqa: E402
+    _DEFAULT_MAX_NIGHTLIES,
+    _PYPI_URL_PROD,
     AuthenticationError,
     CleanMode,
     CsrfParser,
@@ -26,7 +28,6 @@ from duckdb_packaging.pypi_cleanup import (  # noqa: E402
     main,
     session_with_retries,
     setup_logging,
-    validate_arguments,
     validate_username,
 )
 
@@ -59,23 +60,6 @@ class TestValidation:
 
         with pytest.raises(ArgumentTypeError, match="Invalid username format"):
             validate_username("invalid-")
-
-    def test_validate_arguments_dry_run(self):
-        """Test argument validation for dry run mode."""
-        args = Mock(dry_run=True, username=None, max_nightlies=2)
-        validate_arguments(args)  # Should not raise
-
-    def test_validate_arguments_live_mode_no_username(self):
-        """Test argument validation for live mode without username."""
-        args = Mock(dry_run=False, username=None, max_nightlies=2)
-        with pytest.raises(ValidationError, match="username is required"):
-            validate_arguments(args)
-
-    def test_validate_arguments_negative_nightlies(self):
-        """Test argument validation with negative max nightlies."""
-        args = Mock(dry_run=True, username="test", max_nightlies=-1)
-        with pytest.raises(ValidationError, match="must be non-negative"):
-            validate_arguments(args)
 
 
 class TestCredentials:
@@ -465,26 +449,20 @@ class TestArgumentParser:
         parser = create_argument_parser()
         assert parser.prog is not None
 
-    def test_parse_args_prod_dry_run(self):
+    def test_parse_args_prod_list(self):
         """Test parsing arguments for production dry run."""
         parser = create_argument_parser()
-        args = parser.parse_args(["--prod", "--dry-run"])
+        args = parser.parse_args(["--prod", "list"])
 
-        assert args.prod is True
-        assert args.test is False
-        assert args.dry_run is True
-        assert args.max_nightlies == 2
-        assert args.verbose is False
+        assert args.pypi_url is _PYPI_URL_PROD
+        assert args.max_nightlies == _DEFAULT_MAX_NIGHTLIES
+        assert args.loglevel is logging.WARN
 
-    def test_parse_args_test_with_username(self):
+    def test_parse_args_test_list_with_username(self):
         """Test parsing arguments for test with username."""
         parser = create_argument_parser()
-        args = parser.parse_args(["--test", "-u", "testuser", "--verbose"])
-
-        assert args.test is True
-        assert args.prod is False
-        assert args.username == "testuser"
-        assert args.verbose is True
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--test", "list", "-u", "testuser"])
 
     def test_parse_args_missing_host(self):
         """Test parsing arguments with missing host selection."""
@@ -506,28 +484,9 @@ class TestMainFunction:
         mock_cleanup.run.return_value = 0
         mock_cleanup_class.return_value = mock_cleanup
 
-        with patch("sys.argv", ["pypi_cleanup.py", "--test", "-u", "testuser"]):
+        with patch("sys.argv", ["pypi_cleanup.py", "--test", "delete", "-u", "testuser"]):
             result = main()
 
         assert result == 0
         mock_setup_logging.assert_called_once()
         mock_cleanup.run.assert_called_once()
-
-    @patch("duckdb_packaging.pypi_cleanup.setup_logging")
-    def test_main_validation_error(self, mock_setup_logging):
-        """Test main function with validation error."""
-        with patch("sys.argv", ["pypi_cleanup.py", "--test"]):  # Missing username for live mode
-            result = main()
-
-        assert result == 2  # Validation error exit code
-
-    @patch("duckdb_packaging.pypi_cleanup.setup_logging")
-    @patch("duckdb_packaging.pypi_cleanup.validate_arguments")
-    def test_main_keyboard_interrupt(self, mock_validate, mock_setup_logging):
-        """Test main function with keyboard interrupt."""
-        mock_validate.side_effect = KeyboardInterrupt()
-
-        with patch("sys.argv", ["pypi_cleanup.py", "--test", "--dry-run"]):
-            result = main()
-
-        assert result == 130  # Keyboard interrupt exit code

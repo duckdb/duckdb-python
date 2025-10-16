@@ -3,9 +3,10 @@ from pathlib import Path
 import pytest
 
 import duckdb
+import duckdb.sqltypes as duckdb_types
 
-VARCHAR = duckdb.typing.VARCHAR
-BIGINT = duckdb.typing.BIGINT
+VARCHAR = duckdb_types.VARCHAR
+BIGINT = duckdb_types.BIGINT
 
 filename = str(Path(__file__).parent / "data" / "binary_string.parquet")
 

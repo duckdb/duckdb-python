@@ -128,7 +128,8 @@ types.BuiltinFunctionType
 
 import typing
 
-typing._UnionGenericAlias
+typing.Union
+typing.get_origin
 
 import uuid
 

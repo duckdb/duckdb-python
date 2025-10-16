@@ -44,16 +44,29 @@ jobs:
           - { minimal: true, python: cp310 }
           - { minimal: true, python: cp311 }
           - { minimal: true, python: cp312 }
+          - { minimal: true, python: cp313 }
           - { minimal: true, platform: { arch: universal2 } }
     runs-on: ${{ matrix.platform.os }}
     env:
+      ### cibuildwheel configuration
+      #
+      # This is somewhat brittle, so be careful with changes. Some notes for our future selves (and others):
+      # - cibw will change its cwd to a temp dir and create a separate venv for testing. It then installs the wheel it
+      #   built into that venv, and run the CIBW_TEST_COMMAND. We have to install all dependencies ourselves, and make
+      #   sure that the pytest config in pyproject.toml is available.
+      # - CIBW_BEFORE_TEST installs the test dependencies by exporting them into a pylock.toml. At the time of writing,
+      #   `uv sync --no-install-project` had problems correctly resolving dependencies using resolution environments
+      #   across all platforms we build for. This might be solved in newer uv versions.
+      # - CIBW_TEST_COMMAND specifies pytest conf from pyproject.toml. --confcutdir is needed to prevent pytest from
+      #   traversing the full filesystem, which produces an error on Windows.
+      # - CIBW_TEST_SKIP we always skip tests for *-macosx_universal2 builds, because we run tests for arm64 and x86_64.
       CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
       CIBW_TEST_SOURCES: tests
       CIBW_BEFORE_TEST: >
-        uv export --only-group test --no-emit-project --output-file pylock.toml --directory {project} &&
+        uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
         uv pip install -r pylock.toml
       CIBW_TEST_COMMAND: >
-        uv run -v pytest ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }} --verbose --ignore=./tests/stubs
+        uv run -v pytest --confcutdir=. --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
 
     steps:
       - name: Checkout DuckDB Python
@@ -78,15 +91,14 @@ jobs:
         run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
 
       # Install Astral UV, which will be used as build-frontend for cibuildwheel
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
-          version: "0.8.16"
+          version: "0.9.0"
           enable-cache: false
           cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-          python-version: ${{ matrix.python }}
 
       - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
-        uses: pypa/cibuildwheel@v3.1
+        uses: pypa/cibuildwheel@v3.2
         env:
           CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}

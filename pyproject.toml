@@ -30,6 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: C++",
 ]
 authors = [{name = "DuckDB Foundation"}]
@@ -46,9 +47,9 @@ all = [ # users can install duckdb with 'duckdb[all]', which will install this l
     "ipython", # used in duckdb.query_graph
     "fsspec",  # used in duckdb.filesystem
     "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
-    "pandas; python_version < '3.14'",  # used for pandas dataframes all over the place
+    "pandas",  # used for pandas dataframes all over the place
     "pyarrow; python_version < '3.14'", # used for pyarrow support
-    "adbc_driver_manager; python_version < '3.14'", # for the adbc driver
+    "adbc-driver-manager", # for the adbc driver
 ]
 
 ######################################################################################################
@@ -206,7 +207,6 @@ required-environments = [ # ... but do always resolve for all of them
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
-prerelease = "if-necessary-or-explicit" # for 3.14
 
 # We just need pytorch for tests, wihtout GPU acceleration. PyPI doesn't host a cpu-only version for Linux, so we have
 # to configure the index url for cpu-only pytorch manually
@@ -224,8 +224,8 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "pybind11-stubgen",
     "mypy",
     "fsspec",
-    "pandas; python_version < '3.14'",
-    "polars; python_version < '3.14'",
+    "pandas",
+    "polars",
     "pyarrow; python_version < '3.14'",
 ]
 test = [ # dependencies used for running tests
@@ -233,23 +233,23 @@ test = [ # dependencies used for running tests
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
-    "mypy",
+    "pytest-timestamper",
     "coverage",
-    "gcovr; python_version < '3.14'",
+    "gcovr",
     "gcsfs",
     "packaging",
-    "polars; python_version < '3.14'",
+    "polars",
     "psutil",
     "py4j",
     "pyotp",
-    "pyspark; python_version < '3.14'",
+    "pyspark",
     "pytz",
     "requests",
     "urllib3",
     "fsspec>=2022.11.0",
-    "pandas>=2.0.0; python_version < '3.14'",
+    "pandas>=2.0.0",
     "pyarrow>=18.0.0; python_version < '3.14'",
-    "torch>=2.2.2; python_version < '3.14' and (sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13')",
+    "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' )",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and python_version < '3.12'",
@@ -262,9 +262,9 @@ scripts = [ # dependencies used for running scripts
     "ipython",
     "ipywidgets",
     "numpy",
-    "pandas; python_version < '3.14'",
+    "pandas",
     "pcpp",
-    "polars; python_version < '3.14'",
+    "polars",
     "pyarrow; python_version < '3.14'",
     "pytz"
 ]
@@ -281,6 +281,7 @@ build = [
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
     "pre-commit",
+    "mypy",
     "ruff>=0.13.0",
     {include-group = "stubdeps"},
     {include-group = "build"},
@@ -302,7 +303,7 @@ dev = [ # tooling like uv will install this automatically when syncing the envir
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = "-ra -q"
+addopts = "-ra --verbose"
 testpaths = ["tests"]
 filterwarnings = [
     "error",
@@ -350,7 +351,7 @@ line-length = 120
 indent-width = 4
 target-version = "py39"
 fix = true
-exclude = ['external/duckdb']
+exclude = ['external/duckdb', 'sqllogic']
 
 [tool.ruff.lint]
 fixable = ["ALL"]
@@ -442,7 +443,6 @@ manylinux-x86_64-image = "manylinux_2_28"
 manylinux-pypy_x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 manylinux-pypy_aarch64-image = "manylinux_2_28"
-enable = ["cpython-prerelease"]
 
 [tool.cibuildwheel.linux]
 before-build = ["yum install -y ccache"]

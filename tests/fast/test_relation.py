@@ -12,7 +12,7 @@ from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 from duckdb import ColumnExpression
-from duckdb.typing import BIGINT, BOOLEAN, TINYINT, VARCHAR
+from duckdb.sqltypes import BIGINT, BOOLEAN, TINYINT, VARCHAR
 
 
 @pytest.fixture(scope="session")

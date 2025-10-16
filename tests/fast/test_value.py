@@ -6,7 +6,7 @@ import pytest
 
 import duckdb
 from duckdb import InvalidInputException, NotImplementedException
-from duckdb.typing import (
+from duckdb.sqltypes import (
     BIGINT,
     BIT,
     BLOB,

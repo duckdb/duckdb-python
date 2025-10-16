@@ -64,7 +64,7 @@ class TestArrowTimestampsTimezone:
         con.execute("create table t (i timestamptz)")
         con.execute("insert into t values (NULL),('2021-11-15 02:30:00'::timestamptz)")
         rel = con.table("t")
-        arrow_tbl = rel.record_batch().read_all()
+        arrow_tbl = rel.fetch_record_batch().read_all()
         con.register("t2", arrow_tbl)
 
         assert con.execute("select * from t").fetchall() == con.execute("select * from t2").fetchall()

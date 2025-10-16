@@ -29,9 +29,9 @@ jobs:
           persist-credentials: false
 
       - name: Install Astral UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "0.7.14"
+          version: "0.9.0"
           python-version: 3.9
 
       - name: pre-commit (cache)
