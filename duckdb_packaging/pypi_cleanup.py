@@ -38,6 +38,14 @@ _LOGIN_RETRY_DELAY = 5
 
 def create_argument_parser() -> argparse.ArgumentParser:
     """Create and configure the argument parser."""
+
+    def max_nightlies_type(value: int) -> int:
+        """Validate that --max-nightlies is set to a positive integer."""
+        if int(value) < 0:
+            msg = f"max-nightlies must be a positive integer, got {int(value)}"
+            raise ValueError(msg)
+        return int(value)
+
     parser = argparse.ArgumentParser(
         description="""
 PyPI cleanup script for removing development versions.
@@ -54,23 +62,54 @@ This script will:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be deleted but don't actually do it")
+    loglevel_group = parser.add_mutually_exclusive_group(required=False)
+    loglevel_group.add_argument(
+        "-d",
+        "--debug",
+        help="Show debug logs",
+        dest="loglevel",
+        action="store_const",
+        const=logging.DEBUG,
+        default=logging.WARNING,
+    )
+    loglevel_group.add_argument(
+        "-v",
+        "--verbose",
+        help="Show info logs",
+        dest="loglevel",
+        action="store_const",
+        const=logging.INFO,
+    )
 
     host_group = parser.add_mutually_exclusive_group(required=True)
-    host_group.add_argument("--prod", action="store_true", help="Use production PyPI (pypi.org)")
-    host_group.add_argument("--test", action="store_true", help="Use test PyPI (test.pypi.org)")
+    host_group.add_argument(
+        "--prod", help="Use production PyPI (pypi.org)", dest="pypi_url", action="store_const", const=_PYPI_URL_PROD
+    )
+    host_group.add_argument(
+        "--test", help="Use test PyPI (test.pypi.org)", dest="pypi_url", action="store_const", const=_PYPI_URL_TEST
+    )
 
     parser.add_argument(
         "-m",
         "--max-nightlies",
-        type=int,
+        type=max_nightlies_type,
         default=_DEFAULT_MAX_NIGHTLIES,
         help=f"Max number of nightlies of unreleased versions (default={_DEFAULT_MAX_NIGHTLIES})",
     )
 
-    parser.add_argument("-u", "--username", type=validate_username, help="PyPI username (required unless --dry-run)")
+    subparsers = parser.add_subparsers(title="Subcommands")
 
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose debug logging")
+    # Add the "list" subcommand
+    parser_list = subparsers.add_parser("list", help="List all packages available for deletion")
+    parser_list.set_defaults(func=lambda args: _run(CleanMode.LIST_ONLY, args))
+    # Add the "delete" subcommand
+    parser_delete = subparsers.add_parser(
+        "delete", help="Delete packages that match the given criteria (use with care!"
+    )
+    parser_delete.add_argument(
+        "-u", "--username", type=validate_username, help="PyPI username (required)", required=True
+    )
+    parser_delete.set_defaults(func=lambda args: _run(CleanMode.DELETE, args))
 
     return parser
 
@@ -149,17 +188,6 @@ def load_credentials() -> tuple[Optional[str], Optional[str]]:
     return password, otp
 
 
-def validate_arguments(args: argparse.Namespace) -> None:
-    """Validate parsed arguments."""
-    if not args.dry_run and not args.username:
-        msg = "--username is required when not in dry-run mode"
-        raise ValidationError(msg)
-
-    if args.max_nightlies < 0:
-        msg = "--max-nightlies must be non-negative"
-        raise ValidationError(msg)
-
-
 class CsrfParser(HTMLParser):
     """HTML parser to extract CSRF tokens from PyPI forms.
 
@@ -230,7 +258,7 @@ class PyPICleanup:
         if self._mode == CleanMode.DELETE:
             logging.warning("NOT A DRILL: WILL DELETE PACKAGES")
         elif self._mode == CleanMode.LIST_ONLY:
-            logging.info("Running in DRY RUN mode, nothing will be deleted")
+            logging.debug("Running in DRY RUN mode, nothing will be deleted")
         else:
             msg = "Unexpected mode"
             raise RuntimeError(msg)
@@ -255,19 +283,21 @@ class PyPICleanup:
             logging.info(f"No releases found for {self._package}")
             return 0
 
-        # Determine versions to delete
+        # Determine and report versions to delete
         versions_to_delete = self._determine_versions_to_delete(versions)
-        if not versions_to_delete:
-            logging.info("No versions to delete (no stale rc's or dev releases)")
+        if len(versions_to_delete) > 0:
+            print(f"Found the following stale releases on {self._index_host}:")
+            for version in sorted(versions_to_delete):
+                print(f"- {version}")
+        else:
+            print(f"No stale releases found on {self._index_host}")
             return 0
-
-        logging.warning(f"Found {len(versions_to_delete)} versions to clean up:")
-        for version in sorted(versions_to_delete):
-            logging.warning(version)
 
         if self._mode != CleanMode.DELETE:
             logging.info("Dry run complete - no packages were deleted")
             return 0
+
+        logging.warning(f"Will try to delete {len(versions_to_delete)} releases from {self._index_host}")
 
         # Perform authentication and deletion
         self._authenticate(http_session)
@@ -527,32 +557,21 @@ class PyPICleanup:
         delete_response.raise_for_status()
 
 
-def main() -> int:
-    """Main entry point for the script."""
-    parser = create_argument_parser()
-    args = parser.parse_args()
-
-    # Setup logging
-    setup_logging((args.verbose and logging.DEBUG) or logging.INFO)
-
+def _run(mode: CleanMode, args: argparse.Namespace) -> int:
+    """Action called by the subcommands after arg parsing."""
+    setup_logging(args.loglevel)
     try:
-        # Validate arguments
-        validate_arguments(args)
-
-        # Dry run vs delete
-        password, otp, mode = None, None, CleanMode.LIST_ONLY
-        if not args.dry_run:
+        if mode == CleanMode.DELETE:
             password, otp = load_credentials()
-            mode = CleanMode.DELETE
-
-        # Determine PyPI URL
-        pypi_url = _PYPI_URL_PROD if args.prod else _PYPI_URL_TEST
-
-        # Create and run cleanup
-        cleanup = PyPICleanup(pypi_url, mode, args.max_nightlies, username=args.username, password=password, otp=otp)
-
+            cleanup = PyPICleanup(
+                args.pypi_url, mode, args.max_nightlies, username=args.username, password=password, otp=otp
+            )
+        elif mode == CleanMode.LIST_ONLY:
+            cleanup = PyPICleanup(args.pypi_url, mode, args.max_nightlies)
+        else:
+            print(f"Unknown mode {mode}. Did nothing.")
+            return -1
         return cleanup.run()
-
     except ValidationError:
         logging.exception("Configuration error")
         return 2
@@ -560,8 +579,16 @@ def main() -> int:
         logging.info("Operation cancelled by user")
         return 130
     except Exception:
-        logging.exception("Unexpected error", exc_info=args.verbose)
+        logging.exception("Unexpected error")
         return 1
+
+
+def main() -> int:
+    """Main entry point for the script."""
+    parser = create_argument_parser()
+    args = parser.parse_args()
+    # call the subcommand's func
+    return args.func(args)
 
 
 if __name__ == "__main__":
