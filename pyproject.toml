@@ -126,7 +126,6 @@ if.env.COVERAGE = false
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 
-
 [tool.scikit-build.sdist]
 include = [
     "README.md",
@@ -235,7 +234,6 @@ test = [ # dependencies used for running tests
     "pytest-reraise",
     "pytest-timeout",
     "pytest-timestamper",
-    "mypy",
     "coverage",
     "gcovr",
     "gcsfs",
@@ -283,6 +281,7 @@ build = [
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
     "pre-commit",
+    "mypy",
     "ruff>=0.13.0",
     {include-group = "stubdeps"},
     {include-group = "build"},
