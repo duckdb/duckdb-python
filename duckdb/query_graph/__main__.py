@@ -6,71 +6,233 @@ from functools import reduce
 from pathlib import Path
 
 qgraph_css = """
-.styled-table {
-	border-collapse: collapse;
-	margin: 25px 0;
-	font-size: 0.9em;
-	font-family: sans-serif;
-	min-width: 400px;
-	box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-}
-.styled-table thead tr {
-	background-color: #009879;
-	color: #ffffff;
-	text-align: left;
-}
-.styled-table th,
-.styled-table td {
-	padding: 12px 15px;
-}
-.styled-table tbody tr {
-	border-bottom: 1px solid #dddddd;
+:root {
+  --text-primary-color: #0d0d0d;
+  --text-secondary-color: #444;
+  --doc-codebox-border-color: #e6e6e6;
+  --doc-codebox-background-color: #f7f7f7;
+  --doc-scrollbar-bg: #e6e6e6;
+  --doc-scrollbar-slider: #ccc;
+  --duckdb-accent: #009982;
+  --duckdb-accent-light: #00b89a;
+  --card-bg: #fff;
+  --border-radius: 8px;
+  --shadow: 0 4px 14px rgba(0,0,0,0.05);
 }
 
-.styled-table tbody tr:nth-of-type(even) {
-	background-color: #f3f3f3;
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text-primary-color);
+  background: #fafafa;
+  line-height: 1.55;
 }
 
-.styled-table tbody tr:last-of-type {
-	border-bottom: 2px solid #009879;
+.container {
+  max-width: 1000px;
+  margin: 40px auto;
+  padding: 0 20px;
 }
 
-.node-body {
-	font-size:15px;
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
 }
+
+header img {
+  width: 100px;
+  height: 100px;
+}
+
+header h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary-color);
+}
+
+/* === Table Styling (DuckDB documentation style, flat header) === */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 20px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--doc-codebox-border-color);
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--card-bg);
+}
+
+thead {
+  background-color: var(--duckdb-accent);
+  color: white;
+}
+
+th, td {
+  padding: 10px 12px;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+th {
+  font-weight: 700;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--doc-codebox-border-color);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover {
+  background: var(--doc-codebox-border-color);
+}
+
+/* === Chart/Card Section === */
+.chart {
+  padding: 20px;
+  border: 1px solid var(--doc-codebox-border-color);
+  border-radius: var(--border-radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+  overflow: visible;
+}
+
+/* === Tree Layout Styling === */
+.tf-tree {
+  overflow-x: visible;
+  overflow-y: visible;
+  padding-top: 20px;
+}
+
 .tf-nc {
-	position: relative;
-	width: 180px;
-	text-align: center;
-	background-color: #fff100;
-}
-.custom-tooltip {
-  position: relative;
+  background: var(--card-bg);
+  border: 1px solid var(--doc-codebox-border-color);
+  border-radius: var(--border-radius);
+  padding: 6px;
   display: inline-block;
 }
 
-.tooltip-text {
-  visibility: hidden;
-  background-color: #333;
-  color: #fff;
-  text-align: center;
-  padding: 0px;
-  border-radius: 1px;
-
-  /* Positioning */
-  position: absolute;
-  z-index: 1;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-bottom: 8px;
-
-  /* Tooltip Arrow */
-  width: 400px;
+.node-body {
+  font-size: 13px;
+  text-align: left;
+  padding: 10px;
+  white-space: nowrap;
 }
 
-.custom-tooltip:hover .tooltip-text {
-  visibility: visible;
+.node-body p {
+  margin: 2px 0;
+}
+
+.node-details {
+  white-space: nowrap;
+  overflow: visible;
+  display: inline-block;
+}
+
+/* === Metric Boxes === */
+.chart .metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.chart .metric-box {
+  background: var(--card-bg);
+  border: 1px solid var(--doc-codebox-border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chart .metric-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.chart .metric-title {
+  font-size: 13px;
+  color: var(--text-secondary-color);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.chart .metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--duckdb-accent);
+}
+
+
+/* === SQL Query Block === */
+.chart.sql-block {
+  background: var(--doc-codebox-background-color);
+  border: 1px solid var(--doc-codebox-border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.chart.sql-block pre {
+  margin: 0;
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary-color);
+  white-space: pre;
+}
+
+.chart.sql-block code {
+  color: var(--duckdb-accent);
+  font-weight: 500;
+}
+
+
+/* === Links, Typography, and Consistency === */
+a {
+  color: var(--duckdb-accent);
+  text-decoration: underline;
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: black;
+}
+
+strong {
+  font-weight: 600;
+}
+
+/* === Dark Mode Support === */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text-primary-color: #e6e6e6;
+    --doc-codebox-border-color: #2a2a2a;
+    --doc-codebox-background-color: #1e1e1e;
+    --card-bg: #111;
+  }
+  body {
+    background: #0b0b0b;
+  }
+  thead {
+    background-color: var(--duckdb-accent);
+  }
+  tbody tr:hover {
+    background: #222;
+  }
 }
 """
 
@@ -131,36 +293,48 @@ def get_child_timings(top_node: object, query_timings: object) -> str:  # noqa: 
         get_child_timings(child, query_timings)
 
 
-def get_pink_shade_hex(fraction: float) -> str:  # noqa: D103
+def get_f7fff0_shade_hex(fraction: float) -> str:
+    """
+    Returns a shade between very light (#f7fff0) and a slightly darker green-yellow,
+    depending on the fraction (0..1)
+    """
     fraction = max(0, min(1, fraction))
 
-    # Define the RGB values for very light pink (almost white) and dark pink
-    light_pink = (255, 250, 250)  # Very light pink
-    dark_pink = (255, 20, 147)  # Dark pink
+    # Define RGB for light and dark end
+    light_color = (247, 255, 240)  # #f7fff0
+    dark_color = (200, 255, 150)   # slightly darker/more saturated green-yellow
 
-    # Calculate the RGB values for the given fraction
-    r = int(light_pink[0] + (dark_pink[0] - light_pink[0]) * fraction)
-    g = int(light_pink[1] + (dark_pink[1] - light_pink[1]) * fraction)
-    b = int(light_pink[2] + (dark_pink[2] - light_pink[2]) * fraction)
+    # Interpolate RGB channels
+    r = int(light_color[0] + (dark_color[0] - light_color[0]) * fraction)
+    g = int(light_color[1] + (dark_color[1] - light_color[1]) * fraction)
+    b = int(light_color[2] + (dark_color[2] - light_color[2]) * fraction)
 
-    # Return as hexadecimal color code
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, width: int, extra_info: str) -> str:  # noqa: D103
-    node_style = f"background-color: {get_pink_shade_hex(float(result) / cpu_time)};"
-
-    body = f'<span class="tf-nc custom-tooltip" style="{node_style}">'
-    body += '<div class="node-body">'
+def get_node_body(name: str, result: str, cpu_time: float, card: int, est: int, result_size: int, extra_info: str) -> str:  # noqa: D103
+    """
+    Generate the HTML body for a single node in the tree.
+    """
+    node_style = f"background-color: {get_f7fff0_shade_hex(float(result) / cpu_time)};"
     new_name = "BRIDGE" if (name == "INVALID") else name.replace("_", " ")
     formatted_num = f"{float(result):.4f}"
-    body += f"<p><b>{new_name}</b> </p><p>time: {formatted_num} seconds</p>"
-    body += f'<span class="tooltip-text"> {extra_info} </span>'
-    if width > 0:
+
+    body = f'<span class="tf-nc" style="{node_style}">'
+    body += '<div class="node-body">'
+    body += f"<p><b>{new_name}</b></p>"
+    if result_size > 0:
+        body += f"<p>time: {formatted_num}s</p>"
         body += f"<p>cardinality: {card}</p>"
         body += f"<p>estimate: {est}</p>"
-        body += f"<p>width: {width} bytes</p>"
+        body += f"<p>result size: {result_size} bytes</p>"
+    body += "<details>"
+    body += f"<summary>Extra info</summary>"
+    body += '<div class="node-details">'
+    body += f"<p>{extra_info}</p>"
     # TODO: Expand on timing. Usually available from a detailed profiling  # noqa: TD002, TD003
+    body += "</div>"
+    body += "</details>"
     body += "</div>"
     body += "</span>"
     return body
@@ -178,8 +352,6 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:  # noqa
             estimate = int(value)
         else:
             extra_info += f"{key}: {value} <br>"
-    cardinality = json_graph["operator_cardinality"]
-    width = int(json_graph["result_set_size"] / max(1, cardinality))
 
     # get rid of some typically long names
     extra_info = re.sub(r"__internal_\s*", "__", extra_info)
@@ -189,9 +361,9 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:  # noqa
         json_graph["operator_type"],
         json_graph["operator_timing"],
         cpu_time,
-        cardinality,
+        json_graph["operator_cardinality"],
         estimate,
-        width,
+        json_graph["result_set_size"],
         re.sub(r",\s*", ", ", extra_info),
     )
 
@@ -208,13 +380,12 @@ def generate_tree_recursive(json_graph: object, cpu_time: float) -> str:  # noqa
 def generate_timing_html(graph_json: object, query_timings: object) -> object:  # noqa: D103
     json_graph = json.loads(graph_json)
     gather_timing_information(json_graph, query_timings)
-    total_time = float(json_graph.get("operator_timing") or json_graph.get("latency"))
     table_head = """
-	<table class=\"styled-table\">
+	<table>
 		<thead>
 			<tr>
 				<th>Phase</th>
-				<th>Time</th>
+				<th>Time (s)</th>
 				<th>Percentage</th>
 			</tr>
 		</thead>"""
@@ -225,23 +396,55 @@ def generate_timing_html(graph_json: object, query_timings: object) -> object:  
     execution_time = query_timings.get_sum_of_all_timings()
 
     all_phases = query_timings.get_phases()
-    query_timings.add_node_timing(NodeTiming("TOTAL TIME", total_time))
-    query_timings.add_node_timing(NodeTiming("Execution Time", execution_time))
-    all_phases = ["TOTAL TIME", "Execution Time", *all_phases]
+    query_timings.add_node_timing(NodeTiming("Execution Time (CPU)", execution_time))
+    all_phases = ["Execution Time (CPU)", *all_phases]
     for phase in all_phases:
         summarized_phase = query_timings.get_summary_phase_timings(phase)
-        summarized_phase.calculate_percentage(total_time)
-        phase_column = f"<b>{phase}</b>" if phase == "TOTAL TIME" or phase == "Execution Time" else phase
+        summarized_phase.calculate_percentage(execution_time)
+        phase_column = f"<b>{phase}</b>" if phase == "Execution Time (CPU)" else phase
         table_body += f"""
 	<tr>
 			<td>{phase_column}</td>
-            <td>{summarized_phase.time}</td>
+            <td>{round(summarized_phase.time, 8)}</td>
             <td>{str(summarized_phase.percentage * 100)[:6]}%</td>
     </tr>
 """
     table_body += table_end
     return table_head + table_body
 
+def generate_metric_grid_html(graph_json: str) -> str:  # noqa: D103
+    json_graph = json.loads(graph_json)
+    metrics = {
+        "Execution Time (s)": f"{float(json_graph.get("latency", "N/A")):.4f}",
+        "Total GB Read": f"{float(json_graph.get("total_bytes_read", "N/A")) / (1024 ** 3):.4f}" if json_graph.get("total_bytes_read", "N/A") != "N/A" else "N/A",
+        "Total GB Written": f"{float(json_graph.get("total_bytes_written", "N/A")) / (1024 ** 3):.4f}" if json_graph.get("total_bytes_written", "N/A") != "N/A" else "N/A",
+        "Peak Memory (GB)": f"{float(json_graph.get("system_peak_buffer_memory", "N/A")) / (1024 ** 3):.4f}" if json_graph.get("system_peak_buffer_memory", "N/A") != "N/A" else "N/A",
+        "Rows Scanned": f"{json_graph.get("cumulative_rows_scanned", "N/A"):,}" if json_graph.get("cumulative_rows_scanned", "N/A") != "N/A" else "N/A",
+    }
+    metric_grid_html = """<div class="metrics-grid">"""
+    for key in metrics.keys():
+        metric_grid_html += f"""
+        <div class="metric-box">
+            <div class="metric-title">{key}</div>
+            <div class="metric-value">{metrics[key]}</div>
+        </div>
+        """
+    metric_grid_html += "</div>"
+    return metric_grid_html
+
+def generate_sql_query_html(graph_json: str) -> str:  # noqa: D103
+    json_graph = json.loads(graph_json)
+    sql_query = json_graph.get("query_name", "N/A")
+    sql_html = f"""
+    <details><summary><b>SQL Query</b></summary>
+    <div class="chart sql-block">
+        <pre><code>
+{sql_query}
+        </code></pre>
+    </div>
+    </details><br>
+    """
+    return sql_html
 
 def generate_tree_html(graph_json: object) -> str:  # noqa: D103
     json_graph = json.loads(graph_json)
@@ -269,10 +472,10 @@ def generate_ipython(json_input: str) -> str:  # noqa: D103
 
 def generate_style_html(graph_json: str, include_meta_info: bool) -> None:  # noqa: D103, FBT001
     treeflex_css = '<link rel="stylesheet" href="https://unpkg.com/treeflex/dist/css/treeflex.css">\n'
-    css = "<style>\n"
-    css += qgraph_css + "\n"
-    css += "</style>\n"
-    return {"treeflex_css": treeflex_css, "duckdb_css": css, "libraries": "", "chart_script": ""}
+    libraries = (
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">\n'
+    )
+    return {"treeflex_css": treeflex_css, "duckdb_css": qgraph_css, "libraries": libraries, "chart_script": ""}
 
 
 def gather_timing_information(json: str, query_timings: object) -> None:  # noqa: D103
@@ -288,8 +491,10 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: 
         text = f.read()
 
     html_output = generate_style_html(text, True)
+    highlight_metric_grid = generate_metric_grid_html(text)
     timing_table = generate_timing_html(text, query_timings)
     tree_output = generate_tree_html(text)
+    sql_query_html = generate_sql_query_html(text)
 
     # finally create and write the html
     with open_utf8(output_file, "w+") as f:
@@ -302,12 +507,20 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: 
 	${TREEFLEX_CSS}
 	<style>
 		${DUCKDB_CSS}
-	</style>
+    </style>
 </head>
-<body>
-	<div id="meta-info"></div>
+<body>    
+    <div class="container">
+        <header>
+            <img src="https://raw.githubusercontent.com/duckdb/duckdb/refs/heads/main/logo/DuckDB_Logo-horizontal.svg" alt="DuckDB Logo">
+            <h1>Query Profile Graph</h1>
+        </header>
+    <div class="chart" id="query-overview">
+        ${METRIC_GRID}
+    </div>
 	<div class="chart" id="query-profile">
-		${TIMING_TABLE}
+        ${SQL_QUERY}
+        ${TIMING_TABLE}
 	</div>
 	${TREE}
 </body>
@@ -315,6 +528,8 @@ def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: 
 """
         html = html.replace("${TREEFLEX_CSS}", html_output["treeflex_css"])
         html = html.replace("${DUCKDB_CSS}", html_output["duckdb_css"])
+        html = html.replace("${METRIC_GRID}", highlight_metric_grid)
+        html = html.replace("${SQL_QUERY}", sql_query_html)
         html = html.replace("${TIMING_TABLE}", timing_table)
         html = html.replace("${TREE}", tree_output)
         f.write(html)
