@@ -125,6 +125,34 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Check if a filesystem with the provided name is currently registered", py::arg("name"), py::kw_only(),
 	    py::arg("connection") = py::none());
 	m.def(
+	    "get_profiling_information",
+	    [](const py::str &format, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->GetProfilingInformation(format);
+	    },
+	    "Get profiling information from a query", py::kw_only(), py::arg("format") = "json", 
+		py::arg("connection") = py::none());
+	m.def(
+	    "enable_profiling",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->EnableProfiling();
+	    },
+	    "Enable profiling for the current connection", py::kw_only(), py::arg("connection") = py::none());
+	m.def(
+	    "disable_profiling",
+	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->DisableProfiling();
+	    },
+	    "Disable profiling for the current connection", py::kw_only(), py::arg("connection") = py::none());
+	m.def(
 	    "create_function",
 	    [](const string &name, const py::function &udf, const py::object &arguments = py::none(),
 	       const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
