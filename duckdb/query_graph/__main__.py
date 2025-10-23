@@ -485,10 +485,16 @@ def gather_timing_information(json: str, query_timings: object) -> None:  # noqa
     get_child_timings(json["children"][0], query_timings)
 
 
-def translate_json_to_html(input_file: str, output_file: str) -> None:  # noqa: D103
+def translate_json_to_html(input_file: str = None, input_text: str = None, output_file: str = "profile.html") -> None:  # noqa: D103
     query_timings = AllTimings()
-    with open_utf8(input_file, "r") as f:
-        text = f.read()
+    if input_text is not None:
+        text = input_text
+    elif input_file is not None:
+        with open_utf8(input_file, "r") as f:
+            text = f.read()
+    else:
+        print("please provide either input file or input text")
+        exit(1)
 
     html_output = generate_style_html(text, True)
     highlight_metric_grid = generate_metric_grid_html(text)
