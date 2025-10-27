@@ -495,7 +495,6 @@ def translate_json_to_html(input_file: str = None, input_text: str = None, outpu
     else:
         print("please provide either input file or input text")
         exit(1)
-
     html_output = generate_style_html(text, True)
     highlight_metric_grid = generate_metric_grid_html(text)
     timing_table = generate_timing_html(text, query_timings)
