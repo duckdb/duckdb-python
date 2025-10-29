@@ -132,14 +132,12 @@ jobs:
           path: artifacts/
           merge-multiple: true
 
-      - name: Authenticate with AWS
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: 'us-east-2'
-          aws-access-key-id: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-          aws-secret-access-key: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-
       - name: Upload Artifacts
+        env:
+          AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+
         run: |
           aws s3 cp artifacts ${{ needs.workflow_state.outputs.s3_url }} --recursive
 
