@@ -298,7 +298,7 @@ void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 			auto new_value = utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone);
 			// We need to create the column anew because the exact dt changed to a new timezone
 			df.attr("drop")("columns"_a = names[i].c_str(), "inplace"_a = true);
-			df.attr("__setitem__")(names[i].c_str(), new_value);
+			df.attr("insert")(i, names[i].c_str(), new_value);
 		}
 	}
 }
@@ -384,7 +384,7 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 			if (result->types[i] == LogicalType::DATE) {
 				auto new_value = df[names[i].c_str()].attr("dt").attr("date");
 				df.attr("drop")("columns"_a = names[i].c_str(), "inplace"_a = true);
-				df.attr("__setitem__")(names[i].c_str(), new_value);
+				df.attr("insert")(i, names[i].c_str(), new_value);
 			}
 		}
 	}
