@@ -287,8 +287,13 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	return res;
 }
 
+static void ReplaceDFColumn(PandasDataFrame &df, const char *col_name, idx_t idx, const py::handle &new_value) {
+	df.attr("drop")("columns"_a = col_name, "inplace"_a = true);
+	df.attr("insert")(idx, col_name, new_value, "allow_duplicates"_a = false);
+}
+
 // TODO: unify these with an enum/flag to indicate which conversions to do
-void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
+void DuckDBPyResult::ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_object) const {
 	auto names = df.attr("columns").cast<vector<string>>();
 
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
@@ -297,8 +302,10 @@ void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 			auto utc_local = df[names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
 			auto new_value = utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone);
 			// We need to create the column anew because the exact dt changed to a new timezone
-			df.attr("drop")("columns"_a = names[i].c_str(), "inplace"_a = true);
-			df.attr("__setitem__")(names[i].c_str(), new_value);
+			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
+		} else if (date_as_object && result->types[i] == LogicalType::DATE) {
+			auto new_value = df[names[i].c_str()].attr("dt").attr("date");
+			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
 		}
 	}
 }
@@ -374,20 +381,11 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 	}
 
 	PandasDataFrame df = py::cast<PandasDataFrame>(pandas.attr("DataFrame").attr("from_dict")(o));
-	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
-	ChangeToTZType(df);
+	// Convert TZ and (optionally) Date types
+	ConvertDateTimeTypes(df, date_as_object);
 
 	auto names = df.attr("columns").cast<vector<string>>();
 	D_ASSERT(result->ColumnCount() == names.size());
-	if (date_as_object) {
-		for (idx_t i = 0; i < result->ColumnCount(); i++) {
-			if (result->types[i] == LogicalType::DATE) {
-				auto new_value = df[names[i].c_str()].attr("dt").attr("date");
-				df.attr("drop")("columns"_a = names[i].c_str(), "inplace"_a = true);
-				df.attr("__setitem__")(names[i].c_str(), new_value);
-			}
-		}
-	}
 	return df;
 }
 
