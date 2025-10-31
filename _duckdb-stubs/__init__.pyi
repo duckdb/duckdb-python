@@ -1048,7 +1048,7 @@ def commit(*, connection: DuckDBPyConnection | None = None) -> DuckDBPyConnectio
 def connect(
     database: str | pathlib.Path = ":memory:",
     read_only: bool = False,
-    config: dict[str, str] | None = None,
+    config: dict[str, str | bool | int | float | list[str]] | None = None,
 ) -> DuckDBPyConnection: ...
 def create_function(
     name: str,
