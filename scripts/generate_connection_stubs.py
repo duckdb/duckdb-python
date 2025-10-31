@@ -5,7 +5,7 @@ from pathlib import Path
 os.chdir(Path(__file__).parent)
 
 JSON_PATH = "connection_methods.json"
-DUCKDB_STUBS_FILE = Path("..") / "duckdb" / "__init__.pyi"
+DUCKDB_STUBS_FILE = Path("..") / "_duckdb-stubs" / "__init__.pyi"
 
 START_MARKER = "    # START OF CONNECTION METHODS"
 END_MARKER = "    # END OF CONNECTION METHODS"
