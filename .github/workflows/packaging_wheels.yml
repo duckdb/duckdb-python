@@ -37,7 +37,7 @@ jobs:
           - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
           - { os: macos-15,         arch: arm64,      cibw_system: macosx }
           - { os: macos-15,         arch: universal2, cibw_system: macosx }
-          - { os: macos-13,         arch: x86_64,     cibw_system: macosx }
+          - { os: macos-15-intel,   arch: x86_64,     cibw_system: macosx }
         minimal:
           - ${{ inputs.minimal }}
         exclude:
