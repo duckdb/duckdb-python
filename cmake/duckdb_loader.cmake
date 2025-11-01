@@ -198,8 +198,6 @@ function(_duckdb_create_interface_target target_name)
         /wd26451
         /wd26495 # suppress Code Analysis
         /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe functions
-        /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # see
-                                               # https://github.com/duckdblabs/duckdb-internal/issues/5151
         /utf-8 # treat source files as UTF-8 encoded
     )
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
