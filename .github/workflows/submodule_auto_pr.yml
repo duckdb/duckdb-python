@@ -1,0 +1,111 @@
+name: Submodule Auto PR
+on:
+  workflow_call:
+    inputs:
+      duckdb-python-sha:
+        type: string
+        description: The commit to build against (defaults to latest commit of current ref)
+        required: false
+      duckdb-sha:
+        type: string
+        description: The DuckDB submodule commit or ref to build against
+        required: true
+      auto-land:
+        type: boolean
+        description: Immediately merge the PR
+        default: false
+    secrets:
+      DUCKDBLABS_BOT_TOKEN:
+        description: Github token of the DuckDBLabs bot
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create_pr:
+    name: Create PR to bump duckdb submodule to given SHA
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.duckdb-python-sha }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Checkout or Create Needed Branch
+        run: |
+          git fetch --all
+          head_sha=${{ inputs.duckdb-python-sha }}
+          branch_name="vendoring-${{ github.ref_name }}"
+          if [[ `git rev-parse --verify ${branch_name} 2>/dev/null` ]]; then
+            # branch exists
+            git checkout ${branch_name}
+          else
+            # new branch
+            git checkout -b ${branch_name}
+          fi
+          [[ ${head_sha} ]] && git reset --hard ${head_sha} || true
+
+      - name: Checkout DuckDB at Given SHA
+        run: |
+          cd external/duckdb
+          git fetch origin
+          git checkout ${{ inputs.duckdb-sha }}
+
+      - name: Set Git User
+        run: |
+          git config --global user.email "github_bot@duckdblabs.com"
+          git config --global user.name "DuckDB Labs GitHub Bot"
+
+      - name: Create PR to Bump DuckDB Submodule
+        env:
+          GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+        run: |
+          # First commit and push
+          git add external/duckdb
+          git commit -m "Bump submodule"
+          git push --force origin vendoring-${{ github.ref_name }}
+          # create PR msg
+          echo "Bump duckdb submodule:" > body.txt
+          echo "- Target branch: ${{ github.ref_name }}" >> body.txt
+          echo "- Date: $( date +"%Y-%m-%d %H:%M:%S" )" >> body.txt
+          echo "- DuckDB SHA: ${{ inputs.duckdb-sha }}" >> body.txt
+          echo "- Trigger: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> body.txt
+          gh pr create \
+            --head "vendoring-${{ github.ref_name }}" \
+            --base ${{ github.ref_name }} \
+            --title "[duckdb-labs bot] Bump DuckDB submodule" \
+            --body-file body.txt > output.txt 2>&1
+          # Show summary
+          success=$?
+          url=$( [[ $success ]] && gh pr view vendoring-${{ github.ref_name }} --json url --jq .url > url.txt || true )
+          echo "## Submodule PR Summary" >> $GITHUB_STEP_SUMMARY
+          if [[ $success ]]; then
+            echo "### PR created: [${url}](${url})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Failed to create PR" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          [[ $success ]] || exit 1
+
+      - name: Automerge PR
+        if: ${{ inputs.auto-land }}
+        env:
+          GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+        run: |
+          gh pr merge vendoring-${{ github.ref_name }} > output.txt
+          # Show summary
+          success=$?
+          if [[ $success ]]; then
+            echo "### PR merged" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Failed to auto-merge PR" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

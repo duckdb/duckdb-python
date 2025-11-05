@@ -22,6 +22,11 @@ on:
         options:
           - test
           - prod
+      nightly-stale-after-days:
+        type: string
+        description: After how many days should nightlies be considered stale
+        required: true
+        default: 4
       store-s3:
         type: boolean
         description: Also store test packages in S3 (always true for prod)
@@ -51,23 +56,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: index_check
-        name: Check ${{ needs.build_sdist.outputs.package-version }} on PyPI
+        name: Check version on PyPI
         run: |
-          set -eu
-          # Check PyPI whether the release we're building is already present
+          set -ex
           pypi_hostname=${{ inputs.pypi-index == 'test' && 'test.' || '' }}pypi.org
-          pkg_version=${{ needs.build_sdist.outputs.package-version }}
-          url=https://${pypi_hostname}/pypi/duckdb/${pkg_version}/json
-          http_status=$( curl -s -o /dev/null -w "%{http_code}" $url || echo $? )
-          if [[ $http_status == "200" ]]; then
-            echo "::warning::Package version ${pkg_version} is already present on ${pypi_hostname}"
-            pypi_state=VERSION_FOUND
-          elif [[ $http_status == 000* ]]; then
-            echo "::error::Error checking PyPI at ${url}: curl exit code ${http_status#'000'}"
-            pypi_state=UNKNOWN
-          else
-            echo "::notice::Package version ${pkg_version} not found on ${pypi_hostname} (http status: ${http_status})"
+          # install duckdb
+          curl https://install.duckdb.org | sh
+          # query pypi
+          result=$(cat <<EOF | ${HOME}/.duckdb/cli/latest/duckdb | xargs
+          ---- Output lines
+          .mode line
+          ---- Query that fetches the given version's age, if the version already exists
+          SELECT
+            today() - (file.value->>'upload_time_iso_8601')::DATE     AS age,
+          FROM read_json('https://${pypi_hostname}/pypi/duckdb/json') AS jd
+          CROSS JOIN json_each(jd.releases)                           AS rel(key, value)
+          CROSS JOIN unnest(FROM_JSON(rel.value, '["JSON"]'))         AS file(value)
+          WHERE rel.key='${{ needs.build_sdist.outputs.package-version }}'
+          LIMIT 1;
+          EOF
+          )
+          if [ -z "$result" ]; then
             pypi_state=VERSION_NOT_FOUND
+          elif [ "${result#age = }" -ge "${{ inputs.nightly-stale-after-days }}" ]; then
+            pypi_state=VERSION_STALE
+          else
+            pypi_state=VERSION_FOUND
           fi
           echo "pypi_state=${pypi_state}" >> $GITHUB_OUTPUT
 
@@ -96,7 +110,7 @@ jobs:
             echo "::notice::S3 upload disabled in inputs, not generating S3 URL"
             exit 0
           fi
-          if [[ VERSION_FOUND == "${{ steps.index_check.outputs.pypi_state }}" ]]; then
+          if [[ VERSION_NOT_FOUND != "${{ steps.index_check.outputs.pypi_state }}" ]]; then
             echo "::warning::S3 upload disabled because package version already uploaded to PyPI"
             exit 0
           fi
@@ -107,10 +121,22 @@ jobs:
           echo "::notice::Generated S3 URL: ${s3_url}"
           echo "s3_url=${s3_url}" >> $GITHUB_OUTPUT
 
+  submodule_pr:
+    name: Create PR to bump submodule to given SHA if version on PyPI is stale
+    needs: workflow_state
+    if: ${{ needs.workflow_state.outputs.pypi_state == 'VERSION_STALE' }}
+    uses: ./.github/workflows/submodule_auto_pr.yml
+    with:
+      duckdb-python-sha: ${{ inputs.duckdb-python-sha }}
+      duckdb-sha: ${{ inputs.duckdb-sha }}
+    secrets:
+      # reusable workflows and secrets are not great: https://github.com/actions/runner/issues/3206
+      DUCKDBLABS_BOT_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+
   build_wheels:
     name: Build and test releases
     needs: workflow_state
-    if: ${{ needs.workflow_state.outputs.pypi_state != 'VERSION_FOUND' }}
+    if: ${{ needs.workflow_state.outputs.pypi_state == 'VERSION_NOT_FOUND' }}
     uses: ./.github/workflows/packaging_wheels.yml
     with:
       minimal: false
