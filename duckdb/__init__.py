@@ -201,9 +201,6 @@ from duckdb.value.constant import (
     Value,
 )
 
-# explicitly make the experimental module available
-from . import experimental
-
 __all__: list[str] = [
     "BinaryValue",
     "BinderException",
@@ -319,7 +316,6 @@ __all__: list[str] = [
     "enum_type",
     "execute",
     "executemany",
-    "experimental",
     "extract_statements",
     "fetch_arrow_table",
     "fetch_df",
