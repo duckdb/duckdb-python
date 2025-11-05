@@ -328,6 +328,10 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
+module = "duckdb.experimental.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
 module = [
     "fsspec.*",
     "pandas",
