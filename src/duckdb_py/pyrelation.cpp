@@ -23,8 +23,6 @@
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 
-#include <duckdb/main/relation/table_relation.hpp>
-
 namespace duckdb {
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
@@ -1517,10 +1515,6 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 	PyExecuteRelation(insert);
 }
 
-static bool IsAcceptedInsertRelationType(const Relation &relation) {
-	return relation.type == RelationType::TABLE_RELATION;
-}
-
 void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) {
 	AssertRelation();
 	unique_ptr<ParsedExpression> condition;
@@ -1565,7 +1559,7 @@ void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) 
 	return rel->Update(std::move(names), std::move(expressions), std::move(condition));
 }
 
-void DuckDBPyRelation::Insert(const py::object &params) {
+void DuckDBPyRelation::Insert(const py::object &params) const {
 	AssertRelation();
 	if (this->rel->type != RelationType::TABLE_RELATION) {
 		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
@@ -1574,17 +1568,7 @@ void DuckDBPyRelation::Insert(const py::object &params) {
 
 	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
-	// Grab table info
-	auto table_relation = static_cast<TableRelation *>(this->rel.get());
-	auto catalog = table_relation->description->database;
-	auto schema = table_relation->description->schema;
-	auto table = table_relation->description->table;
-	// Create a value relation
-	vector<string> column_names;
-	auto value_rel =
-	    make_shared_ptr<ValueRelation>(this->rel->context->GetContext(), values, std::move(column_names), "values");
-	// Now insert
-	value_rel->Insert(catalog, schema, table);
+	rel->Insert(values);
 }
 
 void DuckDBPyRelation::Create(const string &table) {
