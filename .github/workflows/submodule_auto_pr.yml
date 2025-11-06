@@ -14,6 +14,16 @@ on:
       GH_TOKEN:
         description: Github token of the DuckDBLabs bot
         required: true
+  workflow_dispatch:
+    inputs:
+      duckdb-python-sha:
+        type: string
+        description: The commit to build against (defaults to latest commit of current ref)
+        required: false
+      duckdb-sha:
+        type: string
+        description: The DuckDB submodule commit or ref to build against
+        required: true
 
 defaults:
   run:
