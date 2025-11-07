@@ -3,6 +3,7 @@
 import os
 import subprocess
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -108,6 +109,17 @@ class TestGitTagConversion(unittest.TestCase):
 class TestSetupToolsScmIntegration(unittest.TestCase):
     """Test setuptools_scm integration functions."""
 
+    def _verify_date_suffix(self, version_string: str) -> None:
+        """Helper to verify the date suffix in a dev version is today's date."""
+        date_part = version_string.split(".dev")[1]
+        assert len(date_part) == 8, f"Date part should be 8 digits, got {len(date_part)}"
+        assert date_part.isdigit(), f"Date part should be all digits, got {date_part}"
+
+        # Parse the date and verify it's today
+        parsed_date = datetime.strptime(date_part, "%Y%m%d").date()
+        today = datetime.now(timezone.utc).date()
+        assert parsed_date == today, f"Date {parsed_date} should be today {today}"
+
     def test_bump_version_exact_tag(self):
         """Test bump_version with exact tag (distance=0, dirty=False)."""
         assert _tag_to_version("1.2.3") == "1.2.3"
@@ -116,15 +128,21 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_with_distance(self):
         """Test bump_version with distance from tag."""
-        assert _bump_dev_version("1.2.3", 5) == "1.3.0.dev5"
+        result = _bump_dev_version("1.2.3", 5)
+        assert result.startswith("1.3.0.dev")
+        self._verify_date_suffix(result)
 
         # Post-release development
-        assert _bump_dev_version("1.2.3.post1", 3) == "1.2.3.post2.dev3"
+        result = _bump_dev_version("1.2.3.post1", 3)
+        assert result.startswith("1.2.3.post2.dev")
+        self._verify_date_suffix(result)
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "0"})
     def test_bump_version_release_branch(self):
         """Test bump_version on bugfix branch."""
-        assert _bump_dev_version("1.2.3", 5) == "1.2.4.dev5"
+        result = _bump_dev_version("1.2.3", 5)
+        assert result.startswith("1.2.4.dev")
+        self._verify_date_suffix(result)
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_dirty(self):
@@ -142,7 +160,8 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
         mock_version.dirty = False
 
         result = version_scheme(mock_version)
-        assert result == "1.3.0.dev5"
+        assert result.startswith("1.3.0.dev")
+        self._verify_date_suffix(result)
 
     def test_bump_version_invalid_format(self):
         """Test bump_version with invalid version format."""

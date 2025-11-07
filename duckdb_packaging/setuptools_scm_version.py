@@ -6,6 +6,7 @@ to match the exact behavior of the original DuckDB Python package.
 
 import os
 import re
+from datetime import datetime, timezone
 from typing import Protocol
 
 # Import from our own versioning module to avoid duplication
@@ -72,15 +73,19 @@ def _bump_dev_version(base_version: str, distance: int) -> str:
         raise ValueError(msg)
     major, minor, patch, post, rc = parse_version(base_version)
 
+    # Use date-based versioning for dev builds (YYYYMMDD format)
+    # This allows daily nightlies even without code changes
+    date_suffix = datetime.now(timezone.utc).strftime("%Y%m%d")
+
     if post != 0:
         # We're developing on top of a post-release
-        return f"{format_version(major, minor, patch, post=post + 1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, post=post + 1)}.dev{date_suffix}"
     elif rc != 0:
         # We're developing on top of an rc
-        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{date_suffix}"
     elif _main_branch_versioning():
-        return f"{format_version(major, minor + 1, 0)}.dev{distance}"
-    return f"{format_version(major, minor, patch + 1)}.dev{distance}"
+        return f"{format_version(major, minor + 1, 0)}.dev{date_suffix}"
+    return f"{format_version(major, minor, patch + 1)}.dev{date_suffix}"
 
 
 def forced_version_from_env() -> str:
