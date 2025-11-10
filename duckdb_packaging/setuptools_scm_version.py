@@ -72,15 +72,21 @@ def _bump_dev_version(base_version: str, distance: int) -> str:
         raise ValueError(msg)
     major, minor, patch, post, rc = parse_version(base_version)
 
+    # Get DuckDB submodule distance from its last tag (if set via env var)
+    duckdb_distance = os.getenv("DUCKDB_DISTANCE")
+    # Concatenate distances with zeros in between to form a valid PEP 440 dev version
+    # Pad duckdb_distance to 6 digits to ensure proper version ordering
+    dev_suffix = f"{distance}{int(duckdb_distance):06d}" if duckdb_distance else str(distance)
+
     if post != 0:
         # We're developing on top of a post-release
-        return f"{format_version(major, minor, patch, post=post + 1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, post=post + 1)}.dev{dev_suffix}"
     elif rc != 0:
         # We're developing on top of an rc
-        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{distance}"
+        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{dev_suffix}"
     elif _main_branch_versioning():
-        return f"{format_version(major, minor + 1, 0)}.dev{distance}"
-    return f"{format_version(major, minor, patch + 1)}.dev{distance}"
+        return f"{format_version(major, minor + 1, 0)}.dev{dev_suffix}"
+    return f"{format_version(major, minor, patch + 1)}.dev{dev_suffix}"
 
 
 def forced_version_from_env() -> str:
