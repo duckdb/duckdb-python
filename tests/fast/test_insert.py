@@ -27,6 +27,4 @@ class TestInsert:
         res = duckdb_cursor.table("not_main.tbl").fetchall()
         assert len(res) == 10
 
-        # TODO: This is not currently supported  # noqa: TD002, TD003
-        with pytest.raises(duckdb.CatalogException, match="Table with name tbl does not exist"):
-            duckdb_cursor.table("not_main.tbl").insert([42, 21, 1337])
+        duckdb_cursor.table("not_main.tbl").insert((42,))

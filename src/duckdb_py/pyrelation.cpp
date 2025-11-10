@@ -1511,12 +1511,8 @@ DuckDBPyRelation &DuckDBPyRelation::Execute() {
 void DuckDBPyRelation::InsertInto(const string &table) {
 	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
-	auto insert = rel->InsertRel(parsed_info.schema, parsed_info.name);
+	auto insert = rel->InsertRel(parsed_info.catalog, parsed_info.schema, parsed_info.name);
 	PyExecuteRelation(insert);
-}
-
-static bool IsAcceptedInsertRelationType(const Relation &relation) {
-	return relation.type == RelationType::TABLE_RELATION;
 }
 
 void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) {
@@ -1563,9 +1559,9 @@ void DuckDBPyRelation::Update(const py::object &set_p, const py::object &where) 
 	return rel->Update(std::move(names), std::move(expressions), std::move(condition));
 }
 
-void DuckDBPyRelation::Insert(const py::object &params) {
+void DuckDBPyRelation::Insert(const py::object &params) const {
 	AssertRelation();
-	if (!IsAcceptedInsertRelationType(*this->rel)) {
+	if (this->rel->type != RelationType::TABLE_RELATION) {
 		throw InvalidInputException("'DuckDBPyRelation.insert' can only be used on a table relation");
 	}
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(params)};
