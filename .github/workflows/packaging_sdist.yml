@@ -55,6 +55,13 @@ jobs:
         if: ${{ inputs.set-version != '' }}
         run: echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
 
+      - name: Set DUCKDB_DISTANCE
+        shell: bash
+        run: |
+          cd external/duckdb
+          DUCKDB_DISTANCE=$(git describe --tags --long | cut -d'-' -f2)
+          echo "DUCKDB_DISTANCE=$DUCKDB_DISTANCE" >> $GITHUB_ENV
+
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v7
         with:
