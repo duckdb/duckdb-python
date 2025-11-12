@@ -432,19 +432,20 @@ class TestDataFrame:
         data = [("Alice", 25, 5000.0), ("Bob", 30, 6000.0)]
         df = spark.createDataFrame(data, ["name", "age", "salary"])
         dtypes = df.dtypes
+
         assert isinstance(dtypes, list)
         assert len(dtypes) == 3
         for col_name, col_type in dtypes:
             assert isinstance(col_name, str)
             assert isinstance(col_type, str)
+        
         col_names = [name for name, _ in dtypes]
         assert col_names == ["name", "age", "salary"]
         for _, col_type in dtypes:
-            assert len(col_type) > 0  # Should have some type string
+            assert len(col_type) > 0  
 
     def test_dtypes_complex_types(self, spark):
         from spark_namespace.sql.types import ArrayType, IntegerType, StringType, StructField, StructType
-
         schema = StructType([
             StructField("name", StringType(), True),
             StructField("scores", ArrayType(IntegerType()), True),
@@ -453,12 +454,10 @@ class TestDataFrame:
                 StructField("zip", StringType(), True)
             ]), True)
         ])
-
         data = [
             ("Alice", [90, 85, 88], {"city": "NYC", "zip": "10001"}),
             ("Bob", [75, 80, 82], {"city": "LA", "zip": "90001"})
         ]
-
         df = spark.createDataFrame(data, schema)
         dtypes = df.dtypes
 
@@ -472,6 +471,7 @@ class TestDataFrame:
         df.printSchema()
         captured = capsys.readouterr()
         output = captured.out
+
         assert "root" in output
         assert "name" in output
         assert "age" in output
@@ -480,9 +480,7 @@ class TestDataFrame:
         assert "int" in output.lower() or "bigint" in output.lower()
 
     def test_printSchema_nested(self, spark, capsys):
-        # Test printSchema with nested schema
         from spark_namespace.sql.types import ArrayType, IntegerType, StringType, StructField, StructType
-
         schema = StructType([
             StructField("id", IntegerType(), True),
             StructField("person", StructType([
@@ -491,30 +489,22 @@ class TestDataFrame:
             ]), True),
             StructField("hobbies", ArrayType(StringType()), True)
         ])
-
         data = [
             (1, {"name": "Alice", "age": 25}, ["reading", "coding"]),
             (2, {"name": "Bob", "age": 30}, ["gaming", "music"])
         ]
-
         df = spark.createDataFrame(data, schema)
-
-        # Should not raise an error
         df.printSchema()
-
         captured = capsys.readouterr()
         output = captured.out
 
-        # Verify nested structure is shown
         assert "root" in output
         assert "person" in output
         assert "hobbies" in output
 
     def test_printSchema_negative_level(self, spark):
-        # Test printSchema with invalid level parameter
         data = [("Alice", 25)]
         df = spark.createDataFrame(data, ["name", "age"])
 
-        # Should raise PySparkValueError for negative level
         with pytest.raises(PySparkValueError):
             df.printSchema(level=-1)
