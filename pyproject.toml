@@ -12,7 +12,7 @@ readme = "README.md"
 keywords = ["DuckDB", "Database", "SQL", "OLAP"]
 requires-python = ">=3.9.0"
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Topic :: Database",
@@ -40,7 +40,7 @@ maintainers = [{name = "DuckDB Foundation"}]
 Documentation = "https://duckdb.org/docs/stable/clients/python/overview"
 Source = "https://github.com/duckdb/duckdb-python"
 Issues = "https://github.com/duckdb/duckdb-python/issues"
-Changelog = "https://github.com/duckdb/duckdb/releases"
+Changelog = "https://github.com/duckdb/duckdb-python/releases"
 
 [project.optional-dependencies]
 all = [ # users can install duckdb with 'duckdb[all]', which will install this list
