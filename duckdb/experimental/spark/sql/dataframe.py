@@ -569,6 +569,22 @@ class DataFrame:  # noqa: D101
         """
         return [f.name for f in self.schema.fields]
 
+    @property
+    def dtypes(self) -> list[tuple[str, str]]:
+        """Returns all column names and their data types as a list of tuples.
+
+        Returns:
+        -------
+        list of tuple
+            List of tuples, each tuple containing a column name and its data type as strings.
+
+        Examples:
+        --------
+        >>> df.dtypes
+        [('age', 'bigint'), ('name', 'string')]
+        """
+        return [(f.name, f.dataType.simpleString()) for f in self.schema.fields]
+
     def _ipython_key_completions_(self) -> list[str]:
         # Provides tab-completion for column names in PySpark DataFrame
         # when accessed in bracket notation, e.g. df['<TAB>]
@@ -982,8 +998,27 @@ class DataFrame:  # noqa: D101
     def write(self) -> DataFrameWriter:  # noqa: D102
         return DataFrameWriter(self)
 
-    def printSchema(self) -> None:  # noqa: D102
-        raise ContributionsAcceptedError
+    def printSchema(self, level: Optional[int] = None) -> None:
+        """Prints out the schema in the tree format.
+
+        Parameters
+        ----------
+        level : int, optional
+            How many levels to print for nested schemas. Prints all levels by default.
+
+        Examples:
+        --------
+        >>> df.printSchema()
+        root
+         |-- age: bigint (nullable = true)
+         |-- name: string (nullable = true)
+        """
+        if level is not None and level < 0:
+            raise PySparkValueError(
+                error_class="NEGATIVE_VALUE",
+                message_parameters={"arg_name": "level", "arg_value": str(level)},
+            )
+        print(self.schema.treeString(level))
 
     def union(self, other: "DataFrame") -> "DataFrame":
         """Return a new :class:`DataFrame` containing union of rows in this and another
