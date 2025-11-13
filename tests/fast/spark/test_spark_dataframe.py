@@ -508,3 +508,76 @@ class TestDataFrame:
 
         with pytest.raises(PySparkValueError):
             df.printSchema(level=-1)
+
+    def test_treeString_basic(self, spark):
+        data = [("Alice", 25, 5000)]
+        df = spark.createDataFrame(data, ["name", "age", "salary"])
+        tree = df.schema.treeString()
+
+        assert tree.startswith("root\n")
+        assert " |-- name:" in tree
+        assert " |-- age:" in tree
+        assert " |-- salary:" in tree
+        assert "(nullable = true)" in tree
+        assert tree.count(" |-- ") == 3
+
+    def test_treeString_nested_struct(self, spark):
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
+
+        schema = StructType([
+            StructField("id", IntegerType(), True),
+            StructField("person", StructType([
+                StructField("name", StringType(), True),
+                StructField("age", IntegerType(), True)
+            ]), True)
+        ])
+        data = [(1, {"name": "Alice", "age": 25})]
+        df = spark.createDataFrame(data, schema)
+        tree = df.schema.treeString()
+
+        assert "root\n" in tree
+        assert " |-- id:" in tree
+        assert " |-- person: struct (nullable = true)" in tree
+        assert "name:" in tree
+        assert "age:" in tree
+
+    def test_treeString_with_level(self, spark):
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
+
+        schema = StructType([
+            StructField("id", IntegerType(), True),
+            StructField("person", StructType([
+                StructField("name", StringType(), True),
+                StructField("details", StructType([
+                    StructField("address", StringType(), True)
+                ]), True)
+            ]), True)
+        ])
+
+        data = [(1, {"name": "Alice", "details": {"address": "123 Main St"}})]
+        df = spark.createDataFrame(data, schema)
+
+        # Level 1 should only show top-level fields
+        tree_level_1 = df.schema.treeString(level=1)
+        assert " |-- id:" in tree_level_1
+        assert " |-- person: struct" in tree_level_1
+        # Should not show nested field names at level 1
+        lines = tree_level_1.split('\n')
+        assert len([l for l in lines if l.strip()]) <= 3 
+
+    def test_treeString_array_type(self, spark):
+        from spark_namespace.sql.types import ArrayType, StringType, StructField, StructType
+
+        schema = StructType([
+            StructField("name", StringType(), True),
+            StructField("hobbies", ArrayType(StringType()), True)
+        ])
+
+        data = [("Alice", ["reading", "coding"])]
+        df = spark.createDataFrame(data, schema)
+        tree = df.schema.treeString()
+
+        assert "root\n" in tree
+        assert " |-- name:" in tree
+        assert " |-- hobbies: array<" in tree
+        assert "(nullable = true)" in tree

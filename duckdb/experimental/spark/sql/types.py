@@ -894,6 +894,72 @@ class StructType(DataType):
         """
         return list(self.names)
 
+    def treeString(self, level: Optional[int] = None) -> str:
+        """Returns a string representation of the schema in tree format.
+
+        Parameters
+        ----------
+        level : int, optional
+            Maximum depth to print. If None, prints all levels.
+
+        Returns:
+        -------
+        str
+            Tree-formatted schema string
+
+        Examples:
+        --------
+        >>> schema = StructType([StructField("age", IntegerType(), True)])
+        >>> print(schema.treeString())
+        root
+         |-- age: integer (nullable = true)
+        """
+        def _tree_string(schema: "StructType", depth: int = 0, max_depth: Optional[int] = None) -> list[str]:
+            """Recursively build tree string lines."""
+            lines = []
+            if depth == 0:
+                lines.append("root")
+
+            if max_depth is not None and depth >= max_depth:
+                return lines
+
+            for field in schema.fields:
+                indent = " " * depth
+                prefix = " |-- "
+                nullable_str = "true" if field.nullable else "false"
+
+                # Handle nested StructType
+                if isinstance(field.dataType, StructType):
+                    lines.append(f"{indent}{prefix}{field.name}: struct (nullable = {nullable_str})")
+                    # Recursively handle nested struct - don't skip any lines, root only appears at depth 0
+                    nested_lines = _tree_string(field.dataType, depth + 1, max_depth)
+                    lines.extend(nested_lines)
+                # Handle ArrayType
+                elif isinstance(field.dataType, ArrayType):
+                    element_type = field.dataType.elementType
+                    if isinstance(element_type, StructType):
+                        lines.append(f"{indent}{prefix}{field.name}: array (nullable = {nullable_str})")
+                        lines.append(f"{indent} |    |-- element: struct (containsNull = {field.dataType.containsNull})")
+                        nested_lines = _tree_string(element_type, depth + 2, max_depth)
+                        lines.extend(nested_lines)
+                    else:
+                        type_str = element_type.simpleString()
+                        lines.append(f"{indent}{prefix}{field.name}: array<{type_str}> (nullable = {nullable_str})")
+                # Handle MapType
+                elif isinstance(field.dataType, MapType):
+                    key_type = field.dataType.keyType.simpleString()
+                    value_type = field.dataType.valueType.simpleString()
+                    lines.append(f"{indent}{prefix}{field.name}: map<{key_type},{value_type}> (nullable = {nullable_str})")
+                # Handle simple types
+                else:
+                    type_str = field.dataType.simpleString()
+                    lines.append(f"{indent}{prefix}{field.name}: {type_str} (nullable = {nullable_str})")
+
+            return lines
+
+        lines = _tree_string(self, 0, level)
+        return "\n".join(lines)
+
     def needConversion(self) -> bool:  # noqa: D102
         # We need convert Row()/namedtuple into tuple()
         return True
