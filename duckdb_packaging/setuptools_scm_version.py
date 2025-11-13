@@ -75,8 +75,9 @@ def _bump_dev_version(base_version: str, distance: int) -> str:
     # Get DuckDB submodule distance from its last tag (if set via env var)
     duckdb_distance = os.getenv("DUCKDB_DISTANCE")
     # Concatenate distances with zeros in between to form a valid PEP 440 dev version
-    # Pad duckdb_distance to 6 digits to ensure proper version ordering
-    dev_suffix = f"{distance}{int(duckdb_distance):06d}" if duckdb_distance else str(distance)
+    # Format: <python_distance padded to 6 digits><duckdb_distance padded to 6 digits>
+    # Example: distance=5, duckdb_distance=123 -> 000005000123
+    dev_suffix = f"{distance:06d}{int(duckdb_distance):06d}" if duckdb_distance else str(distance)
 
     if post != 0:
         # We're developing on top of a post-release

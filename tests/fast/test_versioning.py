@@ -124,10 +124,10 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1", "DUCKDB_DISTANCE": "123"})
     def test_bump_version_with_duckdb_distance(self):
         """Test bump_version with DUCKDB_DISTANCE env var set."""
-        assert _bump_dev_version("1.2.3", 5) == "1.3.0.dev5000123"
+        assert _bump_dev_version("1.2.3", 5) == "1.3.0.dev000005000123"
 
         # Post-release development
-        assert _bump_dev_version("1.2.3.post1", 3) == "1.2.3.post2.dev3000123"
+        assert _bump_dev_version("1.2.3.post1", 3) == "1.2.3.post2.dev000003000123"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "0"})
     def test_bump_version_release_branch(self):
