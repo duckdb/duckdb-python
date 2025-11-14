@@ -427,3 +427,173 @@ class TestDataFrame:
         assert df is not cached
         assert cached.collect() == df.collect()
         assert cached.collect() == [Row(one=1, two=2, three=3, four=4)]
+
+    def test_dtypes(self, spark):
+        data = [("Alice", 25, 5000.0), ("Bob", 30, 6000.0)]
+        df = spark.createDataFrame(data, ["name", "age", "salary"])
+        dtypes = df.dtypes
+
+        assert isinstance(dtypes, list)
+        assert len(dtypes) == 3
+        for col_name, col_type in dtypes:
+            assert isinstance(col_name, str)
+            assert isinstance(col_type, str)
+
+        col_names = [name for name, _ in dtypes]
+        assert col_names == ["name", "age", "salary"]
+        for _, col_type in dtypes:
+            assert len(col_type) > 0
+
+    def test_dtypes_complex_types(self, spark):
+        from spark_namespace.sql.types import ArrayType, IntegerType, StringType, StructField, StructType
+
+        schema = StructType(
+            [
+                StructField("name", StringType(), True),
+                StructField("scores", ArrayType(IntegerType()), True),
+                StructField(
+                    "address",
+                    StructType([StructField("city", StringType(), True), StructField("zip", StringType(), True)]),
+                    True,
+                ),
+            ]
+        )
+        data = [
+            ("Alice", [90, 85, 88], {"city": "NYC", "zip": "10001"}),
+            ("Bob", [75, 80, 82], {"city": "LA", "zip": "90001"}),
+        ]
+        df = spark.createDataFrame(data, schema)
+        dtypes = df.dtypes
+
+        assert len(dtypes) == 3
+        col_names = [name for name, _ in dtypes]
+        assert col_names == ["name", "scores", "address"]
+
+    def test_printSchema(self, spark, capsys):
+        data = [("Alice", 25, 5000), ("Bob", 30, 6000)]
+        df = spark.createDataFrame(data, ["name", "age", "salary"])
+        df.printSchema()
+        captured = capsys.readouterr()
+        output = captured.out
+
+        assert "root" in output
+        assert "name" in output
+        assert "age" in output
+        assert "salary" in output
+        assert "string" in output or "varchar" in output.lower()
+        assert "int" in output.lower() or "bigint" in output.lower()
+
+    def test_printSchema_nested(self, spark, capsys):
+        from spark_namespace.sql.types import ArrayType, IntegerType, StringType, StructField, StructType
+
+        schema = StructType(
+            [
+                StructField("id", IntegerType(), True),
+                StructField(
+                    "person",
+                    StructType([StructField("name", StringType(), True), StructField("age", IntegerType(), True)]),
+                    True,
+                ),
+                StructField("hobbies", ArrayType(StringType()), True),
+            ]
+        )
+        data = [
+            (1, {"name": "Alice", "age": 25}, ["reading", "coding"]),
+            (2, {"name": "Bob", "age": 30}, ["gaming", "music"]),
+        ]
+        df = spark.createDataFrame(data, schema)
+        df.printSchema()
+        captured = capsys.readouterr()
+        output = captured.out
+
+        assert "root" in output
+        assert "person" in output
+        assert "hobbies" in output
+
+    def test_printSchema_negative_level(self, spark):
+        data = [("Alice", 25)]
+        df = spark.createDataFrame(data, ["name", "age"])
+
+        with pytest.raises(PySparkValueError):
+            df.printSchema(level=-1)
+
+    def test_treeString_basic(self, spark):
+        data = [("Alice", 25, 5000)]
+        df = spark.createDataFrame(data, ["name", "age", "salary"])
+        tree = df.schema.treeString()
+
+        assert tree.startswith("root\n")
+        assert " |-- name:" in tree
+        assert " |-- age:" in tree
+        assert " |-- salary:" in tree
+        assert "(nullable = true)" in tree
+        assert tree.count(" |-- ") == 3
+
+    def test_treeString_nested_struct(self, spark):
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
+
+        schema = StructType(
+            [
+                StructField("id", IntegerType(), True),
+                StructField(
+                    "person",
+                    StructType([StructField("name", StringType(), True), StructField("age", IntegerType(), True)]),
+                    True,
+                ),
+            ]
+        )
+        data = [(1, {"name": "Alice", "age": 25})]
+        df = spark.createDataFrame(data, schema)
+        tree = df.schema.treeString()
+
+        assert "root\n" in tree
+        assert " |-- id:" in tree
+        assert " |-- person: struct (nullable = true)" in tree
+        assert "name:" in tree
+        assert "age:" in tree
+
+    def test_treeString_with_level(self, spark):
+        from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
+
+        schema = StructType(
+            [
+                StructField("id", IntegerType(), True),
+                StructField(
+                    "person",
+                    StructType(
+                        [
+                            StructField("name", StringType(), True),
+                            StructField("details", StructType([StructField("address", StringType(), True)]), True),
+                        ]
+                    ),
+                    True,
+                ),
+            ]
+        )
+
+        data = [(1, {"name": "Alice", "details": {"address": "123 Main St"}})]
+        df = spark.createDataFrame(data, schema)
+
+        # Level 1 should only show top-level fields
+        tree_level_1 = df.schema.treeString(level=1)
+        assert " |-- id:" in tree_level_1
+        assert " |-- person: struct" in tree_level_1
+        # Should not show nested field names at level 1
+        lines = tree_level_1.split("\n")
+        assert len([line for line in lines if line.strip()]) <= 3
+
+    def test_treeString_array_type(self, spark):
+        from spark_namespace.sql.types import ArrayType, StringType, StructField, StructType
+
+        schema = StructType(
+            [StructField("name", StringType(), True), StructField("hobbies", ArrayType(StringType()), True)]
+        )
+
+        data = [("Alice", ["reading", "coding"])]
+        df = spark.createDataFrame(data, schema)
+        tree = df.schema.treeString()
+
+        assert "root\n" in tree
+        assert " |-- name:" in tree
+        assert " |-- hobbies: array<" in tree
+        assert "(nullable = true)" in tree
