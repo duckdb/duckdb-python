@@ -914,6 +914,7 @@ class StructType(DataType):
         root
          |-- age: integer (nullable = true)
         """
+
         def _tree_string(schema: "StructType", depth: int = 0, max_depth: Optional[int] = None) -> list[str]:
             """Recursively build tree string lines."""
             lines = []
@@ -939,7 +940,9 @@ class StructType(DataType):
                     element_type = field.dataType.elementType
                     if isinstance(element_type, StructType):
                         lines.append(f"{indent}{prefix}{field.name}: array (nullable = {nullable_str})")
-                        lines.append(f"{indent} |    |-- element: struct (containsNull = {field.dataType.containsNull})")
+                        lines.append(
+                            f"{indent} |    |-- element: struct (containsNull = {field.dataType.containsNull})"
+                        )
                         nested_lines = _tree_string(element_type, depth + 2, max_depth)
                         lines.extend(nested_lines)
                     else:
@@ -949,7 +952,9 @@ class StructType(DataType):
                 elif isinstance(field.dataType, MapType):
                     key_type = field.dataType.keyType.simpleString()
                     value_type = field.dataType.valueType.simpleString()
-                    lines.append(f"{indent}{prefix}{field.name}: map<{key_type},{value_type}> (nullable = {nullable_str})")
+                    lines.append(
+                        f"{indent}{prefix}{field.name}: map<{key_type},{value_type}> (nullable = {nullable_str})"
+                    )
                 # Handle simple types
                 else:
                     type_str = field.dataType.simpleString()
