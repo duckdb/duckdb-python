@@ -15,7 +15,6 @@ import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
 
 from ..errors import PySparkIndexError, PySparkTypeError, PySparkValueError
-from ..exception import ContributionsAcceptedError
 from .column import Column
 from .readwriter import DataFrameWriter
 from .type_utils import duckdb_to_spark_schema
