@@ -30,6 +30,29 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
     return _invoke_function(name, *cols)
 
 
+def _nan_constant() -> Expression:
+    """Create a NaN constant expression.
+
+    Note: ConstantExpression(float("nan")) returns NULL instead of NaN because
+    TransformPythonValue() in the C++ layer has nan_as_null=true by default.
+    This is intentional for data import scenarios (CSV, Pandas, etc.) where NaN
+    represents missing data.
+
+    For mathematical functions that need to return NaN (not NULL) for out-of-range
+    inputs per PySpark/IEEE 754 semantics, we use SQLExpression as a workaround.
+
+    Returns:
+    -------
+    Expression
+        An expression that evaluates to NaN (not NULL)
+
+    See Also:
+    --------
+    NAN_ROOT_CAUSE_ANALYSIS.md for full explanation
+    """
+    return SQLExpression("'NaN'::DOUBLE")
+
+
 def col(column: str) -> Column:  # noqa: D103
     return Column(ColumnExpression(column))
 
@@ -617,11 +640,9 @@ def asin(col: "ColumnOrName") -> Column:
     +--------+
     """
     col = _to_column_expr(col)
-    # TODO: ConstantExpression(float("nan")) gives NULL and not NaN  # noqa: TD002, TD003
+    # asin domain is [-1, 1]; return NaN for out-of-range values per PySpark semantics
     return Column(
-        CaseExpression((col < -1.0) | (col > 1.0), ConstantExpression(float("nan"))).otherwise(
-            FunctionExpression("asin", col)
-        )
+        CaseExpression((col < -1.0) | (col > 1.0), _nan_constant()).otherwise(FunctionExpression("asin", col))
     )
 
 
@@ -4177,7 +4198,11 @@ def acos(col: "ColumnOrName") -> Column:
     |     NaN|
     +--------+
     """
-    return _invoke_function_over_columns("acos", col)
+    col = _to_column_expr(col)
+    # acos domain is [-1, 1]; return NaN for out-of-range values per PySpark semantics
+    return Column(
+        CaseExpression((col < -1.0) | (col > 1.0), _nan_constant()).otherwise(FunctionExpression("acos", col))
+    )
 
 
 def call_function(funcName: str, *cols: "ColumnOrName") -> Column:

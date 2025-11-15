@@ -7,7 +7,7 @@ from .types import DataType
 if TYPE_CHECKING:
     from ._typing import DateTimeLiteral, DecimalLiteral, LiteralType
 
-from duckdb import ColumnExpression, ConstantExpression, Expression, FunctionExpression
+from duckdb import ConstantExpression, Expression, FunctionExpression
 from duckdb.sqltypes import DuckDBPyType
 
 __all__ = ["Column"]
@@ -173,9 +173,11 @@ class Column:
             #    raise ValueError("Using a slice with a step value is not supported")
             # return self.substr(k.start, k.stop)
         else:
-            # TODO: this is super hacky  # noqa: TD002, TD003
-            expr_str = str(self.expr) + "." + str(k)
-            return Column(ColumnExpression(expr_str))
+            # Use struct_extract for proper struct field access
+            from duckdb import ConstantExpression, FunctionExpression
+
+            field_name_expr = ConstantExpression(str(k))
+            return Column(FunctionExpression("struct_extract", self.expr, field_name_expr))
 
     def __getattr__(self, item: Any) -> "Column":  # noqa: ANN401
         """An expression that gets an item at position ``ordinal`` out of a list,
