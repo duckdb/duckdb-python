@@ -283,7 +283,10 @@ class TestRelation:
         # Accept both historical and current Binder error message variants
         with pytest.raises(
             duckdb.BinderException,
-            match=r'Referenced column "a" not found in FROM clause!|Referenced column "a" was not found because the FROM clause is missing',
+            match=(
+                r'Referenced column "a" not found in FROM clause!|'
+                r'Referenced column "a" was not found because the FROM clause is missing'
+            ),
         ):
             duckdb_cursor.values(duckdb.ColumnExpression("a"))
 
