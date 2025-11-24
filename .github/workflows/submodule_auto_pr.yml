@@ -79,7 +79,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
         run: |
-          # First commit and push
+          # No need to do anything if the submodule is already at the given sha
+          [[ `git status --porcelain -- external/duckdb` == "" ]] && exit 0
+          # We have changes. Commit and push
           git add external/duckdb
           git commit -m "Bump submodule"
           git push --force origin vendoring-${{ github.ref_name }}
