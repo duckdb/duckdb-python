@@ -170,3 +170,46 @@ class TestToParquet:
             ("shinji", 123.0, "a"),
         ]
         assert result.execute().fetchall() == expected
+
+    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
+    def test_filename_pattern_with_index(self, pd):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ["a", "a", "b", "c"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=["category"], filename_pattern="orders_{i}")
+        # Check that files follow the pattern with {i}
+        files_a = os.listdir(f"{temp_file_name}/category=a")
+        files_b = os.listdir(f"{temp_file_name}/category=b")
+        files_c = os.listdir(f"{temp_file_name}/category=c")
+        assert all("orders_" in f and f.endswith(".parquet") for f in files_a)
+        assert all("orders_" in f and f.endswith(".parquet") for f in files_b)
+        assert all("orders_" in f and f.endswith(".parquet") for f in files_c)
+        # Verify data integrity
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
+        expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
+        assert result.execute().fetchall() == expected
+
+    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
+    def test_filename_pattern_with_uuid(self, pd):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, filename_pattern="file_{uuid}")
+        # Check that files follow the pattern with {uuid}
+        files = [f for f in os.listdir(temp_file_name) if f.endswith(".parquet")]
+        assert len(files) > 0
+        assert all(f.startswith("file_") and f.endswith(".parquet") for f in files)
+        # Verify data integrity
+        result = duckdb.read_parquet(f"{temp_file_name}/*.parquet")
+        assert rel.execute().fetchall() == result.execute().fetchall()
