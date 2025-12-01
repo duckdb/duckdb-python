@@ -33,6 +33,7 @@ jobs:
         python: [ cp39, cp310, cp311, cp312, cp313, cp314 ]
         platform:
           - { os: windows-2025,     arch: amd64,      cibw_system: win }
+          - { os: windows-11-arm,   arch: arm64,      cibw_system: win }
           - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
           - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
           - { os: macos-15,         arch: arm64,      cibw_system: macosx }
@@ -100,7 +101,7 @@ jobs:
       - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
         uses: pypa/cibuildwheel@v3.2
         env:
-          CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
+          CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch == 'arm64' && matrix.platform.cibw_system == 'win' && 'ARM64' || matrix.platform.arch }}
           CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
 
       - name: Upload wheel

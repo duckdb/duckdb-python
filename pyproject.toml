@@ -197,6 +197,7 @@ environments = [ # no need to resolve packages beyond these platforms with uv...
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'ARM64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
@@ -204,6 +205,7 @@ required-environments = [ # ... but do always resolve for all of them
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'ARM64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
@@ -252,7 +254,7 @@ test = [ # dependencies used for running tests
     "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' )",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
-    "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and python_version < '3.12'",
+    "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and platform_machine != 'ARM64' and python_version < '3.12'",
     "tensorflow-cpu-aws==2.15.1; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version < '3.12'",
     "numpy<2; python_version < '3.12'",
     "numpy>=2; python_version >= '3.12'",
