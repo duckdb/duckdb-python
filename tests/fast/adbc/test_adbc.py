@@ -1,12 +1,12 @@
 import datetime
 from pathlib import Path
 
-import adbc_driver_manager.dbapi
 import numpy as np
-import pyarrow
 import pytest
 
-import adbc_driver_duckdb.dbapi
+adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb")
+pyarrow = pytest.importorskip("pyarrow")
 
 xfail = pytest.mark.xfail
 driver_path = adbc_driver_duckdb.driver_path()

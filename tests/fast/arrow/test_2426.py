@@ -1,4 +1,8 @@
+import pytest
+
 import duckdb
+
+pytest.importorskip("pyarrow")
 
 try:
     can_run = True

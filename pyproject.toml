@@ -184,7 +184,8 @@ exclude = [
 # - numpy: tensorflow doesn't play nice with numpy>2 so for every platform that can run tensorflow (cp39-cp311) we use
 #          numpy<2. numpy<2 has no wheels for cp31[2|3], meaning an sdist will be used. However, on Windows amd64 +
 #          cp313 this results in a segfault / access violation. To get around this, we install numpy>=2 on all >=cp312
-#          platforms.
+#          platforms. Then for windows arm64, for which there is no tensorflow, we only allow numpy>=2.3 because that
+#          ships arm64 win32 wheels.
 ######################################################################################################
 
 [tool.uv]
@@ -197,6 +198,7 @@ environments = [ # no need to resolve packages beyond these platforms with uv...
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
@@ -204,6 +206,7 @@ required-environments = [ # ... but do always resolve for all of them
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
     "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
     "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
@@ -219,6 +222,7 @@ explicit = true
 torch = [ { index = "pytorch-cpu" } ]
 torchvision = [ { index = "pytorch-cpu" } ]
 
+# todo: adjust for windows arm64 while test dependencies become available
 [dependency-groups] # used for development only, requires pip >=25.1.0
 stubdeps = [ # dependencies used for typehints in the stubs
     "pybind11-stubgen",
@@ -226,17 +230,18 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "fsspec",
     "pandas",
     "polars",
-    "pyarrow",
+    "pyarrow; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "typing-extensions",
 ]
 test = [ # dependencies used for running tests
-    "adbc-driver-manager",
+    "adbc-driver-manager; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
     "pytest-timestamper",
     "coverage",
     "gcovr",
-    "gcsfs",
+    "gcsfs; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "packaging",
     "polars",
     "psutil",
@@ -246,16 +251,18 @@ test = [ # dependencies used for running tests
     "pytz",
     "requests",
     "urllib3",
-    "fsspec>=2022.11.0",
+    "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pandas>=2.0.0",
-    "pyarrow>=18.0.0",
-    "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' )",
+    "pyarrow>=18.0.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' ) and ( sys_platform != 'win32' or platform_machine != 'ARM64' or python_version > '3.11' )",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
-    "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and python_version < '3.12'",
+    "tensorflow-cpu>=2.14.0; sys_platform == 'win32' and platform_machine != 'ARM64' and python_version < '3.12'",
     "tensorflow-cpu-aws==2.15.1; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version < '3.12'",
-    "numpy<2; python_version < '3.12'",
-    "numpy>=2; python_version >= '3.12'",
+    "typing-extensions",
+    "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
+    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
 ]
 scripts = [ # dependencies used for running scripts
     "cxxheaderparser",
@@ -265,7 +272,7 @@ scripts = [ # dependencies used for running scripts
     "pandas",
     "pcpp",
     "polars",
-    "pyarrow",
+    "pyarrow; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pytz"
 ]
 pypi = [ # dependencies used by the pypi cleanup script
