@@ -45,10 +45,6 @@ def _nan_constant() -> Expression:
     -------
     Expression
         An expression that evaluates to NaN (not NULL)
-
-    See Also:
-    --------
-    NAN_ROOT_CAUSE_ANALYSIS.md for full explanation
     """
     return SQLExpression("'NaN'::DOUBLE")
 
