@@ -36,7 +36,8 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none(),
 	             py::arg("overwrite") = py::none(), py::arg("per_thread_output") = py::none(),
 	             py::arg("use_tmp_file") = py::none(), py::arg("partition_by") = py::none(),
-	             py::arg("write_partition_columns") = py::none(), py::arg("append") = py::none());
+	             py::arg("write_partition_columns") = py::none(), py::arg("append") = py::none(),
+	             py::arg("filename_pattern") = py::none());
 
 	DefineMethod(
 	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",

@@ -1213,7 +1213,8 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
                                  const py::object &row_group_size_bytes, const py::object &row_group_size,
                                  const py::object &overwrite, const py::object &per_thread_output,
                                  const py::object &use_tmp_file, const py::object &partition_by,
-                                 const py::object &write_partition_columns, const py::object &append) {
+                                 const py::object &write_partition_columns, const py::object &append,
+                                 const py::object &filename_pattern) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1302,6 +1303,13 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 			throw InvalidInputException("to_parquet only accepts 'use_tmp_file' as a boolean");
 		}
 		options["use_tmp_file"] = {Value::BOOLEAN(py::bool_(use_tmp_file))};
+	}
+
+	if (!py::none().is(filename_pattern)) {
+		if (!py::isinstance<py::str>(filename_pattern)) {
+			throw InvalidInputException("to_parquet only accepts 'filename_pattern' as a string");
+		}
+		options["filename_pattern"] = {Value(py::str(filename_pattern))};
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));
