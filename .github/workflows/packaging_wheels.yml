@@ -47,8 +47,8 @@ jobs:
           - { minimal: true, python: cp312 }
           - { minimal: true, python: cp313 }
           - { minimal: true, platform: { arch: universal2 } }
-          - { os: windows-11-arm, arch: ARM64, python: cp39 }  # too many dependency problems for win arm64
-          - { os: windows-11-arm, arch: ARM64, python: cp310 } # too many dependency problems for win arm64
+          - { python: cp39,  platform: { os: windows-11-arm, arch: ARM64 } }  # too many dependency problems for win arm64
+          - { python: cp310,  platform: { os: windows-11-arm, arch: ARM64 } }  # too many dependency problems for win arm64
     runs-on: ${{ matrix.platform.os }}
     env:
       ### cibuildwheel configuration
