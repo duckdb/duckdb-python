@@ -534,6 +534,7 @@ class TestAllTypes:
 
     @pytest.mark.parametrize("cur_type", all_types)
     def test_arrow(self, cur_type):
+        pytest.importorskip("pyarrow")
         try:
             pass
         except Exception:

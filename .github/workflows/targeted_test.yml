@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - 'windows-2025'
+          - 'windows-11-arm'
           - 'ubuntu-24.04'
           - 'ubuntu-24.04-arm'
           - 'macos-15'
@@ -36,6 +37,11 @@ on:
         description: 'Custom test path (must be in tests/ directory, overrides testsuite)'
         required: false
         type: string
+      verbose-uv:
+        description: 'Let uv generate verbose output (pytest verbosity is always on)'
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   test:
@@ -83,4 +89,4 @@ jobs:
       - name: Run tests
         shell: bash
         run: |
-          uv run pytest -vv ${{ steps.test_path.outputs.test_path }}
+          uv ${{ inputs.verbose-uv && 'run -v' || 'run' }} pytest -vv ${{ steps.test_path.outputs.test_path }}
