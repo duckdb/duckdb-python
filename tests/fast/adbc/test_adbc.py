@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager")
+adbc_driver_manager_dbapi = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_duckdb = pytest.importorskip("adbc_driver_duckdb")
 pyarrow = pytest.importorskip("pyarrow")
 
@@ -14,7 +15,7 @@ driver_path = adbc_driver_duckdb.driver_path()
 
 @pytest.fixture
 def duck_conn():
-    with adbc_driver_manager.dbapi.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
+    with adbc_driver_manager_dbapi.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
 
@@ -93,7 +94,7 @@ def test_commit(tmp_path):
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
-    with adbc_driver_manager.dbapi.connect(
+    with adbc_driver_manager_dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -103,7 +104,7 @@ def test_commit(tmp_path):
             cur.adbc_ingest("ingest", table, "create")
 
     # Check Data is not there
-    with adbc_driver_manager.dbapi.connect(
+    with adbc_driver_manager_dbapi.connect(
         driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
@@ -122,7 +123,7 @@ def test_commit(tmp_path):
 
     # This now works because we enabled autocommit
     with (
-        adbc_driver_manager.dbapi.connect(
+        adbc_driver_manager_dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -294,7 +295,7 @@ def test_large_chunk(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.dbapi.connect(
+        adbc_driver_manager_dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -320,7 +321,7 @@ def test_dictionary_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.dbapi.connect(
+        adbc_driver_manager_dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
@@ -348,7 +349,7 @@ def test_ree_data(tmp_path):
         db.unlink()
     db_kwargs = {"path": f"{db}"}
     with (
-        adbc_driver_manager.dbapi.connect(
+        adbc_driver_manager_dbapi.connect(
             driver=driver_path,
             entrypoint="duckdb_adbc_init",
             db_kwargs=db_kwargs,
