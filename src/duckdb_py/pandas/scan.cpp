@@ -66,6 +66,7 @@ PandasScanFunction::PandasScanFunction()
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
 	serialize = PandasSerialize;
+	deserialize = PandasDeserialize;
 	projection_pushdown = true;
 }
 
@@ -233,6 +234,10 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 void PandasScanFunction::PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                          const TableFunction &function) {
 	throw NotImplementedException("PandasScan function cannot be serialized");
+}
+
+unique_ptr<FunctionData> PandasScanFunction::PandasDeserialize(Deserializer &deserializer, TableFunction &function) {
+	throw NotImplementedException("PandasScan function cannot be deserialized");
 }
 
 } // namespace duckdb
