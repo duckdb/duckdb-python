@@ -1,5 +1,9 @@
 # Contributing to duckdb-python
 
+## Setting up a development environment
+
+See the [instructions on duckdb.org](https://duckdb.org/docs/stable/dev/building/python).
+
 ## General Guidelines
 
 ### **Did you find a bug?**
@@ -39,7 +43,3 @@
 ### Testing cross-platform and cross-Python
 
 * On your fork you can [run](https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow) the Packaging workflow manually for any branch. You can choose whether to build for all platforms or a subset, and to either run the full testsuite, the fast tests only, or no tests at all.
-
-## Setting up a development environment
-
-See the [instructions on duckdb.org](https://duckdb.org/docs/stable/dev/building/python).
