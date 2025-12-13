@@ -8,8 +8,9 @@ from packaging.version import Version
 import duckdb
 
 pa = pytest.importorskip("pyarrow")
+pd = pytest.importorskip("pyarrow.dataset")
+pa_lib = pytest.importorskip("pyarrow.lib")
 pq = pytest.importorskip("pyarrow.parquet")
-ds = pytest.importorskip("pyarrow.dataset")
 np = pytest.importorskip("numpy")
 re = pytest.importorskip("re")
 
@@ -26,7 +27,7 @@ def create_pyarrow_table(rel):
 
 def create_pyarrow_dataset(rel):
     table = create_pyarrow_table(rel)
-    return ds.dataset(table)
+    return pd.dataset(table)
 
 
 def test_decimal_filter_pushdown(duckdb_cursor):
@@ -549,7 +550,7 @@ class TestArrowFilterPushdown:
         df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
         df.to_parquet(str(file_path))
 
-        my_arrow_dataset = ds.dataset(str(file_path))
+        my_arrow_dataset = pd.dataset(str(file_path))
         res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).fetch_arrow_table()
         output = duckdb_cursor.sql("select * from res").fetchall()
         expected = [(1, dt), (2, dt), (3, dt)]
@@ -1018,3 +1019,40 @@ class TestArrowFilterPushdown:
         duckdb_cursor.register("t", t)
         res = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
         assert len(res) == 11
+
+    def test_binary_view_filter(self, duckdb_cursor):
+        """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
+        table = pa.table({"col": pa.array([b"abc", b"efg"], type=pa.binary_view())})
+        dset = pd.dataset(table)
+        res = duckdb_cursor.sql("select * from dset where col = 'abc'::binary")
+        assert len(res) == 1
+
+    def test_string_view_filter(self, duckdb_cursor):
+        """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
+        table = pa.table({"col": pa.array(["abc", "efg"], type=pa.string_view())})
+        dset = pd.dataset(table)
+        res = duckdb_cursor.sql("select * from dset where col = 'abc'")
+        assert len(res) == 1
+
+    @pytest.mark.xfail(raises=pa_lib.ArrowNotImplementedError)
+    def test_canary_for_pyarrow_string_view_filter_support(self, duckdb_cursor):
+        """This canary will xpass when pyarrow implements string view filter support."""
+        # predicate: field == "string value"
+        filter_expr = pd.field("col") == pd.scalar("val1")
+        # dataset with a string view column
+        table = pa.table({"col": pa.array(["val1", "val2"], type=pa.string_view())})
+        dset = pd.dataset(table)
+        # creating the scanner fails
+        dset.scanner(columns=["col"], filter=filter_expr)
+
+    @pytest.mark.xfail(raises=pa_lib.ArrowNotImplementedError)
+    def test_canary_for_pyarrow_binary_view_filter_support(self, duckdb_cursor):
+        """This canary will xpass when pyarrow implements binary view filter support."""
+        # predicate: field == const
+        const = pd.scalar(pa.scalar(b"bin1", pa.binary_view()))
+        filter_expr = pd.field("col") == const
+        # dataset with a string view column
+        table = pa.table({"col": pa.array([b"bin1", b"bin2"], type=pa.binary_view())})
+        dset = pd.dataset(table)
+        # creating the scanner fails
+        dset.scanner(columns=["col"], filter=filter_expr)
