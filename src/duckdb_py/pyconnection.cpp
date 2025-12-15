@@ -1776,7 +1776,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 	D_ASSERT(py::gil_check());
 	py::gil_scoped_release release;
 	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
-	connection.Query("DROP VIEW \"" + name + "\"");
+	const auto quoted_name = KeywordHelper::WriteOptionallyQuoted(name, '\"');
+	connection.Query("DROP VIEW " + quoted_name + "");
 	registered_objects.erase(name);
 	return shared_from_this();
 }

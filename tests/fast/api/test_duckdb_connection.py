@@ -313,6 +313,38 @@ class TestDuckDBConnection:
         # This should not have affected the existing view:
         assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
 
+    def test_unregister_quoted_table_names(self, duckdb_cursor):
+        """Test that unregister works for quoted tables."""
+        rel = duckdb_cursor.sql("select 'test', 'data'")
+
+        table_name = 'test with .s and "s and  s'
+        duckdb_cursor.register(table_name, rel)
+        duckdb_cursor.unregister(table_name)
+
+        escaped_table_name = table_name.replace('"', '""')
+        with pytest.raises(duckdb.CatalogException):
+            duckdb_cursor.sql(f'select * from "{escaped_table_name}"')
+
+    def test_unregister_with_scary_name(self, duckdb_cursor):
+        """Test that unregister doesn't have side effects."""
+        rel = duckdb_cursor.sql("select 'test', 'data'")
+
+        scary_name = 'test";create table foo as select * from range(10);--'
+        # make sure a view with the name "test" exists
+        duckdb_cursor.register("test", rel)
+        duckdb_cursor.register(scary_name, rel)
+        # try to trick unregister (which uses DROP VIEW) to run another statement
+        duckdb_cursor.unregister(scary_name)
+
+        # hopefully that didn't happen
+        with pytest.raises(duckdb.CatalogException):
+            duckdb_cursor.sql("select * from foo")
+
+        # verify the scary name table was properly unregistered
+        escaped_scary_name = scary_name.replace('"', '""')
+        with pytest.raises(duckdb.CatalogException):
+            duckdb_cursor.sql(f'select * from "{escaped_scary_name}"')
+
     @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     def test_relation_out_of_scope(self, pandas):
         def temporary_scope():
