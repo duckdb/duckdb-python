@@ -2,6 +2,7 @@ from typing import cast  # noqa: D100
 
 from duckdb.sqltypes import DuckDBPyType
 
+from ..exception import ContributionsAcceptedError
 from .types import (
     ArrayType,
     BinaryType,
@@ -79,7 +80,12 @@ def convert_nested_type(dtype: DuckDBPyType) -> DataType:  # noqa: D103
     if id == "list" or id == "array":
         children = dtype.children
         return ArrayType(convert_type(children[0][1]))
-    # TODO: add support for 'union'  # noqa: TD002, TD003
+    if id == "union":
+        msg = (
+            "Union types are not supported in the PySpark interface. "
+            "DuckDB union types cannot be directly mapped to PySpark types."
+        )
+        raise ContributionsAcceptedError(msg)
     if id == "struct":
         children: list[tuple[str, DuckDBPyType]] = dtype.children
         fields = [StructField(x[0], convert_type(x[1])) for x in children]

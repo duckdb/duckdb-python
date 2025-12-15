@@ -125,7 +125,7 @@ class DataFrameReader:  # noqa: D101
             types, names = schema.extract_types_and_names()
             df = df._cast_types(types)
             df = df.toDF(names)
-        raise NotImplementedError
+        return df
 
     def csv(  # noqa: D102
         self,

@@ -1214,7 +1214,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
                                  const py::object &overwrite, const py::object &per_thread_output,
                                  const py::object &use_tmp_file, const py::object &partition_by,
                                  const py::object &write_partition_columns, const py::object &append,
-                                 const py::object &filename_pattern) {
+                                 const py::object &filename_pattern, const py::object &file_size_bytes) {
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!py::none().is(compression)) {
@@ -1310,6 +1310,17 @@ void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compr
 			throw InvalidInputException("to_parquet only accepts 'filename_pattern' as a string");
 		}
 		options["filename_pattern"] = {Value(py::str(filename_pattern))};
+	}
+
+	if (!py::none().is(file_size_bytes)) {
+		if (py::isinstance<py::int_>(file_size_bytes)) {
+			int64_t file_size_bytes_int = py::int_(file_size_bytes);
+			options["file_size_bytes"] = {Value(file_size_bytes_int)};
+		} else if (py::isinstance<py::str>(file_size_bytes)) {
+			options["file_size_bytes"] = {Value(py::str(file_size_bytes))};
+		} else {
+			throw InvalidInputException("to_parquet only accepts 'file_size_bytes' as an integer or string");
+		}
 	}
 
 	auto write_parquet = rel->WriteParquetRel(filename, std::move(options));

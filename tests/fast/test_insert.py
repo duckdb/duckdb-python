@@ -27,6 +27,7 @@ class TestInsert:
         res = duckdb_cursor.table("not_main.tbl").fetchall()
         assert len(res) == 10
 
+        # Insert into a schema-qualified table should work; table has a single column from range(10)
         duckdb_cursor.table("not_main.tbl").insert([42])
         res2 = duckdb_cursor.table("not_main.tbl").fetchall()
         assert len(res2) == 11
