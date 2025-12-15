@@ -639,6 +639,23 @@ class TestPolars:
 
         assert res == correct
 
+    @pytest.mark.parametrize(
+        "input_str", ["A'dam", 'answer = "42"', "'; DROP TABLE users; --", "line1\nline2\ttab", "", None]
+    )
+    def test_expr_with_sql_in_string_node(self, input_str):
+        """SQL in a String node in an expression is treated as a constant expression."""
+        expected = str(duckdb.ConstantExpression(input_str))
+
+        # Regular string
+        tree = {"Scalar": {"String": input_str}}
+        result = _pl_tree_to_sql(tree)
+        assert result == expected
+
+        # StringOwned
+        tree = {"Scalar": {"StringOwned": input_str}}
+        result = _pl_tree_to_sql(tree)
+        assert result == expected
+
     def test_invalid_expr_json(self):
         bad_key_expr = """
         {
