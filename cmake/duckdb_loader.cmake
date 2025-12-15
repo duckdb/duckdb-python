@@ -220,10 +220,6 @@ function(_duckdb_print_summary)
   message(STATUS "  Native Arch: ${NATIVE_ARCH}")
   message(STATUS "  Unity Build Disabled: ${DISABLE_UNITY}")
 
-  if(BUILD_EXTENSIONS)
-    message(STATUS "  Extensions: ${BUILD_EXTENSIONS}")
-  endif()
-
   set(debug_opts)
   if(FORCE_ASSERT)
     list(APPEND debug_opts "FORCE_ASSERT")
@@ -251,6 +247,21 @@ function(duckdb_add_library target_name)
 
   # Create clean interface target
   _duckdb_create_interface_target(${target_name})
+endfunction()
+
+function(duckdb_link_extensions target_name)
+  # Link to the DuckDB static library and extensions
+  target_link_libraries(${target_name}
+                        PRIVATE duckdb_generated_extension_loader)
+  if(BUILD_EXTENSIONS)
+    message(STATUS "Linking DuckDB extensions:")
+    foreach(ext IN LISTS BUILD_EXTENSIONS)
+      message(STATUS "- ${ext}")
+      target_link_libraries(${target_name} PRIVATE ${ext}_extension)
+    endforeach()
+  else()
+    message(STATUS "No DuckDB extensions linked in")
+  endif()
 endfunction()
 
 # ════════════════════════════════════════════════════════════════════════════════
