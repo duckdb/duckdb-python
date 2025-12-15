@@ -7,7 +7,7 @@
 # debugging but will never allow jemalloc in a release build if not on Linux.
 #
 # Usage: include(cmake/duckdb_loader.cmake) # Optionally load extensions
-# set(CORE_EXTENSIONS "json;parquet;icu")
+# set(BUILD_EXTENSIONS "json;parquet;icu")
 #
 # # set sensible defaults for a debug build: duckdb_configure_for_debug()
 #
@@ -35,7 +35,7 @@ _duckdb_set_default(DUCKDB_SOURCE_PATH
                     "${CMAKE_CURRENT_SOURCE_DIR}/external/duckdb")
 
 # Extension list - commonly used extensions for Python
-_duckdb_set_default(CORE_EXTENSIONS "core_functions;parquet;icu;json")
+_duckdb_set_default(BUILD_EXTENSIONS "core_functions;parquet;icu;json")
 
 # Core build options - disable unnecessary components for Python builds
 _duckdb_set_default(BUILD_SHELL OFF)
@@ -64,8 +64,8 @@ _duckdb_set_default(DEBUG_STACKTRACE OFF)
 set(DUCKDB_SOURCE_PATH
     "${DUCKDB_SOURCE_PATH}"
     CACHE PATH "Path to DuckDB source directory")
-set(CORE_EXTENSIONS
-    "${CORE_EXTENSIONS}"
+set(BUILD_EXTENSIONS
+    "${BUILD_EXTENSIONS}"
     CACHE STRING "Semicolon-separated list of extensions to enable")
 set(BUILD_SHELL
     "${BUILD_SHELL}"
@@ -110,40 +110,35 @@ set(DEBUG_STACKTRACE
 
 function(_duckdb_validate_jemalloc_config)
   # Check if jemalloc is in the extension list
-  if(NOT CORE_EXTENSIONS MATCHES "jemalloc")
+  if(NOT BUILD_EXTENSIONS MATCHES "jemalloc")
     return()
   endif()
 
-  # If we're on Linux then using jemalloc is fine, otherwise we only allow it in
-  # debug builds
-  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(is_debug_build FALSE)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-      set(is_debug_build TRUE)
-    endif()
-    if(is_debug_build)
-      message(
-        WARNING
-          "jemalloc extension enabled on ${CMAKE_SYSTEM_NAME} in Debug build.\n"
-          "This is only recommended for debugging purposes.\n"
-          "jemalloc is officially supported only on Linux.")
-    else()
-      message(
-        WARNING
-          "jemalloc extension is only supported on ${CMAKE_SYSTEM_NAME} in Debug builds.\n"
-          "Removing jemalloc from extension list.\n"
-          "In non-debug builds, jemalloc is only supported on Linux.")
-      # Remove jemalloc from the extension list
-      string(REPLACE "jemalloc" "" CORE_EXTENSIONS_FILTERED
-                     "${CORE_EXTENSIONS}")
-      string(REGEX REPLACE ";+" ";" CORE_EXTENSIONS_FILTERED
-                           "${CORE_EXTENSIONS_FILTERED}")
-      string(REGEX REPLACE "^;|;$" "" CORE_EXTENSIONS_FILTERED
-                           "${CORE_EXTENSIONS_FILTERED}")
-      set(CORE_EXTENSIONS
-          "${CORE_EXTENSIONS_FILTERED}"
-          PARENT_SCOPE)
-    endif()
+  # jemalloc is only allowed in linux and osx debug builds
+  set(supported_os
+      CMAKE_SYSTEM_NAME
+      STREQUAL
+      "Darwin"
+      OR
+      CMAKE_SYSTEM_NAME
+      STREQUAL
+      "Linux")
+  set(jemalloc_allowed CMAKE_BUILD_TYPE STREQUAL "Debug" AND supported_os)
+  if(NOT jemalloc_allowed)
+    message(
+      WARNING
+        "jemalloc extension is only supported on Linux and OSX in Debug builds.\n"
+        "Removing jemalloc from extension list.")
+    # Remove jemalloc from the extension list
+    string(REPLACE "jemalloc" "" BUILD_EXTENSIONS_FILTERED
+                   "${BUILD_EXTENSIONS}")
+    string(REGEX REPLACE ";+" ";" BUILD_EXTENSIONS_FILTERED
+                         "${BUILD_EXTENSIONS_FILTERED}")
+    string(REGEX REPLACE "^;|;$" "" BUILD_EXTENSIONS_FILTERED
+                         "${BUILD_EXTENSIONS_FILTERED}")
+    set(BUILD_EXTENSIONS
+        "${BUILD_EXTENSIONS_FILTERED}"
+        PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -225,8 +220,8 @@ function(_duckdb_print_summary)
   message(STATUS "  Native Arch: ${NATIVE_ARCH}")
   message(STATUS "  Unity Build Disabled: ${DISABLE_UNITY}")
 
-  if(CORE_EXTENSIONS)
-    message(STATUS "  Extensions: ${CORE_EXTENSIONS}")
+  if(BUILD_EXTENSIONS)
+    message(STATUS "  Extensions: ${BUILD_EXTENSIONS}")
   endif()
 
   set(debug_opts)
