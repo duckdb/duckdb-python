@@ -337,6 +337,11 @@ public:
 	py::list ListFilesystems();
 	bool FileSystemIsRegistered(const string &name);
 
+	// Profiling info
+	py::str GetProfilingInformation(const py::str &format = "json");
+	void EnableProfiling();
+	void DisableProfiling();
+
 	//! Default connection to an in-memory database
 	static DefaultConnectionHolder default_connection;
 	//! Caches and provides an interface to get frequently used modules+subtypes
