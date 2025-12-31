@@ -24,7 +24,20 @@
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
-
+namespace {
+std::string QuoteIdentifier(const std::string &name) {
+	std::string out;
+	out.reserve(name.size() + 2);
+	out.push_back('"');
+	for (char c : name) {
+		if (c == '"')
+			out.push_back('"'); // escape " as ""
+		out.push_back(c);
+	}
+	out.push_back('"');
+	return out;
+}
+} // namespace
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation created without a relation");
@@ -153,7 +166,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 			if (!projection.empty()) {
 				projection += ", ";
 			}
-			projection += names[i];
+			projection += QuoteIdentifier(names[i]);
 		}
 	}
 	if (projection.empty()) {
