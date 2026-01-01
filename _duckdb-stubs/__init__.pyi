@@ -86,9 +86,11 @@ __all__: list[str] = [
     "default_connection",
     "description",
     "df",
+    "disable_profiling",
     "distinct",
     "dtype",
     "duplicate",
+    "enable_profiling",
     "enum_type",
     "execute",
     "executemany",
@@ -109,6 +111,7 @@ __all__: list[str] = [
     "from_df",
     "from_parquet",
     "from_query",
+    "get_profiling_information",
     "get_table_names",
     "install_extension",
     "interrupt",
@@ -313,6 +316,9 @@ class DuckDBPyConnection:
         repository_url: str | None = None,
         version: str | None = None,
     ) -> None: ...
+    def get_profiling_information(self, format: str = "json") -> str: ...
+    def enable_profiling(self) -> None: ...
+    def disable_profiling(self) -> None: ...
     def interrupt(self) -> None: ...
     def list_filesystems(self) -> list[str]: ...
     def list_type(self, type: sqltypes.DuckDBPyType) -> sqltypes.DuckDBPyType: ...
@@ -1248,6 +1254,9 @@ def limit(
     *,
     connection: DuckDBPyConnection | None = None,
 ) -> DuckDBPyRelation: ...
+def get_profiling_information(*, connection: DuckDBPyConnection | None = None, format: str = "json") -> str: ...
+def enable_profiling(*, connection: DuckDBPyConnection | None = None) -> None: ...
+def disable_profiling(*, connection: DuckDBPyConnection | None = None) -> None: ...
 def list_filesystems(*, connection: DuckDBPyConnection | None = None) -> list[str]: ...
 def list_type(
     type: sqltypes.DuckDBPyType, *, connection: DuckDBPyConnection | None = None

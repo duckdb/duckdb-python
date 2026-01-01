@@ -3,6 +3,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -285,6 +286,9 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("repository") = py::none(),
 	      py::arg("repository_url") = py::none(), py::arg("version") = py::none());
 	m.def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
+	m.def("get_profiling_information", &DuckDBPyConnection::GetProfilingInformation, "Get profiling information for a query", py::arg("format") = "json");
+	m.def("enable_profiling", &DuckDBPyConnection::EnableProfiling, "Enable profiling for subsequent queries");
+	m.def("disable_profiling", &DuckDBPyConnection::DisableProfiling, "Disable profiling for subsequent queries");
 } // END_OF_CONNECTION_METHODS
 
 void DuckDBPyConnection::UnregisterFilesystem(const py::str &name) {
@@ -329,6 +333,39 @@ py::list DuckDBPyConnection::ListFilesystems() {
 		names.append(py::str(name));
 	}
 	return names;
+}
+
+py::str DuckDBPyConnection::GetProfilingInformation(const py::str &format) {
+	// We want to expose ProfilerPrintFormat as a string to Python users
+	ProfilerPrintFormat format_enum;
+	if (format == "query_tree") {
+		format_enum = ProfilerPrintFormat::QUERY_TREE;
+	} else if (format == "json") {
+		format_enum = ProfilerPrintFormat::JSON;
+	} else if (format == "query_tree_optimizer") {
+		format_enum = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else if (format == "no_output") {
+		format_enum = ProfilerPrintFormat::NO_OUTPUT;
+	} else if (format == "html") {
+		format_enum = ProfilerPrintFormat::HTML;
+	} else if (format == "graphviz") {
+		format_enum = ProfilerPrintFormat::GRAPHVIZ;
+	} else {
+		throw InvalidInputException("Invalid ProfilerPrintFormat string: " + std::string(format) + ". Valid options are: query_tree, json, query_tree_optimizer, no_output, html, graphviz.");
+	}
+	auto &connection = con.GetConnection();
+	py::str profiling_info = connection.GetProfilingInformation(format_enum);
+	return profiling_info;
+}
+
+void DuckDBPyConnection::EnableProfiling() {
+	auto &connection = con.GetConnection();
+	connection.EnableProfiling();
+}
+
+void DuckDBPyConnection::DisableProfiling() {
+	auto &connection = con.GetConnection();
+	connection.DisableProfiling();
 }
 
 py::list DuckDBPyConnection::ExtractStatements(const string &query) {
