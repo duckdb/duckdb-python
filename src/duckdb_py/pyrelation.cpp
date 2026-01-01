@@ -30,14 +30,16 @@ std::string QuoteIdentifier(const std::string &name) {
 	out.reserve(name.size() + 2);
 	out.push_back('"');
 	for (char c : name) {
-		if (c == '"')
+		if (c == '"') {
 			out.push_back('"'); // escape " as ""
+		}
 		out.push_back(c);
 	}
 	out.push_back('"');
 	return out;
 }
 } // namespace
+
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation created without a relation");
