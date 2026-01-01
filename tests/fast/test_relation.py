@@ -690,7 +690,6 @@ class TestRelation:
         assert res == expected
 
     def test_relation_select_dtypes_quotes_identifiers_with_spaces(self, duckdb_cursor):
-        # Regression test for select_dtypes on columns requiring identifier quoting (e.g., spaces)
         df = pd.DataFrame({"na me": ["alice", "bob"], "x": [1, 2]})
         rel = duckdb_cursor.from_df(df)
         out = rel.select_dtypes([duckdb.sqltypes.VARCHAR]).fetchdf()
