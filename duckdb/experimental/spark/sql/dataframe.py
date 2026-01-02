@@ -1067,8 +1067,7 @@ class DataFrame:  # noqa: D101
     unionAll = union
 
     def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
-        """Returns a new :class:`DataFrame` containing union of rows in this and another
-        :class:`DataFrame`.
+        """Returns a new :class:`DataFrame` containing union of rows in this and another :class:`DataFrame`.
 
         This is different from both `UNION ALL` and `UNION DISTINCT` in SQL. To do a SQL-style set
         union (that does deduplication of elements), use this function followed by :func:`distinct`.
@@ -1121,15 +1120,25 @@ class DataFrame:  # noqa: D101
         |   1|   2|   3|NULL|
         |NULL|   4|   5|   6|
         +----+----+----+----+
-        """  # noqa: D205
+        """
         if allowMissingColumns:
-            cols = []
-            for col in self.relation.columns:
-                if col in other.relation.columns:
-                    cols.append(col)
-                else:
-                    cols.append(spark_sql_functions.lit(None))
-            other = other.select(*cols)
+            df1 = self.select(
+                *list(self.relation.columns),
+                *[
+                    spark_sql_functions.lit(None).alias(c)
+                    for c in other.relation.columns
+                    if c not in self.relation.columns
+                ],
+            )
+
+            df2 = other.select(
+                *[
+                    spark_sql_functions.col(c) if c in other.relation.columns else spark_sql_functions.lit(None).alias(c)
+                    for c in df1.relation.columns
+                ]
+            )
+
+            return df1.unionByName(df2, allowMissingColumns=False)
         else:
             other = other.select(*self.relation.columns)
 
