@@ -1,19 +1,21 @@
-import sys
 import gc
 import platform
-import duckdb
+import sys
+
 import pytest
 
+import duckdb
 
-@pytest.mark.parametrize("rows, iters", [(1000, 20)])
+
+@pytest.mark.parametrize(("rows", "iters"), [(1000, 20)])
 def test_python_scalar_udf_return_value_refcount_does_not_leak(rows, iters):
     if platform.python_implementation() != "CPython":
         pytest.skip("refcount-based test requires CPython")
 
-    payload = (b"processed_data_" + b"x" * 8192)  # large-ish bytes to mimic the reported issue
+    payload = b"processed_data_" + b"x" * 8192  # large-ish bytes to mimic the reported issue
 
     def udf_bytes(_):
-        return payload # Always return the exact same object so we can track its refcount.
+        return payload  # Always return the exact same object so we can track its refcount.
 
     # Baseline refcount (note: getrefcount adds a temporary ref)
     baseline = sys.getrefcount(payload)
