@@ -153,7 +153,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 			if (!projection.empty()) {
 				projection += ", ";
 			}
-			projection += names[i];
+			projection += KeywordHelper::WriteOptionallyQuoted(names[i]);
 		}
 	}
 	if (projection.empty()) {
