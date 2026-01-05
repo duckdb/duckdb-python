@@ -115,15 +115,19 @@ function(_duckdb_validate_jemalloc_config)
   endif()
 
   # jemalloc is only allowed in linux and osx debug builds
-  set(supported_os
-      CMAKE_SYSTEM_NAME
-      STREQUAL
-      "Darwin"
-      OR
-      CMAKE_SYSTEM_NAME
-      STREQUAL
-      "Linux")
-  set(jemalloc_allowed CMAKE_BUILD_TYPE STREQUAL "Debug" AND supported_os)
+  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(supported_os TRUE)
+  else()
+    set(supported_os FALSE)
+  endif()
+
+  # jemalloc is only allowed in debug builds
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND supported_os)
+    set(jemalloc_allowed TRUE)
+  else()
+    set(jemalloc_allowed FALSE)
+  endif()
+
   if(NOT jemalloc_allowed)
     message(
       WARNING
@@ -247,6 +251,11 @@ function(duckdb_add_library target_name)
 
   # Create clean interface target
   _duckdb_create_interface_target(${target_name})
+
+  # Propagate BUILD_EXTENSIONS back to caller scope in case it was modified
+  set(BUILD_EXTENSIONS
+      "${BUILD_EXTENSIONS}"
+      PARENT_SCOPE)
 endfunction()
 
 function(duckdb_link_extensions target_name)
