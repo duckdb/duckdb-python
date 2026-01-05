@@ -251,6 +251,11 @@ function(duckdb_add_library target_name)
 
   # Create clean interface target
   _duckdb_create_interface_target(${target_name})
+
+  # Propagate BUILD_EXTENSIONS back to caller scope in case it was modified
+  set(BUILD_EXTENSIONS
+      "${BUILD_EXTENSIONS}"
+      PARENT_SCOPE)
 endfunction()
 
 function(duckdb_link_extensions target_name)
