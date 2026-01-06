@@ -1,4 +1,6 @@
 import os
+import pathlib
+import re
 import tempfile
 
 import pytest
@@ -170,3 +172,90 @@ class TestToParquet:
             ("shinji", 123.0, "a"),
         ]
         assert result.execute().fetchall() == expected
+
+    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
+    def test_filename_pattern_with_index(self, pd):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ["a", "a", "b", "c"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=["category"], filename_pattern="orders_{i}")
+        # Check that files follow the pattern with {i}
+        files_a = list(pathlib.Path(f"{temp_file_name}/category=a").iterdir())
+        files_b = list(pathlib.Path(f"{temp_file_name}/category=b").iterdir())
+        files_c = list(pathlib.Path(f"{temp_file_name}/category=c").iterdir())
+        filename_pattern = re.compile(r"^orders_[09]+\.parquet$")
+        assert all(filename_pattern.search(str(f.name)) for f in files_a)
+        assert all(filename_pattern.search(str(f.name)) for f in files_b)
+        assert all(filename_pattern.search(str(f.name)) for f in files_c)
+
+        # Verify data integrity
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
+        expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
+        assert result.execute().fetchall() == expected
+
+    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
+    def test_filename_pattern_with_uuid(self, pd):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ["a", "a", "b", "c"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, partition_by=["category"], filename_pattern="file_{uuid}")
+        # Check that files follow the pattern with {uuid}
+        files_a = list(pathlib.Path(f"{temp_file_name}/category=a").iterdir())
+        files_b = list(pathlib.Path(f"{temp_file_name}/category=b").iterdir())
+        files_c = list(pathlib.Path(f"{temp_file_name}/category=c").iterdir())
+        filename_pattern = re.compile(r"^file_[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}\.parquet$")
+        print(files_a)
+        assert all(filename_pattern.search(str(f.name)) for f in files_a)
+        assert all(filename_pattern.search(str(f.name)) for f in files_b)
+        assert all(filename_pattern.search(str(f.name)) for f in files_c)
+
+        # Verify data integrity
+        result = duckdb.sql(f"FROM read_parquet('{temp_file_name}/*/*.parquet', hive_partitioning=TRUE)")
+        expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
+        assert result.execute().fetchall() == expected
+
+    @pytest.mark.parametrize("file_size_bytes", [1000, "1k"])
+    def test_file_size_bytes_basic(self, file_size_bytes):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+
+        # use same test data as external/duckdb/test/sql/copy/file_size_bytes.test
+        rel = duckdb.from_query("SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);")
+        rel.to_parquet(temp_file_name, file_size_bytes=file_size_bytes, row_group_size=2000)
+
+        # Check that multiple files were created
+        files = list(pathlib.Path(temp_file_name).iterdir())
+        assert len(files) > 1, f"Expected multiple files, got {len(files)}"
+
+        # Verify data integrity
+        result = duckdb.read_parquet(f"{temp_file_name}/*.parquet")
+        assert len(result.execute().fetchall()) == 10000
+
+    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize("file_size_bytes", ["256MB", "1G"])
+    def test_file_size_bytes_human_readable(self, pd, file_size_bytes):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        df = pd.DataFrame(
+            {
+                "name": ["rei", "shinji", "asuka", "kaworu"],
+                "float": [321.0, 123.0, 23.0, 340.0],
+                "category": ["a", "a", "b", "c"],
+            }
+        )
+        rel = duckdb.from_df(df)
+        rel.to_parquet(temp_file_name, file_size_bytes=file_size_bytes)
+
+        # With large file size limits, should create just one file
+        parquet_rel = duckdb.read_parquet(temp_file_name)
+        assert rel.execute().fetchall() == parquet_rel.execute().fetchall()

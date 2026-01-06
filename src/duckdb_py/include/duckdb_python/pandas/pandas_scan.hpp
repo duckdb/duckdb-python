@@ -55,6 +55,8 @@ public:
 
 	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                            const TableFunction &function);
+
+	static unique_ptr<FunctionData> PandasDeserialize(Deserializer &deserializer, TableFunction &function);
 };
 
 } // namespace duckdb

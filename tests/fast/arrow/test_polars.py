@@ -2,6 +2,7 @@ import datetime
 import json
 
 import pytest
+from packaging.version import parse as parse_version
 
 import duckdb
 
@@ -10,6 +11,8 @@ arrow = pytest.importorskip("pyarrow")
 pl_testing = pytest.importorskip("polars.testing")
 
 from duckdb.polars_io import _pl_tree_to_sql, _predicate_to_expression  # noqa: E402
+
+pl_pre_1_36_0 = parse_version(pl.__version__) < parse_version("1.36.0")
 
 
 def valid_filter(filter):
@@ -86,10 +89,18 @@ class TestPolars:
         res = duckdb_cursor.read_json(string).pl()
         assert str(res["entry"][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
 
-    @pytest.mark.skipif(
-        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
-    )
-    def test_polars_from_json_error(self, duckdb_cursor):
+    @pytest.mark.skipif(pl_pre_1_36_0, reason="Polars < 1.36.0 doesn't support arrow extensions")
+    def test_polars_from_json_post_pl_1_36_0(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=true")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        pl.register_extension_type("arrow.json", pl.Extension)
+        res = duckdb_cursor.read_json(string).pl()
+        assert str(res["entry"][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
+
+    @pytest.mark.skipif(not pl_pre_1_36_0, reason="Polars >= 1.36.0 supports arrow extensions")
+    def test_polars_from_json_pre_pl_1_36_0(self, duckdb_cursor):
         from io import StringIO
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
@@ -426,13 +437,34 @@ class TestPolars:
             lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
         )
 
-        # Validate Filter
+    @pytest.mark.skipif(pl_pre_1_36_0, reason="Polars < 1.36.0 expressions on dates produce casts in predicates")
+    def test_polars_predicate_to_expression_post_1_36_0(self):
+        ts_2008 = datetime.datetime(2008, 1, 1, 0, 0, 1)
+        ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
+        ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
+        # Validate filters - none of these produce casts in polars >= 1.36.0
+        valid_filter(pl.col("a") == ts_2008)
+        valid_filter(pl.col("a") > ts_2008)
+        valid_filter(pl.col("a") >= ts_2010)
+        valid_filter(pl.col("a") < ts_2010)
+        valid_filter(pl.col("a") <= ts_2010)
+        valid_filter(pl.col("a").is_null())
+        valid_filter(pl.col("a").is_not_null())
+        valid_filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008))
+        valid_filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
+        valid_filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008))
+
+    @pytest.mark.skipif(not pl_pre_1_36_0, reason="Polars >= 1.36.0 expressions on dates don't produce casts")
+    def test_polars_predicate_to_expression_pre_1_36_0(self):
+        ts_2008 = datetime.datetime(2008, 1, 1, 0, 0, 1)
+        ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
+        ts_2020 = datetime.datetime(2020, 3, 1, 10, 0, 1)
+        # Validate filters
         invalid_filter(pl.col("a") == ts_2008)
         invalid_filter(pl.col("a") > ts_2008)
         invalid_filter(pl.col("a") >= ts_2010)
         invalid_filter(pl.col("a") < ts_2010)
         invalid_filter(pl.col("a") <= ts_2010)
-        # These two are actually valid because they don't produce a cast
         valid_filter(pl.col("a").is_null())
         valid_filter(pl.col("a").is_not_null())
         invalid_filter((pl.col("a") == ts_2010) & (pl.col("b") == ts_2008))
@@ -606,6 +638,23 @@ class TestPolars:
         correct = duckdb_cursor.execute("FROM t").fetchall()
 
         assert res == correct
+
+    @pytest.mark.parametrize(
+        "input_str", ["A'dam", 'answer = "42"', "'; DROP TABLE users; --", "line1\nline2\ttab", "", None]
+    )
+    def test_expr_with_sql_in_string_node(self, input_str):
+        """SQL in a String node in an expression is treated as a constant expression."""
+        expected = str(duckdb.ConstantExpression(input_str))
+
+        # Regular string
+        tree = {"Scalar": {"String": input_str}}
+        result = _pl_tree_to_sql(tree)
+        assert result == expected
+
+        # StringOwned
+        tree = {"Scalar": {"StringOwned": input_str}}
+        result = _pl_tree_to_sql(tree)
+        assert result == expected
 
     def test_invalid_expr_json(self):
         bad_key_expr = """

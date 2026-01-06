@@ -5,7 +5,6 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 import math
 
 import numpy as np
-from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as sf
 from spark_namespace.sql.types import Row
 
@@ -288,12 +287,7 @@ class TestSparkFunctionsNumeric:
         res = df.select("asin_value").collect()
 
         assert res[0].asin_value == 0
-        if USE_ACTUAL_SPARK:
-            assert np.isnan(res[1].asin_value)
-        else:
-            # TODO: DuckDB should return NaN here. Reason is that  # noqa: TD002, TD003
-            # ConstantExpression(float("nan")) gives NULL and not NaN
-            assert res[1].asin_value is None
+        assert np.isnan(res[1].asin_value)
 
     def test_corr(self, spark):
         N = 20

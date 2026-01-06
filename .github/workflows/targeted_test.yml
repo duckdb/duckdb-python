@@ -1,0 +1,92 @@
+name: Targeted Platform Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to test on'
+        required: true
+        type: choice
+        options:
+          - 'windows-2025'
+          - 'windows-11-arm'
+          - 'ubuntu-24.04'
+          - 'ubuntu-24.04-arm'
+          - 'macos-15'
+          - 'macos-15-intel'
+      python_version:
+        description: 'Python version to test'
+        required: true
+        type: choice
+        options:
+          - '3.9'
+          - '3.10'
+          - '3.11'
+          - '3.12'
+          - '3.13'
+          - '3.14'
+      testsuite:
+        description: 'Test suite to run (ignored if custom_test_path is provided)'
+        required: false
+        type: choice
+        options:
+          - 'fast'
+          - 'all'
+        default: 'fast'
+      custom_test_path:
+        description: 'Custom test path (must be in tests/ directory, overrides testsuite)'
+        required: false
+        type: string
+      verbose-uv:
+        description: 'Let uv generate verbose output (pytest verbosity is always on)'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  test:
+    name: 'Test with Python ${{ inputs.python_version }} on ${{ inputs.platform }}'
+    runs-on: ${{ inputs.platform }}
+
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.9.0"
+          enable-cache: false
+          python-version: ${{ inputs.python_version }}
+
+      - name: Set and validate test path
+        id: test_path
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.custom_test_path }}" ]]; then
+            # test path was passed in
+            tests_base="$( pwd -P )/tests"
+            test_path="${{ inputs.custom_test_path }}"
+
+            # Ensure the given test path exists
+            [[ -e "$test_path" ]] || { echo "${test_path} does not exist"; exit 1; }
+
+            # Resolve custom test path to absolute path
+            test_path_abs=$(cd "$test_path" 2>/dev/null && pwd -P || ( cd "$(dirname "$test_path")" && printf '%s/%s' "$(pwd -P)" "$(basename "$test_path")" ) )
+
+            # Make sure test_path_abs is inside tests_base
+            [[ "$test_path_abs" == "$tests_base" || "$test_path_abs" == "$tests_base"/* ]] || { echo "${test_path_abs} is not part of ${tests_base}?"; exit 1; }
+
+            echo "test_path=$test_path_abs" >> $GITHUB_OUTPUT
+          else
+            # use a testsuite
+            echo "test_path=$GITHUB_WORKSPACE/${{ inputs.testsuite == 'fast' && 'tests/fast' || 'tests' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run tests
+        shell: bash
+        run: |
+          uv ${{ inputs.verbose-uv && 'run -v' || 'run' }} pytest -vv ${{ steps.test_path.outputs.test_path }}

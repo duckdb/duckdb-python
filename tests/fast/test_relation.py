@@ -280,7 +280,14 @@ class TestRelation:
             rel = duckdb_cursor.values((const(1), const(2), const(3)), const(4))
 
         # Using Expressions that can't be resolved:
-        with pytest.raises(duckdb.BinderException, match='Referenced column "a" not found in FROM clause!'):
+        # Accept both historical and current Binder error message variants
+        with pytest.raises(
+            duckdb.BinderException,
+            match=(
+                r'Referenced column "a" not found in FROM clause!|'
+                r'Referenced column "a" was not found because the FROM clause is missing'
+            ),
+        ):
             duckdb_cursor.values(duckdb.ColumnExpression("a"))
 
     def test_insert_into_operator(self):
@@ -681,3 +688,10 @@ class TestRelation:
 
         res = con.sql("select * from vw").fetchall()
         assert res == expected
+
+    def test_relation_select_dtypes_quotes_identifiers_with_spaces(self, duckdb_cursor):
+        df = pd.DataFrame({"na me": ["alice", "bob"], "x": [1, 2]})
+        rel = duckdb_cursor.from_df(df)
+        out = rel.select_dtypes([duckdb.sqltypes.VARCHAR]).fetchdf()
+        assert list(out.columns) == ["na me"]
+        assert out["na me"].tolist() == ["alice", "bob"]

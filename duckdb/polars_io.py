@@ -236,8 +236,9 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         # String type
         if dtype == "String" or dtype == "StringOwned":
             # Some new formats may store directly under StringOwned
-            string_val: object | None = value.get("StringOwned", value.get("String", None))
-            return f"'{string_val}'"
+            string_val = value.get("StringOwned", value.get("String", None))
+            # the string must be a string constant
+            return str(duckdb.ConstantExpression(string_val))
 
         msg = f"Unsupported scalar type {dtype!s}, with value {value}"
         raise NotImplementedError(msg)

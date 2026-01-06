@@ -19,7 +19,7 @@
 
 import enum
 import functools
-import importlib
+import importlib.util
 import typing
 
 import adbc_driver_manager
@@ -46,5 +46,4 @@ def driver_path() -> str:
     if duckdb_module_spec is None:
         msg = "Could not find duckdb shared library. Did you pip install duckdb?"
         raise ImportError(msg)
-    print(f"Found duckdb shared library at {duckdb_module_spec.origin}")
     return duckdb_module_spec.origin
