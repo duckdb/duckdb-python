@@ -116,7 +116,7 @@ function(_duckdb_validate_jemalloc_config)
 
   # jemalloc is only enabled on 64bit x86 linux builds
   if(CMAKE_SIZEOF_VOID_P EQUAL 8
-     AND OS_NAME STREQUAL "linux"
+     AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
      AND NOT BSD)
     set(jemalloc_allowed TRUE)
   else()
