@@ -46,7 +46,7 @@ from duckdb.value.constant import (
     NullValue,
     ShortValue,
     StringValue,
-    TimestampMilisecondValue,
+    TimestampMillisecondValue,
     TimestampNanosecondValue,
     TimestampSecondValue,
     TimestampValue,
@@ -128,7 +128,7 @@ class TestValue:
         "value",
         [
             TimestampSecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
-            TimestampMilisecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
+            TimestampMillisecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
             TimestampNanosecondValue(datetime.datetime(1970, 3, 21, 12, 36, 43)),
         ],
     )
