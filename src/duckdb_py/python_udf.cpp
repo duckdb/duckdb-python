@@ -326,7 +326,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 
 			// Call the function
-			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			auto ret = py::reinterpret_steal<py::object>(PyObject_CallObject(function, bundled_parameters.ptr()));
 			if (ret == nullptr && PyErr_Occurred()) {
 				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 					auto exception = py::error_already_set();
