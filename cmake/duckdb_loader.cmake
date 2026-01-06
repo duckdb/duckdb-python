@@ -7,7 +7,7 @@
 # debugging but will never allow jemalloc in a release build if not on Linux.
 #
 # Usage: include(cmake/duckdb_loader.cmake) # Optionally load extensions
-# set(CORE_EXTENSIONS "json;parquet;icu")
+# set(BUILD_EXTENSIONS "json;parquet;icu")
 #
 # # set sensible defaults for a debug build: duckdb_configure_for_debug()
 #
@@ -35,7 +35,7 @@ _duckdb_set_default(DUCKDB_SOURCE_PATH
                     "${CMAKE_CURRENT_SOURCE_DIR}/external/duckdb")
 
 # Extension list - commonly used extensions for Python
-_duckdb_set_default(CORE_EXTENSIONS "core_functions;parquet;icu;json")
+_duckdb_set_default(BUILD_EXTENSIONS "core_functions;parquet;icu;json")
 
 # Core build options - disable unnecessary components for Python builds
 _duckdb_set_default(BUILD_SHELL OFF)
@@ -64,8 +64,8 @@ _duckdb_set_default(DEBUG_STACKTRACE OFF)
 set(DUCKDB_SOURCE_PATH
     "${DUCKDB_SOURCE_PATH}"
     CACHE PATH "Path to DuckDB source directory")
-set(CORE_EXTENSIONS
-    "${CORE_EXTENSIONS}"
+set(BUILD_EXTENSIONS
+    "${BUILD_EXTENSIONS}"
     CACHE STRING "Semicolon-separated list of extensions to enable")
 set(BUILD_SHELL
     "${BUILD_SHELL}"
@@ -110,40 +110,32 @@ set(DEBUG_STACKTRACE
 
 function(_duckdb_validate_jemalloc_config)
   # Check if jemalloc is in the extension list
-  if(NOT CORE_EXTENSIONS MATCHES "jemalloc")
+  if(NOT BUILD_EXTENSIONS MATCHES "jemalloc")
     return()
   endif()
 
-  # If we're on Linux then using jemalloc is fine, otherwise we only allow it in
-  # debug builds
-  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(is_debug_build FALSE)
-    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-      set(is_debug_build TRUE)
-    endif()
-    if(is_debug_build)
-      message(
-        WARNING
-          "jemalloc extension enabled on ${CMAKE_SYSTEM_NAME} in Debug build.\n"
-          "This is only recommended for debugging purposes.\n"
-          "jemalloc is officially supported only on Linux.")
-    else()
-      message(
-        WARNING
-          "jemalloc extension is only supported on ${CMAKE_SYSTEM_NAME} in Debug builds.\n"
-          "Removing jemalloc from extension list.\n"
-          "In non-debug builds, jemalloc is only supported on Linux.")
-      # Remove jemalloc from the extension list
-      string(REPLACE "jemalloc" "" CORE_EXTENSIONS_FILTERED
-                     "${CORE_EXTENSIONS}")
-      string(REGEX REPLACE ";+" ";" CORE_EXTENSIONS_FILTERED
-                           "${CORE_EXTENSIONS_FILTERED}")
-      string(REGEX REPLACE "^;|;$" "" CORE_EXTENSIONS_FILTERED
-                           "${CORE_EXTENSIONS_FILTERED}")
-      set(CORE_EXTENSIONS
-          "${CORE_EXTENSIONS_FILTERED}"
-          PARENT_SCOPE)
-    endif()
+  # jemalloc is only enabled on 64bit x86 linux builds
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8
+     AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+     AND NOT BSD)
+    set(jemalloc_allowed TRUE)
+  else()
+    set(jemalloc_allowed FALSE)
+  endif()
+
+  if(NOT jemalloc_allowed)
+    message(WARNING "jemalloc extension is only supported on Linux.\n"
+                    "Removing jemalloc from extension list.")
+    # Remove jemalloc from the extension list
+    string(REPLACE "jemalloc" "" BUILD_EXTENSIONS_FILTERED
+                   "${BUILD_EXTENSIONS}")
+    string(REGEX REPLACE ";+" ";" BUILD_EXTENSIONS_FILTERED
+                         "${BUILD_EXTENSIONS_FILTERED}")
+    string(REGEX REPLACE "^;|;$" "" BUILD_EXTENSIONS_FILTERED
+                         "${BUILD_EXTENSIONS_FILTERED}")
+    set(BUILD_EXTENSIONS
+        "${BUILD_EXTENSIONS_FILTERED}"
+        PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -188,19 +180,17 @@ function(_duckdb_create_interface_target target_name)
   if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_compile_options(
       ${target_name}
-      INTERFACE
-        /wd4244 # suppress Conversion from 'type1' to 'type2', possible loss of
-                # data
-        /wd4267 # suppress Conversion from ‘size_t’ to ‘type’, possible loss of
-                # data
-        /wd4200 # suppress Nonstandard extension used: zero-sized array in
-                # struct/union
-        /wd26451
-        /wd26495 # suppress Code Analysis
-        /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe functions
-        /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # see
-                                               # https://github.com/duckdblabs/duckdb-internal/issues/5151
-        /utf-8 # treat source files as UTF-8 encoded
+      INTERFACE /wd4244 # suppress Conversion from 'type1' to 'type2', possible
+                        # loss of data
+                /wd4267 # suppress Conversion from ‘size_t’ to ‘type’, possible
+                        # loss of data
+                /wd4200 # suppress Nonstandard extension used: zero-sized array
+                        # in struct/union
+                /wd26451
+                /wd26495 # suppress Code Analysis
+                /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe
+                                          # functions
+                /utf-8 # treat source files as UTF-8 encoded
     )
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_options(
@@ -224,10 +214,6 @@ function(_duckdb_print_summary)
   message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
   message(STATUS "  Native Arch: ${NATIVE_ARCH}")
   message(STATUS "  Unity Build Disabled: ${DISABLE_UNITY}")
-
-  if(CORE_EXTENSIONS)
-    message(STATUS "  Extensions: ${CORE_EXTENSIONS}")
-  endif()
 
   set(debug_opts)
   if(FORCE_ASSERT)
@@ -256,6 +242,26 @@ function(duckdb_add_library target_name)
 
   # Create clean interface target
   _duckdb_create_interface_target(${target_name})
+
+  # Propagate BUILD_EXTENSIONS back to caller scope in case it was modified
+  set(BUILD_EXTENSIONS
+      "${BUILD_EXTENSIONS}"
+      PARENT_SCOPE)
+endfunction()
+
+function(duckdb_link_extensions target_name)
+  # Link to the DuckDB static library and extensions
+  target_link_libraries(${target_name}
+                        PRIVATE duckdb_generated_extension_loader)
+  if(BUILD_EXTENSIONS)
+    message(STATUS "Linking DuckDB extensions:")
+    foreach(ext IN LISTS BUILD_EXTENSIONS)
+      message(STATUS "- ${ext}")
+      target_link_libraries(${target_name} PRIVATE ${ext}_extension)
+    endforeach()
+  else()
+    message(STATUS "No DuckDB extensions linked in")
+  endif()
 endfunction()
 
 # ════════════════════════════════════════════════════════════════════════════════

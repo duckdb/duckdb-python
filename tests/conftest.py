@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from importlib import import_module
 from pathlib import Path
@@ -19,12 +20,24 @@ except ImportError:
     pandas = None
     pyarrow_dtype = None
 
-# Check if pandas has arrow dtypes enabled
-try:
-    from pandas.compat import pa_version_under7p0
+    # Only install mock after we've failed to import pandas for conftest.py
+    class MockPandas:
+        def __getattr__(self, name: str) -> object:
+            pytest.skip("pandas not available", allow_module_level=True)
 
-    pyarrow_dtypes_enabled = not pa_version_under7p0
-except ImportError:
+    sys.modules["pandas"] = MockPandas()
+    sys.modules["pandas.testing"] = MockPandas()
+    sys.modules["pandas._testing"] = MockPandas()
+
+# Check if pandas has arrow dtypes enabled
+if pandas is not None:
+    try:
+        from pandas.compat import pa_version_under7p0
+
+        pyarrow_dtypes_enabled = not pa_version_under7p0
+    except (ImportError, AttributeError):
+        pyarrow_dtypes_enabled = False
+else:
     pyarrow_dtypes_enabled = False
 
 
@@ -32,7 +45,7 @@ def import_pandas():
     if pandas:
         return pandas
     else:
-        pytest.skip("Couldn't import pandas")
+        pytest.skip("Couldn't import pandas", allow_module_level=True)
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option

@@ -217,8 +217,8 @@ def test_insertion(duck_conn):
     # Test Append
     with duck_conn.cursor() as cursor:
         with pytest.raises(
-            adbc_driver_manager.InternalError,
-            match=r'Table with name "ingest_table" already exists!',
+            adbc_driver_manager.ProgrammingError,
+            match=r"ALREADY_EXISTS",
         ):
             cursor.adbc_ingest("ingest_table", table, "create")
         cursor.adbc_ingest("ingest_table", table, "append")

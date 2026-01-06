@@ -28,8 +28,9 @@ class TestADBCConnectionGetInfo:
                 "duckdb",
                 "v" + duckdb.__duckdb_version__,  # don't hardcode this, as it will change every version
                 "ADBC DuckDB Driver",
+                "v" + duckdb.__duckdb_version__,  # don't hardcode this, as it will change every version
                 "(unknown)",
-                "(unknown)",
+                None,
             ],
             type=pa.string(),
         )
@@ -58,7 +59,7 @@ class TestADBCConnectionGetInfo:
         table = reader.read_all()
         values = table["info_value"]
 
-        expected_result = pa.array(["duckdb", "(unknown)"], type=pa.string())
+        expected_result = pa.array(["duckdb"], type=pa.string())
 
         assert values.num_chunks == 1
         chunk = values.chunk(0)
