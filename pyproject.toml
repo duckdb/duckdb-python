@@ -82,7 +82,7 @@ packages.adbc_driver_duckdb = "adbc_driver_duckdb"
 packages._duckdb-stubs = "_duckdb-stubs"
 
 [tool.scikit-build.cmake.define]
-BUILD_EXTENSIONS = "core_functions;json;parquet;icu;jemalloc"
+BUILD_EXTENSIONS = "core_functions;json;parquet;icu"
 
 [tool.setuptools_scm]
 version_scheme = "duckdb_packaging.setuptools_scm_version:version_scheme"
