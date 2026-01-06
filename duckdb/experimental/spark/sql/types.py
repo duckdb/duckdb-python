@@ -53,7 +53,7 @@ __all__ = [
     "StructType",
     "TimeNTZType",
     "TimeType",
-    "TimestampMilisecondNTZType",
+    "TimestampMillisecondNTZType",
     "TimestampNTZType",
     "TimestampNanosecondNTZType",
     "TimestampSecondNTZType",
@@ -282,8 +282,8 @@ class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
         raise ContributionsAcceptedError
 
 
-class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
-    """Timestamp (datetime.datetime) data type without timezone information with milisecond precision."""
+class TimestampMillisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
+    """Timestamp (datetime.datetime) data type without timezone information with millisecond precision."""
 
     def __init__(self) -> None:  # noqa: D107
         super().__init__(DuckDBPyType("TIMESTAMP_MS"))

@@ -178,7 +178,7 @@ class TimestampSecondValue(Value):
         super().__init__(object, TIMESTAMP_S)
 
 
-class TimestampMilisecondValue(Value):
+class TimestampMillisecondValue(Value):
     def __init__(self, object: Any) -> None:
         super().__init__(object, TIMESTAMP_MS)
 
@@ -255,7 +255,7 @@ __all__ = [
     "StringValue",
     "TimeTimeZoneValue",
     "TimeValue",
-    "TimestampMilisecondValue",
+    "TimestampMillisecondValue",
     "TimestampNanosecondValue",
     "TimestampSecondValue",
     "TimestampTimeZoneValue",
