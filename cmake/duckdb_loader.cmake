@@ -114,25 +114,18 @@ function(_duckdb_validate_jemalloc_config)
     return()
   endif()
 
-  # jemalloc is only allowed in linux and osx debug builds
-  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(supported_os TRUE)
-  else()
-    set(supported_os FALSE)
-  endif()
-
-  # jemalloc is only allowed in debug builds
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND supported_os)
+  # jemalloc is only enabled on 64bit x86 linux builds
+  if(CMAKE_SIZEOF_VOID_P EQUAL 8
+     AND CMAKE_SYSTEM_NAME STREQUAL "Linux"
+     AND NOT BSD)
     set(jemalloc_allowed TRUE)
   else()
     set(jemalloc_allowed FALSE)
   endif()
 
   if(NOT jemalloc_allowed)
-    message(
-      WARNING
-        "jemalloc extension is only supported on Linux and OSX in Debug builds.\n"
-        "Removing jemalloc from extension list.")
+    message(WARNING "jemalloc extension is only supported on Linux.\n"
+                    "Removing jemalloc from extension list.")
     # Remove jemalloc from the extension list
     string(REPLACE "jemalloc" "" BUILD_EXTENSIONS_FILTERED
                    "${BUILD_EXTENSIONS}")
@@ -187,19 +180,17 @@ function(_duckdb_create_interface_target target_name)
   if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_compile_options(
       ${target_name}
-      INTERFACE
-        /wd4244 # suppress Conversion from 'type1' to 'type2', possible loss of
-                # data
-        /wd4267 # suppress Conversion from ‘size_t’ to ‘type’, possible loss of
-                # data
-        /wd4200 # suppress Nonstandard extension used: zero-sized array in
-                # struct/union
-        /wd26451
-        /wd26495 # suppress Code Analysis
-        /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe functions
-        /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR # see
-                                               # https://github.com/duckdblabs/duckdb-internal/issues/5151
-        /utf-8 # treat source files as UTF-8 encoded
+      INTERFACE /wd4244 # suppress Conversion from 'type1' to 'type2', possible
+                        # loss of data
+                /wd4267 # suppress Conversion from ‘size_t’ to ‘type’, possible
+                        # loss of data
+                /wd4200 # suppress Nonstandard extension used: zero-sized array
+                        # in struct/union
+                /wd26451
+                /wd26495 # suppress Code Analysis
+                /D_CRT_SECURE_NO_WARNINGS # suppress warnings about unsafe
+                                          # functions
+                /utf-8 # treat source files as UTF-8 encoded
     )
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     target_compile_options(
