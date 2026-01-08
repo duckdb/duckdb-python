@@ -225,7 +225,9 @@ Value PyTime::ToDuckValue() {
 		auto seconds = PyTimezone::GetUTCOffsetSeconds(this->timezone_obj);
 		return Value::TIMETZ(dtime_tz_t(duckdb_time, seconds));
 	}
-	return Value::TIME(duckdb_time);
+	// For non-timezoned time's we default to TIME_NS
+	const auto nanos = Time::ToNanoTime(hour, minute, second, microsecond * 1000);
+	return Value::TIME_NS(dtime_ns_t(nanos));
 }
 
 int32_t PyTime::GetHours(py::handle &obj) {
@@ -585,13 +587,20 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto tmp_datetime_with_tz = import_cache.datetime.datetime.combine()(tmp_datetime, py_time, timezone_offset);
 		return tmp_datetime_with_tz.attr("timetz")();
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-		int32_t hour, min, sec, microsec;
-		auto time = val.GetValueUnsafe<dtime_t>();
-		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		int32_t hour, min, sec, usec;
+		dtime_t time;
+		if (type.id() == LogicalTypeId::TIME) {
+			time = val.GetValueUnsafe<dtime_t>();
+		} else {
+			// Python's datetime doesn't support nanoseconds, we convert to micros.
+			time = val.GetValueUnsafe<dtime_ns_t>().time();
+		}
+		duckdb::Time::Convert(time, hour, min, sec, usec);
 		try {
-			auto pytime = PyTime_FromTime(hour, min, sec, microsec);
+			auto pytime = PyTime_FromTime(hour, min, sec, usec);
 			if (!pytime) {
 				throw py::error_already_set();
 			}

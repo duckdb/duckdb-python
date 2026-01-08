@@ -140,6 +140,24 @@ struct TimeConvert {
 	}
 };
 
+struct TimeNSConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(dtime_ns_t val, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+		auto value = Value::TIME_NS(val);
+		auto py_obj = PythonObject::FromValue(value, LogicalType::TIME_NS, client_properties);
+		// Release ownership of the PyObject* without decreasing refcount
+		// this returns a handle, of which we take the ptr to get the PyObject*
+		return py_obj.release().ptr();
+	}
+
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
+		return nullptr;
+	}
+};
+
 struct StringConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(string_t val, NumpyAppendData &append_data) {
@@ -638,6 +656,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		break;
 	case LogicalTypeId::TIME:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(append_data);
+		break;
+	case LogicalTypeId::TIME_NS:
+		may_have_null = ConvertColumn<dtime_ns_t, PyObject *, duckdb_py_convert::TimeNSConvert>(append_data);
 		break;
 	case LogicalTypeId::INTERVAL:
 		may_have_null = ConvertColumn<interval_t, int64_t, duckdb_py_convert::IntervalConvert>(append_data);

@@ -395,7 +395,8 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 		if (!py::none().is(tzinfo)) {
 			return LogicalType::TIME_TZ;
 		}
-		return LogicalType::TIME;
+		// Convert to the most precise type
+		return LogicalType::TIME_NS;
 	}
 	case PythonObjectType::Date:
 		return LogicalType::DATE;

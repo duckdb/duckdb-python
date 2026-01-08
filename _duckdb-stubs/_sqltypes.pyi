@@ -59,6 +59,7 @@ INTERVAL: DuckDBPyType  # value = INTERVAL
 SMALLINT: DuckDBPyType  # value = SMALLINT
 SQLNULL: DuckDBPyType  # value = "NULL"
 TIME: DuckDBPyType  # value = TIME
+TIME_NS: DuckDBPyType  # value = TIME_NS
 TIMESTAMP: DuckDBPyType  # value = TIMESTAMP
 TIMESTAMP_MS: DuckDBPyType  # value = TIMESTAMP_MS
 TIMESTAMP_NS: DuckDBPyType  # value = TIMESTAMP_NS

@@ -48,6 +48,7 @@ static idx_t GetNumpyTypeWidth(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return sizeof(int64_t);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BIT:
@@ -110,6 +111,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::INTERVAL:
 		return "timedelta64[ns]";
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BIT:

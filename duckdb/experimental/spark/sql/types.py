@@ -51,6 +51,7 @@ __all__ = [
     "StringType",
     "StructField",
     "StructType",
+    "TimeNSType",
     "TimeNTZType",
     "TimeType",
     "TimestampMillisecondNTZType",
@@ -503,6 +504,16 @@ class TimeNTZType(IntegralType):
 
     def simpleString(self) -> str:  # noqa: D102
         return "time"
+
+
+class TimeNSType(IntegralType):
+    """Time NS (datetime.time) data type without timezone information."""
+
+    def __init__(self) -> None:  # noqa: D107
+        super().__init__(DuckDBPyType("TIME_NS"))
+
+    def simpleString(self) -> str:  # noqa: D102
+        return "time_ns"
 
 
 class DayTimeIntervalType(AtomicType):

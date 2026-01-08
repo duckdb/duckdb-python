@@ -24,7 +24,7 @@ class TestArrowTime:
         assert rel["a"] == arrow_table["c"]
         assert rel["b"] == arrow_table["c"]
         assert rel["c"] == arrow_table["c"]
-        assert rel["d"] == arrow_table["c"]
+        assert rel["d"] == arrow_table["d"]
 
     def test_time_null(self, duckdb_cursor):
         if not can_run:
@@ -40,7 +40,7 @@ class TestArrowTime:
         assert rel["a"] == arrow_table["c"]
         assert rel["b"] == arrow_table["c"]
         assert rel["c"] == arrow_table["c"]
-        assert rel["d"] == arrow_table["c"]
+        assert rel["d"] == arrow_table["d"]
 
     def test_max_times(self, duckdb_cursor):
         if not can_run:
@@ -62,7 +62,7 @@ class TestArrowTime:
         assert rel["a"] == result["a"]
 
         # Max NSec
-        data = pa.array([9223372036854774], type=pa.time64("us"))
+        data = pa.array([9223372036854774000], type=pa.time64("ns"))
         result = pa.Table.from_arrays([data], ["a"])
         data = pa.array([9223372036854774000], type=pa.time64("ns"))
         arrow_table = pa.Table.from_arrays([data], ["a"])
