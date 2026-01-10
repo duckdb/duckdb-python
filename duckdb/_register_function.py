@@ -1,11 +1,9 @@
-# ruff: noqa: D100
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, overload
 
 if TYPE_CHECKING:
-    from duckdb import DuckDBPyConnection, PythonExceptionHandling
-    from duckdb import func, sqltypes
+    from duckdb import DuckDBPyConnection, PythonExceptionHandling, func, sqltypes
 
 
 @overload
@@ -58,6 +56,7 @@ def _register_function_impl(
             return x + 1
 
     Args:
+        self: A DuckDBPyConnection with which to register the function against.
         function: The function to register (when used without parentheses).
         name: SQL function name. Defaults to the Python function's name.
         parameters: List of parameter types. Inferred from annotations if None.
