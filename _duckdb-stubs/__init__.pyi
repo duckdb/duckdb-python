@@ -81,6 +81,7 @@ __all__: list[str] = [
     "commit",
     "connect",
     "create_function",
+    "register_function",
     "cursor",
     "decimal_type",
     "default_connection",
@@ -208,6 +209,26 @@ class DuckDBPyConnection:
         exception_handling: PythonExceptionHandling = ...,
         side_effects: bool = False,
     ) -> DuckDBPyConnection: ...
+    @pytyping.overload
+    def register_function(
+        self,
+        function: Callable[..., pytyping.Any],
+        /,
+    ) -> Callable[..., pytyping.Any]: ...
+    @pytyping.overload
+    def register_function(
+        self,
+        function: None = None,
+        /,
+        *,
+        name: str | None = None,
+        parameters: list[sqltypes.DuckDBPyType] | None = None,
+        return_type: sqltypes.DuckDBPyType | None = None,
+        type: func.PythonUDFType | None = None,
+        null_handling: func.FunctionNullHandling | None = None,
+        exception_handling: PythonExceptionHandling | None = None,
+        side_effects: bool = False,
+    ) -> Callable[[Callable[..., pytyping.Any]], Callable[..., pytyping.Any]]: ...
     def cursor(self) -> DuckDBPyConnection: ...
     def decimal_type(self, width: pytyping.SupportsInt, scale: pytyping.SupportsInt) -> sqltypes.DuckDBPyType: ...
     def df(self, *, date_as_object: bool = False) -> pandas.DataFrame: ...

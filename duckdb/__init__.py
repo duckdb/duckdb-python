@@ -160,6 +160,7 @@ from duckdb._dbapi_type_object import (
     STRING,
     DBAPITypeObject,
 )
+from duckdb._register_function import _register_function_impl
 from duckdb._version import (
     __duckdb_version__,
     __version__,
@@ -200,6 +201,10 @@ from duckdb.value.constant import (
     UUIDValue,
     Value,
 )
+
+## Attach Python Implemented Methods:
+## These are mehods that do not have a cpp implementation, and are syntactic sugare around existing methods.
+DuckDBPyConnection.register_function = _register_function_impl  # type: ignore[method-assign]
 
 __all__: list[str] = [
     "BinaryValue",
