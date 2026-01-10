@@ -8,7 +8,8 @@ pa = pytest.importorskip("pyarrow")
 
 
 class TestPyArrowUDF:
-    def test_basic_use(self):
+    @pytest.mark.parametrize("method", ["create_function", "register_function"])
+    def test_basic_use(self, method):
         def plus_one(x):
             pa.lib.Table.from_arrays([x], names=["c0"])
             import pandas as pd
@@ -18,7 +19,10 @@ class TestPyArrowUDF:
             return pa.lib.Table.from_pandas(df)
 
         con = duckdb.connect()
-        con.create_function("plus_one", plus_one, [BIGINT], BIGINT, type="arrow")
+        if method == "create_function":
+            con.create_function("plus_one", plus_one, [BIGINT], BIGINT, type="arrow")
+        elif method == "register_function":
+            con.register_function(plus_one, parameters=[BIGINT], return_type=BIGINT, type="arrow")
         assert con.sql("select plus_one(5)").fetchall() == [(6,)]
 
         range_table = con.table_function("range", [5000])  # noqa: F841
