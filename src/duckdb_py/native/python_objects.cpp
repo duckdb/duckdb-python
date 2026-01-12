@@ -585,13 +585,20 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto tmp_datetime_with_tz = import_cache.datetime.datetime.combine()(tmp_datetime, py_time, timezone_offset);
 		return tmp_datetime_with_tz.attr("timetz")();
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-		int32_t hour, min, sec, microsec;
-		auto time = val.GetValueUnsafe<dtime_t>();
-		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		int32_t hour, min, sec, usec;
+		dtime_t time;
+		if (type.id() == LogicalTypeId::TIME) {
+			time = val.GetValueUnsafe<dtime_t>();
+		} else {
+			// Python's datetime doesn't support nanoseconds, we convert to micros.
+			time = val.GetValueUnsafe<dtime_ns_t>().time();
+		}
+		duckdb::Time::Convert(time, hour, min, sec, usec);
 		try {
-			auto pytime = PyTime_FromTime(hour, min, sec, microsec);
+			auto pytime = PyTime_FromTime(hour, min, sec, usec);
 			if (!pytime) {
 				throw py::error_already_set();
 			}

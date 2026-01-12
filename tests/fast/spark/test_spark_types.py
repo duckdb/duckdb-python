@@ -28,6 +28,7 @@ from spark_namespace.sql.types import (
     StringType,
     StructField,
     StructType,
+    TimeNSType,
     TimeNTZType,
     TimestampMillisecondNTZType,
     TimestampNanosecondNTZType,
@@ -129,5 +130,6 @@ class TestTypes:
                     True,
                 ),
                 StructField("map", MapType(StringType(), StringType(), True), True),
+                StructField("time_ns", TimeNSType(), True),
             ]
         )
