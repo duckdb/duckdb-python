@@ -395,10 +395,36 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vec
 		       function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 	}
 	for (idx_t i = 0; i < input.size(); i++) {
+		// We parse the input as an expression to validate it.
+		auto trimmed_input = input[i];
+		StringUtil::Trim(trimmed_input);
+
+		unique_ptr<ParsedExpression> expression;
+		try {
+			auto expressions = Parser::ParseExpressionList(trimmed_input);
+			if (expressions.size() == 1) {
+				expression = std::move(expressions[0]);
+			}
+		} catch (const ParserException &) {
+			// First attempt at parsing failed, the input might be a column name that needs quoting.
+			auto quoted_input = KeywordHelper::WriteQuoted(trimmed_input, '"');
+			auto expressions = Parser::ParseExpressionList(quoted_input);
+			if (expressions.size() == 1 && expressions[0]->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+				expression = std::move(expressions[0]);
+			}
+		}
+
+		if (!expression) {
+			throw ParserException("Invalid column expression: %s", trimmed_input);
+		}
+
+		// ToString() handles escaping for all expression types
+		auto escaped_input = expression->ToString();
+
 		if (function_parameter.empty()) {
-			expr += function_name + "(" + input[i] + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
+			expr += function_name + "(" + escaped_input + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 		} else {
-			expr += function_name + "(" + input[i] + "," + function_parameter +
+			expr += function_name + "(" + escaped_input + "," + function_parameter +
 			        ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 		}
 
@@ -587,7 +613,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Product(const std::string &column
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::StringAgg(const std::string &column, const std::string &sep,
                                                          const std::string &groups, const std::string &window_spec,
                                                          const std::string &projected_columns) {
-	auto string_agg_params = "\'" + sep + "\'";
+	auto string_agg_params = KeywordHelper::WriteOptionallyQuoted(sep, '\'');
 	return ApplyAggOrWin("string_agg", column, string_agg_params, groups, window_spec, projected_columns);
 }
 
