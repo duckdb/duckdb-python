@@ -34,18 +34,18 @@ def fetch_df(rel):
 
 
 def fetch_arrow(rel):
-    return rel.fetch_arrow_table()
+    return rel.arrow_table()
 
 
 def fetch_arrow_table(rel):
-    return rel.fetch_arrow_table()
+    return rel.arrow_table()
 
 
 def fetch_arrow_record_batch(rel: duckdb.DuckDBPyRelation):
     # Note: this has to executed first, otherwise we'll create a deadlock
     # Because it will try to execute the input at the same time as executing the relation
     # On the same connection (that's the core of the issue)
-    return rel.execute().fetch_record_batch()
+    return rel.execute().arrow_reader()
 
 
 def fetch_relation(rel):

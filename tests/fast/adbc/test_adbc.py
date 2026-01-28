@@ -131,7 +131,7 @@ def test_commit(tmp_path):
         conn.cursor() as cur,
     ):
         cur.execute("SELECT count(*) from ingest")
-        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [4]}
+        assert cur.arrow_table().to_pydict() == {"count_star()": [4]}
 
 
 def test_connection_get_table_schema(duck_conn):
@@ -197,7 +197,7 @@ def test_statement_query(duck_conn):
         assert cursor.fetchone() is None
 
         cursor.execute("SELECT 1 AS foo")
-        assert cursor.fetch_arrow_table().to_pylist() == [{"foo": 1}]
+        assert cursor.arrow_table().to_pylist() == [{"foo": 1}]
 
 
 def test_insertion(duck_conn):
@@ -207,12 +207,12 @@ def test_insertion(duck_conn):
     with duck_conn.cursor() as cursor:
         cursor.adbc_ingest("ingest", reader, "create")
         cursor.execute("SELECT * FROM ingest")
-        assert cursor.fetch_arrow_table() == table
+        assert cursor.arrow_table() == table
 
     with duck_conn.cursor() as cursor:
         cursor.adbc_ingest("ingest_table", table, "create")
         cursor.execute("SELECT * FROM ingest")
-        assert cursor.fetch_arrow_table() == table
+        assert cursor.arrow_table() == table
 
     # Test Append
     with duck_conn.cursor() as cursor:
@@ -223,14 +223,14 @@ def test_insertion(duck_conn):
             cursor.adbc_ingest("ingest_table", table, "create")
         cursor.adbc_ingest("ingest_table", table, "append")
         cursor.execute("SELECT count(*) FROM ingest_table")
-        assert cursor.fetch_arrow_table().to_pydict() == {"count_star()": [8]}
+        assert cursor.arrow_table().to_pydict() == {"count_star()": [8]}
 
 
 def test_read(duck_conn):
     with duck_conn.cursor() as cursor:
         filename = Path(__file__).parent / ".." / "data" / "category.csv"
         cursor.execute(f"SELECT * FROM '{filename}'")
-        assert cursor.fetch_arrow_table().to_pydict() == {
+        assert cursor.arrow_table().to_pydict() == {
             "CATEGORY_ID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
             "NAME": [
                 "Action",
@@ -305,7 +305,7 @@ def test_large_chunk(tmp_path):
     ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("SELECT count(*) from ingest")
-        assert cur.fetch_arrow_table().to_pydict() == {"count_star()": [30_000]}
+        assert cur.arrow_table().to_pydict() == {"count_star()": [30_000]}
 
 
 def test_dictionary_data(tmp_path):
@@ -331,9 +331,7 @@ def test_dictionary_data(tmp_path):
     ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("from ingest")
-        assert cur.fetch_arrow_table().to_pydict() == {
-            "fruits": ["apple", "banana", "apple", "orange", "banana", "banana"]
-        }
+        assert cur.arrow_table().to_pydict() == {"fruits": ["apple", "banana", "apple", "orange", "banana", "banana"]}
 
 
 def test_ree_data(tmp_path):
@@ -359,9 +357,7 @@ def test_ree_data(tmp_path):
     ):
         cur.adbc_ingest("ingest", table, "create")
         cur.execute("from ingest")
-        assert cur.fetch_arrow_table().to_pydict() == {
-            "fruits": ["apple", "apple", "apple", "banana", "banana", "orange"]
-        }
+        assert cur.arrow_table().to_pydict() == {"fruits": ["apple", "apple", "apple", "banana", "banana", "orange"]}
 
 
 def sorted_get_objects(catalogs):

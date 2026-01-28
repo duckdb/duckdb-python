@@ -203,12 +203,32 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::kw_only(), py::arg("date_as_object") = false);
 	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
 	      py::arg("rows_per_batch") = 1000000, py::kw_only(), py::arg("lazy") = false);
-	m.def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	      py::arg("rows_per_batch") = 1000000);
-	m.def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
-	m.def("arrow", &DuckDBPyConnection::FetchRecordBatchReader, "Fetch an Arrow RecordBatchReader following execute()",
-	      py::arg("rows_per_batch") = 1000000);
+	m.def("arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
+	      py::arg("batch_size") = 1000000);
+	m.def("arrow_reader", &DuckDBPyConnection::FetchRecordBatchReader,
+	      "Fetch an Arrow RecordBatchReader following execute()", py::arg("batch_size") = 1000000);
+	m.def(
+	    "fetch_arrow_table",
+	    [](DuckDBPyConnection &self, idx_t rows_per_batch) {
+		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_arrow_table() is deprecated, use arrow_table() instead.", 0);
+		    return self.FetchArrow(rows_per_batch);
+	    },
+	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000);
+	m.def(
+	    "fetch_record_batch",
+	    [](DuckDBPyConnection &self, idx_t rows_per_batch) {
+		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_record_batch() is deprecated, use arrow_reader() instead.",
+		                 0);
+		    return self.FetchRecordBatchReader(rows_per_batch);
+	    },
+	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
+	m.def(
+	    "arrow",
+	    [](DuckDBPyConnection &self, idx_t rows_per_batch) {
+		    PyErr_WarnEx(PyExc_DeprecationWarning, "arrow() is deprecated, use arrow_reader() instead.", 0);
+		    return self.FetchRecordBatchReader(rows_per_batch);
+	    },
+	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000);
 	m.def("torch", &DuckDBPyConnection::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors following execute()");
 	m.def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()");
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");

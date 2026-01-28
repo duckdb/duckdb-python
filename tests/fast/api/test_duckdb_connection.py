@@ -54,7 +54,7 @@ class TestDuckDBConnection:
     def test_arrow(self):
         pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")
-        duckdb.fetch_arrow_table()
+        duckdb.arrow_table()
 
     def test_begin_commit(self):
         duckdb.begin()
@@ -195,7 +195,7 @@ class TestDuckDBConnection:
 
         result_df = duckdb.execute(sql).df()
 
-        arrow_table = duckdb.execute(sql).fetch_arrow_table()
+        arrow_table = duckdb.execute(sql).arrow_table()
 
         arrow_df = arrow_table.to_pandas()
         assert result_df["repetitions"].sum() == arrow_df["repetitions"].sum()
@@ -225,7 +225,7 @@ class TestDuckDBConnection:
 
         duckdb.execute("CREATE table t as select range a from range(3000);")
         duckdb.execute("SELECT a FROM t")
-        record_batch_reader = duckdb.fetch_record_batch(1024)
+        record_batch_reader = duckdb.arrow_reader(1024)
         chunk = record_batch_reader.read_all()
         assert len(chunk) == 3000
 
@@ -299,7 +299,7 @@ class TestDuckDBConnection:
         assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
 
         # Create a registered object called 'vw'
-        arrow_result = duckdb_cursor.execute("select 42").fetch_arrow_table()
+        arrow_result = duckdb_cursor.execute("select 42").arrow_table()
         with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
             duckdb_cursor.register("vw", arrow_result)
 
