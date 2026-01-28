@@ -18,11 +18,11 @@ class TestArrowLargeOffsets:
             match="Arrow Appender: The maximum combined list offset for regular list buffers is 2147483647 but "
             "the offset of 2147481000 exceeds this",
         ):
-            duckdb_cursor.sql("SELECT col FROM tbl").fetch_arrow_table()
+            duckdb_cursor.sql("SELECT col FROM tbl").to_arrow_table()
 
         tbl2 = pa.Table.from_pydict({"col": ary.cast(pa.large_list(pa.uint8()))})  # noqa: F841
         duckdb_cursor.sql("set arrow_large_buffer_size = true")
-        res2 = duckdb_cursor.sql("SELECT col FROM tbl2").fetch_arrow_table()
+        res2 = duckdb_cursor.sql("SELECT col FROM tbl2").to_arrow_table()
         res2.validate()
 
     @pytest.mark.skip(reason="CI does not have enough memory to validate this")
@@ -35,8 +35,8 @@ class TestArrowLargeOffsets:
             match="Arrow Appender: The maximum combined list offset for regular list buffers is 2147483647 but the "
             "offset of 2147481000 exceeds this",
         ):
-            duckdb_cursor.sql("select map(col, col) from tbl").fetch_arrow_table()
+            duckdb_cursor.sql("select map(col, col) from tbl").to_arrow_table()
 
         duckdb_cursor.sql("set arrow_large_buffer_size = true")
-        arrow_map_large = duckdb_cursor.sql("select map(col, col) from tbl").fetch_arrow_table()
+        arrow_map_large = duckdb_cursor.sql("select map(col, col) from tbl").to_arrow_table()
         arrow_map_large.validate()

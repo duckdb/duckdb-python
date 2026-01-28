@@ -68,7 +68,7 @@ class DataFrame:  # noqa: D101
         age: [[2,5]]
         name: [["Alice","Bob"]]
         """
-        return self.relation.to_arrow_table()
+        return self.relation.arrow_table()
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.

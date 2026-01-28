@@ -41,7 +41,7 @@ class TestStreamingResult:
         pytest.importorskip("pyarrow.dataset")
         # record batch reader
         res = duckdb_cursor.sql("SELECT * FROM range(100000) t(i)")
-        reader = res.fetch_arrow_reader(batch_size=16_384)
+        reader = res.to_arrow_reader(batch_size=16_384)
         result = []
         for batch in reader:
             result += batch.to_pydict()["i"]
@@ -52,7 +52,7 @@ class TestStreamingResult:
             "SELECT CASE WHEN i < 10000 THEN i ELSE concat('hello', i::VARCHAR)::INT END FROM range(100000) t(i)"
         )
         with pytest.raises(duckdb.ConversionException, match="Could not convert string 'hello10000' to INT32"):
-            reader = res.fetch_arrow_reader(batch_size=16_384)
+            reader = res.to_arrow_reader(batch_size=16_384)
 
     def test_9801(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE test(id INTEGER , name VARCHAR NOT NULL);")

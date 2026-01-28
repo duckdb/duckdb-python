@@ -270,10 +270,7 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         # Try to pushdown filter, if one exists
         if duck_predicate is not None:
             relation_final = relation_final.filter(duck_predicate)
-        if batch_size is None:
-            results = relation_final.fetch_arrow_reader()
-        else:
-            results = relation_final.fetch_arrow_reader(batch_size)
+        results = relation_final.to_arrow_reader() if batch_size is None else relation_final.to_arrow_reader(batch_size)
 
         for record_batch in iter(results.read_next_batch, None):
             if predicate is not None and duck_predicate is None:

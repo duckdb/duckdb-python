@@ -24,7 +24,7 @@ class TestArrowInterval:
             pa.array([1], pa.duration("s")),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ["a", "b", "c", "d"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == expected_arrow["a"]
         assert rel["b"] == expected_arrow["a"]
         assert rel["c"] == expected_arrow["a"]
@@ -41,7 +41,7 @@ class TestArrowInterval:
             pa.array([None], pa.duration("s")),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ["a", "b", "c", "d"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == expected_arrow["a"]
         assert rel["b"] == expected_arrow["a"]
         assert rel["c"] == expected_arrow["a"]
@@ -56,4 +56,4 @@ class TestArrowInterval:
         arrow_table = pa.Table.from_arrays([data], ["a"])
 
         with pytest.raises(duckdb.ConversionException, match="Could not convert Interval to Microsecond"):
-            duckdb.from_arrow(arrow_table).fetch_arrow_table()
+            duckdb.from_arrow(arrow_table).to_arrow_table()

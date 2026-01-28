@@ -24,7 +24,7 @@ def create_pyarrow_pandas(rel):
 
 
 def create_pyarrow_table(rel):
-    return rel.fetch_arrow_table()
+    return rel.to_arrow_table()
 
 
 def create_pyarrow_dataset(rel):
@@ -553,7 +553,7 @@ class TestArrowFilterPushdown:
         df.to_parquet(str(file_path))
 
         my_arrow_dataset = pa_ds.dataset(str(file_path))
-        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).fetch_arrow_table()
+        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).to_arrow_table()
         output = duckdb_cursor.sql("select * from res").fetchall()
         expected = [(1, dt), (2, dt), (3, dt)]
         assert output == expected
@@ -704,7 +704,7 @@ class TestArrowFilterPushdown:
         duckdb_cursor.execute(f"copy (select * from df2) to '{data2.as_posix()}'")
 
         glob_pattern = tmp_path / "data*.parquet"
-        table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).fetch_arrow_table()
+        table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).to_arrow_table()
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
         expected_df = duckdb.from_parquet(glob_pattern.as_posix()).filter("date > '2019-01-01'").df()
@@ -869,7 +869,7 @@ class TestArrowFilterPushdown:
         con.execute(
             "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
         )
-        arrow_tbl = con.execute("FROM T").fetch_arrow_table()
+        arrow_tbl = con.execute("FROM T").to_arrow_table()
 
         # No projection just unsupported filter
         assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, "3", 3, 3)]
@@ -893,7 +893,7 @@ class TestArrowFilterPushdown:
             "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"  # noqa: E501
         )
 
-        arrow_tbl = con.execute("FROM T_2").fetch_arrow_table()
+        arrow_tbl = con.execute("FROM T_2").to_arrow_table()
 
         assert con.execute(
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
@@ -905,8 +905,8 @@ class TestArrowFilterPushdown:
         duckdb_conn.execute("CREATE TABLE build as select (random()*9999)::INT b from range(20);")
         duck_probe = duckdb_conn.table("probe")
         duck_build = duckdb_conn.table("build")
-        duck_probe_arrow = duck_probe.fetch_arrow_table()
-        duck_build_arrow = duck_build.fetch_arrow_table()
+        duck_probe_arrow = duck_probe.to_arrow_table()
+        duck_build_arrow = duck_build.to_arrow_table()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         duckdb_conn.register("duck_build_arrow", duck_build_arrow)
         assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
@@ -917,7 +917,7 @@ class TestArrowFilterPushdown:
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE probe as select range a from range(1000);")
         duck_probe = duckdb_conn.table("probe")
-        duck_probe_arrow = duck_probe.fetch_arrow_table()
+        duck_probe_arrow = duck_probe.to_arrow_table()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
 
@@ -980,7 +980,7 @@ class TestArrowFilterPushdown:
             arrow_res = con.sql(query.format(table="arrow_table")).fetchall()
             assert len(duckdb_res) == len(arrow_res)
 
-        arrow_table = duckdb_cursor.table("test").fetch_arrow_table()
+        arrow_table = duckdb_cursor.table("test").to_arrow_table()
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")

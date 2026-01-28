@@ -31,7 +31,7 @@ class TestRuntimeError:
         con = duckdb.connect()
         con.execute("create table tbl as select 'hello' i")
         with pytest.raises(duckdb.ConversionException):
-            con.execute("select i::int from tbl").fetch_arrow_table()
+            con.execute("select i::int from tbl").to_arrow_table()
 
     def test_register_error(self):
         con = duckdb.connect()
@@ -43,23 +43,23 @@ class TestRuntimeError:
         pytest.importorskip("pyarrow")
 
         con = duckdb.connect()
-        arrow_object = con.execute("select 1").fetch_arrow_table()
+        arrow_object = con.execute("select 1").to_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
         with pytest.raises(duckdb.InvalidInputException, match="There is no query result"):
-            res.fetch_arrow_table()
+            res.to_arrow_table()
 
     def test_arrow_record_batch_reader_error(self):
         pytest.importorskip("pyarrow")
 
         con = duckdb.connect()
-        arrow_object = con.execute("select 1").fetch_arrow_table()
+        arrow_object = con.execute("select 1").to_arrow_table()
         arrow_relation = con.from_arrow(arrow_object)
         res = arrow_relation.execute()
         res.close()
         with pytest.raises(duckdb.ProgrammingError, match="There is no query result"):
-            res.fetch_arrow_reader(1)
+            res.to_arrow_reader(1)
 
     def test_relation_cache_fetchall(self):
         conn = duckdb.connect()
@@ -185,7 +185,7 @@ class TestRuntimeError:
             conn.fetch_df_chunk()
 
         with no_result_set():
-            conn.fetch_arrow_table()
+            conn.to_arrow_table()
 
         with no_result_set():
-            conn.fetch_record_batch()
+            conn.to_arrow_reader()

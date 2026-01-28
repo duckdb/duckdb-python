@@ -446,11 +446,33 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    "Fetch a result as Polars DataFrame following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
 	    py::arg("lazy") = false, py::arg("connection") = py::none());
 	m.def(
+	    "to_arrow_table",
+	    [](idx_t batch_size, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FetchArrow(batch_size);
+	    },
+	    "Fetch a result as Arrow table following execute()", py::arg("batch_size") = 1000000, py::kw_only(),
+	    py::arg("connection") = py::none());
+	m.def(
+	    "to_arrow_reader",
+	    [](idx_t batch_size, shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->FetchRecordBatchReader(batch_size);
+	    },
+	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("batch_size") = 1000000, py::kw_only(),
+	    py::arg("connection") = py::none());
+	m.def(
 	    "fetch_arrow_table",
 	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
+		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_arrow_table() is deprecated, use to_arrow_table() instead.",
+		                 0);
 		    return conn->FetchArrow(rows_per_batch);
 	    },
 	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
@@ -461,16 +483,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
-	    py::arg("connection") = py::none());
-	m.def(
-	    "arrow",
-	    [](const idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
+		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_record_batch() is deprecated, use to_arrow_reader() instead.",
+		                 0);
 		    return conn->FetchRecordBatchReader(rows_per_batch);
 	    },
 	    "Fetch an Arrow RecordBatchReader following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
@@ -957,14 +971,14 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	// We define these "wrapper" methods manually because they are overloaded
 	m.def(
 	    "arrow",
-	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::Table {
+	    [](idx_t rows_per_batch, shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::RecordBatchReader {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->FetchArrow(rows_per_batch);
+		    return conn->FetchRecordBatchReader(rows_per_batch);
 	    },
-	    "Fetch a result as Arrow table following execute()", py::arg("rows_per_batch") = 1000000, py::kw_only(),
-	    py::arg("connection") = py::none());
+	    "Alias of to_arrow_reader(). We recommend using to_arrow_reader() instead.",
+	    py::arg("rows_per_batch") = 1000000, py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "arrow",
 	    [](py::object &arrow_object, shared_ptr<DuckDBPyConnection> conn) -> unique_ptr<DuckDBPyRelation> {

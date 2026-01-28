@@ -78,14 +78,14 @@ class TestNativeTimeZone:
     )
     def test_arrow_timestamp_timezone(self, duckdb_cursor):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
-        table = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetch_arrow_table()
+        table = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").to_arrow_table()
         res = table.to_pandas()
         assert get_tz_string(res.dtypes["tz"].tz) == "America/Los_Angeles"
         assert res["tz"][0].hour == 14
         assert res["tz"][0].minute == 52
 
         duckdb_cursor.execute("SET timezone='UTC';")
-        res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetch_arrow_table().to_pandas()
+        res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").to_arrow_table().to_pandas()
         assert get_tz_string(res.dtypes["tz"].tz) == "UTC"
         assert res["tz"][0].hour == 21
         assert res["tz"][0].minute == 52
@@ -93,13 +93,11 @@ class TestNativeTimeZone:
     def test_arrow_timestamp_time(self, duckdb_cursor):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
         res1 = (
-            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'")
-            .fetch_arrow_table()
-            .to_pandas()
+            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").to_arrow_table().to_pandas()
         )
         res2 = (
             duckdb_cursor.execute(f"select TimeRecStart::TIMETZ::TIME  as tz  from '{filename}'")
-            .fetch_arrow_table()
+            .to_arrow_table()
             .to_pandas()
         )
         assert res1["tz"][0].hour == 14
@@ -109,13 +107,11 @@ class TestNativeTimeZone:
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res1 = (
-            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'")
-            .fetch_arrow_table()
-            .to_pandas()
+            duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").to_arrow_table().to_pandas()
         )
         res2 = (
             duckdb_cursor.execute(f"select TimeRecStart::TIMETZ::TIME  as tz  from '{filename}'")
-            .fetch_arrow_table()
+            .to_arrow_table()
             .to_pandas()
         )
         assert res1["tz"][0].hour == 21

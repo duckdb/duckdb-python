@@ -20,7 +20,7 @@ class TestArrowTime:
             pa.array([1000000000], pa.time64("ns")),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ["a", "b", "c", "d"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == arrow_table["c"]
         assert rel["b"] == arrow_table["c"]
         assert rel["c"] == arrow_table["c"]
@@ -36,7 +36,7 @@ class TestArrowTime:
             pa.array([None], pa.time64("ns")),
         )
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2], data[3]], ["a", "b", "c", "d"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == arrow_table["c"]
         assert rel["b"] == arrow_table["c"]
         assert rel["c"] == arrow_table["c"]
@@ -50,7 +50,7 @@ class TestArrowTime:
         # Max Sec
         data = pa.array([2147483647], type=pa.time32("s"))
         arrow_table = pa.Table.from_arrays([data], ["a"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == result["a"]
 
         # Max MSec
@@ -58,7 +58,7 @@ class TestArrowTime:
         result = pa.Table.from_arrays([data], ["a"])
         data = pa.array([2147483647], type=pa.time32("ms"))
         arrow_table = pa.Table.from_arrays([data], ["a"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
         assert rel["a"] == result["a"]
 
         # Max NSec
@@ -66,7 +66,7 @@ class TestArrowTime:
         result = pa.Table.from_arrays([data], ["a"])
         data = pa.array([9223372036854774000], type=pa.time64("ns"))
         arrow_table = pa.Table.from_arrays([data], ["a"])
-        rel = duckdb.from_arrow(arrow_table).fetch_arrow_table()
+        rel = duckdb.from_arrow(arrow_table).to_arrow_table()
 
         print(rel["a"])
         print(result["a"])

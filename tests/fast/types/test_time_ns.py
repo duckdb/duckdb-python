@@ -44,7 +44,7 @@ def test_time_ns_arrow_roundtrip(duckdb_cursor):
     pa = pytest.importorskip("pyarrow")
 
     # Get a time_ns in an arrow table
-    arrow_table = duckdb_cursor.execute("SELECT TIME_NS '12:34:56.123456789' AS time_ns_col").fetch_arrow_table()
+    arrow_table = duckdb_cursor.execute("SELECT TIME_NS '12:34:56.123456789' AS time_ns_col").to_arrow_table()
 
     value = arrow_table.column("time_ns_col")[0]
     assert isinstance(value, pa.lib.Time64Scalar)
