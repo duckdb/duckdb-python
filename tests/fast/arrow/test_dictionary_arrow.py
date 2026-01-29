@@ -127,7 +127,7 @@ class TestArrowDictionary:
         query = query.format(element, count)
         original_rel = duckdb_cursor.sql(query)
         expected = original_rel.fetchall()
-        arrow_res = original_rel.fetch_arrow_table()  # noqa: F841
+        arrow_res = original_rel.to_arrow_table()  # noqa: F841
 
         roundtrip_rel = duckdb_cursor.sql("select * from arrow_res")
         actual = roundtrip_rel.fetchall()

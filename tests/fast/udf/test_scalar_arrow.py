@@ -149,7 +149,7 @@ class TestPyArrowUDF:
                 """
                 select {'a': 5, 'b': 'test', 'c': [5,3,2]}
             """
-            ).fetch_arrow_table()
+            ).to_arrow_table()
 
         con = duckdb.connect()
         struct_type = con.struct_type({"a": BIGINT, "b": VARCHAR, "c": con.list_type(BIGINT)})

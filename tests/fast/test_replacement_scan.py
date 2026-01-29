@@ -25,30 +25,26 @@ def using_sql(con, to_scan, object_name):
 # Fetch methods
 
 
-def fetch_polars(rel):
+def polars_from_rel(rel):
     return rel.pl()
 
 
-def fetch_df(rel):
+def df_from_rel(rel):
     return rel.df()
 
 
-def fetch_arrow(rel):
-    return rel.fetch_arrow_table()
+def arrow_table_from_rel(rel):
+    return rel.to_arrow_table()
 
 
-def fetch_arrow_table(rel):
-    return rel.fetch_arrow_table()
-
-
-def fetch_arrow_record_batch(rel: duckdb.DuckDBPyRelation):
+def arrow_reader_from_rel(rel: duckdb.DuckDBPyRelation):
     # Note: this has to executed first, otherwise we'll create a deadlock
     # Because it will try to execute the input at the same time as executing the relation
     # On the same connection (that's the core of the issue)
-    return rel.execute().fetch_record_batch()
+    return rel.execute().to_arrow_reader()
 
 
-def fetch_relation(rel):
+def rel_from_rel(rel):
     return rel
 
 
@@ -94,7 +90,7 @@ class TestReplacementScan:
     @pytest.mark.parametrize("get_relation", [using_table, using_sql])
     @pytest.mark.parametrize(
         "fetch_method",
-        [fetch_polars, fetch_df, fetch_arrow, fetch_arrow_table, fetch_arrow_record_batch, fetch_relation],
+        [polars_from_rel, df_from_rel, arrow_table_from_rel, arrow_reader_from_rel, rel_from_rel],
     )
     @pytest.mark.parametrize("object_name", ["tbl", "table", "select", "update"])
     def test_table_replacement_scans(self, duckdb_cursor, get_relation, fetch_method, object_name):

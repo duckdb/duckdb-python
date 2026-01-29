@@ -176,11 +176,11 @@ def fetchdf_chunk_query(duckdb_conn, queue):
         queue.put(False)
 
 
-def fetch_arrow_query(duckdb_conn, queue):
+def arrow_table_query(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").fetch_arrow_table()
+        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_table()
         queue.put(True)
     except Exception:
         queue.put(False)
@@ -190,7 +190,7 @@ def fetch_record_batch_query(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").fetch_record_batch()
+        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_reader()
         queue.put(True)
     except Exception:
         queue.put(False)
@@ -406,7 +406,7 @@ class TestDuckMultithread:
 
     def test_fetcharrow(self, duckdb_cursor):
         pytest.importorskip("pyarrow")
-        duck_threads = DuckDBThreaded(10, fetch_arrow_query)
+        duck_threads = DuckDBThreaded(10, arrow_table_query)
         duck_threads.multithread_test()
 
     def test_fetch_record_batch(self, duckdb_cursor):

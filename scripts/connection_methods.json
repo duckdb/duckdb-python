@@ -395,7 +395,7 @@
 		"return": "polars.DataFrame"
 	},
 	{
-		"name": "fetch_arrow_table",
+		"name": "arrow_table",
 		"function": "FetchArrow",
 		"docs": "Fetch a result as Arrow table following execute()",
 		"args": [

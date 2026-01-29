@@ -12,7 +12,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor_check = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -24,7 +24,7 @@ class TestArrowFetchRecordBatch:
             chunk = record_batch_reader.read_next_batch()
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -38,7 +38,7 @@ class TestArrowFetchRecordBatch:
             "CREATE table t as SELECT CASE WHEN i % 2 = 0 THEN true ELSE false END AS a from range(3000) as tbl(i);"
         )
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -51,7 +51,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -63,7 +63,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor_check = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range::varchar a from range(3000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -76,7 +76,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -90,7 +90,7 @@ class TestArrowFetchRecordBatch:
             "CREATE table t as select {'x': i, 'y': i::varchar, 'z': i+1} as a from range(3000)  as tbl(i);"
         )
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -103,7 +103,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -115,7 +115,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor_check = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select [i,i+1] as a from range(3000)  as tbl(i);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -128,7 +128,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -141,7 +141,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor_check = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select map([i], [i+1]) as a from range(3000)  as tbl(i);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -154,7 +154,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -169,7 +169,7 @@ class TestArrowFetchRecordBatch:
             "CREATE table t as SELECT CASE WHEN i % 2 = 0 THEN i ELSE NULL END AS a from range(3000) as tbl(i);"
         )
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
         assert record_batch_reader.schema.names == ["a"]
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1024
@@ -182,7 +182,7 @@ class TestArrowFetchRecordBatch:
 
         # Check if we are producing the correct thing
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         res = duckdb_cursor_check.execute("select * from record_batch_reader").fetchall()
         correct = duckdb_cursor.execute("select * from t").fetchall()
@@ -193,7 +193,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch()
+        record_batch_reader = query.to_arrow_reader()
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 3000
 
@@ -201,7 +201,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(5000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(2048)
+        record_batch_reader = query.to_arrow_reader(2048)
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 2048
         chunk = record_batch_reader.read_next_batch()
@@ -212,12 +212,12 @@ class TestArrowFetchRecordBatch:
             chunk = record_batch_reader.read_next_batch()
 
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1)
+        record_batch_reader = query.to_arrow_reader(1)
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 1
 
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(2000)
+        record_batch_reader = query.to_arrow_reader(2000)
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 2000
 
@@ -226,15 +226,15 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor.execute("CREATE table t as select range a from range(5000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
         with pytest.raises(RuntimeError, match="Approximate Batch Size of Record Batch MUST be higher than 0"):
-            query.fetch_record_batch(0)
+            query.to_arrow_reader(0)
         with pytest.raises(TypeError, match="incompatible function arguments"):
-            query.fetch_record_batch(-1)
+            query.to_arrow_reader(-1)
 
     def test_record_batch_reader_from_relation(self, duckdb_cursor):
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         relation = duckdb_cursor.table("t")
-        record_batch_reader = relation.fetch_record_batch()
+        record_batch_reader = relation.to_arrow_reader()
         chunk = record_batch_reader.read_next_batch()
         assert len(chunk) == 3000
 
@@ -242,7 +242,7 @@ class TestArrowFetchRecordBatch:
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(2048);")
         query = duckdb_cursor.execute("SELECT a FROM t")
-        record_batch_reader = query.fetch_record_batch(1024)
+        record_batch_reader = query.to_arrow_reader(1024)
 
         chunk = record_batch_reader.read_all()
         assert len(chunk) == 2048
@@ -268,7 +268,7 @@ class TestArrowFetchRecordBatch:
 
         # Because this produces multiple chunks, this caused a segfault before
         # because we changed some data in the first batch fetch
-        batch_iter = conn.execute(query).fetch_record_batch(chunk_size)
+        batch_iter = conn.execute(query).to_arrow_reader(chunk_size)
         for batch in batch_iter:
             del batch
 
@@ -278,7 +278,7 @@ class TestArrowFetchRecordBatch:
         query = duckdb_cursor.execute(f"CREATE table t as select range a from range({object_size});")
         for i in [1, 2, 4, 8, 16, 32, 33, 77, 999, 999999]:
             query = duckdb_cursor.execute("SELECT a FROM t")
-            record_batch_reader = query.fetch_record_batch(i)
+            record_batch_reader = query.to_arrow_reader(i)
             num_loops = int(object_size / i)
             for _j in range(num_loops):
                 assert record_batch_reader.schema.names == ["a"]

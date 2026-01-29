@@ -14,7 +14,7 @@ except Exception:
 def check_equal(duckdb_conn):
     true_result = duckdb_conn.execute("SELECT * from test").fetchall()
     duck_tbl = duckdb_conn.table("test")
-    duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.fetch_arrow_table())
+    duck_from_arrow = duckdb_conn.from_arrow(duck_tbl.to_arrow_table())
     duck_from_arrow.create("testarrow")
     arrow_result = duckdb_conn.execute("SELECT * from testarrow").fetchall()
     assert arrow_result == true_result
@@ -86,7 +86,7 @@ class TestArrowFetch:
         duckdb_cursor = duckdb.connect()
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         relation = duckdb_cursor.table("t")
-        arrow_tbl = relation.fetch_arrow_table()
+        arrow_tbl = relation.to_arrow_table()
         assert arrow_tbl["a"].num_chunks == 1
-        arrow_tbl = relation.fetch_arrow_table(2048)
+        arrow_tbl = relation.to_arrow_table(2048)
         assert arrow_tbl["a"].num_chunks == 2

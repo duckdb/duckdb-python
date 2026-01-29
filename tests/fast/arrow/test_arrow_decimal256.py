@@ -17,4 +17,4 @@ class TestArrowDecimal256:
             with pytest.raises(
                 duckdb.NotImplementedException, match="Unsupported Internal Arrow Type for Decimal d:12,4,256"
             ):
-                conn.execute("select * from pa_decimal256;").fetch_arrow_table().to_pylist()
+                conn.execute("select * from pa_decimal256;").to_arrow_table().to_pylist()
