@@ -6215,3 +6215,188 @@ def broadcast(df: "DataFrame") -> "DataFrame":
     or optimizations, since broadcasting is not applicable in the DuckDB context.
     """  # noqa: D205
     return df
+
+
+def row_number() -> Column:
+    """Window function: returns a sequential number starting at 1 within a window partition.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for calculating row numbers.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.range(3)
+    >>> w = Window.orderBy(df.id.desc())
+    >>> df.withColumn("desc_order", sf.row_number().over(w)).show()
+    +---+----------+
+    | id|desc_order|
+    +---+----------+
+    |  2|         1|
+    |  1|         2|
+    |  0|         3|
+    +---+----------+
+    """
+    return _invoke_function("row_number")
+
+
+def dense_rank() -> Column:
+    """Window function: returns the rank of rows within a window partition, without any gaps.
+
+    The difference between rank and dense_rank is that dense_rank leaves no gaps in ranking
+    sequence when there are ties. That is, if you were ranking a competition using dense_rank
+    and had three people tie for second place, you would say that all three were in second
+    place and that the next person came in third. Rank would give me sequential numbers, making
+    the person that came in third place (after the ties) would register as coming in fifth.
+
+    This is equivalent to the DENSE_RANK function in SQL.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for calculating ranks.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame([1, 1, 2, 3, 3, 4], "int")
+    >>> w = Window.orderBy("value")
+    >>> df.withColumn("drank", sf.dense_rank().over(w)).show()
+    +-----+-----+
+    |value|drank|
+    +-----+-----+
+    |    1|    1|
+    |    1|    1|
+    |    2|    2|
+    |    3|    3|
+    |    3|    3|
+    |    4|    4|
+    +-----+-----+
+    """
+    return _invoke_function("dense_rank")
+
+
+def rank() -> Column:
+    """Window function: returns the rank of rows within a window partition.
+
+    The difference between rank and dense_rank is that dense_rank leaves no gaps in ranking
+    sequence when there are ties. That is, if you were ranking a competition using dense_rank
+    and had three people tie for second place, you would say that all three were in second
+    place and that the next person came in third. Rank would give me sequential numbers, making
+    the person that came in third place (after the ties) would register as coming in fifth.
+
+    This is equivalent to the RANK function in SQL.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for calculating ranks.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame([1, 1, 2, 3, 3, 4], "int")
+    >>> w = Window.orderBy("value")
+    >>> df.withColumn("drank", sf.rank().over(w)).show()
+    +-----+-----+
+    |value|drank|
+    +-----+-----+
+    |    1|    1|
+    |    1|    1|
+    |    2|    3|
+    |    3|    4|
+    |    3|    4|
+    |    4|    6|
+    +-----+-----+
+    """
+    return _invoke_function("rank")
+
+
+def cume_dist() -> Column:
+    """Window function: returns the cumulative distribution of values within a window partition.
+
+    Window function: returns the cumulative distribution of values within a window partition
+    i.e. the fraction of rows that are below the current row.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for calculating cumulative distribution.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame([1, 2, 3, 3, 4], "int")
+    >>> w = Window.orderBy("value")
+    >>> df.withColumn("cd", sf.cume_dist().over(w)).show()
+    +-----+---+
+    |value| cd|
+    +-----+---+
+    |    1|0.2|
+    |    2|0.4|
+    |    3|0.8|
+    |    3|0.8|
+    |    4|1.0|
+    +-----+---+
+    """
+    return _invoke_function("cume_dist")
+
+
+def percent_rank() -> Column:
+    """Window function: returns the relative rank (i.e. percentile) of rows within a window partition.
+
+    .. versionadded:: 1.6.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        the column for calculating relative rank.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame([1, 1, 2, 3, 3, 4], "int")
+    >>> w = Window.orderBy("value")
+    >>> df.withColumn("pr", sf.percent_rank().over(w)).show()
+    +-----+---+
+    |value| pr|
+    +-----+---+
+    |    1|0.0|
+    |    1|0.0|
+    |    2|0.4|
+    |    3|0.6|
+    |    3|0.6|
+    |    4|1.0|
+    +-----+---+
+    """
+    return _invoke_function("percent_rank")
