@@ -95,7 +95,7 @@ class TestDataFrameWindowFunction:
         w = Window.partitionBy(F.col("grp")).orderBy(F.col("value").desc())
 
         with pytest.raises(
-            ContributionsAcceptedError, match="Column Expression is not supported in WindowSpec.orderBy yet"
+            ContributionsAcceptedError, match=r"Column Expression is not supported in WindowSpec.orderBy yet"
         ):
             df = df.withColumn("rn", F.row_number().over(w))
 

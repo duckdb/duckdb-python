@@ -1,5 +1,5 @@
-from collections.abc import Sequence
-from typing import List, Optional, Tuple, Union
+from collections.abc import Sequence  # noqa: D100
+from typing import Optional, Union
 
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
@@ -18,11 +18,11 @@ class WindowSpec:
         Supports Spark Connect.
     """
 
-    def __init__(self) -> None:
-        self._partition_by: List[ColumnOrName] = []
-        self._order_by: List[ColumnOrName] = []
-        self._rows_between: Optional[Tuple[int, int]] = None
-        self._range_between: Optional[Tuple[int, int]] = None
+    def __init__(self) -> None:  # noqa: D107
+        self._partition_by: list[ColumnOrName] = []
+        self._order_by: list[ColumnOrName] = []
+        self._rows_between: Optional[tuple[int, int]] = None
+        self._range_between: Optional[tuple[int, int]] = None
 
     def _copy(self) -> "WindowSpec":
         new_window = WindowSpec()
@@ -42,7 +42,7 @@ class WindowSpec:
         cols : str, :class:`Column` or list
             names of columns or expressions
         """
-        all_cols: Union[List[ColumnOrName], List[List[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
+        all_cols: Union[list[ColumnOrName], list[list[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
 
         if isinstance(all_cols[0], list):
             all_cols = all_cols[0]
@@ -61,7 +61,7 @@ class WindowSpec:
         cols : str, :class:`Column` or list
             names of columns or expressions
         """
-        all_cols: Union[List[ColumnOrName], List[List[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
+        all_cols: Union[list[ColumnOrName], list[list[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
 
         if isinstance(all_cols[0], list):
             all_cols = all_cols[0]
@@ -126,20 +126,22 @@ class WindowSpec:
         new_window._range_between = (start, end)
         return new_window
 
-    def _columns_as_str(self, *, cols: List[ColumnOrName], include_order_direction: bool) -> list[str]:
+    def _columns_as_str(self, *, cols: list[ColumnOrName], include_order_direction: bool) -> list[str]:
         expressions = []
         for col in cols:
             if isinstance(col, str):
                 expressions.append(col)
             elif isinstance(col, Column):
                 if include_order_direction:
-                    # TODO: Handle ascending/descending order if needed
-                    raise ContributionsAcceptedError("Column Expression is not supported in WindowSpec.orderBy yet")
+                    # TODO: Handle ascending/descending order if needed # noqa: TD002, TD003
+                    msg = "Column Expression is not supported in WindowSpec.orderBy yet"
+                    raise ContributionsAcceptedError(msg)
 
                 else:
                     expressions.append(str(col.expr))
             else:
-                raise PySparkTypeError(f"Invalid column type: {type(col)}")
+                msg = f"Invalid column type: {type(col)}"
+                raise PySparkTypeError(msg)
         return expressions
 
     @staticmethod
@@ -316,7 +318,7 @@ class Window:
 
     @classmethod
     def rowsBetween(cls, start: int, end: int) -> WindowSpec:
-        """Creates a :class:`WindowSpec` with the frame boundaries defined, from `start` (inclusive) to `end` (inclusive).
+        """Creates a :class:`WindowSpec` with the frame boundaries defined, from start (inclusive) to end (inclusive).
 
         Both `start` and `end` are relative positions from the current row.
         For example, "0" means "current row", while "-1" means the row before
@@ -391,7 +393,7 @@ class Window:
 
     @classmethod
     def rangeBetween(cls, start: int, end: int) -> WindowSpec:
-        """Creates a :class:`WindowSpec` with the frame boundaries defined, from `start` (inclusive) to `end` (inclusive).
+        """Creates a :class:`WindowSpec` with the frame boundaries defined, from start (inclusive) to end (inclusive).
 
         Both `start` and `end` are relative from the current row. For example,
         "0" means "current row", while "-1" means one off before the current row,
