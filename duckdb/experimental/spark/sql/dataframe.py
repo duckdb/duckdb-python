@@ -1,4 +1,5 @@
 import uuid  # noqa: D100
+from collections.abc import Iterable
 from functools import reduce
 from keyword import iskeyword
 from typing import (
@@ -13,6 +14,7 @@ from typing import (
 
 import duckdb
 from duckdb import ColumnExpression, Expression, StarExpression
+from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 from ..errors import PySparkIndexError, PySparkTypeError, PySparkValueError
 from .column import Column
@@ -24,6 +26,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
 
+    from .._typing import ArrowMapIterFunction, PandasMapIterFunction
     from ._typing import ColumnOrName
     from .group import GroupedData
     from .session import SparkSession
@@ -1418,6 +1421,202 @@ class DataFrame:  # noqa: D101
         """
         cached_relation = self.relation.execute()
         return DataFrame(cached_relation, self.session)
+
+    def mapInArrow(
+        self,
+        func: "ArrowMapIterFunction",
+        schema: Union[StructType, str],
+        barrier: bool = False,
+        profile: Optional[Any] = None,  # noqa: ANN401
+    ) -> "DataFrame":
+        """Maps an iterator of batches in the current :class:`DataFrame` using a Python native
+        function that is performed on `pyarrow.RecordBatch`\\s both as input and output,
+        and returns the result as a :class:`DataFrame`.
+
+        This method applies the specified Python function to an iterator of
+        `pyarrow.RecordBatch`\\s, each representing a batch of rows from the original DataFrame.
+        The returned iterator of `pyarrow.RecordBatch`\\s are combined as a :class:`DataFrame`.
+        The size of the function's input and output can be different. Each `pyarrow.RecordBatch`
+        size can be controlled by `spark.sql.execution.arrow.maxRecordsPerBatch`.
+
+        .. versionadded:: 3.3.0
+
+        Parameters
+        ----------
+        func : function
+            a Python native function that takes an iterator of `pyarrow.RecordBatch`\\s, and
+            outputs an iterator of `pyarrow.RecordBatch`\\s.
+        schema : :class:`pyspark.sql.types.DataType` or str
+            the return type of the `func` in PySpark. The value can be either a
+            :class:`pyspark.sql.types.DataType` object or a DDL-formatted type string.
+        barrier : bool, optional, default False
+            Use barrier mode execution, ensuring that all Python workers in the stage will be
+            launched concurrently.
+
+            .. versionadded: 3.5.0
+
+        profile : :class:`pyspark.resource.ResourceProfile`. The optional ResourceProfile
+            to be used for mapInArrow.
+
+            .. versionadded: 4.0.0
+
+        Examples:
+        --------
+        >>> import pyarrow as pa
+        >>> df = spark.createDataFrame([(1, 21), (2, 30)], ("id", "age"))
+        >>> def filter_func(iterator):
+        ...     for batch in iterator:
+        ...         pdf = batch.to_pandas()
+        ...         yield pa.RecordBatch.from_pandas(pdf[pdf.id == 1])
+        >>> df.mapInArrow(filter_func, df.schema).show()
+        +---+---+
+        | id|age|
+        +---+---+
+        |  1| 21|
+        +---+---+
+
+        Set ``barrier`` to ``True`` to force the ``mapInArrow`` stage running in the
+        barrier mode, it ensures all Python workers in the stage will be
+        launched concurrently.
+
+        >>> df.mapInArrow(filter_func, df.schema, barrier=True).collect()
+        [Row(id=1, age=21)]
+
+        See Also:
+        --------
+        pyspark.sql.functions.pandas_udf
+        DataFrame.mapInPandas
+        """  # noqa: D205, D301
+        if isinstance(schema, str):
+            msg = "DDL-formatted type string is not supported yet for the 'schema' parameter."
+            raise ContributionsAcceptedError(msg)
+
+        if profile is not None:
+            msg = "ResourceProfile is not supported yet for the 'profile' parameter."
+            raise ContributionsAcceptedError(msg)
+
+        del barrier  # Ignored due duckdb works on single node and doesn't have barrier execution mode.
+
+        import pyarrow as pa
+        from pyarrow.dataset import dataset
+
+        arrow_schema = self.session.createDataFrame([], schema=schema).toArrow().schema
+        record_batches = self.relation.fetch_record_batch()
+        batch_generator = func(record_batches)
+        reader = pa.RecordBatchReader.from_batches(arrow_schema, batch_generator)
+        ds = dataset(reader)  # noqa: F841
+        df = DataFrame(self.session.conn.sql("SELECT * FROM ds"), self.session)
+        return df
+
+    def mapInPandas(
+        self,
+        func: "PandasMapIterFunction",
+        schema: Union[StructType, str],
+        barrier: bool = False,
+        profile: Optional[Any] = None,  # noqa: ANN401
+    ) -> "DataFrame":
+        """Maps an iterator of batches in the current :class:`DataFrame` using a Python native
+        function that is performed on pandas DataFrames both as input and output,
+        and returns the result as a :class:`DataFrame`.
+
+        This method applies the specified Python function to an iterator of
+        `pandas.DataFrame`\\s, each representing a batch of rows from the original DataFrame.
+        The returned iterator of `pandas.DataFrame`\\s are combined as a :class:`DataFrame`.
+        The size of the function's input and output can be different. Each `pandas.DataFrame`
+        size can be controlled by `spark.sql.execution.arrow.maxRecordsPerBatch`.
+
+        .. versionadded:: 3.0.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        func : function
+            a Python native function that takes an iterator of `pandas.DataFrame`\\s, and
+            outputs an iterator of `pandas.DataFrame`\\s.
+        schema : :class:`pyspark.sql.types.DataType` or str
+            the return type of the `func` in PySpark. The value can be either a
+            :class:`pyspark.sql.types.DataType` object or a DDL-formatted type string.
+        barrier : bool, optional, default False
+            Use barrier mode execution, ensuring that all Python workers in the stage will be
+            launched concurrently.
+
+            .. versionadded: 3.5.0
+
+        profile : :class:`pyspark.resource.ResourceProfile`. The optional ResourceProfile
+            to be used for mapInPandas.
+
+            .. versionadded: 4.0.0
+
+
+        Examples:
+        --------
+        >>> df = spark.createDataFrame([(1, 21), (2, 30)], ("id", "age"))
+
+        Filter rows with id equal to 1:
+
+        >>> def filter_func(iterator):
+        ...     for pdf in iterator:
+        ...         yield pdf[pdf.id == 1]
+        >>> df.mapInPandas(filter_func, df.schema).show()
+        +---+---+
+        | id|age|
+        +---+---+
+        |  1| 21|
+        +---+---+
+
+        Compute the mean age for each id:
+
+        >>> def mean_age(iterator):
+        ...     for pdf in iterator:
+        ...         yield pdf.groupby("id").mean().reset_index()
+        >>> df.mapInPandas(mean_age, "id: bigint, age: double").show()
+        +---+----+
+        | id| age|
+        +---+----+
+        |  1|21.0|
+        |  2|30.0|
+        +---+----+
+
+        Add a new column with the double of the age:
+
+        >>> def double_age(iterator):
+        ...     for pdf in iterator:
+        ...         pdf["double_age"] = pdf["age"] * 2
+        ...         yield pdf
+        >>> df.mapInPandas(double_age, "id: bigint, age: bigint, double_age: bigint").show()
+        +---+---+----------+
+        | id|age|double_age|
+        +---+---+----------+
+        |  1| 21|        42|
+        |  2| 30|        60|
+        +---+---+----------+
+
+        Set ``barrier`` to ``True`` to force the ``mapInPandas`` stage running in the
+        barrier mode, it ensures all Python workers in the stage will be
+        launched concurrently.
+
+        >>> df.mapInPandas(filter_func, df.schema, barrier=True).collect()
+        [Row(id=1, age=21)]
+
+        See Also:
+        --------
+        pyspark.sql.functions.pandas_udf
+        DataFrame.mapInArrow
+        """  # noqa: D205, D301
+        import pyarrow as pa
+
+        def _build_arrow_func(pandas_func: "PandasMapIterFunction") -> "ArrowMapIterFunction":
+            def _map_func(record_batches: Iterable[pa.RecordBatch]) -> Iterable[pa.RecordBatch]:
+                pandas_iterator = (batch.to_pandas() for batch in record_batches)
+                pandas_result_gen = pandas_func(pandas_iterator)
+                batch_iterator = (pa.RecordBatch.from_pandas(pdf) for pdf in pandas_result_gen)
+                yield from batch_iterator
+
+            return _map_func
+
+        return self.mapInArrow(_build_arrow_func(func), schema, barrier, profile)
 
 
 __all__ = ["DataFrame"]
