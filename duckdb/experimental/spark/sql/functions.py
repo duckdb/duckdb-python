@@ -6571,3 +6571,79 @@ def lead(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) ->
     +---+---+----------+
     """  # noqa: D205, D212
     return _invoke_function("lead", _to_column_expr(col), ConstantExpression(offset), ConstantExpression(default))
+
+
+def nth_value(col: "ColumnOrName", offset: int, ignoreNulls: Optional[bool] = False) -> Column:
+    """Window function: returns the value that is the `offset`\\th row of the window frame
+    (counting from 1), and `null` if the size of window frame is less than `offset` rows.
+
+    It will return the `offset`\\th non-null value it sees when `ignoreNulls` is set to
+    true. If all values are null, then null is returned.
+
+    This is equivalent to the nth_value function in SQL.
+
+    .. versionadded:: 3.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or column name
+        name of column or expression
+    offset : int
+        number of row to use as the value
+    ignoreNulls : bool, optional
+        indicates the Nth value should skip null in the
+        determination of which row to use
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        value of nth row.
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame(
+    ...     [("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], ["c1", "c2"]
+    ... )
+    >>> df.show()
+    +---+---+
+    | c1| c2|
+    +---+---+
+    |  a|  1|
+    |  a|  2|
+    |  a|  3|
+    |  b|  8|
+    |  b|  2|
+    +---+---+
+
+    >>> w = Window.partitionBy("c1").orderBy("c2")
+    >>> df.withColumn("nth_value", sf.nth_value("c2", 1).over(w)).show()
+    +---+---+---------+
+    | c1| c2|nth_value|
+    +---+---+---------+
+    |  a|  1|        1|
+    |  a|  2|        1|
+    |  a|  3|        1|
+    |  b|  2|        2|
+    |  b|  8|        2|
+    +---+---+---------+
+
+    >>> df.withColumn("nth_value", sf.nth_value("c2", 2).over(w)).show()
+    +---+---+---------+
+    | c1| c2|nth_value|
+    +---+---+---------+
+    |  a|  1|     NULL|
+    |  a|  2|        2|
+    |  a|  3|        2|
+    |  b|  2|     NULL|
+    |  b|  8|        8|
+    +---+---+---------+
+    """  # noqa: D205, D301
+    if ignoreNulls:
+        msg = "The ignoreNulls option of nth_value is not supported yet."
+        raise ContributionsAcceptedError(msg)
+    return _invoke_function("nth_value", _to_column_expr(col), ConstantExpression(offset))

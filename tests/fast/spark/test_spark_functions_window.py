@@ -162,3 +162,18 @@ class TestDataFrameWindowFunction:
             Row(c1="b", c2=2, next_value=8, next_value_default=8, next_value_offset2=-1),
             Row(c1="b", c2=8, next_value=None, next_value_default=0, next_value_offset2=-1),
         ]
+
+    def test_nth_value(self, spark):
+        df = spark.createDataFrame(data=[("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], schema=["c1", "c2"])
+        w = Window.partitionBy("c1").orderBy("c2")
+        df = df.withColumn("nth1", F.nth_value("c2", 1).over(w))
+        df = df.withColumn("nth2", F.nth_value("c2", 2).over(w))
+        res = df.sort("c1", "c2").collect()
+
+        assert res == [
+            Row(c1="a", c2=1, nth1=1, nth2=None),
+            Row(c1="a", c2=2, nth1=1, nth2=2),
+            Row(c1="a", c2=3, nth1=1, nth2=2),
+            Row(c1="b", c2=2, nth1=2, nth2=None),
+            Row(c1="b", c2=8, nth1=2, nth2=8),
+        ]
