@@ -6400,3 +6400,174 @@ def percent_rank() -> Column:
     +-----+---+
     """
     return _invoke_function("percent_rank")
+
+
+def lag(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) -> Column:  # noqa: ANN401
+    """Window function: returns the value that is `offset` rows before the current row, and
+    `default` if there is less than `offset` rows before the current row. For example,
+    an `offset` of one will return the previous row at any given point in the window partition.
+
+    This is equivalent to the LAG function in SQL.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or column name
+        name of column or expression
+    offset : int, optional default 1
+        number of row to extend
+    default : optional
+        default value
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        value before current row based on `offset`.
+
+    See Also:
+    --------
+    :meth:`pyspark.sql.functions.lead`
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame(
+    ...     [("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], ["c1", "c2"]
+    ... )
+    >>> df.show()
+    +---+---+
+    | c1| c2|
+    +---+---+
+    |  a|  1|
+    |  a|  2|
+    |  a|  3|
+    |  b|  8|
+    |  b|  2|
+    +---+---+
+
+    >>> w = Window.partitionBy("c1").orderBy("c2")
+    >>> df.withColumn("previous_value", sf.lag("c2").over(w)).show()
+    +---+---+--------------+
+    | c1| c2|previous_value|
+    +---+---+--------------+
+    |  a|  1|          NULL|
+    |  a|  2|             1|
+    |  a|  3|             2|
+    |  b|  2|          NULL|
+    |  b|  8|             2|
+    +---+---+--------------+
+
+    >>> df.withColumn("previous_value", sf.lag("c2", 1, 0).over(w)).show()
+    +---+---+--------------+
+    | c1| c2|previous_value|
+    +---+---+--------------+
+    |  a|  1|             0|
+    |  a|  2|             1|
+    |  a|  3|             2|
+    |  b|  2|             0|
+    |  b|  8|             2|
+    +---+---+--------------+
+
+    >>> df.withColumn("previous_value", sf.lag("c2", 2, -1).over(w)).show()
+    +---+---+--------------+
+    | c1| c2|previous_value|
+    +---+---+--------------+
+    |  a|  1|            -1|
+    |  a|  2|            -1|
+    |  a|  3|             1|
+    |  b|  2|            -1|
+    |  b|  8|            -1|
+    +---+---+--------------+
+    """  # noqa: D205
+    return _invoke_function("lag", _to_column_expr(col), ConstantExpression(offset), ConstantExpression(default))
+
+
+def lead(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) -> Column:  # noqa: ANN401
+    """
+    Window function: returns the value that is `offset` rows after the current row, and
+    `default` if there is less than `offset` rows after the current row. For example,
+    an `offset` of one will return the next row at any given point in the window partition.
+
+    This is equivalent to the LEAD function in SQL.
+
+    .. versionadded:: 1.4.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or column name
+        name of column or expression
+    offset : int, optional default 1
+        number of row to extend
+    default : optional
+        default value
+
+    Returns:
+    -------
+    :class:`~pyspark.sql.Column`
+        value after current row based on `offset`.
+
+    See Also:
+    --------
+    :meth:`pyspark.sql.functions.lag`
+
+    Examples:
+    --------
+    >>> from pyspark.sql import functions as sf
+    >>> from pyspark.sql import Window
+    >>> df = spark.createDataFrame(
+    ...     [("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], ["c1", "c2"]
+    ... )
+    >>> df.show()
+    +---+---+
+    | c1| c2|
+    +---+---+
+    |  a|  1|
+    |  a|  2|
+    |  a|  3|
+    |  b|  8|
+    |  b|  2|
+    +---+---+
+
+    >>> w = Window.partitionBy("c1").orderBy("c2")
+    >>> df.withColumn("next_value", sf.lead("c2").over(w)).show()
+    +---+---+----------+
+    | c1| c2|next_value|
+    +---+---+----------+
+    |  a|  1|         2|
+    |  a|  2|         3|
+    |  a|  3|      NULL|
+    |  b|  2|         8|
+    |  b|  8|      NULL|
+    +---+---+----------+
+
+    >>> df.withColumn("next_value", sf.lead("c2", 1, 0).over(w)).show()
+    +---+---+----------+
+    | c1| c2|next_value|
+    +---+---+----------+
+    |  a|  1|         2|
+    |  a|  2|         3|
+    |  a|  3|         0|
+    |  b|  2|         8|
+    |  b|  8|         0|
+    +---+---+----------+
+
+    >>> df.withColumn("next_value", sf.lead("c2", 2, -1).over(w)).show()
+    +---+---+----------+
+    | c1| c2|next_value|
+    +---+---+----------+
+    |  a|  1|         3|
+    |  a|  2|        -1|
+    |  a|  3|        -1|
+    |  b|  2|        -1|
+    |  b|  8|        -1|
+    +---+---+----------+
+    """  # noqa: D205, D212
+    return _invoke_function("lead", _to_column_expr(col), ConstantExpression(offset), ConstantExpression(default))

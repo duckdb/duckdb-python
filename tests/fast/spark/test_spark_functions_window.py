@@ -130,3 +130,35 @@ class TestDataFrameWindowFunction:
             Row(idx=4, value=40, ma_range2=30.0),
             Row(idx=6, value=60, ma_range2=50.0),
         ]
+
+    def test_lag(self, spark):
+        df = spark.createDataFrame(data=[("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], schema=["c1", "c2"])
+        w = Window.partitionBy("c1").orderBy("c2")
+        df = df.withColumn("previous_value", F.lag("c2").over(w))
+        df = df.withColumn("previous_value_default", F.lag("c2", 1, 0).over(w))
+        df = df.withColumn("previous_value_offset2", F.lag("c2", 2, -1).over(w))
+        res = df.sort("c1", "c2").collect()
+
+        assert res == [
+            Row(c1="a", c2=1, previous_value=None, previous_value_default=0, previous_value_offset2=-1),
+            Row(c1="a", c2=2, previous_value=1, previous_value_default=1, previous_value_offset2=-1),
+            Row(c1="a", c2=3, previous_value=2, previous_value_default=2, previous_value_offset2=1),
+            Row(c1="b", c2=2, previous_value=None, previous_value_default=0, previous_value_offset2=-1),
+            Row(c1="b", c2=8, previous_value=2, previous_value_default=2, previous_value_offset2=-1),
+        ]
+
+    def test_lead(self, spark):
+        df = spark.createDataFrame(data=[("a", 1), ("a", 2), ("a", 3), ("b", 8), ("b", 2)], schema=["c1", "c2"])
+        w = Window.partitionBy("c1").orderBy("c2")
+        df = df.withColumn("next_value", F.lead("c2").over(w))
+        df = df.withColumn("next_value_default", F.lead("c2", 1, 0).over(w))
+        df = df.withColumn("next_value_offset2", F.lead("c2", 2, -1).over(w))
+        res = df.sort("c1", "c2").collect()
+
+        assert res == [
+            Row(c1="a", c2=1, next_value=2, next_value_default=2, next_value_offset2=3),
+            Row(c1="a", c2=2, next_value=3, next_value_default=3, next_value_offset2=-1),
+            Row(c1="a", c2=3, next_value=None, next_value_default=0, next_value_offset2=-1),
+            Row(c1="b", c2=2, next_value=8, next_value_default=8, next_value_offset2=-1),
+            Row(c1="b", c2=8, next_value=None, next_value_default=0, next_value_offset2=-1),
+        ]
