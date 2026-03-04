@@ -226,6 +226,12 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
 	return CreateCompareExpression(ExpressionType::COMPARE_NOT_IN, args);
 }
 
+// TRY
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Try() {
+	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_TRY, *this);
+}
+
 // COALESCE
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Coalesce(const py::args &args) {

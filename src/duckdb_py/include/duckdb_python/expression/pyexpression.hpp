@@ -83,6 +83,10 @@ public:
 	shared_ptr<DuckDBPyExpression> In(const py::args &args);
 	shared_ptr<DuckDBPyExpression> NotIn(const py::args &args);
 
+	// TRY
+
+	shared_ptr<DuckDBPyExpression> Try();
+
 	// Order modifiers
 
 	shared_ptr<DuckDBPyExpression> Ascending();

@@ -928,6 +928,24 @@ class TestExpression:
         res2 = rel.filter(b.isnotnull()).fetchall()
         assert res2 == [(1, "a"), (2, "b"), (4, "c"), (5, "a")]
 
+    def test_try(self):
+        con = duckdb.connect()
+        rel = con.sql(
+            """
+            select * from (VALUES
+                (-1.0),
+                (0.0),
+                (1.0),
+                (NULL),
+            ) tbl(a)
+        """
+        )
+
+        expr = FunctionExpression("sqrt", ColumnExpression("a"))
+
+        res = rel.select(expr.try_()).fetchall()
+        assert res == [(None,), (0.0,), (1.0,), (None,)]
+
     def test_sort(self):
         con = duckdb.connect()
         rel = con.sql(
