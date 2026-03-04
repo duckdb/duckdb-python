@@ -368,6 +368,14 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	expression.def("isnotin", &DuckDBPyExpression::NotIn, docs);
 
 	docs = R"(
+		Create a TRY expression from self
+
+		Returns:
+			DuckDBPyExpression: TRY(self)
+	)";
+	expression.def("try_", &DuckDBPyExpression::Try, docs);
+
+	docs = R"(
 		Return the stringified version of the expression.
 
 		Returns:
