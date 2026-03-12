@@ -35,6 +35,14 @@ class TestSparkColumn:
         ):
             df = df.withColumn("struct", "yes")
 
+    def test_struct_column_with_list(self, spark):
+        df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
+        res = df.select(struct([df.age, df.name]).alias("struct")).collect()
+        assert res == [
+            Row(struct=Row(age=2, name="Alice")),
+            Row(struct=Row(age=5, name="Bob")),
+        ]
+
     def test_array_column(self, spark):
         df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)], ["a", "b", "c", "d"])
 
