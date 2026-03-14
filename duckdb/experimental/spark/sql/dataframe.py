@@ -22,6 +22,8 @@ from .readwriter import DataFrameWriter
 from .type_utils import duckdb_to_spark_schema
 from .types import Row, StructType
 
+_LOCAL_ITERATOR_BATCH_SIZE = 10_000
+
 if TYPE_CHECKING:
     import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
@@ -167,7 +169,7 @@ class DataFrame:  # noqa: D101
         >>> df.foreachPartition(func)
         """
         rows_generator = self.toLocalIterator()
-        while rows := itertools.islice(rows_generator, 10_000):
+        while rows := itertools.islice(rows_generator, _LOCAL_ITERATOR_BATCH_SIZE):
             f(rows)
 
     def isEmpty(self) -> bool:
