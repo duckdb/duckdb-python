@@ -115,8 +115,11 @@ class DataFrame:  # noqa: D101
         columns = self.relation.columns
         cur = self.relation.execute()
 
-        while rows := cur.fetchmany(10_000):
-            yield from (_construct_row(x, columns) for x in rows)
+        try:
+            while rows := cur.fetchmany(10_000):
+                yield from (_construct_row(x, columns) for x in rows)
+        finally:
+            cur.close()
 
     def foreach(self, f: Callable[[Row], None]) -> None:
         """Applies the ``f`` function to all :class:`Row` of this :class:`DataFrame`.
@@ -170,7 +173,7 @@ class DataFrame:  # noqa: D101
         """
         rows_generator = self.toLocalIterator()
         while rows := itertools.islice(rows_generator, _LOCAL_ITERATOR_BATCH_SIZE):
-            f(rows)
+            f(iter(rows))
 
     def isEmpty(self) -> bool:
         """Checks if the :class:`DataFrame` is empty and returns a boolean value.
