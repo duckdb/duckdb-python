@@ -116,7 +116,7 @@ class DataFrame:  # noqa: D101
         cur = self.relation.execute()
 
         try:
-            while rows := cur.fetchmany(10_000):
+            while rows := cur.fetchmany(_LOCAL_ITERATOR_BATCH_SIZE):
                 yield from (_construct_row(x, columns) for x in rows)
         finally:
             cur.close()
