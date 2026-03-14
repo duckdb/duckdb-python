@@ -1,4 +1,6 @@
-import uuid  # noqa: D100
+import itertools  # noqa: D100
+import uuid
+from collections.abc import Iterable, Iterator
 from functools import reduce
 from keyword import iskeyword
 from typing import (
@@ -29,6 +31,12 @@ if TYPE_CHECKING:
     from .session import SparkSession
 
 from duckdb.experimental.spark.sql import functions as spark_sql_functions
+
+
+def _construct_row(values: Iterable, names: list[str]) -> Row:
+    row = tuple.__new__(Row, list(values))
+    row.__fields__ = list(names)
+    return row
 
 
 class DataFrame:  # noqa: D101
@@ -70,6 +78,146 @@ class DataFrame:  # noqa: D101
         name: [["Alice","Bob"]]
         """
         return self.relation.to_arrow_table()
+
+    def toLocalIterator(self, prefetchPartitions: bool = False) -> Iterator[Row]:
+        """Returns an iterator that contains all of the rows in this :class:`DataFrame`.
+
+        The iterator will consume as much memory as the largest partition in this
+        :class:`DataFrame`. With prefetch it may consume up to the memory of the 2 largest
+        partitions.
+
+        .. versionadded:: 2.0.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        prefetchPartitions : bool, optional
+            If Spark should pre-fetch the next partition before it is needed.
+
+            .. versionchanged:: 3.4.0
+                This argument does not take effect for Spark Connect.
+
+        Returns:
+        -------
+        Iterator
+            Iterator of rows.
+
+        Examples:
+        --------
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> list(df.toLocalIterator())
+        [Row(age=14, name='Tom'), Row(age=23, name='Alice'), Row(age=16, name='Bob')]
+        """
+        columns = self.relation.columns
+        cur = self.relation.execute()
+
+        while rows := cur.fetchmany(10_000):
+            yield from (_construct_row(x, columns) for x in rows)
+
+    def foreach(self, f: Callable[[Row], None]) -> None:
+        """Applies the ``f`` function to all :class:`Row` of this :class:`DataFrame`.
+
+        This is a shorthand for ``df.rdd.foreach()``.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 4.0.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        f : function
+            A function that accepts one parameter which will
+            receive each row to process.
+
+        Examples:
+        --------
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> def func(person):
+        ...     print(person.name)
+        >>> df.foreach(func)
+        """
+        for row in self.toLocalIterator():
+            f(row)
+
+    def foreachPartition(self, f: Callable[[Iterator[Row]], None]) -> None:
+        """Applies the ``f`` function to each partition of this :class:`DataFrame`.
+
+        This a shorthand for ``df.rdd.foreachPartition()``.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 4.0.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        f : function
+            A function that accepts one parameter which will receive
+            each partition to process.
+
+        Examples:
+        --------
+        >>> df = spark.createDataFrame([(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> def func(itr):
+        ...     for person in itr:
+        ...         print(person.name)
+        >>> df.foreachPartition(func)
+        """
+        rows_generator = self.toLocalIterator()
+        while rows := itertools.islice(rows_generator, 10_000):
+            f(rows)
+
+    def isEmpty(self) -> bool:
+        """Checks if the :class:`DataFrame` is empty and returns a boolean value.
+
+        .. versionadded:: 3.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Returns:
+        -------
+        bool
+            Returns ``True`` if the DataFrame is empty, ``False`` otherwise.
+
+        See Also:
+        --------
+        DataFrame.count : Counts the number of rows in DataFrame.
+
+        Notes:
+        -----
+        - An empty DataFrame has no rows. It may have columns, but no data.
+
+        Examples:
+        --------
+        Example 1: Checking if an empty DataFrame is empty
+
+        >>> df_empty = spark.createDataFrame([], "a STRING")
+        >>> df_empty.isEmpty()
+        True
+
+        Example 2: Checking if a non-empty DataFrame is empty
+
+        >>> df_non_empty = spark.createDataFrame(["a"], "STRING")
+        >>> df_non_empty.isEmpty()
+        False
+
+        Example 3: Checking if a DataFrame with null values is empty
+
+        >>> df_nulls = spark.createDataFrame([(None, None)], "a STRING, b INT")
+        >>> df_nulls.isEmpty()
+        False
+
+        Example 4: Checking if a DataFrame with no rows but with columns is empty
+
+        >>> df_no_rows = spark.createDataFrame([], "id INT, value STRING")
+        >>> df_no_rows.isEmpty()
+        True
+        """
+        return self.first() is None
 
     def createOrReplaceTempView(self, name: str) -> None:
         """Creates or replaces a local temporary view with this :class:`DataFrame`.
@@ -1381,12 +1529,7 @@ class DataFrame:  # noqa: D101
         columns = self.relation.columns
         result = self.relation.fetchall()
 
-        def construct_row(values: list, names: list[str]) -> Row:
-            row = tuple.__new__(Row, list(values))
-            row.__fields__ = list(names)
-            return row
-
-        rows = [construct_row(x, columns) for x in result]
+        rows = [_construct_row(x, columns) for x in result]
         return rows
 
     def cache(self) -> "DataFrame":

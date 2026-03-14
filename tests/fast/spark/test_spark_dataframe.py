@@ -1,3 +1,5 @@
+from unittest import mock
+
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
@@ -597,3 +599,40 @@ class TestDataFrame:
         assert " |-- name:" in tree
         assert " |-- hobbies: array<" in tree
         assert "(nullable = true)" in tree
+
+    def test_method_is_empty(self, spark):
+        data = [(1, "Alice"), (2, "Bob")]
+        df = spark.createDataFrame(data, ["id", "name"])
+        empty_df = spark.createDataFrame([], schema=df.schema)
+
+        assert not df.isEmpty()
+        assert empty_df.isEmpty()
+
+    def test_dataframe_foreach(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [Row(age=56, name="Carol"), Row(age=20, name="Alice"), Row(age=3, name="Dave")]
+
+        mock_callable = mock.MagicMock()
+        df.foreach(mock_callable)
+        mock_callable.assert_has_calls(
+            [mock.call(expected[0]), mock.call(expected[1]), mock.call(expected[2])],
+            any_order=True,
+        )
+
+    def test_dataframe_foreach_partition(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [Row(age=56, name="Carol"), Row(age=20, name="Alice"), Row(age=3, name="Dave")]
+
+        mock_callable = mock.MagicMock()
+        df.foreachPartition(mock_callable)
+        mock_callable.assert_called_once_with(expected)
+
+    def test_to_local_iterator(self, spark):
+        data = [(56, "Carol"), (20, "Alice"), (3, "Dave")]
+        df = spark.createDataFrame(data, ["age", "name"])
+        expected = [Row(age=56, name="Carol"), Row(age=20, name="Alice"), Row(age=3, name="Dave")]
+
+        res = list(df.toLocalIterator())
+        assert res == expected
