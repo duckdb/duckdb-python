@@ -1,4 +1,4 @@
-import itertools  # noqa: D100
+import itertools
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from functools import reduce
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .group import GroupedData
     from .session import SparkSession
 
-from duckdb.experimental.spark.sql import functions as spark_sql_functions
+from duckdb.experimental.spark.sql import functions as spark_sql_functions  # noqa: E402
 
 
 def _construct_row(values: Iterable, names: list[str]) -> Row:
