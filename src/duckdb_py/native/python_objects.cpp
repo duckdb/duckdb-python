@@ -13,6 +13,9 @@
 
 #include "datetime.h" // Python datetime initialize #1
 
+#include <duckdb/common/types/variant_value.hpp>
+#include <duckdb/function/scalar/variant_utils.hpp>
+
 namespace duckdb {
 
 PyDictionary::PyDictionary(py::object dict) {
@@ -445,6 +448,7 @@ static bool KeyIsHashable(const LogicalType &type) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::MAP:
+	case LogicalTypeId::VARIANT:
 		return false;
 	case LogicalTypeId::UNION: {
 		idx_t count = UnionType::GetMemberCount(type);
@@ -585,13 +589,20 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto tmp_datetime_with_tz = import_cache.datetime.datetime.combine()(tmp_datetime, py_time, timezone_offset);
 		return tmp_datetime_with_tz.attr("timetz")();
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_NS: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-		int32_t hour, min, sec, microsec;
-		auto time = val.GetValueUnsafe<dtime_t>();
-		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		int32_t hour, min, sec, usec;
+		dtime_t time;
+		if (type.id() == LogicalTypeId::TIME) {
+			time = val.GetValueUnsafe<dtime_t>();
+		} else {
+			// Python's datetime doesn't support nanoseconds, we convert to micros.
+			time = val.GetValueUnsafe<dtime_ns_t>().time();
+		}
+		duckdb::Time::Convert(time, hour, min, sec, usec);
 		try {
-			auto pytime = PyTime_FromTime(hour, min, sec, microsec);
+			auto pytime = PyTime_FromTime(hour, min, sec, usec);
 			if (!pytime) {
 				throw py::error_already_set();
 			}
@@ -692,6 +703,14 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		int64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
 		return import_cache.datetime.timedelta()(py::arg("days") = days,
 		                                         py::arg("microseconds") = interval_value.micros);
+	}
+	case LogicalTypeId::VARIANT: {
+		Vector tmp(val);
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		return FromValue(variant_val, variant_val.type(), client_properties);
 	}
 
 	default:

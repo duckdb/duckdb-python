@@ -337,6 +337,11 @@ public:
 	py::list ListFilesystems();
 	bool FileSystemIsRegistered(const string &name);
 
+	// Profiling info
+	py::str GetProfilingInformation(const py::str &format = "json");
+	void EnableProfiling();
+	void DisableProfiling();
+
 	//! Default connection to an in-memory database
 	static DefaultConnectionHolder default_connection;
 	//! Caches and provides an interface to get frequently used modules+subtypes
@@ -350,6 +355,8 @@ public:
 	static unique_ptr<QueryResult> CompletePendingQuery(PendingQueryResult &pending_query);
 
 private:
+	unique_ptr<DuckDBPyRelation> CreateRelation(shared_ptr<Relation> rel);
+	unique_ptr<DuckDBPyRelation> CreateRelation(shared_ptr<DuckDBPyResult> result);
 	PathLike GetPathLike(const py::object &object);
 	ScalarFunction CreateScalarUDF(const string &name, const py::function &udf, const py::object &parameters,
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,

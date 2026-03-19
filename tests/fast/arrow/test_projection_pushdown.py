@@ -21,7 +21,7 @@ class TestArrowProjectionPushdown:
         """
         )
         duck_tbl = duckdb_cursor.table("test")
-        arrow_table = duck_tbl.fetch_arrow_table()
+        arrow_table = duck_tbl.to_arrow_table()
         assert duckdb_cursor.execute("SELECT sum(c) FROM arrow_table").fetchall() == [(333,)]
 
         # RecordBatch does not use projection pushdown, test that this also still works

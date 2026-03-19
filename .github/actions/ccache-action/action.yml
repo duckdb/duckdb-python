@@ -1,0 +1,23 @@
+name: 'Setup Ccache'
+inputs:
+  key:
+    description: 'Cache key (defaults to github.job)'
+    required: false
+    default: ''
+runs:
+  using: "composite"
+  steps:
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ inputs.key || github.job }}
+         save: ${{ github.repository != 'duckdb/duckdb-python' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+         # Dump verbose ccache statistics report at end of CI job.
+         verbose: 1
+         # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.
+         # Note: `layout=subdirs` computes the size limit divided by 16 dirs.
+         # See also: https://ccache.dev/manual/4.9.html#_cache_size_management
+         max-size: 1500MB
+         # Evicts all cache files that were not touched during the job run.
+         # Removing cache files from previous runs avoids creating huge caches.
+         evict-old-files: 'job'

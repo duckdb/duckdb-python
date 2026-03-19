@@ -350,13 +350,19 @@ void RegisterExceptions(const py::module &m) {
 	auto io_exception = py::register_exception<PyIOException>(m, "IOException", operational_error).ptr();
 	py::register_exception<PySerializationException>(m, "SerializationException", operational_error);
 
-	static py::exception<PyHTTPException> HTTP_EXCEPTION(m, "HTTPException", io_exception);
-	const auto string_type = py::type::of(py::str());
-	const auto Dict = py::module_::import("typing").attr("Dict");
-	HTTP_EXCEPTION.attr("__annotations__") =
-	    py::dict(py::arg("status_code") = py::type::of(py::int_()), py::arg("body") = string_type,
-	             py::arg("reason") = string_type, py::arg("headers") = Dict[py::make_tuple(string_type, string_type)]);
-	HTTP_EXCEPTION.doc() = "Thrown when an error occurs in the httpfs extension, or whilst downloading an extension.";
+	// Use a raw pointer to avoid destructor running after Python finalization.
+	// The module holds a reference to the exception type, keeping it alive.
+	static PyObject *HTTP_EXCEPTION = nullptr;
+	{
+		auto http_exc = py::register_exception<PyHTTPException>(m, "HTTPException", io_exception);
+		HTTP_EXCEPTION = http_exc.ptr();
+		const auto string_type = py::type::of(py::str());
+		const auto Dict = py::module_::import("typing").attr("Dict");
+		http_exc.attr("__annotations__") = py::dict(
+		    py::arg("status_code") = py::type::of(py::int_()), py::arg("body") = string_type,
+		    py::arg("reason") = string_type, py::arg("headers") = Dict[py::make_tuple(string_type, string_type)]);
+		http_exc.doc() = "Thrown when an error occurs in the httpfs extension, or whilst downloading an extension.";
+	}
 
 	// IntegrityError
 	auto integrity_error = py::register_exception<IntegrityError>(m, "IntegrityError", db_error).ptr();
@@ -388,7 +394,7 @@ void RegisterExceptions(const py::module &m) {
 		} catch (const duckdb::Exception &ex) {
 			duckdb::ErrorData error(ex);
 			UnsetPythonException();
-			PyThrowException(error, HTTP_EXCEPTION.ptr());
+			PyThrowException(error, HTTP_EXCEPTION);
 		} catch (const py::builtin_exception &ex) {
 			// These represent Python exceptions, we don't want to catch these
 			throw;
@@ -399,7 +405,7 @@ void RegisterExceptions(const py::module &m) {
 				throw;
 			}
 			UnsetPythonException();
-			PyThrowException(error, HTTP_EXCEPTION.ptr());
+			PyThrowException(error, HTTP_EXCEPTION);
 		}
 	});
 }

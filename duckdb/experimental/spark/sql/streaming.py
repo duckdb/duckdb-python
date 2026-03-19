@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, Union  # noqa: D100
+from typing import TYPE_CHECKING
 
 from .types import StructType
 
@@ -6,8 +6,8 @@ if TYPE_CHECKING:
     from .dataframe import DataFrame
     from .session import SparkSession
 
-PrimitiveType = Union[bool, float, int, str]
-OptionalPrimitiveType = Optional[PrimitiveType]
+PrimitiveType = bool | float | int | str
+OptionalPrimitiveType = PrimitiveType | None
 
 
 class DataStreamWriter:  # noqa: D101
@@ -25,9 +25,9 @@ class DataStreamReader:  # noqa: D101
 
     def load(  # noqa: D102
         self,
-        path: Optional[str] = None,
-        format: Optional[str] = None,
-        schema: Union[StructType, str, None] = None,
+        path: str | None = None,
+        format: str | None = None,
+        schema: StructType | str | None = None,
         **options: OptionalPrimitiveType,
     ) -> "DataFrame":
         raise NotImplementedError

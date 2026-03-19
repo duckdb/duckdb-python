@@ -77,7 +77,7 @@ class TestArrowDataset:
         duckdb_conn.register("dataset", userdata_parquet_dataset)
 
         query = duckdb_conn.execute("SELECT * FROM dataset order by id")
-        record_batch_reader = query.fetch_record_batch(2048)
+        record_batch_reader = query.to_arrow_reader(2048)
 
         arrow_table = record_batch_reader.read_all()  # noqa: F841
         # reorder since order of rows isn't deterministic
@@ -94,7 +94,7 @@ class TestArrowDataset:
         duckdb_conn = duckdb.connect()
         dataset = CustomDataset()  # noqa: F841
         query = duckdb_conn.execute("SELECT b FROM dataset WHERE a < 5")
-        record_batch_reader = query.fetch_record_batch(2048)
+        record_batch_reader = query.to_arrow_reader(2048)
         arrow_table = record_batch_reader.read_all()
         assert arrow_table.equals(CustomDataset.DATA[:5].select(["b"]))
 

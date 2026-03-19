@@ -1,7 +1,7 @@
 import re
 
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
@@ -25,10 +25,9 @@ def tmp_database(tmp_path_factory):
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
 class TestDuckDBConnection:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_append(self, pandas):
+    def test_append(self):
         duckdb.execute("Create table integers (i integer)")
-        df_in = pandas.DataFrame(
+        df_in = pd.DataFrame(
             {
                 "numbers": [1, 2, 3, 4, 5],
             }
@@ -55,7 +54,7 @@ class TestDuckDBConnection:
     def test_arrow(self):
         pytest.importorskip("pyarrow")
         duckdb.execute("select [1,2,3]")
-        duckdb.fetch_arrow_table()
+        duckdb.to_arrow_table()
 
     def test_begin_commit(self):
         duckdb.begin()
@@ -177,8 +176,8 @@ class TestDuckDBConnection:
         assert duckdb.table("tbl").fetchall() == [(21,), (22,), (23,)]
         duckdb.execute("drop table tbl")
 
-    def test_fetch_arrow_table(self):
-        # Needed for 'fetch_arrow_table'
+    def test_arrow_table(self):
+        # Needed for 'arrow_table'
         pytest.importorskip("pyarrow")
 
         duckdb.execute("Create Table test (a integer)")
@@ -196,7 +195,7 @@ class TestDuckDBConnection:
 
         result_df = duckdb.execute(sql).df()
 
-        arrow_table = duckdb.execute(sql).fetch_arrow_table()
+        arrow_table = duckdb.execute(sql).to_arrow_table()
 
         arrow_df = arrow_table.to_pandas()
         assert result_df["repetitions"].sum() == arrow_df["repetitions"].sum()
@@ -221,12 +220,12 @@ class TestDuckDBConnection:
         duckdb.execute("DROP TABLE t")
 
     def test_fetch_record_batch(self):
-        # Needed for 'fetch_arrow_table'
+        # Needed for 'arrow_table'
         pytest.importorskip("pyarrow")
 
         duckdb.execute("CREATE table t as select range a from range(3000);")
         duckdb.execute("SELECT a FROM t")
-        record_batch_reader = duckdb.fetch_record_batch(1024)
+        record_batch_reader = duckdb.to_arrow_reader(1024)
         chunk = record_batch_reader.read_all()
         assert len(chunk) == 3000
 
@@ -300,7 +299,7 @@ class TestDuckDBConnection:
         assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
 
         # Create a registered object called 'vw'
-        arrow_result = duckdb_cursor.execute("select 42").fetch_arrow_table()
+        arrow_result = duckdb_cursor.execute("select 42").to_arrow_table()
         with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
             duckdb_cursor.register("vw", arrow_result)
 
@@ -345,13 +344,12 @@ class TestDuckDBConnection:
         with pytest.raises(duckdb.CatalogException):
             duckdb_cursor.sql(f'select * from "{escaped_scary_name}"')
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_relation_out_of_scope(self, pandas):
+    def test_relation_out_of_scope(self):
         def temporary_scope():
             # Create a connection, we will return this
             con = duckdb.connect()
             # Create a dataframe
-            df = pandas.DataFrame({"a": [1, 2, 3]})
+            df = pd.DataFrame({"a": [1, 2, 3]})
             # The dataframe has to be registered as well
             # making sure it does not go out of scope
             con.register("df", df)
@@ -389,10 +387,11 @@ class TestDuckDBConnection:
         assert duckdb.interrupt is not None
 
     def test_wrap_shadowing(self):
-        pd = NumpyPandas()
+        import pandas as pd_local
+
         import duckdb
 
-        df = pd.DataFrame({"a": [1, 2, 3]})  # noqa: F841
+        df = pd_local.DataFrame({"a": [1, 2, 3]})  # noqa: F841
         res = duckdb.sql("from df").fetchall()
         assert res == [(1,), (2,), (3,)]
 

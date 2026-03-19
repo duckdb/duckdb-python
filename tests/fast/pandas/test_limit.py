@@ -1,13 +1,11 @@
-import pytest
-from conftest import ArrowPandas, NumpyPandas
+import pandas as pd
 
 import duckdb
 
 
 class TestLimitPandas:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_limit_df(self, duckdb_cursor, pandas):
-        df_in = pandas.DataFrame(
+    def test_limit_df(self, duckdb_cursor):
+        df_in = pd.DataFrame(
             {
                 "numbers": [1, 2, 3, 4, 5],
             }
@@ -15,9 +13,8 @@ class TestLimitPandas:
         limit_df = duckdb.limit(df_in, 2)
         assert len(limit_df.execute().fetchall()) == 2
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_aggregate_df(self, duckdb_cursor, pandas):
-        df_in = pandas.DataFrame(
+    def test_aggregate_df(self, duckdb_cursor):
+        df_in = pd.DataFrame(
             {
                 "numbers": [1, 2, 2, 2],
             }

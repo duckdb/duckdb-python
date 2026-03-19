@@ -363,12 +363,11 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 	case PythonObjectType::Bool:
 		return LogicalType::BOOLEAN;
 	case PythonObjectType::Integer: {
-		Value integer;
-		if (!TryTransformPythonNumeric(integer, ele)) {
+		auto type = SniffPythonIntegerType(ele);
+		if (type.id() == LogicalTypeId::SQLNULL) {
 			can_convert = false;
-			return LogicalType::SQLNULL;
 		}
-		return integer.type();
+		return type;
 	}
 	case PythonObjectType::Float:
 		if (std::isnan(PyFloat_AsDouble(ele.ptr()))) {

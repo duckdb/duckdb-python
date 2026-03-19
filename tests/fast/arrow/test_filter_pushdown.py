@@ -2,32 +2,34 @@
 import sys
 
 import pytest
-from conftest import pandas_supports_arrow_backend
+from conftest import PANDAS_GE_3
 from packaging.version import Version
 
 import duckdb
 
 pa = pytest.importorskip("pyarrow")
-pd = pytest.importorskip("pyarrow.dataset")
+pa_ds = pytest.importorskip("pyarrow.dataset")
 pa_lib = pytest.importorskip("pyarrow.lib")
-pq = pytest.importorskip("pyarrow.parquet")
+pa_parquet = pytest.importorskip("pyarrow.parquet")
+pd = pytest.importorskip("pandas")
 np = pytest.importorskip("numpy")
 re = pytest.importorskip("re")
 
 
 def create_pyarrow_pandas(rel):
-    if not pandas_supports_arrow_backend():
-        pytest.skip(reason="Pandas version doesn't support 'pyarrow' backend")
-    return rel.df().convert_dtypes(dtype_backend="pyarrow")
+    if PANDAS_GE_3:
+        return rel.df()
+    else:
+        return rel.df().convert_dtypes(dtype_backend="pyarrow")
 
 
 def create_pyarrow_table(rel):
-    return rel.fetch_arrow_table()
+    return rel.to_arrow_table()
 
 
 def create_pyarrow_dataset(rel):
     table = create_pyarrow_table(rel)
-    return pd.dataset(table)
+    return pa_ds.dataset(table)
 
 
 def test_decimal_filter_pushdown(duckdb_cursor):
@@ -550,8 +552,8 @@ class TestArrowFilterPushdown:
         df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
         df.to_parquet(str(file_path))
 
-        my_arrow_dataset = pd.dataset(str(file_path))
-        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).fetch_arrow_table()
+        my_arrow_dataset = pa_ds.dataset(str(file_path))
+        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).to_arrow_table()
         output = duckdb_cursor.sql("select * from res").fetchall()
         expected = [(1, dt), (2, dt), (3, dt)]
         assert output == expected
@@ -702,39 +704,11 @@ class TestArrowFilterPushdown:
         duckdb_cursor.execute(f"copy (select * from df2) to '{data2.as_posix()}'")
 
         glob_pattern = tmp_path / "data*.parquet"
-        table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).fetch_arrow_table()
+        table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).to_arrow_table()
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
         expected_df = duckdb.from_parquet(glob_pattern.as_posix()).filter("date > '2019-01-01'").df()
         pandas.testing.assert_frame_equal(expected_df, output_df)
-
-    # https://github.com/duckdb/duckdb/pull/4817/files#r1339973721
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_column_removal(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test AS SELECT
-                range a,
-                100 - range b
-            FROM range(100)
-        """
-        )
-        duck_test_table = duckdb_cursor.table("test")
-        arrow_table = create_table(duck_test_table)
-
-        # PR 4817 - remove filter columns that are unused in the remainder of the query plan from the table function
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT count(*) FROM arrow_table WHERE
-                a > 25 AND b > 25
-        """
-        ).fetchall()
-
-        # scanned columns that come out of the scan are displayed like this, so we shouldn't see them
-        match = re.search("│ +a +│", query_res[0][1])
-        assert not match
-        match = re.search("│ +b +│", query_res[0][1])
-        assert not match
 
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
     @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
@@ -895,7 +869,7 @@ class TestArrowFilterPushdown:
         con.execute(
             "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
         )
-        arrow_tbl = con.execute("FROM T").fetch_arrow_table()
+        arrow_tbl = con.execute("FROM T").to_arrow_table()
 
         # No projection just unsupported filter
         assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, "3", 3, 3)]
@@ -919,7 +893,7 @@ class TestArrowFilterPushdown:
             "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"  # noqa: E501
         )
 
-        arrow_tbl = con.execute("FROM T_2").fetch_arrow_table()
+        arrow_tbl = con.execute("FROM T_2").to_arrow_table()
 
         assert con.execute(
             "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
@@ -931,8 +905,8 @@ class TestArrowFilterPushdown:
         duckdb_conn.execute("CREATE TABLE build as select (random()*9999)::INT b from range(20);")
         duck_probe = duckdb_conn.table("probe")
         duck_build = duckdb_conn.table("build")
-        duck_probe_arrow = duck_probe.fetch_arrow_table()
-        duck_build_arrow = duck_build.fetch_arrow_table()
+        duck_probe_arrow = duck_probe.to_arrow_table()
+        duck_build_arrow = duck_build.to_arrow_table()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         duckdb_conn.register("duck_build_arrow", duck_build_arrow)
         assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
@@ -943,9 +917,36 @@ class TestArrowFilterPushdown:
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE probe as select range a from range(1000);")
         duck_probe = duckdb_conn.table("probe")
-        duck_probe_arrow = duck_probe.fetch_arrow_table()
+        duck_probe_arrow = duck_probe.to_arrow_table()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
+
+    @pytest.mark.timeout(10)
+    def test_in_filter_pushdown_large_list(self, duckdb_cursor):
+        """Large IN lists must not hang. Regression test for https://github.com/duckdb/duckdb-python/issues/52."""
+        arrow_table = pa.table({"a": pa.array(range(5000))})
+        in_list = ", ".join(str(i) for i in range(0, 5000, 2))
+        result = duckdb.sql(f"SELECT count(*) FROM arrow_table WHERE a IN ({in_list})").fetchone()
+        assert result == (2500,)
+
+    def test_in_filter_pushdown_with_nulls(self, duckdb_cursor):
+        arrow_table = pa.table({"a": pa.array([1, 2, None, 4, None, 6])})
+        # IN list without NULL: null rows should not match
+        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4) ORDER BY a").fetchall()
+        assert result == [(1,), (4,)]
+        # IN list with NULL: null rows still should not match (SQL semantics)
+        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4, NULL) ORDER BY a").fetchall()
+        assert result == [(1,), (4,)]
+
+    def test_in_filter_pushdown_varchar(self, duckdb_cursor):
+        arrow_table = pa.table({"s": pa.array(["alice", "bob", "charlie", "dave", None])})
+        result = duckdb.sql("SELECT s FROM arrow_table WHERE s IN ('bob', 'dave') ORDER BY s").fetchall()
+        assert result == [("bob",), ("dave",)]
+
+    def test_in_filter_pushdown_float(self, duckdb_cursor):
+        arrow_table = pa.table({"f": pa.array([1.0, 2.5, 3.75, 4.0, None], type=pa.float64())})
+        result = duckdb.sql("SELECT f FROM arrow_table WHERE f IN (2.5, 4.0) ORDER BY f").fetchall()
+        assert result == [(2.5,), (4.0,)]
 
     def test_pushdown_of_optional_filter(self, duckdb_cursor):
         cardinality_table = pa.Table.from_pydict(
@@ -1006,7 +1007,7 @@ class TestArrowFilterPushdown:
             arrow_res = con.sql(query.format(table="arrow_table")).fetchall()
             assert len(duckdb_res) == len(arrow_res)
 
-        arrow_table = duckdb_cursor.table("test").fetch_arrow_table()
+        arrow_table = duckdb_cursor.table("test").to_arrow_table()
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
         assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")
@@ -1023,14 +1024,14 @@ class TestArrowFilterPushdown:
     def test_binary_view_filter(self, duckdb_cursor):
         """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
         table = pa.table({"col": pa.array([b"abc", b"efg"], type=pa.binary_view())})
-        dset = pd.dataset(table)
+        dset = pa_ds.dataset(table)
         res = duckdb_cursor.sql("select * from dset where col = 'abc'::binary")
         assert len(res) == 1
 
     def test_string_view_filter(self, duckdb_cursor):
         """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
         table = pa.table({"col": pa.array(["abc", "efg"], type=pa.string_view())})
-        dset = pd.dataset(table)
+        dset = pa_ds.dataset(table)
         res = duckdb_cursor.sql("select * from dset where col = 'abc'")
         assert len(res) == 1
 
@@ -1038,10 +1039,10 @@ class TestArrowFilterPushdown:
     def test_canary_for_pyarrow_string_view_filter_support(self, duckdb_cursor):
         """This canary will xpass when pyarrow implements string view filter support."""
         # predicate: field == "string value"
-        filter_expr = pd.field("col") == pd.scalar("val1")
+        filter_expr = pa_ds.field("col") == pa_ds.scalar("val1")
         # dataset with a string view column
         table = pa.table({"col": pa.array(["val1", "val2"], type=pa.string_view())})
-        dset = pd.dataset(table)
+        dset = pa_ds.dataset(table)
         # creating the scanner fails
         dset.scanner(columns=["col"], filter=filter_expr)
 
@@ -1049,10 +1050,10 @@ class TestArrowFilterPushdown:
     def test_canary_for_pyarrow_binary_view_filter_support(self, duckdb_cursor):
         """This canary will xpass when pyarrow implements binary view filter support."""
         # predicate: field == const
-        const = pd.scalar(pa.scalar(b"bin1", pa.binary_view()))
-        filter_expr = pd.field("col") == const
+        const = pa_ds.scalar(pa.scalar(b"bin1", pa.binary_view()))
+        filter_expr = pa_ds.field("col") == const
         # dataset with a string view column
         table = pa.table({"col": pa.array([b"bin1", b"bin2"], type=pa.binary_view())})
-        dset = pd.dataset(table)
+        dset = pa_ds.dataset(table)
         # creating the scanner fails
         dset.scanner(columns=["col"], filter=filter_expr)

@@ -122,7 +122,11 @@ static LogicalType FromString(const string &type_str, shared_ptr<DuckDBPyConnect
 		pycon = DuckDBPyConnection::DefaultConnection();
 	}
 	auto &connection = pycon->con.GetConnection();
-	return TransformStringToLogicalType(type_str, *connection.context);
+
+	LogicalType type;
+	connection.context->RunFunctionInTransaction(
+	    [&]() { type = TransformStringToLogicalType(type_str, *connection.context); });
+	return type;
 }
 
 static bool FromNumpyType(const py::object &type, LogicalType &result) {
@@ -211,7 +215,7 @@ static py::tuple FilterNones(const py::tuple &args) {
 
 	for (const auto &arg : args) {
 		py::object object = py::reinterpret_borrow<py::object>(arg);
-		if (object.is(py::none().get_type())) {
+		if (object.is(py::type::of(py::none()))) {
 			continue;
 		}
 		result.append(object);
@@ -309,13 +313,13 @@ static LogicalType FromObject(const py::object &object) {
 	case PythonTypeObject::TYPE: {
 		shared_ptr<DuckDBPyType> type_object;
 		if (!py::try_cast<shared_ptr<DuckDBPyType>>(object, type_object)) {
-			string actual_type = py::str(object.get_type());
+			string actual_type = py::str(py::type::of(object));
 			throw InvalidInputException("Expected argument of type DuckDBPyType, received '%s' instead", actual_type);
 		}
 		return type_object->Type();
 	}
 	default: {
-		string actual_type = py::str(object.get_type());
+		string actual_type = py::str(py::type::of(object));
 		throw NotImplementedException("Could not convert from object of type '%s' to DuckDBPyType", actual_type);
 	}
 	}

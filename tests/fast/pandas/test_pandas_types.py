@@ -56,7 +56,7 @@ class TestNumpyNullableTypes:
         # c=type2
         # ..
         data = {}
-        for letter, dtype in zip(string.ascii_lowercase, data_types):
+        for letter, dtype in zip(string.ascii_lowercase, data_types, strict=False):
             data[letter] = base_df.a.astype(dtype)
 
         df = pd.DataFrame.from_dict(data)  # noqa: F841
@@ -65,7 +65,7 @@ class TestNumpyNullableTypes:
 
         # Verify that the types in the out_df are correct
         # TODO: we don't support outputting pandas specific types (i.e UInt64)  # noqa: TD002, TD003
-        for letter, item in zip(string.ascii_lowercase, data_types):
+        for letter, item in zip(string.ascii_lowercase, data_types, strict=False):
             column_name = letter
             assert str(out_df[column_name].dtype) == item.lower()
 

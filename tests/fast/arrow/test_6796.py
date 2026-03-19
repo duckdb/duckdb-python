@@ -1,15 +1,14 @@
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
 pyarrow = pytest.importorskip("pyarrow")
 
 
-@pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-def test_6796(pandas):
+def test_6796():
     conn = duckdb.connect()
-    input_df = pandas.DataFrame({"foo": ["bar"]})
+    input_df = pd.DataFrame({"foo": ["bar"]})
     conn.register("input_df", input_df)
 
     query = """
@@ -20,7 +19,7 @@ def test_6796(pandas):
 
     # fetching directly into Pandas works
     res_df = conn.execute(query).fetch_df()
-    res_arrow = conn.execute(query).fetch_arrow_table()  # noqa: F841
+    res_arrow = conn.execute(query).to_arrow_table()  # noqa: F841
 
     df_arrow_table = pyarrow.Table.from_pandas(res_df)  # noqa: F841
 

@@ -1,5 +1,3 @@
-from typing import Optional  # noqa: D100
-
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
 
@@ -10,7 +8,7 @@ class SparkConf:  # noqa: D101
     def contains(self, key: str) -> bool:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def get(self, key: str, defaultValue: Optional[str] = None) -> Optional[str]:  # noqa: D102
+    def get(self, key: str, defaultValue: str | None = None) -> str | None:  # noqa: D102
         raise ContributionsAcceptedError
 
     def getAll(self) -> list[tuple[str, str]]:  # noqa: D102
@@ -26,7 +24,7 @@ class SparkConf:  # noqa: D101
         raise ContributionsAcceptedError
 
     def setExecutorEnv(  # noqa: D102
-        self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[list[tuple[str, str]]] = None
+        self, key: str | None = None, value: str | None = None, pairs: list[tuple[str, str]] | None = None
     ) -> "SparkConf":
         raise ContributionsAcceptedError
 

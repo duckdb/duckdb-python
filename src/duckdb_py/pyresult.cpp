@@ -117,16 +117,13 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
 }
 
 Optional<py::tuple> DuckDBPyResult::Fetchone() {
-	{
-		D_ASSERT(py::gil_check());
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
+	if (!current_chunk || chunk_offset >= current_chunk->size()) {
 		py::gil_scoped_release release;
-		if (!result) {
-			throw InvalidInputException("result closed");
-		}
-		if (!current_chunk || chunk_offset >= current_chunk->size()) {
-			current_chunk = FetchNext(*result);
-			chunk_offset = 0;
-		}
+		current_chunk = FetchNext(*result);
+		chunk_offset = 0;
 	}
 
 	if (!current_chunk || current_chunk->size() == 0) {
@@ -304,7 +301,7 @@ void DuckDBPyResult::ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_obje
 			// We need to create the column anew because the exact dt changed to a new timezone
 			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
 		} else if (date_as_object && result->types[i] == LogicalType::DATE) {
-			auto new_value = df[names[i].c_str()].attr("dt").attr("date");
+			py::object new_value = df[names[i].c_str()].attr("dt").attr("date");
 			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
 		}
 	}
@@ -499,6 +496,81 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
 
+// Wraps pre-built Arrow arrays from an ArrowQueryResult into an ArrowArrayStream.
+// This avoids the double-materialization that happens when using ResultArrowArrayStreamWrapper
+// with an ArrowQueryResult (which throws NotImplementedException from FetchInternal).
+struct ArrowQueryResultStreamWrapper {
+	ArrowQueryResultStreamWrapper(unique_ptr<QueryResult> result_p) : result(std::move(result_p)), index(0) {
+		auto &arrow_result = result->Cast<ArrowQueryResult>();
+		arrays = arrow_result.ConsumeArrays();
+		types = result->types;
+		names = result->names;
+		client_properties = result->client_properties;
+
+		stream.private_data = this;
+		stream.get_schema = GetSchema;
+		stream.get_next = GetNext;
+		stream.release = Release;
+		stream.get_last_error = GetLastError;
+	}
+
+	static int GetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+		if (!stream->release) {
+			return -1;
+		}
+		auto self = reinterpret_cast<ArrowQueryResultStreamWrapper *>(stream->private_data);
+		out->release = nullptr;
+		try {
+			ArrowConverter::ToArrowSchema(out, self->types, self->names, self->client_properties);
+		} catch (std::runtime_error &e) {
+			self->last_error = e.what();
+			return -1;
+		}
+		return 0;
+	}
+
+	static int GetNext(ArrowArrayStream *stream, ArrowArray *out) {
+		if (!stream->release) {
+			return -1;
+		}
+		auto self = reinterpret_cast<ArrowQueryResultStreamWrapper *>(stream->private_data);
+		if (self->index >= self->arrays.size()) {
+			out->release = nullptr;
+			return 0;
+		}
+		*out = self->arrays[self->index]->arrow_array;
+		self->arrays[self->index]->arrow_array.release = nullptr;
+		self->index++;
+		return 0;
+	}
+
+	static void Release(ArrowArrayStream *stream) {
+		if (!stream || !stream->release) {
+			return;
+		}
+		stream->release = nullptr;
+		delete reinterpret_cast<ArrowQueryResultStreamWrapper *>(stream->private_data);
+	}
+
+	static const char *GetLastError(ArrowArrayStream *stream) {
+		if (!stream->release) {
+			return "stream was released";
+		}
+		auto self = reinterpret_cast<ArrowQueryResultStreamWrapper *>(stream->private_data);
+		return self->last_error.c_str();
+	}
+
+	ArrowArrayStream stream;
+	unique_ptr<QueryResult> result;
+	vector<unique_ptr<ArrowArrayWrapper>> arrays;
+	vector<LogicalType> types;
+	vector<string> names;
+	ClientProperties client_properties;
+	idx_t index;
+	string last_error;
+};
+
+// Destructor for capsules that own a heap-allocated ArrowArrayStream (slow path).
 static void ArrowArrayStreamPyCapsuleDestructor(PyObject *object) {
 	auto data = PyCapsule_GetPointer(object, "arrow_array_stream");
 	if (!data) {
@@ -512,6 +584,18 @@ static void ArrowArrayStreamPyCapsuleDestructor(PyObject *object) {
 }
 
 py::object DuckDBPyResult::FetchArrowCapsule(idx_t rows_per_batch) {
+	if (result && result->type == QueryResultType::ARROW_RESULT) {
+		// Fast path: yield pre-built Arrow arrays directly.
+		// The wrapper is heap-allocated; Release() deletes it via private_data.
+		// We heap-allocate a separate ArrowArrayStream for the capsule so that the capsule
+		// holds a stable pointer even after the wrapper is consumed and deleted by a scan.
+		auto wrapper = new ArrowQueryResultStreamWrapper(std::move(result));
+		auto stream = new ArrowArrayStream();
+		*stream = wrapper->stream;
+		wrapper->stream.release = nullptr;
+		return py::capsule(stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
+	}
+	// Existing slow path for MaterializedQueryResult / StreamQueryResult
 	auto stream_p = FetchArrowArrayStream(rows_per_batch);
 	auto stream = new ArrowArrayStream();
 	*stream = stream_p;

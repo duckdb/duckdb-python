@@ -395,7 +395,7 @@
 		"return": "polars.DataFrame"
 	},
 	{
-		"name": "fetch_arrow_table",
+		"name": "arrow_table",
 		"function": "FetchArrow",
 		"docs": "Fetch a result as Arrow table following execute()",
 		"args": [
@@ -1092,6 +1092,31 @@
 				"type": "str"
 			}
 		],
+		"return": "None"
+	},
+	{
+		"name": "get_profiling_information",
+		"function": "GetProfilingInformation",
+		"docs": "Get profiling information for a query",
+		"args": [
+			{
+				"name": "format",
+				"default": "JSON",
+				"type": "Optional[str]"
+			}
+		],
+		"return": "str"
+	},
+	{
+		"name": "enable_profiling",
+		"function": "EnableProfiling",
+		"docs": "Enable profiling for a connection",
+		"return": "None"
+	},
+	{
+		"name": "disable_profiling",
+		"function": "DisableProfiling",
+		"docs": "Disable profiling for a connection",
 		"return": "None"
 	}
 ]

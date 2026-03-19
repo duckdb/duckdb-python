@@ -71,7 +71,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.9.0"
-          python-version: 3.9
+          python-version: 3.12
           enable-cache: true
           cache-suffix: -${{ github.workflow }}
 
@@ -111,6 +111,7 @@ jobs:
           mkdir coverage-cpp
           uv run gcovr \
             --gcov-ignore-errors all \
+            --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
             --root "$PWD" \
             --filter "${PWD}/src/duckdb_py" \
             --exclude '.*/\.cache/.*' \

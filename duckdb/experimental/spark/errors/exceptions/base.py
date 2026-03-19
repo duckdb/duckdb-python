@@ -1,4 +1,4 @@
-from typing import Optional, cast  # noqa: D100
+from typing import cast
 
 from ..utils import ErrorClassesReader
 
@@ -8,11 +8,11 @@ class PySparkException(Exception):
 
     def __init__(  # noqa: D107
         self,
-        message: Optional[str] = None,
+        message: str | None = None,
         # The error class, decides the message format, must be one of the valid options listed in 'error_classes.py'
-        error_class: Optional[str] = None,
+        error_class: str | None = None,
         # The dictionary listing the arguments specified in the message (or the error_class)
-        message_parameters: Optional[dict[str, str]] = None,
+        message_parameters: dict[str, str] | None = None,
     ) -> None:
         # `message` vs `error_class` & `message_parameters` are mutually exclusive.
         assert (message is not None and (error_class is None and message_parameters is None)) or (
@@ -31,7 +31,7 @@ class PySparkException(Exception):
         self.error_class = error_class
         self.message_parameters = message_parameters
 
-    def getErrorClass(self) -> Optional[str]:
+    def getErrorClass(self) -> str | None:
         """Returns an error class as a string.
 
         .. versionadded:: 3.4.0
@@ -43,7 +43,7 @@ class PySparkException(Exception):
         """
         return self.error_class
 
-    def getMessageParameters(self) -> Optional[dict[str, str]]:
+    def getMessageParameters(self) -> dict[str, str] | None:
         """Returns a message parameters as a dictionary.
 
         .. versionadded:: 3.4.0

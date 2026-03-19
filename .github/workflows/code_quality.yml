@@ -32,7 +32,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.9.0"
-          python-version: 3.9
+          python-version: "3.12"
 
       - name: pre-commit (cache)
         uses: actions/cache@v4

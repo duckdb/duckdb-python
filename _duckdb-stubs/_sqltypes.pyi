@@ -1,5 +1,5 @@
 import duckdb
-import typing as pytyping
+import typing
 
 __all__: list[str] = [
     "BIGINT",
@@ -29,6 +29,7 @@ __all__: list[str] = [
     "UTINYINT",
     "UUID",
     "VARCHAR",
+    "VARIANT",
     "DuckDBPyType",
 ]
 
@@ -37,12 +38,12 @@ class DuckDBPyType:
     def __getattr__(self, name: str) -> DuckDBPyType: ...
     def __getitem__(self, name: str) -> DuckDBPyType: ...
     def __hash__(self) -> int: ...
-    @pytyping.overload
+    @typing.overload
     def __init__(self, type_str: str, connection: duckdb.DuckDBPyConnection) -> None: ...
-    @pytyping.overload
+    @typing.overload
     def __init__(self, obj: object) -> None: ...
     @property
-    def children(self) -> list[tuple[str, object]]: ...
+    def children(self) -> list[tuple[str, DuckDBPyType | int | list[str]]]: ...
     @property
     def id(self) -> str: ...
 
@@ -59,6 +60,7 @@ INTERVAL: DuckDBPyType  # value = INTERVAL
 SMALLINT: DuckDBPyType  # value = SMALLINT
 SQLNULL: DuckDBPyType  # value = "NULL"
 TIME: DuckDBPyType  # value = TIME
+TIME_NS: DuckDBPyType  # value = TIME_NS
 TIMESTAMP: DuckDBPyType  # value = TIMESTAMP
 TIMESTAMP_MS: DuckDBPyType  # value = TIMESTAMP_MS
 TIMESTAMP_NS: DuckDBPyType  # value = TIMESTAMP_NS
@@ -73,3 +75,4 @@ USMALLINT: DuckDBPyType  # value = USMALLINT
 UTINYINT: DuckDBPyType  # value = UTINYINT
 UUID: DuckDBPyType  # value = UUID
 VARCHAR: DuckDBPyType  # value = VARCHAR
+VARIANT: DuckDBPyType  # value = VARIANT

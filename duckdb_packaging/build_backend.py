@@ -16,7 +16,6 @@ Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional, Union
 
 from scikit_build_core.build import (
     build_editable,
@@ -132,7 +131,7 @@ def _read_duckdb_long_version() -> str:
     return _version_file_path().read_text(encoding="utf-8").strip()
 
 
-def _skbuild_config_add(key: str, value: Union[list, str], config_settings: dict[str, Union[list[str], str]]) -> None:
+def _skbuild_config_add(key: str, value: list | str, config_settings: dict[str, list[str] | str]) -> None:
     """Add or modify a configuration setting for scikit-build-core.
 
     This function handles adding values to scikit-build-core configuration settings,
@@ -179,7 +178,7 @@ def _skbuild_config_add(key: str, value: Union[list, str], config_settings: dict
         raise RuntimeError(msg)
 
 
-def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[list[str], str]]] = None) -> str:
+def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str] | None = None) -> str:
     """Build a source distribution using the DuckDB submodule.
 
     This function extracts the DuckDB version from either the git submodule and saves it
@@ -210,8 +209,8 @@ def build_sdist(sdist_directory: str, config_settings: Optional[dict[str, Union[
 
 def build_wheel(
     wheel_directory: str,
-    config_settings: Optional[dict[str, Union[list[str], str]]] = None,
-    metadata_directory: Optional[str] = None,
+    config_settings: dict[str, list[str] | str] | None = None,
+    metadata_directory: str | None = None,
 ) -> str:
     """Build a wheel from either git submodule or extracted sdist sources.
 

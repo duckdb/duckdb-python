@@ -3,15 +3,14 @@ import pathlib
 import re
 import tempfile
 
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
 
 class TestToParquet:
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_basic_to_parquet(self, pd):
+    def test_basic_to_parquet(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
         rel = duckdb.from_df(df)
@@ -21,8 +20,7 @@ class TestToParquet:
         csv_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_compression_gzip(self, pd):
+    def test_compression_gzip(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
@@ -50,9 +48,8 @@ class TestToParquet:
         """
         ).execute().fetchall() == [("duckdb_schema", None), ("i", 42), ("my_struct", 43), ("j", 44)]
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("row_group_size_bytes", [122880 * 1024, "2MB"])
-    def test_row_group_size_bytes(self, pd, row_group_size_bytes):
+    def test_row_group_size_bytes(self, row_group_size_bytes):
         con = duckdb.connect()
         con.execute("SET preserve_insertion_order=false;")
 
@@ -63,8 +60,7 @@ class TestToParquet:
         parquet_rel = con.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_row_group_size(self, pd):
+    def test_row_group_size(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame({"a": ["string1", "string2", "string3"]})
         rel = duckdb.from_df(df)
@@ -72,9 +68,8 @@ class TestToParquet:
         parquet_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("write_columns", [None, True, False])
-    def test_partition(self, pd, write_columns):
+    def test_partition(self, write_columns):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -89,9 +84,8 @@ class TestToParquet:
         expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
         assert result.execute().fetchall() == expected
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("write_columns", [None, True, False])
-    def test_overwrite(self, pd, write_columns):
+    def test_overwrite(self, write_columns):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -108,8 +102,7 @@ class TestToParquet:
 
         assert result.execute().fetchall() == expected
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_use_tmp_file(self, pd):
+    def test_use_tmp_file(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -124,8 +117,7 @@ class TestToParquet:
         result = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == result.execute().fetchall()
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_per_thread_output(self, pd):
+    def test_per_thread_output(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
         print("threads:", num_threads)
@@ -141,8 +133,7 @@ class TestToParquet:
         result = duckdb.read_parquet(f"{temp_file_name}/*.parquet")
         assert rel.execute().fetchall() == result.execute().fetchall()
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_append(self, pd):
+    def test_append(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -173,8 +164,7 @@ class TestToParquet:
         ]
         assert result.execute().fetchall() == expected
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_filename_pattern_with_index(self, pd):
+    def test_filename_pattern_with_index(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -199,8 +189,7 @@ class TestToParquet:
         expected = [("rei", 321.0, "a"), ("shinji", 123.0, "a"), ("asuka", 23.0, "b"), ("kaworu", 340.0, "c")]
         assert result.execute().fetchall() == expected
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_filename_pattern_with_uuid(self, pd):
+    def test_filename_pattern_with_uuid(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {
@@ -242,9 +231,8 @@ class TestToParquet:
         result = duckdb.read_parquet(f"{temp_file_name}/*.parquet")
         assert len(result.execute().fetchall()) == 10000
 
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("file_size_bytes", ["256MB", "1G"])
-    def test_file_size_bytes_human_readable(self, pd, file_size_bytes):
+    def test_file_size_bytes_human_readable(self, file_size_bytes):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         df = pd.DataFrame(
             {

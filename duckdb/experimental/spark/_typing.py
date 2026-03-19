@@ -16,16 +16,16 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from collections.abc import Iterable, Sized
-from typing import Callable, TypeVar, Union
+from collections.abc import Callable, Iterable, Sized
+from typing import Literal, TypeVar
 
 from numpy import float32, float64, int32, int64, ndarray
-from typing_extensions import Literal, Protocol, Self
+from typing_extensions import Protocol, Self
 
 F = TypeVar("F", bound=Callable)
 T_co = TypeVar("T_co", covariant=True)
 
-PrimitiveType = Union[bool, float, int, str]
+PrimitiveType = bool | float | int | str
 
 NonUDFType = Literal[0]
 

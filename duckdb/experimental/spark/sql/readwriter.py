@@ -1,11 +1,11 @@
-from typing import TYPE_CHECKING, Optional, Union, cast  # noqa: D100
+from typing import TYPE_CHECKING, cast
 
 from ..errors import PySparkNotImplementedError, PySparkTypeError
 from ..exception import ContributionsAcceptedError
 from .types import StructType
 
-PrimitiveType = Union[bool, float, int, str]
-OptionalPrimitiveType = Optional[PrimitiveType]
+PrimitiveType = bool | float | int | str
+OptionalPrimitiveType = PrimitiveType | None
 
 if TYPE_CHECKING:
     from duckdb.experimental.spark.sql.dataframe import DataFrame
@@ -23,9 +23,9 @@ class DataFrameWriter:  # noqa: D101
     def parquet(  # noqa: D102
         self,
         path: str,
-        mode: Optional[str] = None,
-        partitionBy: Union[str, list[str], None] = None,
-        compression: Optional[str] = None,
+        mode: str | None = None,
+        partitionBy: str | list[str] | None = None,
+        compression: str | None = None,
     ) -> None:
         relation = self.dataframe.relation
         if mode:
@@ -38,23 +38,23 @@ class DataFrameWriter:  # noqa: D101
     def csv(  # noqa: D102
         self,
         path: str,
-        mode: Optional[str] = None,
-        compression: Optional[str] = None,
-        sep: Optional[str] = None,
-        quote: Optional[str] = None,
-        escape: Optional[str] = None,
-        header: Optional[Union[bool, str]] = None,
-        nullValue: Optional[str] = None,
-        escapeQuotes: Optional[Union[bool, str]] = None,
-        quoteAll: Optional[Union[bool, str]] = None,
-        dateFormat: Optional[str] = None,
-        timestampFormat: Optional[str] = None,
-        ignoreLeadingWhiteSpace: Optional[Union[bool, str]] = None,
-        ignoreTrailingWhiteSpace: Optional[Union[bool, str]] = None,
-        charToEscapeQuoteEscaping: Optional[str] = None,
-        encoding: Optional[str] = None,
-        emptyValue: Optional[str] = None,
-        lineSep: Optional[str] = None,
+        mode: str | None = None,
+        compression: str | None = None,
+        sep: str | None = None,
+        quote: str | None = None,
+        escape: str | None = None,
+        header: bool | str | None = None,
+        nullValue: str | None = None,
+        escapeQuotes: bool | str | None = None,
+        quoteAll: bool | str | None = None,
+        dateFormat: str | None = None,
+        timestampFormat: str | None = None,
+        ignoreLeadingWhiteSpace: bool | str | None = None,
+        ignoreTrailingWhiteSpace: bool | str | None = None,
+        charToEscapeQuoteEscaping: str | None = None,
+        encoding: str | None = None,
+        emptyValue: str | None = None,
+        lineSep: str | None = None,
     ) -> None:
         if mode not in (None, "overwrite"):
             raise NotImplementedError
@@ -92,9 +92,9 @@ class DataFrameReader:  # noqa: D101
 
     def load(  # noqa: D102
         self,
-        path: Optional[Union[str, list[str]]] = None,
-        format: Optional[str] = None,
-        schema: Optional[Union[StructType, str]] = None,
+        path: str | list[str] | None = None,
+        format: str | None = None,
+        schema: StructType | str | None = None,
         **options: OptionalPrimitiveType,
     ) -> "DataFrame":
         from duckdb.experimental.spark.sql.dataframe import DataFrame
@@ -129,40 +129,40 @@ class DataFrameReader:  # noqa: D101
 
     def csv(  # noqa: D102
         self,
-        path: Union[str, list[str]],
-        schema: Optional[Union[StructType, str]] = None,
-        sep: Optional[str] = None,
-        encoding: Optional[str] = None,
-        quote: Optional[str] = None,
-        escape: Optional[str] = None,
-        comment: Optional[str] = None,
-        header: Optional[Union[bool, str]] = None,
-        inferSchema: Optional[Union[bool, str]] = None,
-        ignoreLeadingWhiteSpace: Optional[Union[bool, str]] = None,
-        ignoreTrailingWhiteSpace: Optional[Union[bool, str]] = None,
-        nullValue: Optional[str] = None,
-        nanValue: Optional[str] = None,
-        positiveInf: Optional[str] = None,
-        negativeInf: Optional[str] = None,
-        dateFormat: Optional[str] = None,
-        timestampFormat: Optional[str] = None,
-        maxColumns: Optional[Union[int, str]] = None,
-        maxCharsPerColumn: Optional[Union[int, str]] = None,
-        maxMalformedLogPerPartition: Optional[Union[int, str]] = None,
-        mode: Optional[str] = None,
-        columnNameOfCorruptRecord: Optional[str] = None,
-        multiLine: Optional[Union[bool, str]] = None,
-        charToEscapeQuoteEscaping: Optional[str] = None,
-        samplingRatio: Optional[Union[float, str]] = None,
-        enforceSchema: Optional[Union[bool, str]] = None,
-        emptyValue: Optional[str] = None,
-        locale: Optional[str] = None,
-        lineSep: Optional[str] = None,
-        pathGlobFilter: Optional[Union[bool, str]] = None,
-        recursiveFileLookup: Optional[Union[bool, str]] = None,
-        modifiedBefore: Optional[Union[bool, str]] = None,
-        modifiedAfter: Optional[Union[bool, str]] = None,
-        unescapedQuoteHandling: Optional[str] = None,
+        path: str | list[str],
+        schema: StructType | str | None = None,
+        sep: str | None = None,
+        encoding: str | None = None,
+        quote: str | None = None,
+        escape: str | None = None,
+        comment: str | None = None,
+        header: bool | str | None = None,
+        inferSchema: bool | str | None = None,
+        ignoreLeadingWhiteSpace: bool | str | None = None,
+        ignoreTrailingWhiteSpace: bool | str | None = None,
+        nullValue: str | None = None,
+        nanValue: str | None = None,
+        positiveInf: str | None = None,
+        negativeInf: str | None = None,
+        dateFormat: str | None = None,
+        timestampFormat: str | None = None,
+        maxColumns: int | str | None = None,
+        maxCharsPerColumn: int | str | None = None,
+        maxMalformedLogPerPartition: int | str | None = None,
+        mode: str | None = None,
+        columnNameOfCorruptRecord: str | None = None,
+        multiLine: bool | str | None = None,
+        charToEscapeQuoteEscaping: str | None = None,
+        samplingRatio: float | str | None = None,
+        enforceSchema: bool | str | None = None,
+        emptyValue: str | None = None,
+        locale: str | None = None,
+        lineSep: str | None = None,
+        pathGlobFilter: bool | str | None = None,
+        recursiveFileLookup: bool | str | None = None,
+        modifiedBefore: bool | str | None = None,
+        modifiedAfter: bool | str | None = None,
+        unescapedQuoteHandling: str | None = None,
     ) -> "DataFrame":
         if not isinstance(path, str):
             raise NotImplementedError
@@ -263,31 +263,31 @@ class DataFrameReader:  # noqa: D101
 
     def json(
         self,
-        path: Union[str, list[str]],
-        schema: Optional[Union[StructType, str]] = None,
-        primitivesAsString: Optional[Union[bool, str]] = None,
-        prefersDecimal: Optional[Union[bool, str]] = None,
-        allowComments: Optional[Union[bool, str]] = None,
-        allowUnquotedFieldNames: Optional[Union[bool, str]] = None,
-        allowSingleQuotes: Optional[Union[bool, str]] = None,
-        allowNumericLeadingZero: Optional[Union[bool, str]] = None,
-        allowBackslashEscapingAnyCharacter: Optional[Union[bool, str]] = None,
-        mode: Optional[str] = None,
-        columnNameOfCorruptRecord: Optional[str] = None,
-        dateFormat: Optional[str] = None,
-        timestampFormat: Optional[str] = None,
-        multiLine: Optional[Union[bool, str]] = None,
-        allowUnquotedControlChars: Optional[Union[bool, str]] = None,
-        lineSep: Optional[str] = None,
-        samplingRatio: Optional[Union[float, str]] = None,
-        dropFieldIfAllNull: Optional[Union[bool, str]] = None,
-        encoding: Optional[str] = None,
-        locale: Optional[str] = None,
-        pathGlobFilter: Optional[Union[bool, str]] = None,
-        recursiveFileLookup: Optional[Union[bool, str]] = None,
-        modifiedBefore: Optional[Union[bool, str]] = None,
-        modifiedAfter: Optional[Union[bool, str]] = None,
-        allowNonNumericNumbers: Optional[Union[bool, str]] = None,
+        path: str | list[str],
+        schema: StructType | str | None = None,
+        primitivesAsString: bool | str | None = None,
+        prefersDecimal: bool | str | None = None,
+        allowComments: bool | str | None = None,
+        allowUnquotedFieldNames: bool | str | None = None,
+        allowSingleQuotes: bool | str | None = None,
+        allowNumericLeadingZero: bool | str | None = None,
+        allowBackslashEscapingAnyCharacter: bool | str | None = None,
+        mode: str | None = None,
+        columnNameOfCorruptRecord: str | None = None,
+        dateFormat: str | None = None,
+        timestampFormat: str | None = None,
+        multiLine: bool | str | None = None,
+        allowUnquotedControlChars: bool | str | None = None,
+        lineSep: str | None = None,
+        samplingRatio: float | str | None = None,
+        dropFieldIfAllNull: bool | str | None = None,
+        encoding: str | None = None,
+        locale: str | None = None,
+        pathGlobFilter: bool | str | None = None,
+        recursiveFileLookup: bool | str | None = None,
+        modifiedBefore: bool | str | None = None,
+        modifiedAfter: bool | str | None = None,
+        allowNonNumericNumbers: bool | str | None = None,
     ) -> "DataFrame":
         """Loads JSON files and returns the results as a :class:`DataFrame`.
 

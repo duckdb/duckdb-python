@@ -16,18 +16,18 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from collections.abc import Callable
 from typing import (
     Any,
-    Callable,
-    Optional,
     TypeVar,
-    Union,
 )
 
 try:
     from typing import Literal, Protocol
 except ImportError:
-    from typing_extensions import Literal, Protocol
+    from typing import Literal
+
+    from typing_extensions import Protocol
 
 import datetime
 import decimal
@@ -36,14 +36,14 @@ from .._typing import PrimitiveType
 from . import types
 from .column import Column
 
-ColumnOrName = Union[Column, str]
+ColumnOrName = Column | str
 ColumnOrName_ = TypeVar("ColumnOrName_", bound=ColumnOrName)
 DecimalLiteral = decimal.Decimal
-DateTimeLiteral = Union[datetime.datetime, datetime.date]
+DateTimeLiteral = datetime.datetime | datetime.date
 LiteralType = PrimitiveType
-AtomicDataTypeOrString = Union[types.AtomicType, str]
-DataTypeOrString = Union[types.DataType, str]
-OptionalPrimitiveType = Optional[PrimitiveType]
+AtomicDataTypeOrString = types.AtomicType | str
+DataTypeOrString = types.DataType | str
+OptionalPrimitiveType = PrimitiveType | None
 
 AtomicValue = TypeVar(
     "AtomicValue",

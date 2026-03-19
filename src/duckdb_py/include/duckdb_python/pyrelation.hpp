@@ -262,6 +262,10 @@ public:
 
 	bool ContainsColumnByName(const string &name) const;
 
+	void SetConnectionOwner(py::object owner);
+	unique_ptr<DuckDBPyRelation> DeriveRelation(shared_ptr<Relation> new_rel);
+	unique_ptr<DuckDBPyRelation> DeriveRelation(shared_ptr<DuckDBPyResult> result);
+
 private:
 	string ToStringInternal(const BoxRendererConfig &config, bool invalidate_cache = false);
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
@@ -284,6 +288,9 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
+	//! Prevents GC of the parent DuckDBPyConnection.
+	//! Declared first so it is destroyed last (reverse declaration order).
+	py::object connection_owner;
 	//! Whether the relation has been executed at least once
 	bool executed;
 	shared_ptr<Relation> rel;

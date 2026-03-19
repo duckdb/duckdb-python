@@ -1,4 +1,4 @@
-#  # noqa: D100
+#
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -15,7 +15,8 @@
 # limitations under the License.
 #
 
-from typing import TYPE_CHECKING, Callable, Union, overload
+from collections.abc import Callable
+from typing import TYPE_CHECKING, overload
 
 from ..exception import ContributionsAcceptedError
 from .column import Column
@@ -319,7 +320,7 @@ class GroupedData:
     @overload
     def agg(self, __exprs: dict[str, str]) -> DataFrame: ...  # noqa: PYI063
 
-    def agg(self, *exprs: Union[Column, dict[str, str]]) -> DataFrame:
+    def agg(self, *exprs: Column | dict[str, str]) -> DataFrame:
         """Compute aggregates and returns the result as a :class:`DataFrame`.
 
         The available aggregate functions can be:

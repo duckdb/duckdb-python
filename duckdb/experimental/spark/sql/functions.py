@@ -1,5 +1,6 @@
-import warnings  # noqa: D100
-from typing import TYPE_CHECKING, Any, Callable, Optional, Union, overload
+import warnings
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, Union, overload
 
 from duckdb import (
     CaseExpression,
@@ -109,7 +110,7 @@ def ucase(str: "ColumnOrName") -> Column:
     return upper(str)
 
 
-def when(condition: "Column", value: Union[Column, str]) -> Column:  # noqa: D103
+def when(condition: "Column", value: Column | str) -> Column:  # noqa: D103
     if not isinstance(condition, Column):
         msg = "condition should be a Column"
         raise TypeError(msg)
@@ -118,7 +119,7 @@ def when(condition: "Column", value: Union[Column, str]) -> Column:  # noqa: D10
     return Column(expr)
 
 
-def _inner_expr_or_val(val: Union[Column, str]) -> Union[Column, str]:
+def _inner_expr_or_val(val: Column | str) -> Column | str:
     return val.expr if isinstance(val, Column) else val
 
 
@@ -126,7 +127,7 @@ def struct(*cols: Column) -> Column:  # noqa: D103
     return Column(FunctionExpression("struct_pack", *[_inner_expr_or_val(x) for x in cols]))
 
 
-def array(*cols: Union["ColumnOrName", Union[list["ColumnOrName"], tuple["ColumnOrName", ...]]]) -> Column:
+def array(*cols: Union["ColumnOrName", list["ColumnOrName"] | tuple["ColumnOrName", ...]]) -> Column:
     r"""Creates a new array column.
 
     .. versionadded:: 1.4.0
@@ -449,7 +450,7 @@ def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     )
 
 
-def levenshtein(left: "ColumnOrName", right: "ColumnOrName", threshold: Optional[int] = None) -> Column:
+def levenshtein(left: "ColumnOrName", right: "ColumnOrName", threshold: int | None = None) -> Column:
     """Computes the Levenshtein distance of the two given strings.
 
     .. versionadded:: 1.5.0
@@ -766,7 +767,7 @@ def collect_list(col: "ColumnOrName") -> Column:
     return array_agg(col)
 
 
-def array_append(col: "ColumnOrName", value: Union[Column, str]) -> Column:
+def array_append(col: "ColumnOrName", value: Column | str) -> Column:
     """Collection function: returns an array of the elements in col1 along
     with the added element in col2 at the last of the array.
 
@@ -800,7 +801,7 @@ def array_append(col: "ColumnOrName", value: Union[Column, str]) -> Column:
     return _invoke_function("list_append", _to_column_expr(col), _get_expr(value))
 
 
-def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Union[Column, str]) -> Column:
+def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Column | str) -> Column:
     """Collection function: adds an item into a given array at a specified array index.
     Array indices start at 1, or start from the end if index is negative.
     Index above array size appends the array, or prepends the array if index is negative,
@@ -893,7 +894,7 @@ def array_insert(arr: "ColumnOrName", pos: Union["ColumnOrName", int], value: Un
     )
 
 
-def array_contains(col: "ColumnOrName", value: Union[Column, str]) -> Column:
+def array_contains(col: "ColumnOrName", value: Column | str) -> Column:
     """Collection function: returns null if the array is null, true if the array contains the
     given value, and false otherwise.
 
@@ -1373,7 +1374,7 @@ def count(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("count", col)
 
 
-def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+def approx_count_distinct(col: "ColumnOrName", rsd: float | None = None) -> Column:
     """Aggregate function: returns a new :class:`~pyspark.sql.Column` for approximate distinct count
     of column `col`.
 
@@ -1410,7 +1411,7 @@ def approx_count_distinct(col: "ColumnOrName", rsd: Optional[float] = None) -> C
     return _invoke_function_over_columns("approx_count_distinct", col)
 
 
-def approxCountDistinct(col: "ColumnOrName", rsd: Optional[float] = None) -> Column:
+def approxCountDistinct(col: "ColumnOrName", rsd: float | None = None) -> Column:
     """.. versionadded:: 1.3.0.
 
     .. versionchanged:: 3.4.0
@@ -1433,7 +1434,7 @@ def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Col
 
 def transform(
     col: "ColumnOrName",
-    f: Union[Callable[[Column], Column], Callable[[Column, Column], Column]],
+    f: Callable[[Column], Column] | Callable[[Column, Column], Column],
 ) -> Column:
     """Returns an array of elements after applying a transformation to each element in the input array.
 
@@ -2255,7 +2256,7 @@ def product(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("product", col)
 
 
-def rand(seed: Optional[int] = None) -> Column:
+def rand(seed: int | None = None) -> Column:
     """Generates a random column with independent and identically distributed (i.i.d.) samples
     uniformly distributed in [0.0, 1.0).
 
@@ -2419,7 +2420,7 @@ def regexp_extract(str: "ColumnOrName", pattern: str, idx: int) -> Column:
     )
 
 
-def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: Optional[Union[int, Column]] = None) -> Column:
+def regexp_extract_all(str: "ColumnOrName", regexp: "ColumnOrName", idx: int | Column | None = None) -> Column:
     r"""Extract all strings in the `str` that match the Java regex `regexp`
     and corresponding to the regex group index.
 
@@ -4968,7 +4969,7 @@ def add_months(start: "ColumnOrName", months: Union["ColumnOrName", int]) -> Col
     return _invoke_function("date_add", _to_column_expr(start), FunctionExpression("to_months", months)).cast("date")
 
 
-def array_join(col: "ColumnOrName", delimiter: str, null_replacement: Optional[str] = None) -> Column:
+def array_join(col: "ColumnOrName", delimiter: str, null_replacement: str | None = None) -> Column:
     """Concatenates the elements of `column` using the `delimiter`. Null values are replaced with
     `null_replacement` if set, otherwise they are ignored.
 
@@ -5136,7 +5137,7 @@ def array_size(col: "ColumnOrName") -> Column:
     return _invoke_function_over_columns("len", col)
 
 
-def array_sort(col: "ColumnOrName", comparator: Optional[Callable[[Column, Column], Column]] = None) -> Column:
+def array_sort(col: "ColumnOrName", comparator: Callable[[Column, Column], Column] | None = None) -> Column:
     """Collection function: sorts the input array in ascending order. The elements of the input array
     must be orderable. Null elements will be placed at the end of the returned array.
 
@@ -5592,7 +5593,7 @@ def zeroifnull(col: "ColumnOrName") -> Column:
     return coalesce(col, lit(0))
 
 
-def _to_date_or_timestamp(col: "ColumnOrName", spark_datatype: _types.DataType, format: Optional[str] = None) -> Column:
+def _to_date_or_timestamp(col: "ColumnOrName", spark_datatype: _types.DataType, format: str | None = None) -> Column:
     if format is not None:
         raise ContributionsAcceptedError(
             "format is not yet supported as DuckDB and PySpark use a different way of specifying them."
@@ -5601,7 +5602,7 @@ def _to_date_or_timestamp(col: "ColumnOrName", spark_datatype: _types.DataType, 
     return Column(_to_column_expr(col)).cast(spark_datatype)
 
 
-def to_date(col: "ColumnOrName", format: Optional[str] = None) -> Column:
+def to_date(col: "ColumnOrName", format: str | None = None) -> Column:
     """Converts a :class:`~pyspark.sql.Column` into :class:`pyspark.sql.types.DateType`
     using the optionally specified format. Specify formats according to `datetime pattern`_.
     By default, it follows casting rules to :class:`pyspark.sql.types.DateType` if the format
@@ -5639,7 +5640,7 @@ def to_date(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     return _to_date_or_timestamp(col, _types.DateType(), format)
 
 
-def to_timestamp(col: "ColumnOrName", format: Optional[str] = None) -> Column:
+def to_timestamp(col: "ColumnOrName", format: str | None = None) -> Column:
     """Converts a :class:`~pyspark.sql.Column` into :class:`pyspark.sql.types.TimestampType`
     using the optionally specified format. Specify formats according to `datetime pattern`_.
     By default, it follows casting rules to :class:`pyspark.sql.types.TimestampType` if the format

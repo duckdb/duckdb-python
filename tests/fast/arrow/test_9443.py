@@ -23,4 +23,4 @@ class Test9443:
         sql = f'SELECT * FROM "{temp_file}"'
 
         duckdb_cursor.execute(sql)
-        duckdb_cursor.fetch_record_batch()
+        duckdb_cursor.to_arrow_reader()

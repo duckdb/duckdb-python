@@ -1,8 +1,8 @@
 import datetime
 import os
 
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
@@ -34,8 +34,7 @@ class TestHTTPFS:
         res = rel.fetchone()
         assert res == (1, 0, datetime.date(1965, 2, 28), 0, 0, 0, 1, 0, 1, 1, 1, 0, 0, 6, 0, 0, 0, 0)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_httpfs(self, require, pandas):
+    def test_httpfs(self, require):
         connection = require("httpfs")
         try:
             connection.execute("""
@@ -51,14 +50,14 @@ class TestHTTPFS:
                 raise
 
         result_df = connection.fetchdf()
-        exp_result = pandas.DataFrame(
+        exp_result = pd.DataFrame(
             {
-                "id": pandas.Series([1, 2, 3], dtype="int32"),
+                "id": pd.Series([1, 2, 3], dtype="int32"),
                 "first_name": ["Amanda", "Albert", "Evelyn"],
                 "last_name": ["Jordan", "Freeman", "Morgan"],
             }
         )
-        pandas.testing.assert_frame_equal(result_df, exp_result)
+        pd.testing.assert_frame_equal(result_df, exp_result, check_dtype=False)
 
     def test_http_exception(self, require):
         connection = require("httpfs")

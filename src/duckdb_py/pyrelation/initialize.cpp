@@ -62,12 +62,21 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("date_as_object") = false)
 	    .def("fetch_df_chunk", &DuckDBPyRelation::FetchDFChunk, "Execute and fetch a chunk of the rows",
 	         py::arg("vectors_per_chunk") = 1, py::kw_only(), py::arg("date_as_object") = false)
-	    .def("arrow", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
-	    .def("fetch_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
-	         py::arg("batch_size") = 1000000)
 	    .def("to_arrow_table", &DuckDBPyRelation::ToArrowTable, "Execute and fetch all rows as an Arrow Table",
 	         py::arg("batch_size") = 1000000)
+	    .def("to_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
+	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	    .def("arrow", &DuckDBPyRelation::ToRecordBatch,
+	         "Alias of to_arrow_reader(). We recommend using to_arrow_reader() instead.",
+	         py::arg("batch_size") = 1000000)
+	    .def(
+	        "fetch_arrow_table",
+	        [](pybind11::object &self, idx_t batch_size) {
+		        PyErr_WarnEx(PyExc_DeprecationWarning,
+		                     "fetch_arrow_table() is deprecated, use to_arrow_table() instead.", 0);
+		        return self.attr("to_arrow_table")(batch_size);
+	        },
+	        "Execute and fetch all rows as an Arrow Table", py::arg("batch_size") = 1000000)
 	    .def("pl", &DuckDBPyRelation::ToPolars, "Execute and fetch all rows as a Polars DataFrame",
 	         py::arg("batch_size") = 1000000, py::kw_only(), py::arg("lazy") = false)
 	    .def("torch", &DuckDBPyRelation::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors")
@@ -79,24 +88,31 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 		)";
 	m.def("__arrow_c_stream__", &DuckDBPyRelation::ToArrowCapsule, capsule_docs,
 	      py::arg("requested_schema") = py::none());
-	m.def("fetch_record_batch", &DuckDBPyRelation::ToRecordBatch,
-	      "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("rows_per_batch") = 1000000)
-	    .def("fetch_arrow_reader", &DuckDBPyRelation::ToRecordBatch,
-	         "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000)
+	m.def(
+	     "fetch_record_batch",
+	     [](pybind11::object &self, idx_t rows_per_batch) {
+		     PyErr_WarnEx(PyExc_DeprecationWarning,
+		                  "fetch_record_batch() is deprecated, use to_arrow_reader() instead.", 0);
+		     return self.attr("to_arrow_reader")(rows_per_batch);
+	     },
+	     "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("rows_per_batch") = 1000000)
 	    .def(
-	        "record_batch",
-	        [](pybind11::object &self, idx_t rows_per_batch) {
+	        "fetch_arrow_reader",
+	        [](pybind11::object &self, idx_t batch_size) {
 		        PyErr_WarnEx(PyExc_DeprecationWarning,
-		                     "record_batch() is deprecated, use fetch_record_batch() instead.", 0);
-		        return self.attr("fetch_record_batch")(rows_per_batch);
+		                     "fetch_arrow_reader() is deprecated, use to_arrow_reader() instead.", 0);
+		        if (PyErr_Occurred()) {
+			        throw py::error_already_set();
+		        }
+		        return self.attr("to_arrow_reader")(batch_size);
 	        },
-	        py::arg("batch_size") = 1000000);
+	        "Execute and return an Arrow Record Batch Reader that yields all rows", py::arg("batch_size") = 1000000);
 }
 
 static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	/* General aggregate functions */
-	m.def("any_value", &DuckDBPyRelation::AnyValue, "Returns the first non-null value from a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	m.def("any_value", &DuckDBPyRelation::AnyValue, "Returns the first non-null value from a given expression",
+	      py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("arg_max", &DuckDBPyRelation::ArgMax,
 	         "Finds the row with the maximum value for a value column and returns the value of that row for an "
 	         "argument column",
@@ -107,82 +123,98 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         "argument column",
 	         py::arg("arg_column"), py::arg("value_column"), py::arg("groups") = "", py::arg("window_spec") = "",
 	         py::arg("projected_columns") = "");
-	DefineMethod({"avg", "mean"}, m, &DuckDBPyRelation::Avg, "Computes the average on a given column",
-	             py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "",
+	DefineMethod({"avg", "mean"}, m, &DuckDBPyRelation::Avg, "Computes the average of a given expression",
+	             py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
 	             py::arg("projected_columns") = "");
-	m.def("bit_and", &DuckDBPyRelation::BitAnd, "Computes the bitwise AND of all bits present in a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("bit_or", &DuckDBPyRelation::BitOr, "Computes the bitwise OR of all bits present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("bit_xor", &DuckDBPyRelation::BitXor, "Computes the bitwise XOR of all bits present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	m.def("bit_and", &DuckDBPyRelation::BitAnd, "Computes the bitwise AND of all bits present in a given expression",
+	      py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("bit_or", &DuckDBPyRelation::BitOr, "Computes the bitwise OR of all bits present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("bit_xor", &DuckDBPyRelation::BitXor, "Computes the bitwise XOR of all bits present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("bitstring_agg", &DuckDBPyRelation::BitStringAgg,
-	         "Computes a bitstring with bits set for each distinct value in a given column", py::arg("column"),
+	         "Computes a bitstring with bits set for each distinct value in a given expression", py::arg("expression"),
 	         py::arg("min") = py::none(), py::arg("max") = py::none(), py::arg("groups") = "",
 	         py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("bool_and", &DuckDBPyRelation::BoolAnd, "Computes the logical AND of all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("bool_or", &DuckDBPyRelation::BoolOr, "Computes the logical OR of all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("bool_and", &DuckDBPyRelation::BoolAnd,
+	         "Computes the logical AND of all values present in a given expression", py::arg("expression"),
+	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("bool_or", &DuckDBPyRelation::BoolOr,
+	         "Computes the logical OR of all values present in a given expression", py::arg("expression"),
+	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("value_counts", &DuckDBPyRelation::ValueCounts,
-	         "Computes the number of elements present in a given column, also projecting the original column",
-	         py::arg("column"), py::arg("groups") = "")
+	         "Computes the number of elements present in a given expression, also projecting the original expression",
+	         py::arg("expression"), py::arg("groups") = "")
 	    .def("favg", &DuckDBPyRelation::FAvg,
-	         "Computes the average of all values present in a given column using a more accurate floating point "
+	         "Computes the average of all values present in a given expression using a more accurate floating point "
 	         "summation (Kahan Sum)",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("first", &DuckDBPyRelation::First, "Returns the first value of a given column", py::arg("column"),
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("first", &DuckDBPyRelation::First, "Returns the first value of a given expression", py::arg("expression"),
 	         py::arg("groups") = "", py::arg("projected_columns") = "")
 	    .def("fsum", &DuckDBPyRelation::FSum,
-	         "Computes the sum of all values present in a given column using a more accurate floating point "
+	         "Computes the sum of all values present in a given expression using a more accurate floating point "
 	         "summation (Kahan Sum)",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("geomean", &DuckDBPyRelation::GeoMean,
-	         "Computes the geometric mean over all values present in a given column", py::arg("column"),
+	         "Computes the geometric mean over all values present in a given expression", py::arg("expression"),
 	         py::arg("groups") = "", py::arg("projected_columns") = "")
 	    .def("histogram", &DuckDBPyRelation::Histogram,
-	         "Computes the histogram over all values present in a given column", py::arg("column"),
+	         "Computes the histogram over all values present in a given expression", py::arg("expression"),
 	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("list", &DuckDBPyRelation::List, "Returns a list containing all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("last", &DuckDBPyRelation::Last, "Returns the last value of a given column", py::arg("column"),
+	    .def("list", &DuckDBPyRelation::List, "Returns a list containing all values present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("last", &DuckDBPyRelation::Last, "Returns the last value of a given expression", py::arg("expression"),
 	         py::arg("groups") = "", py::arg("projected_columns") = "")
-	    .def("max", &DuckDBPyRelation::Max, "Returns the maximum value present in a given column", py::arg("column"),
-	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("min", &DuckDBPyRelation::Min, "Returns the minimum value present in a given column", py::arg("column"),
-	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("product", &DuckDBPyRelation::Product, "Returns the product of all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("max", &DuckDBPyRelation::Max, "Returns the maximum value present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("min", &DuckDBPyRelation::Min, "Returns the minimum value present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("product", &DuckDBPyRelation::Product, "Returns the product of all values present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("string_agg", &DuckDBPyRelation::StringAgg,
-	         "Concatenates the values present in a given column with a separator", py::arg("column"),
+	         "Concatenates the values present in a given expression with a separator", py::arg("expression"),
 	         py::arg("sep") = ",", py::arg("groups") = "", py::arg("window_spec") = "",
 	         py::arg("projected_columns") = "")
-	    .def("sum", &DuckDBPyRelation::Sum, "Computes the sum of all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("sum", &DuckDBPyRelation::Sum, "Computes the sum of all values present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("unique", &DuckDBPyRelation::Unique, "Returns the distinct values in a column.", py::arg("unique_aggr"));
 	/* TODO: Approximate aggregate functions */
 	/* TODO: Statistical aggregate functions */
-	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("mode", &DuckDBPyRelation::Mode, "Computes the mode over all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given expression",
+	      py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("mode", &DuckDBPyRelation::Mode, "Computes the mode over all values present in a given expression",
+	         py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
 	    .def("quantile_cont", &DuckDBPyRelation::QuantileCont,
-	         "Computes the interpolated quantile value for a given column", py::arg("column"), py::arg("q") = 0.5,
-	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	         "Computes the interpolated quantile value for a given expression", py::arg("expression"),
+	         py::arg("q") = 0.5, py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "");
 	DefineMethod({"quantile_disc", "quantile"}, m, &DuckDBPyRelation::QuantileDisc,
-	             "Computes the exact quantile value for a given column", py::arg("column"), py::arg("q") = 0.5,
+	             "Computes the exact quantile value for a given expression", py::arg("expression"), py::arg("q") = 0.5,
 	             py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
-	m.def("stddev_pop", &DuckDBPyRelation::StdPop, "Computes the population standard deviation for a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	m.def("stddev_pop", &DuckDBPyRelation::StdPop, "Computes the population standard deviation for a given expression",
+	      py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	      py::arg("projected_columns") = "");
 	DefineMethod({"stddev_samp", "stddev", "std"}, m, &DuckDBPyRelation::StdSamp,
-	             "Computes the sample standard deviation for a given column", py::arg("column"), py::arg("groups") = "",
-	             py::arg("window_spec") = "", py::arg("projected_columns") = "");
-	m.def("var_pop", &DuckDBPyRelation::VarPop, "Computes the population variance for a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	             "Computes the sample standard deviation for a given expression", py::arg("expression"),
+	             py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	m.def("var_pop", &DuckDBPyRelation::VarPop, "Computes the population variance for a given expression",
+	      py::arg("expression"), py::arg("groups") = "", py::arg("window_spec") = "",
+	      py::arg("projected_columns") = "");
 	DefineMethod({"var_samp", "variance", "var"}, m, &DuckDBPyRelation::VarSamp,
-	             "Computes the sample variance for a given column", py::arg("column"), py::arg("groups") = "",
+	             "Computes the sample variance for a given expression", py::arg("expression"), py::arg("groups") = "",
 	             py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }
 
@@ -200,19 +232,19 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	    .def("cume_dist", &DuckDBPyRelation::CumeDist, "Computes the cumulative distribution within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("first_value", &DuckDBPyRelation::FirstValue, "Computes the first value within the group or partition",
-	         py::arg("column"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	         py::arg("expression"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets",
 	         py::arg("window_spec"), py::arg("num_buckets"), py::arg("projected_columns") = "")
-	    .def("lag", &DuckDBPyRelation::Lag, "Computes the lag within the partition", py::arg("column"),
+	    .def("lag", &DuckDBPyRelation::Lag, "Computes the lag within the partition", py::arg("expression"),
 	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
 	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
 	    .def("last_value", &DuckDBPyRelation::LastValue, "Computes the last value within the group or partition",
-	         py::arg("column"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("lead", &DuckDBPyRelation::Lead, "Computes the lead within the partition", py::arg("column"),
+	         py::arg("expression"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("lead", &DuckDBPyRelation::Lead, "Computes the lead within the partition", py::arg("expression"),
 	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
 	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
-	    .def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
-	         py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
+	    .def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition",
+	         py::arg("expression"), py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
 	         py::arg("projected_columns") = "");
 }
 

@@ -250,9 +250,13 @@ function(duckdb_add_library target_name)
 endfunction()
 
 function(duckdb_link_extensions target_name)
-  # Link to the DuckDB static library and extensions
-  target_link_libraries(${target_name}
-                        PRIVATE duckdb_generated_extension_loader)
+  # Link to the DuckDB static library and extensions We use WHOLE_ARCHIVE
+  # because duckdb_static calls LoadAllExtensions which is defined in the
+  # extension loader. Without this, linkers (especially on Linux with
+  # --as-needed) may drop the extension loader before seeing the reference.
+  target_link_libraries(
+    ${target_name}
+    PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,duckdb_generated_extension_loader>")
   if(BUILD_EXTENSIONS)
     message(STATUS "Linking DuckDB extensions:")
     foreach(ext IN LISTS BUILD_EXTENSIONS)

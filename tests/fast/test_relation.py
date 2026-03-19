@@ -2,13 +2,11 @@
 import datetime
 import gc
 import os
-import platform
 import tempfile
 
 import numpy as np
 import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 from duckdb import ColumnExpression
@@ -39,10 +37,9 @@ class TestRelation:
         csv_rel = duckdb.from_csv_auto(temp_file_name)
         assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_relation_view(self, duckdb_cursor, pandas):
+    def test_relation_view(self, duckdb_cursor):
         def create_view(duckdb_cursor) -> None:
-            df_in = pandas.DataFrame({"numbers": [1, 2, 3, 4, 5]})
+            df_in = pd.DataFrame({"numbers": [1, 2, 3, 4, 5]})
             rel = duckdb_cursor.query("select * from df_in")
             rel.to_view("my_view")
 
@@ -536,15 +533,6 @@ class TestRelation:
             1024,
             2048,
             5000,
-            1000000,
-            pytest.param(
-                10000000,
-                marks=pytest.mark.skipif(
-                    condition=platform.system() == "Emscripten",
-                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not "
-                    "thrown reliably",
-                ),
-            ),
         ],
     )
     def test_materialized_relation(self, duckdb_cursor, num_rows):

@@ -31,7 +31,7 @@ class Test2426:
 
         result_df = con.execute(sql).df()
 
-        arrow_table = con.execute(sql).fetch_arrow_table()
+        arrow_table = con.execute(sql).to_arrow_table()
 
         arrow_df = arrow_table.to_pandas()
         assert result_df["repetitions"].sum() == arrow_df["repetitions"].sum()

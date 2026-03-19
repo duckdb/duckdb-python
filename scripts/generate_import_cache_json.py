@@ -46,7 +46,7 @@ class ImportCacheModule:
         self.type = "module"
         self.name = parts[-1]
         self.full_path = full_path
-        self.items: dict[str, Union[ImportCacheAttribute, ImportCacheModule]] = {}
+        self.items: dict[str, ImportCacheAttribute | ImportCacheModule] = {}
 
     def add_item(self, item: Union[ImportCacheAttribute, "ImportCacheModule"]):
         assert self.full_path != item.full_path
@@ -111,7 +111,7 @@ class ImportCacheGenerator:
             raise ValueError(msg)
         return self.modules[module_name]
 
-    def get_item(self, item_name: str) -> Union[ImportCacheModule, ImportCacheAttribute]:
+    def get_item(self, item_name: str) -> ImportCacheModule | ImportCacheAttribute:
         parts = item_name.split(".")
         if len(parts) == 1:
             return self.get_module(item_name)

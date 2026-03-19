@@ -19,10 +19,10 @@ class TestArrowIntegration:
 
         userdata_parquet_table = pq.read_table(parquet_filename)
         userdata_parquet_table.validate(full=True)
-        rel_from_arrow = duckdb.arrow(userdata_parquet_table).project(cols).fetch_arrow_table()
+        rel_from_arrow = duckdb.arrow(userdata_parquet_table).project(cols).to_arrow_table()
         rel_from_arrow.validate(full=True)
 
-        rel_from_duckdb = duckdb_cursor.from_parquet(parquet_filename).project(cols).fetch_arrow_table()
+        rel_from_duckdb = duckdb_cursor.from_parquet(parquet_filename).project(cols).to_arrow_table()
         rel_from_duckdb.validate(full=True)
 
         # batched version, lets use various values for batch size
@@ -30,7 +30,7 @@ class TestArrowIntegration:
             userdata_parquet_table2 = pa.Table.from_batches(userdata_parquet_table.to_batches(i))
             assert userdata_parquet_table.equals(userdata_parquet_table2, check_metadata=True)
 
-            rel_from_arrow2 = duckdb.arrow(userdata_parquet_table2).project(cols).fetch_arrow_table()
+            rel_from_arrow2 = duckdb.arrow(userdata_parquet_table2).project(cols).to_arrow_table()
             rel_from_arrow2.validate(full=True)
 
             assert rel_from_arrow.equals(rel_from_arrow2, check_metadata=True)
@@ -42,10 +42,10 @@ class TestArrowIntegration:
 
         unsigned_parquet_table = pq.read_table(parquet_filename)
         unsigned_parquet_table.validate(full=True)
-        rel_from_arrow = duckdb.arrow(unsigned_parquet_table).project(cols).fetch_arrow_table()
+        rel_from_arrow = duckdb.arrow(unsigned_parquet_table).project(cols).to_arrow_table()
         rel_from_arrow.validate(full=True)
 
-        rel_from_duckdb = duckdb_cursor.from_parquet(parquet_filename).project(cols).fetch_arrow_table()
+        rel_from_duckdb = duckdb_cursor.from_parquet(parquet_filename).project(cols).to_arrow_table()
         rel_from_duckdb.validate(full=True)
 
         assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
@@ -53,7 +53,7 @@ class TestArrowIntegration:
         duckdb_cursor.execute(
             "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000::INT c_smallint, c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::float c_float, c::double c_double, 'c_' || c::string c_string from (select case when range % 2 == 0 then range else null end as c from range(-10000, 10000)) sq"  # noqa: E501
         )
-        arrow_result = duckdb_cursor.fetch_arrow_table()
+        arrow_result = duckdb_cursor.to_arrow_table()
         arrow_result.validate(full=True)
         arrow_result.combine_chunks()
         arrow_result.validate(full=True)
@@ -72,7 +72,7 @@ class TestArrowIntegration:
 
         duck_tbl = duckdb_cursor.table("test")
 
-        duck_from_arrow = duckdb_cursor.from_arrow(duck_tbl.fetch_arrow_table())
+        duck_from_arrow = duckdb_cursor.from_arrow(duck_tbl.to_arrow_table())
 
         duck_from_arrow.create("testarrow")
 
@@ -114,7 +114,7 @@ class TestArrowIntegration:
         data = pa.array(arr, pa.month_day_nano_interval())
         arrow_tbl = pa.Table.from_arrays([data], ["a"])
         duckdb_cursor.from_arrow(arrow_tbl).create("intervaltbl")
-        duck_arrow_tbl = duckdb_cursor.table("intervaltbl").fetch_arrow_table()["a"]
+        duck_arrow_tbl = duckdb_cursor.table("intervaltbl").to_arrow_table()["a"]
 
         assert duck_arrow_tbl[0].value == expected_value
 
@@ -122,7 +122,7 @@ class TestArrowIntegration:
         duckdb_cursor.execute("CREATE TABLE test (a INTERVAL)")
         duckdb_cursor.execute("INSERT INTO  test VALUES (INTERVAL 1 YEAR + INTERVAL 1 DAY + INTERVAL 1 SECOND)")
         expected_value = pa.MonthDayNano([12, 1, 1000000000])
-        duck_tbl_arrow = duckdb_cursor.table("test").fetch_arrow_table()["a"]
+        duck_tbl_arrow = duckdb_cursor.table("test").to_arrow_table()["a"]
         assert duck_tbl_arrow[0].value.months == expected_value.months
         assert duck_tbl_arrow[0].value.days == expected_value.days
         assert duck_tbl_arrow[0].value.nanoseconds == expected_value.nanoseconds
@@ -144,7 +144,7 @@ class TestArrowIntegration:
         data = pa.array(arr, pa.month_day_nano_interval())
         arrow_tbl = pa.Table.from_arrays([data], ["a"])
         duckdb_cursor.from_arrow(arrow_tbl).create("intervalnulltbl")
-        duckdb_tbl_arrow = duckdb_cursor.table("intervalnulltbl").fetch_arrow_table()["a"]
+        duckdb_tbl_arrow = duckdb_cursor.table("intervalnulltbl").to_arrow_table()["a"]
 
         assert duckdb_tbl_arrow[0].value is None
         assert duckdb_tbl_arrow[1].value == expected_value
@@ -158,7 +158,7 @@ class TestArrowIntegration:
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         duckdb_cursor.from_arrow(arrow_table).create("dictionarytbl")
-        duckdb_tbl_arrow = duckdb_cursor.table("dictionarytbl").fetch_arrow_table()["a"]
+        duckdb_tbl_arrow = duckdb_cursor.table("dictionarytbl").to_arrow_table()["a"]
 
         assert duckdb_tbl_arrow[0].value == first_value
         assert duckdb_tbl_arrow[1].value == second_value
@@ -172,7 +172,7 @@ class TestArrowIntegration:
         # List
         query = duckdb_cursor.sql(
             "SELECT a from (select list_value(INTERVAL 3 MONTHS, INTERVAL 5 DAYS, INTERVAL 10 SECONDS, NULL) as a) as t"
-        ).fetch_arrow_table()["a"]
+        ).to_arrow_table()["a"]
         assert query[0][0].value == pa.MonthDayNano([3, 0, 0])
         assert query[0][1].value == pa.MonthDayNano([0, 5, 0])
         assert query[0][2].value == pa.MonthDayNano([0, 0, 10000000000])
@@ -181,7 +181,7 @@ class TestArrowIntegration:
         # Struct
         query = "SELECT a from (SELECT STRUCT_PACK(a := INTERVAL 1 MONTHS, b := INTERVAL 10 DAYS, c:= INTERVAL 20 SECONDS) as a) as t"  # noqa: E501
         true_answer = duckdb_cursor.sql(query).fetchall()
-        from_arrow = duckdb_cursor.from_arrow(duckdb_cursor.sql(query).fetch_arrow_table()).fetchall()
+        from_arrow = duckdb_cursor.from_arrow(duckdb_cursor.sql(query).to_arrow_table()).fetchall()
         assert true_answer[0][0]["a"] == from_arrow[0][0]["a"]
         assert true_answer[0][0]["b"] == from_arrow[0][0]["b"]
         assert true_answer[0][0]["c"] == from_arrow[0][0]["c"]
@@ -193,7 +193,7 @@ class TestArrowIntegration:
         arrow_tbl = pa.Table.from_arrays([data], ["a"])
         duckdb_cursor.from_arrow(arrow_tbl).create("intervalminmaxtbl")
 
-        duck_arrow_tbl = duckdb_cursor.table("intervalminmaxtbl").fetch_arrow_table()["a"]
+        duck_arrow_tbl = duckdb_cursor.table("intervalminmaxtbl").to_arrow_table()["a"]
         assert duck_arrow_tbl[0].value == pa.MonthDayNano([0, 0, 0])
         assert duck_arrow_tbl[1].value == pa.MonthDayNano([2147483647, 2147483647, 9223372036854775000])
 
@@ -211,7 +211,7 @@ class TestArrowIntegration:
                     df_b table2 ON
                 table1.join_key = table2.join_key
         """
-        ).fetch_arrow_table()
+        ).to_arrow_table()
         assert res.schema.names == ["join_key", "col_a", "join_key", "col_a"]
 
     def test_strings_roundtrip(self, duckdb_cursor):
@@ -227,7 +227,7 @@ class TestArrowIntegration:
 
         duck_tbl = duckdb_cursor.table("test")
 
-        duck_from_arrow = duckdb_cursor.from_arrow(duck_tbl.fetch_arrow_table())
+        duck_from_arrow = duckdb_cursor.from_arrow(duck_tbl.to_arrow_table())
 
         duck_from_arrow.create("testarrow")
 

@@ -33,6 +33,7 @@ Note that this approach is taken after from NumPy.
 
 __ALL__ = ["_NoValue"]
 
+from typing_extensions import Self
 
 # Disallow reloading this module so as to preserve the identities of the
 # classes defined here.
@@ -54,7 +55,7 @@ class _NoValueType:
 
     __instance = None
 
-    def __new__(cls) -> "_NoValueType":
+    def __new__(cls) -> Self:
         # ensure that only one instance exists
         if not cls.__instance:
             cls.__instance = super().__new__(cls)

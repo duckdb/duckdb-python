@@ -10,7 +10,7 @@ dynamic = ["version"]
 description = "DuckDB in-process database"
 readme = "README.md"
 keywords = ["DuckDB", "Database", "SQL", "OLAP"]
-requires-python = ">=3.9.0"
+requires-python = ">=3.10.0"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "License :: OSI Approved :: MIT License",
@@ -25,7 +25,6 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -176,12 +175,12 @@ exclude = [
 #
 # This section has dependency groups for testing and development. Tread carefully, the current setup makes sure that
 # test dependencies can be installed on as many platforms we build wheel for. Especially picky are:
-# - tensorflow: we can only run tests on cp39-cp311, for osx there is no tensorflow-cpu, for windows we need
+# - tensorflow: we can only run tests on cp310-cp311, for osx there is no tensorflow-cpu, for windows we need
 #          tensorflow-cpu-aws and there is no distribution availalbe for Linux aarch64.
 # - torch: since we can't use gpu acceleration, we need to rely on torch-cpu, which isn't available on pypi. We use
 #          `tool.uv.index` and `tool.uv.sources` to make sure the official pytorch index is used. Even there, we don't
 #          have a wheel available for x86_64 OSX + cp313.
-# - numpy: tensorflow doesn't play nice with numpy>2 so for every platform that can run tensorflow (cp39-cp311) we use
+# - numpy: tensorflow doesn't play nice with numpy>2 so for every platform that can run tensorflow (cp310-cp311) we use
 #          numpy<2. numpy<2 has no wheels for cp31[2|3], meaning an sdist will be used. However, on Windows amd64 +
 #          cp313 this results in a segfault / access violation. To get around this, we install numpy>=2 on all >=cp312
 #          platforms. Then for windows arm64, for which there is no tensorflow, we only allow numpy>=2.3 because that
@@ -195,20 +194,20 @@ default-groups = ["dev"]
 # build wheels for.
 # See https://docs.astral.sh/uv/concepts/resolution/#universal-resolution
 environments = [ # no need to resolve packages beyond these platforms with uv...
-    "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "python_version >= '3.10' and sys_platform == 'win32' and platform_machine == 'AMD64'",
     "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
-    "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 required-environments = [ # ... but do always resolve for all of them
-    "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "python_version >= '3.9' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "python_version >= '3.9' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "python_version >= '3.10' and sys_platform == 'win32' and platform_machine == 'AMD64'",
     "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
-    "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "python_version >= '3.9' and sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 
 # We just need pytorch for tests, wihtout GPU acceleration. PyPI doesn't host a cpu-only version for Linux, so we have
@@ -234,7 +233,8 @@ stubdeps = [ # dependencies used for typehints in the stubs
     "typing-extensions",
 ]
 test = [ # dependencies used for running tests
-    "adbc-driver-manager; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "adbc-driver-manager>=1.10.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "adbc-driver-manager>=1.7.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
@@ -252,8 +252,10 @@ test = [ # dependencies used for running tests
     "requests",
     "urllib3",
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "pandas>=2.0.0",
-    "pyarrow>=18.0.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
+    "pandas>=3.0.0; python_version > '3.10'",
+    "pandas<3.0.0; python_version < '3.11'",
+    "pyarrow>=23.0.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "torch>=2.2.2; python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' or python_version < '3.13' ) and ( sys_platform != 'win32' or platform_machine != 'ARM64' or python_version > '3.11' )",
     "tensorflow==2.14.0; sys_platform == 'darwin' and python_version < '3.12'",
     "tensorflow-cpu>=2.14.0; sys_platform == 'linux' and platform_machine != 'aarch64' and python_version < '3.12'",
@@ -327,7 +329,7 @@ packages = ["duckdb", "_duckdb"]
 strict = true
 warn_unreachable = true
 pretty = true
-python_version = "3.9"
+python_version = "3.10"
 exclude = [
     "duckdb/experimental/", # not checking the pyspark API
     "duckdb/query_graph/",  # old and unmaintained (should probably remove)
@@ -360,7 +362,7 @@ source = ["duckdb"]
 [tool.ruff]
 line-length = 120
 indent-width = 4
-target-version = "py39"
+target-version = "py310"
 fix = true
 exclude = ['external/duckdb', 'sqllogic']
 
@@ -409,6 +411,8 @@ strict = true
 
 [tool.ruff.lint.per-file-ignores]
 "duckdb/experimental/spark/**.py" = [
+    # No need for moduledocstrings for spark
+    'D100',
     # Ignore boolean positional args in the Spark API
     'FBT001'
 ]
