@@ -1,5 +1,4 @@
-from collections.abc import Sequence  # noqa: D100
-from typing import Optional, Union
+from collections.abc import Sequence
 
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
@@ -21,8 +20,8 @@ class WindowSpec:
     def __init__(self) -> None:  # noqa: D107
         self._partition_by: list[ColumnOrName] = []
         self._order_by: list[ColumnOrName] = []
-        self._rows_between: Optional[tuple[int, int]] = None
-        self._range_between: Optional[tuple[int, int]] = None
+        self._rows_between: tuple[int, int] | None = None
+        self._range_between: tuple[int, int] | None = None
 
     def _copy(self) -> "WindowSpec":
         new_window = WindowSpec()
@@ -32,7 +31,7 @@ class WindowSpec:
         new_window._range_between = self._range_between
         return new_window
 
-    def partitionBy(self, *cols: Union[ColumnOrName, Sequence[ColumnOrName]]) -> "WindowSpec":
+    def partitionBy(self, *cols: ColumnOrName | Sequence[ColumnOrName]) -> "WindowSpec":
         """Defines the partitioning columns in a :class:`WindowSpec`.
 
         .. versionadded:: 1.4.0
@@ -42,7 +41,7 @@ class WindowSpec:
         cols : str, :class:`Column` or list
             names of columns or expressions
         """
-        all_cols: Union[list[ColumnOrName], list[list[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
+        all_cols: list[ColumnOrName] | list[list[ColumnOrName]] = list(cols)  # type: ignore[assignment]
 
         if isinstance(all_cols[0], list):
             all_cols = all_cols[0]
@@ -51,7 +50,7 @@ class WindowSpec:
         new_window._partition_by = all_cols
         return new_window
 
-    def orderBy(self, *cols: Union[ColumnOrName, Sequence[ColumnOrName]]) -> "WindowSpec":
+    def orderBy(self, *cols: ColumnOrName | Sequence[ColumnOrName]) -> "WindowSpec":
         """Defines the ordering columns in a :class:`WindowSpec`.
 
         .. versionadded:: 1.4.0
@@ -61,7 +60,7 @@ class WindowSpec:
         cols : str, :class:`Column` or list
             names of columns or expressions
         """
-        all_cols: Union[list[ColumnOrName], list[list[ColumnOrName]]] = list(cols)  # type: ignore[assignment]
+        all_cols: list[ColumnOrName] | list[list[ColumnOrName]] = list(cols)  # type: ignore[assignment]
 
         if isinstance(all_cols[0], list):
             all_cols = all_cols[0]
@@ -213,7 +212,7 @@ class Window:
     unboundedFollowing: int = (1 << 63) - 1  # 9223372036854775807 - equivalent to Java's Long.MAX_VALUE
 
     @classmethod
-    def partitionBy(cls, *cols: Union[ColumnOrName, Sequence[ColumnOrName]]) -> WindowSpec:
+    def partitionBy(cls, *cols: ColumnOrName | Sequence[ColumnOrName]) -> WindowSpec:
         """Creates a :class:`WindowSpec` with the partitioning defined.
 
         .. versionadded:: 1.4.0
@@ -265,7 +264,7 @@ class Window:
         return WindowSpec().partitionBy(*cols)
 
     @classmethod
-    def orderBy(cls, *cols: Union[ColumnOrName, Sequence[ColumnOrName]]) -> WindowSpec:
+    def orderBy(cls, *cols: ColumnOrName | Sequence[ColumnOrName]) -> WindowSpec:
         """Creates a :class:`WindowSpec` with the ordering defined.
 
         .. versionadded:: 1.4.0

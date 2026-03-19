@@ -6402,7 +6402,7 @@ def percent_rank() -> Column:
     return _invoke_function("percent_rank")
 
 
-def lag(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) -> Column:  # noqa: ANN401
+def lag(col: "ColumnOrName", offset: int = 1, default: Any | None = None) -> Column:  # noqa: ANN401
     """Window function: returns the value that is `offset` rows before the current row, and
     `default` if there is less than `offset` rows before the current row. For example,
     an `offset` of one will return the previous row at any given point in the window partition.
@@ -6487,7 +6487,7 @@ def lag(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) -> 
     return _invoke_function("lag", _to_column_expr(col), ConstantExpression(offset), ConstantExpression(default))
 
 
-def lead(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) -> Column:  # noqa: ANN401
+def lead(col: "ColumnOrName", offset: int = 1, default: Any | None = None) -> Column:  # noqa: ANN401
     """
     Window function: returns the value that is `offset` rows after the current row, and
     `default` if there is less than `offset` rows after the current row. For example,
@@ -6573,7 +6573,7 @@ def lead(col: "ColumnOrName", offset: int = 1, default: Optional[Any] = None) ->
     return _invoke_function("lead", _to_column_expr(col), ConstantExpression(offset), ConstantExpression(default))
 
 
-def nth_value(col: "ColumnOrName", offset: int, ignoreNulls: Optional[bool] = False) -> Column:
+def nth_value(col: "ColumnOrName", offset: int, ignoreNulls: bool | None = False) -> Column:
     """Window function: returns the value that is the `offset`\\th row of the window frame
     (counting from 1), and `null` if the size of window frame is less than `offset` rows.
 
