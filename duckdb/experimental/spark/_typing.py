@@ -19,7 +19,9 @@
 from collections.abc import Callable, Iterable, Sized
 from typing import Literal, TypeVar
 
+import pyarrow
 from numpy import float32, float64, int32, int64, ndarray
+from pandas import DataFrame as PandasDataFrame
 from typing_extensions import Protocol, Self
 
 F = TypeVar("F", bound=Callable)
@@ -28,6 +30,13 @@ T_co = TypeVar("T_co", covariant=True)
 PrimitiveType = bool | float | int | str
 
 NonUDFType = Literal[0]
+
+
+DataFrameLike = PandasDataFrame
+
+PandasMapIterFunction = Callable[[Iterable[DataFrameLike]], Iterable[DataFrameLike]]
+
+ArrowMapIterFunction = Callable[[Iterable[pyarrow.RecordBatch]], Iterable[pyarrow.RecordBatch]]
 
 
 class SupportsIAdd(Protocol):
