@@ -36,6 +36,7 @@ jobs:
           - { os: windows-11-arm,   arch: ARM64,      cibw_system: win }
           - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
           - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
+          - { os: ubuntu-24.04-riscv, arch: riscv64,  cibw_system: manylinux }
           - { os: macos-15,         arch: arm64,      cibw_system: macosx }
           - { os: macos-15,         arch: universal2, cibw_system: macosx }
           - { os: macos-15-intel,   arch: x86_64,     cibw_system: macosx }
@@ -133,6 +134,7 @@ jobs:
           - { os: windows-11-arm,   arch: ARM64,      cibw_system: win }
           - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
           - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
+          - { os: ubuntu-24.04-riscv, arch: riscv64,  cibw_system: manylinux }
           - { os: macos-15,         arch: arm64,      cibw_system: macosx }
           - { os: macos-15,         arch: universal2, cibw_system: macosx }
           - { os: macos-15-intel,   arch: x86_64,     cibw_system: macosx }
