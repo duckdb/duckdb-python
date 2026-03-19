@@ -14,21 +14,11 @@ class TestSparkColumn:
     def test_struct_column(self, spark):
         df = spark.createDataFrame([Row(a=1, b=2, c=3, d=4)])
 
-        # TODO: column names should be set explicitly using the Row, rather than letting duckdb  # noqa: TD002, TD003
-        #   assign defaults(col0, col1, etc..)
-        if USE_ACTUAL_SPARK:
-            df = df.withColumn("struct", struct(df.a, df.b))
-        else:
-            df = df.withColumn("struct", struct(df.col0, df.col1))
-            assert "struct" in df
-            new_col = df.schema["struct"]
+        df = df.withColumn("struct", struct(df.a, df.b))
+        assert "struct" in df
 
-        if USE_ACTUAL_SPARK:
-            assert "a" in df.schema["struct"].dataType.fieldNames()
-            assert "b" in df.schema["struct"].dataType.fieldNames()
-        else:
-            assert "col0" in new_col.dataType
-            assert "col1" in new_col.dataType
+        assert "a" in df.schema["struct"].dataType.fieldNames()
+        assert "b" in df.schema["struct"].dataType.fieldNames()
 
         with pytest.raises(
             PySparkTypeError, match=re.escape("[NOT_COLUMN] Argument `col` should be a Column, got str.")
