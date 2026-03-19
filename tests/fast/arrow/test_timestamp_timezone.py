@@ -45,7 +45,7 @@ class TestArrowTimestampsTimezone:
             for timezone in timezones:
                 con.execute("SET TimeZone = '" + timezone + "'")
                 arrow_table = generate_table(current_time, precision, timezone)
-                res = con.from_arrow(arrow_table).fetch_arrow_table()
+                res = con.from_arrow(arrow_table).to_arrow_table()
                 assert res[0].type == pa.timestamp("us", tz=timezone)
                 assert res == generate_table(current_time, "us", timezone)
 
@@ -54,7 +54,7 @@ class TestArrowTimestampsTimezone:
         con.execute("create table t (i timestamptz)")
         con.execute("insert into t values (NULL),('2021-11-15 02:30:00'::timestamptz)")
         rel = con.table("t")
-        arrow_tbl = rel.fetch_arrow_table()
+        arrow_tbl = rel.to_arrow_table()
         con.register("t2", arrow_tbl)
 
         assert con.execute("select * from t").fetchall() == con.execute("select * from t2").fetchall()
@@ -64,7 +64,7 @@ class TestArrowTimestampsTimezone:
         con.execute("create table t (i timestamptz)")
         con.execute("insert into t values (NULL),('2021-11-15 02:30:00'::timestamptz)")
         rel = con.table("t")
-        arrow_tbl = rel.fetch_record_batch().read_all()
+        arrow_tbl = rel.to_arrow_reader().read_all()
         con.register("t2", arrow_tbl)
 
         assert con.execute("select * from t").fetchall() == con.execute("select * from t2").fetchall()

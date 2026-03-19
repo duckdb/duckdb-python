@@ -1,4 +1,4 @@
-from typing import cast  # noqa: D100
+from typing import cast
 
 from duckdb.sqltypes import DuckDBPyType
 
@@ -23,6 +23,7 @@ from .types import (
     StringType,
     StructField,
     StructType,
+    TimeNSType,
     TimeNTZType,
     TimestampMillisecondNTZType,
     TimestampNanosecondNTZType,
@@ -36,6 +37,7 @@ from .types import (
     UnsignedLongType,
     UnsignedShortType,
     UUIDType,
+    VariantType,
 )
 
 _sqltype_to_spark_class = {
@@ -56,6 +58,7 @@ _sqltype_to_spark_class = {
     "uuid": UUIDType,
     "date": DateType,
     "time": TimeNTZType,
+    "time_ns": TimeNSType,
     "time with time zone": TimeType,
     "timestamp": TimestampNTZType,
     "timestamp with time zone": TimestampType,
@@ -72,6 +75,7 @@ _sqltype_to_spark_class = {
     "float": FloatType,
     "double": DoubleType,
     "decimal": DecimalType,
+    "variant": VariantType,
 }
 
 
@@ -109,5 +113,5 @@ def convert_type(dtype: DuckDBPyType) -> DataType:  # noqa: D103
 
 
 def duckdb_to_spark_schema(names: list[str], types: list[DuckDBPyType]) -> StructType:  # noqa: D103
-    fields = [StructField(name, dtype) for name, dtype in zip(names, [convert_type(x) for x in types])]
+    fields = [StructField(name, dtype) for name, dtype in zip(names, [convert_type(x) for x in types], strict=False)]
     return StructType(fields)

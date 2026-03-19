@@ -160,6 +160,15 @@ py::object GetScalar(Value &constant, const string &timezone_config, const Arrow
 	}
 }
 
+static py::list TransformInList(const InFilter &in) {
+	py::list res;
+	ClientProperties default_properties;
+	for (auto &val : in.values) {
+		res.append(PythonObject::FromValue(val, val.type(), default_properties));
+	}
+	return res;
+}
+
 py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_ref, const string &timezone_config,
                                     const ArrowType &type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
@@ -278,21 +287,17 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		if (!optional_filter.child_filter) {
 			return py::none();
 		}
-		return TransformFilterRecursive(*optional_filter.child_filter, column_ref, timezone_config, type);
+		try {
+			return TransformFilterRecursive(*optional_filter.child_filter, column_ref, timezone_config, type);
+		} catch (const NotImplementedException &) {
+			return py::none();
+		}
 	}
 	case TableFilterType::IN_FILTER: {
 		auto &in_filter = filter.Cast<InFilter>();
-		ConjunctionOrFilter or_filter;
-		value_set_t unique_values;
-		for (const auto &value : in_filter.values) {
-			if (unique_values.find(value) == unique_values.end()) {
-				unique_values.insert(value);
-			}
-		}
-		for (const auto &value : unique_values) {
-			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
-		}
-		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+		auto constant_field = field(py::tuple(py::cast(column_ref)));
+		auto in_list = TransformInList(in_filter);
+		return constant_field.attr("isin")(std::move(in_list));
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
 		//! Ignore dynamic filters for now, not necessary for correctness
@@ -308,11 +313,10 @@ py::object PyArrowFilterPushdown::TransformFilter(TableFilterSet &filter_collect
                                                   unordered_map<idx_t, string> &columns,
                                                   unordered_map<idx_t, idx_t> filter_to_col,
                                                   const ClientProperties &config, const ArrowTableSchema &arrow_table) {
-	auto &filters_map = filter_collection.filters;
 
 	py::object expression = py::none();
-	for (auto &it : filters_map) {
-		auto column_idx = it.first;
+	for (auto &entry : filter_collection) {
+		auto column_idx = entry.ColumnIndex();
 		auto &column_name = columns[column_idx];
 
 		vector<string> column_ref;
@@ -321,7 +325,8 @@ py::object PyArrowFilterPushdown::TransformFilter(TableFilterSet &filter_collect
 		D_ASSERT(columns.find(column_idx) != columns.end());
 
 		auto &arrow_type = arrow_table.GetColumns().at(filter_to_col.at(column_idx));
-		py::object child_expression = TransformFilterRecursive(*it.second, column_ref, config.time_zone, *arrow_type);
+		py::object child_expression =
+		    TransformFilterRecursive(entry.Filter(), column_ref, config.time_zone, *arrow_type);
 		if (child_expression.is(py::none())) {
 			continue;
 		} else if (expression.is(py::none())) {

@@ -12,6 +12,7 @@ pl_testing = pytest.importorskip("polars.testing")
 
 from duckdb.polars_io import _pl_tree_to_sql, _predicate_to_expression  # noqa: E402
 
+pl_pre_1_35_0 = parse_version(pl.__version__) < parse_version("1.35.0")
 pl_pre_1_36_0 = parse_version(pl.__version__) < parse_version("1.36.0")
 
 
@@ -437,7 +438,7 @@ class TestPolars:
             lazy_df.filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008)).select(pl.len()).collect().item() == 2
         )
 
-    @pytest.mark.skipif(pl_pre_1_36_0, reason="Polars < 1.36.0 expressions on dates produce casts in predicates")
+    @pytest.mark.skipif(pl_pre_1_35_0, reason="Polars < 1.36.0 expressions on dates produce casts in predicates")
     def test_polars_predicate_to_expression_post_1_36_0(self):
         ts_2008 = datetime.datetime(2008, 1, 1, 0, 0, 1)
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
@@ -454,7 +455,7 @@ class TestPolars:
         valid_filter((pl.col("a") == ts_2020) & (pl.col("b") == ts_2010) & (pl.col("c") == ts_2020))
         valid_filter((pl.col("a") == ts_2020) | (pl.col("b") == ts_2008))
 
-    @pytest.mark.skipif(not pl_pre_1_36_0, reason="Polars >= 1.36.0 expressions on dates don't produce casts")
+    @pytest.mark.skipif(not pl_pre_1_35_0, reason="Polars >= 1.36.0 expressions on dates don't produce casts")
     def test_polars_predicate_to_expression_pre_1_36_0(self):
         ts_2008 = datetime.datetime(2008, 1, 1, 0, 0, 1)
         ts_2010 = datetime.datetime(2010, 1, 1, 10, 0, 1)
@@ -681,6 +682,30 @@ class TestPolars:
         with pytest.raises(AssertionError, match="The col name of a Column should be a str but got"):
             _pl_tree_to_sql(json.loads(bad_type_expr))
 
+    @pytest.mark.parametrize(
+        ("dtype", "test_value"),
+        [
+            (pl.Int8, 1),
+            (pl.Int16, 1),
+            (pl.Int32, 1),
+            (pl.Int64, 1),
+            (pl.Int128, 1),
+            (pl.UInt8, 1),
+            (pl.UInt16, 1),
+            (pl.UInt32, 1),
+            (pl.UInt64, 1),
+            (pl.UInt128, 1),
+            (pl.Float32, 1.0),
+            (pl.Float64, 1.0),
+            (pl.Boolean, True),
+        ],
+    )
+    def test_scalar_type_pushdown(self, dtype, test_value):
+        """Verify that literals of each scalar type can be pushed down."""
+        expr = pl.col("a") == pl.lit(test_value, dtype=dtype)
+        sql_expression = _predicate_to_expression(expr)
+        assert sql_expression is not None, f"Pushdown failed for {dtype}"
+
     def test_decimal_scale(self):
         scalar_decimal_no_scale = """
           { "Scalar": {
@@ -702,3 +727,59 @@ class TestPolars:
           } }
         """
         assert _pl_tree_to_sql(json.loads(scalar_decimal_scale)) == "1"
+
+    def test_cast_node_unwraps_inner_expression(self):
+        """Cast nodes should be unwrapped to process the inner expression."""
+        # A Cast wrapping a Column reference
+        cast_column = json.loads(
+            '{"Cast": {"expr": {"Column": "a"}, "dtype": {"Decimal": [20, 0]}, "options": "NonStrict"}}'
+        )
+        assert _pl_tree_to_sql(cast_column) == '"a"'
+
+        # A Cast wrapping a full binary expression
+        cast_expr = json.loads("""
+        {
+            "BinaryExpr": {
+                "left": {"Cast": {"expr": {"Column": "a"}, "dtype": {"Decimal": [20, 0]}, "options": "NonStrict"}},
+                "op": "Eq",
+                "right": {"Literal": {"Int": 1}}
+            }
+        }
+        """)
+        assert _pl_tree_to_sql(cast_expr) == '("a" = 1)'
+
+    def test_cast_node_predicate_pushdown(self):
+        """Predicates with Cast nodes should be successfully pushed down."""
+        # A decimal with non-38 precision produces a Cast node in Polars
+        expr = pl.col("a") == pl.lit(1, dtype=pl.Decimal(precision=20, scale=0))
+        valid_filter(expr)
+
+    def test_polars_lazy_pushdown_decimal_with_cast(self):
+        """End-to-end test: decimal columns with non-38 precision should push down filters."""
+        con = duckdb.connect()
+        con.execute("CREATE TABLE test_cast (a DECIMAL(20,0))")
+        con.execute("INSERT INTO test_cast VALUES (1), (10), (100), (NULL)")
+        rel = con.sql("FROM test_cast")
+        lazy_df = rel.pl(lazy=True)
+
+        assert lazy_df.filter(pl.col("a") == 1).collect().to_dicts() == [{"a": 1}]
+        assert lazy_df.filter(pl.col("a") > 1).collect().to_dicts() == [{"a": 10}, {"a": 100}]
+
+    def test_explicit_cast_not_pushed_down(self):
+        """Explicit user .cast() (Strict) should not be pushed down - falls back to Polars."""
+        # pl.col("a").cast(pl.Int64) produces a Strict Cast node
+        expr = pl.col("a").cast(pl.Int64) > 5
+        invalid_filter(expr)
+
+    def test_polars_lazy_cursor_lifetime(self):
+        """Cursor should stay alive while a lazy polars frame derived from it exists (GH #161)."""
+        con = duckdb.connect(":memory:")
+
+        def get_lazy_frame(con):
+            cur = con.cursor()
+            return cur.sql("SELECT 1 AS foo, 2 AS bar").pl(lazy=True)
+
+        lf = get_lazy_frame(con)
+        # Cursor went out of scope, but the lazy frame should keep it alive
+        result = lf.collect()
+        assert result.to_dicts() == [{"foo": 1, "bar": 2}]

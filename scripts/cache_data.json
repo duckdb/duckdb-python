@@ -20,7 +20,8 @@
             "pyarrow.decimal32",
             "pyarrow.decimal64",
             "pyarrow.decimal128"
-        ]
+        ],
+        "required": false
     },
     "pyarrow.dataset": {
         "type": "module",
@@ -29,7 +30,8 @@
         "children": [
             "pyarrow.dataset.Scanner",
             "pyarrow.dataset.Dataset"
-        ]
+        ],
+        "required": false
     },
     "pyarrow.dataset.Scanner": {
         "type": "attribute",
@@ -528,7 +530,9 @@
         "name": "polars",
         "children": [
             "polars.DataFrame",
-            "polars.LazyFrame"
+            "polars.LazyFrame",
+            "polars.col",
+            "polars.lit"
         ],
         "required": false
     },
@@ -805,6 +809,18 @@
         "type": "attribute",
         "full_path": "typing.Union",
         "name": "Union",
+        "children": []
+    },
+    "polars.col": {
+        "type": "attribute",
+        "full_path": "polars.col",
+        "name": "col",
+        "children": []
+    },
+    "polars.lit": {
+        "type": "attribute",
+        "full_path": "polars.lit",
+        "name": "lit",
         "children": []
     }
 }

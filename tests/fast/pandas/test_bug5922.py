@@ -1,13 +1,11 @@
-import pytest
-from conftest import ArrowPandas, NumpyPandas
+import pandas as pd
 
 import duckdb
 
 
 class TestPandasAcceptFloat16:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_pandas_accept_float16(self, duckdb_cursor, pandas):
-        df = pandas.DataFrame({"col": [1, 2, 3]})
+    def test_pandas_accept_float16(self, duckdb_cursor):
+        df = pd.DataFrame({"col": [1, 2, 3]})
         df16 = df.astype({"col": "float16"})  # noqa: F841
         con = duckdb.connect()
         con.execute("CREATE TABLE tbl AS SELECT * FROM df16")

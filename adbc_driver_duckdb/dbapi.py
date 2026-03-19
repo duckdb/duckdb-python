@@ -17,8 +17,6 @@
 
 """DBAPI 2.0-compatible facade for the ADBC DuckDB driver."""
 
-import typing
-
 import adbc_driver_manager
 import adbc_driver_manager.dbapi
 
@@ -91,7 +89,7 @@ ROWID = adbc_driver_manager.dbapi.ROWID
 # Functions
 
 
-def connect(path: typing.Optional[str] = None, **kwargs) -> "Connection":
+def connect(path: str | None = None, **kwargs) -> "Connection":
     """Connect to DuckDB via ADBC."""
     db = None
     conn = None

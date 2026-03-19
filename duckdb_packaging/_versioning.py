@@ -9,7 +9,6 @@ This module provides utilities for version management including:
 import pathlib
 import re
 import subprocess
-from typing import Optional
 
 VERSION_RE = re.compile(
     r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)(?:rc(?P<rc>[0-9]+)|\.post(?P<post>[0-9]+))?$"
@@ -100,7 +99,7 @@ def pep440_to_git_tag(version: str) -> str:
     return f"v{version}"
 
 
-def get_current_version() -> Optional[str]:
+def get_current_version() -> str | None:
     """Get the current version from git tags.
 
     Returns:
@@ -115,7 +114,7 @@ def get_current_version() -> Optional[str]:
         return None
 
 
-def create_git_tag(version: str, message: Optional[str] = None, repo_path: Optional[pathlib.Path] = None) -> None:
+def create_git_tag(version: str, message: str | None = None, repo_path: pathlib.Path | None = None) -> None:
     """Create a git tag for the given version.
 
     Args:
@@ -148,10 +147,10 @@ def strip_post_from_version(version: str) -> str:
 
 
 def get_git_describe(
-    repo_path: Optional[pathlib.Path] = None,
+    repo_path: pathlib.Path | None = None,
     since_major: bool = False,  # noqa: FBT001
     since_minor: bool = False,  # noqa: FBT001
-) -> Optional[str]:
+) -> str | None:
     """Get git describe output for version determination.
 
     Returns:

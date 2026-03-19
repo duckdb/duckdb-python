@@ -14,6 +14,7 @@ from _duckdb._sqltypes import (
     SMALLINT,
     SQLNULL,
     TIME,
+    TIME_NS,
     TIME_TZ,
     TIMESTAMP,
     TIMESTAMP_MS,
@@ -28,6 +29,7 @@ from _duckdb._sqltypes import (
     UTINYINT,
     UUID,
     VARCHAR,
+    VARIANT,
     DuckDBPyType,
 )
 
@@ -50,6 +52,7 @@ __all__ = [
     "TIMESTAMP_NS",
     "TIMESTAMP_S",
     "TIMESTAMP_TZ",
+    "TIME_NS",
     "TIME_TZ",
     "TINYINT",
     "UBIGINT",
@@ -59,5 +62,6 @@ __all__ = [
     "UTINYINT",
     "UUID",
     "VARCHAR",
+    "VARIANT",
     "DuckDBPyType",
 ]

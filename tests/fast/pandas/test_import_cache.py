@@ -1,29 +1,38 @@
+import importlib.util
+
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
 
-@pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-def test_import_cache_explicit_dtype(pandas):
-    df = pandas.DataFrame(  # noqa: F841
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        "python",
+        pytest.param(
+            "pyarrow", marks=pytest.mark.skipif(not importlib.util.find_spec("pyarrow"), reason="pyarrow not installed")
+        ),
+    ],
+)
+def test_import_cache_explicit_dtype(string_dtype):
+    df = pd.DataFrame(  # noqa: F841
         {
             "id": [1, 2, 3],
-            "value": pandas.Series(["123.123", pandas.NaT, pandas.NA], dtype=pandas.StringDtype(storage="python")),
+            "value": pd.Series(["123.123", pd.NaT, pd.NA], dtype=pd.StringDtype(storage=string_dtype)),
         }
     )
     con = duckdb.connect()
     result_df = con.query("select id, value from df").df()
 
-    assert result_df["value"][1] is None
-    assert result_df["value"][2] is None
+    assert pd.isna(result_df["value"][1])
+    assert pd.isna(result_df["value"][2])
 
 
-@pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-def test_import_cache_implicit_dtype(pandas):
-    df = pandas.DataFrame({"id": [1, 2, 3], "value": pandas.Series(["123.123", pandas.NaT, pandas.NA])})  # noqa: F841
+def test_import_cache_implicit_dtype():
+    df = pd.DataFrame({"id": [1, 2, 3], "value": pd.Series(["123.123", pd.NaT, pd.NA])})  # noqa: F841
     con = duckdb.connect()
     result_df = con.query("select id, value from df").df()
 
-    assert result_df["value"][1] is None
-    assert result_df["value"][2] is None
+    assert pd.isna(result_df["value"][1])
+    assert pd.isna(result_df["value"][2])

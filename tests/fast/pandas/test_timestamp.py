@@ -65,7 +65,9 @@ class TestPandasTimestamps:
             }
         )
         df_from_duck = duckdb.from_df(df).df()
-        assert df_from_duck.equals(df)
+        # DuckDB INTERVAL type stores in microseconds, so output is always timedelta64[us]
+        # Check values match without strict dtype comparison
+        pd.testing.assert_frame_equal(df_from_duck, df, check_dtype=False)
 
     @pytest.mark.xfail(
         condition=platform.system() == "Emscripten" and os.environ.get("TZ") != "UTC",

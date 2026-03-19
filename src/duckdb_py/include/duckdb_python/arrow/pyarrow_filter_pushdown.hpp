@@ -8,10 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/table_filter_set.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 

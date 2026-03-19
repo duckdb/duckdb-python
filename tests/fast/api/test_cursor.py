@@ -114,3 +114,23 @@ class TestDBAPICursor:
         cursor.close()
         with pytest.raises(duckdb.ConnectionException):
             cursor.execute("select [1,2,3,4]")
+
+    def test_cursor_relapi_chaining(self):
+        """Cursor should stay alive while a relation derived from it exists (GH #315)."""
+        con = duckdb.connect(":memory:")
+        # Exact repro from the issue
+        res = con.cursor().sql("SELECT 1 AS foo").fetchall()
+        assert res == [(1,)]
+
+    def test_cursor_relapi_chaining_filter(self):
+        """Derived relations should also keep the cursor alive."""
+        con = duckdb.connect(":memory:")
+        res = con.cursor().sql("SELECT 1 AS foo").filter("foo = 1").fetchall()
+        assert res == [(1,)]
+
+    def test_cursor_relapi_chaining_table(self):
+        """Other connection methods returning relations should keep cursor alive."""
+        con = duckdb.connect(":memory:")
+        con.execute("CREATE TABLE tbl AS SELECT 42 AS i")
+        res = con.cursor().table("tbl").fetchall()
+        assert res == [(42,)]

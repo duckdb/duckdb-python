@@ -1,8 +1,8 @@
 from datetime import datetime, time, timezone
 
 import numpy as np
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
@@ -10,25 +10,22 @@ _ = pytest.importorskip("pandas", minversion="2.0.0")
 
 
 class TestDateTimeTime:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_time_high(self, duckdb_cursor, pandas):
+    def test_time_high(self, duckdb_cursor):
         duckdb_time = duckdb_cursor.sql("SELECT make_time(23, 1, 34.234345) AS '0'").df()
         data = [time(hour=23, minute=1, second=34, microsecond=234345)]
-        df_in = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
+        df_in = pd.DataFrame({"0": pd.Series(data=data, dtype="object")})
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
-        pandas.testing.assert_frame_equal(df_out, duckdb_time)
+        pd.testing.assert_frame_equal(df_out, duckdb_time)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_time_low(self, duckdb_cursor, pandas):
+    def test_time_low(self, duckdb_cursor):
         duckdb_time = duckdb_cursor.sql("SELECT make_time(00, 01, 1.000) AS '0'").df()
         data = [time(hour=0, minute=1, second=1)]
-        df_in = pandas.DataFrame({"0": pandas.Series(data=data, dtype="object")})
+        df_in = pd.DataFrame({"0": pd.Series(data=data, dtype="object")})
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
-        pandas.testing.assert_frame_equal(df_out, duckdb_time)
+        pd.testing.assert_frame_equal(df_out, duckdb_time)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
     @pytest.mark.parametrize("input", ["2263-02-28", "9999-01-01"])
-    def test_pandas_datetime_big(self, pandas, input):
+    def test_pandas_datetime_big(self, input):
         duckdb_con = duckdb.connect()
 
         duckdb_con.execute("create table test (date DATE)")
@@ -36,8 +33,8 @@ class TestDateTimeTime:
 
         res = duckdb_con.execute("select * from test").df()
         date_value = np.array([f"{input}"], dtype="datetime64[us]")
-        df = pandas.DataFrame({"date": date_value})
-        pandas.testing.assert_frame_equal(res, df)
+        df = pd.DataFrame({"date": date_value})
+        pd.testing.assert_frame_equal(res, df)
 
     def test_timezone_datetime(self):
         con = duckdb.connect()

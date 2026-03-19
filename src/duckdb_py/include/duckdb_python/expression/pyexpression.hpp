@@ -12,6 +12,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"

@@ -1,5 +1,4 @@
-import pytest
-from conftest import ArrowPandas, NumpyPandas
+import pandas as pd
 
 import duckdb
 from duckdb import Value
@@ -21,39 +20,35 @@ def create_reference_query():
 
 
 class TestDFRecursiveNested:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_list_of_structs(self, duckdb_cursor, pandas):
+    def test_list_of_structs(self, duckdb_cursor):
         data = [[{"a": 5}, NULL, {"a": NULL}], NULL, [{"a": 5}, NULL, {"a": NULL}]]
         reference_query = create_reference_query()
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         check_equal(duckdb_cursor, df, reference_query, Value(data, "STRUCT(a INTEGER)[]"))
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_list_of_map(self, duckdb_cursor, pandas):
+    def test_list_of_map(self, duckdb_cursor):
         # LIST(MAP(VARCHAR, VARCHAR))
         data = [[{5: NULL}, NULL, {}], NULL, [NULL, {3: NULL, 2: "a", 4: NULL}, {"a": 1, "b": 2, "c": 3}]]
         reference_query = create_reference_query()
         print(reference_query)
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         check_equal(duckdb_cursor, df, reference_query, Value(data, "MAP(VARCHAR, VARCHAR)[][]"))
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_recursive_list(self, duckdb_cursor, pandas):
+    def test_recursive_list(self, duckdb_cursor):
         # LIST(LIST(LIST(LIST(INTEGER))))
         data = [[[[3, NULL, 5], NULL], NULL, [[5, -20, NULL]]], NULL, [[[NULL]], [[]], NULL]]
         reference_query = create_reference_query()
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         check_equal(duckdb_cursor, df, reference_query, Value(data, "INTEGER[][][][]"))
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_recursive_struct(self, duckdb_cursor, pandas):
+    def test_recursive_struct(self, duckdb_cursor):
         # STRUCT(STRUCT(STRUCT(LIST)))
         data = {
             "A": {"a": {"1": [1, 2, 3]}, "b": NULL, "c": {"1": NULL}},
             "B": {"a": {"1": [1, NULL, 3]}, "b": NULL, "c": {"1": NULL}},
         }
         reference_query = create_reference_query()
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         check_equal(
             duckdb_cursor,
             df,
@@ -89,8 +84,7 @@ class TestDFRecursiveNested:
             ),
         )
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_recursive_map(self, duckdb_cursor, pandas):
+    def test_recursive_map(self, duckdb_cursor):
         # MAP(
         # 	MAP(
         # 		INTEGER,
@@ -106,13 +100,12 @@ class TestDFRecursiveNested:
             "value": [1, 2],
         }
         reference_query = create_reference_query()
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         check_equal(
             duckdb_cursor, df, reference_query, Value(data, "MAP(MAP(INTEGER, MAP(INTEGER, VARCHAR)), INTEGER)")
         )
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_recursive_stresstest(self, duckdb_cursor, pandas):
+    def test_recursive_stresstest(self, duckdb_cursor):
         data = [
             {
                 "a": {
@@ -134,7 +127,7 @@ class TestDFRecursiveNested:
             }
         ]
         reference_query = create_reference_query()
-        df = pandas.DataFrame([{"a": data}])
+        df = pd.DataFrame([{"a": data}])
         duckdb_type = """
             STRUCT(
                 a MAP(

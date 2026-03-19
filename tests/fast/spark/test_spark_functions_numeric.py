@@ -294,7 +294,7 @@ class TestSparkFunctionsNumeric:
         a = range(N)
         b = [2 * x for x in range(N)]
         # Have to use a groupby to test this as agg is not yet implemented without
-        df = spark.createDataFrame(zip(a, b, ["group1"] * N), ["a", "b", "g"])
+        df = spark.createDataFrame(zip(a, b, ["group1"] * N, strict=False), ["a", "b", "g"])
 
         res = df.groupBy("g").agg(sf.corr("a", "b").alias("c")).collect()
         assert pytest.approx(res[0].c) == 1

@@ -57,7 +57,9 @@ class TestPandasStride:
                 ]
             }
         )
-        pd.testing.assert_frame_equal(roundtrip, expected)
+        # DuckDB INTERVAL type stores in microseconds, so output is always timedelta64[us]
+        # Check values match without strict dtype comparison
+        pd.testing.assert_frame_equal(roundtrip, expected, check_dtype=False)
 
     def test_stride_fp64(self, duckdb_cursor):
         expected_df = pd.DataFrame(np.arange(20, dtype="float64").reshape(5, 4), columns=["a", "b", "c", "d"])

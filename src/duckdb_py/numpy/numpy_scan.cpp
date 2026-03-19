@@ -302,7 +302,10 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		}
 		break;
 	}
-	case NumpyNullableType::TIMEDELTA: {
+	case NumpyNullableType::TIMEDELTA_NS:
+	case NumpyNullableType::TIMEDELTA_US:
+	case NumpyNullableType::TIMEDELTA_MS:
+	case NumpyNullableType::TIMEDELTA_S: {
 		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
 		auto tgt_ptr = FlatVector::GetData<interval_t>(out);
 		auto &mask = FlatVector::Validity(out);
@@ -314,7 +317,25 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				mask.SetInvalid(row);
 				continue;
 			}
-			int64_t micro = src_ptr[source_idx] / 1000;
+
+			int64_t micro;
+			switch (bind_data.numpy_type.type) {
+			case NumpyNullableType::TIMEDELTA_NS:
+				micro = src_ptr[source_idx] / 1000; // ns -> us
+				break;
+			case NumpyNullableType::TIMEDELTA_US:
+				micro = src_ptr[source_idx]; // already us
+				break;
+			case NumpyNullableType::TIMEDELTA_MS:
+				micro = src_ptr[source_idx] * 1000; // ms -> us
+				break;
+			case NumpyNullableType::TIMEDELTA_S:
+				micro = src_ptr[source_idx] * 1000000; // s -> us
+				break;
+			default:
+				throw InternalException("Unexpected timedelta type");
+			}
+
 			int64_t days = micro / Interval::MICROS_PER_DAY;
 			micro = micro % Interval::MICROS_PER_DAY;
 			int64_t months = days / Interval::DAYS_PER_MONTH;

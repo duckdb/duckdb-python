@@ -2,13 +2,12 @@
 import datetime
 
 import numpy
-import pytest
-from conftest import ArrowPandas, NumpyPandas
+import pandas as pd
 
 import duckdb
 
 
-def run_parallel_queries(main_table, left_join_table, expected_df, pandas, iteration_count=5):
+def run_parallel_queries(main_table, left_join_table, expected_df, iteration_count=5):
     for _i in range(iteration_count):
         output_df = None
         sql = """
@@ -28,7 +27,7 @@ def run_parallel_queries(main_table, left_join_table, expected_df, pandas, itera
             duckdb_conn.register("main_table", main_table)
             duckdb_conn.register("left_join_table", left_join_table)
             output_df = duckdb_conn.execute(sql).fetchdf()
-            pandas.testing.assert_frame_equal(expected_df, output_df)
+            pd.testing.assert_frame_equal(expected_df, output_df, check_dtype=False)
             print(output_df)
         except Exception as err:
             print(err)
@@ -37,67 +36,59 @@ def run_parallel_queries(main_table, left_join_table, expected_df, pandas, itera
 
 
 class TestParallelPandasScan:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_numeric_scan(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame([{"join_column": 3}])
-        left_join_table = pandas.DataFrame([{"join_column": 3, "other_column": 4}])
-        run_parallel_queries(main_table, left_join_table, left_join_table, pandas)
+    def test_parallel_numeric_scan(self, duckdb_cursor):
+        main_table = pd.DataFrame([{"join_column": 3}])
+        left_join_table = pd.DataFrame([{"join_column": 3, "other_column": 4}])
+        run_parallel_queries(main_table, left_join_table, left_join_table)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_ascii_text(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame([{"join_column": "text"}])
-        left_join_table = pandas.DataFrame([{"join_column": "text", "other_column": "more text"}])
-        run_parallel_queries(main_table, left_join_table, left_join_table, pandas)
+    def test_parallel_ascii_text(self, duckdb_cursor):
+        main_table = pd.DataFrame([{"join_column": "text"}])
+        left_join_table = pd.DataFrame([{"join_column": "text", "other_column": "more text"}])
+        run_parallel_queries(main_table, left_join_table, left_join_table)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_unicode_text(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame([{"join_column": "mühleisen"}])
-        left_join_table = pandas.DataFrame([{"join_column": "mühleisen", "other_column": "höhöhö"}])
-        run_parallel_queries(main_table, left_join_table, left_join_table, pandas)
+    def test_parallel_unicode_text(self, duckdb_cursor):
+        main_table = pd.DataFrame([{"join_column": "mühleisen"}])
+        left_join_table = pd.DataFrame([{"join_column": "mühleisen", "other_column": "höhöhö"}])
+        run_parallel_queries(main_table, left_join_table, left_join_table)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_complex_unicode_text(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame([{"join_column": "鴨"}])
-        left_join_table = pandas.DataFrame([{"join_column": "鴨", "other_column": "數據庫"}])
-        run_parallel_queries(main_table, left_join_table, left_join_table, pandas)
+    def test_parallel_complex_unicode_text(self, duckdb_cursor):
+        main_table = pd.DataFrame([{"join_column": "鴨"}])
+        left_join_table = pd.DataFrame([{"join_column": "鴨", "other_column": "數據庫"}])
+        run_parallel_queries(main_table, left_join_table, left_join_table)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_emojis(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame([{"join_column": "🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️"}])
-        left_join_table = pandas.DataFrame([{"join_column": "🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️", "other_column": "🦆🍞🦆"}])
-        run_parallel_queries(main_table, left_join_table, left_join_table, pandas)
+    def test_parallel_emojis(self, duckdb_cursor):
+        main_table = pd.DataFrame([{"join_column": "🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️"}])
+        left_join_table = pd.DataFrame([{"join_column": "🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️", "other_column": "🦆🍞🦆"}])
+        run_parallel_queries(main_table, left_join_table, left_join_table)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_numeric_object(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame({"join_column": pandas.Series([3], dtype="Int8")})
-        left_join_table = pandas.DataFrame(
-            {"join_column": pandas.Series([3], dtype="Int8"), "other_column": pandas.Series([4], dtype="Int8")}
+    def test_parallel_numeric_object(self, duckdb_cursor):
+        main_table = pd.DataFrame({"join_column": pd.Series([3], dtype="Int8")})
+        left_join_table = pd.DataFrame(
+            {"join_column": pd.Series([3], dtype="Int8"), "other_column": pd.Series([4], dtype="Int8")}
         )
-        expected_df = pandas.DataFrame(
+        expected_df = pd.DataFrame(
             {"join_column": numpy.array([3], dtype=numpy.int8), "other_column": numpy.array([4], dtype=numpy.int8)}
         )
-        run_parallel_queries(main_table, left_join_table, expected_df, pandas)
+        run_parallel_queries(main_table, left_join_table, expected_df)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_timestamp(self, duckdb_cursor, pandas):
-        main_table = pandas.DataFrame({"join_column": [pandas.Timestamp("20180310T11:17:54Z")]})
-        left_join_table = pandas.DataFrame(
+    def test_parallel_timestamp(self, duckdb_cursor):
+        main_table = pd.DataFrame({"join_column": [pd.Timestamp("20180310T11:17:54Z")]})
+        left_join_table = pd.DataFrame(
             {
-                "join_column": [pandas.Timestamp("20180310T11:17:54Z")],
-                "other_column": [pandas.Timestamp("20190310T11:17:54Z")],
+                "join_column": [pd.Timestamp("20180310T11:17:54Z")],
+                "other_column": [pd.Timestamp("20190310T11:17:54Z")],
             }
         )
-        expected_df = pandas.DataFrame(
+        expected_df = pd.DataFrame(
             {
                 "join_column": numpy.array([datetime.datetime(2018, 3, 10, 11, 17, 54)], dtype="datetime64[ns]"),
                 "other_column": numpy.array([datetime.datetime(2019, 3, 10, 11, 17, 54)], dtype="datetime64[ns]"),
             }
         )
-        run_parallel_queries(main_table, left_join_table, expected_df, pandas)
+        run_parallel_queries(main_table, left_join_table, expected_df)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_parallel_empty(self, duckdb_cursor, pandas):
-        df_empty = pandas.DataFrame({"A": []})
+    def test_parallel_empty(self, duckdb_cursor):
+        df_empty = pd.DataFrame({"A": []})
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")

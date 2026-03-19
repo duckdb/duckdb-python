@@ -1,5 +1,3 @@
-from typing import Optional  # noqa: D100
-
 import duckdb
 from duckdb import DuckDBPyConnection
 from duckdb.experimental.spark.conf import SparkConf
@@ -20,7 +18,7 @@ class SparkContext:  # noqa: D101
         self._connection.close()
 
     @classmethod
-    def getOrCreate(cls, conf: Optional[SparkConf] = None) -> "SparkContext":  # noqa: D102
+    def getOrCreate(cls, conf: SparkConf | None = None) -> "SparkContext":  # noqa: D102
         raise ContributionsAcceptedError
 
     @classmethod
@@ -93,13 +91,13 @@ class SparkContext:  # noqa: D101
     # def emptyRDD(self) -> duckdb.experimental.spark.rdd.RDD[typing.Any]:
     # 	pass
 
-    def getCheckpointDir(self) -> Optional[str]:  # noqa: D102
+    def getCheckpointDir(self) -> str | None:  # noqa: D102
         raise ContributionsAcceptedError
 
     def getConf(self) -> SparkConf:  # noqa: D102
         raise ContributionsAcceptedError
 
-    def getLocalProperty(self, key: str) -> Optional[str]:  # noqa: D102
+    def getLocalProperty(self, key: str) -> str | None:  # noqa: D102
         raise ContributionsAcceptedError
 
     # def hadoopFile(self, path: str, inputFormatClass: str, keyClass: str, valueClass: str,

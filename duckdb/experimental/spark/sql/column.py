@@ -1,5 +1,8 @@
-from collections.abc import Iterable  # noqa: D100
-from typing import TYPE_CHECKING, Any, Callable, Union, cast
+from collections.abc import (
+    Callable,
+    Iterable,
+)
+from typing import TYPE_CHECKING, Any, Union, cast
 
 from ..exception import ContributionsAcceptedError
 from .types import DataType
@@ -222,11 +225,11 @@ class Column:
         expr = self.expr.otherwise(v)
         return Column(expr)
 
-    def cast(self, dataType: Union[DataType, str]) -> "Column":  # noqa: D102
+    def cast(self, dataType: DataType | str) -> "Column":  # noqa: D102
         internal_type = DuckDBPyType(dataType) if isinstance(dataType, str) else dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
 
-    def isin(self, *cols: Union[Iterable[Union["Column", str]], Union["Column", str]]) -> "Column":  # noqa: D102
+    def isin(self, *cols: Iterable[Union["Column", str]] | Union["Column", str]) -> "Column":  # noqa: D102
         if len(cols) == 1 and isinstance(cols[0], (list, set)):
             # Only one argument supplied, it's a list
             cols = cast("tuple", cols[0])

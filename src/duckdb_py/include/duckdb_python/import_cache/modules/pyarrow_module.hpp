@@ -46,6 +46,11 @@ public:
 
 	PythonImportCacheItem Scanner;
 	PythonImportCacheItem Dataset;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 struct PyarrowCacheItem : public PythonImportCacheItem {
@@ -80,6 +85,11 @@ public:
 	PythonImportCacheItem decimal32;
 	PythonImportCacheItem decimal64;
 	PythonImportCacheItem decimal128;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 } // namespace duckdb

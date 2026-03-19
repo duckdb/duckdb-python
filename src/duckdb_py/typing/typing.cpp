@@ -27,6 +27,7 @@ static void DefineBaseTypes(py::handle &m) {
 	m.attr("TIMESTAMP_S") = make_shared_ptr<DuckDBPyType>(LogicalType::TIMESTAMP_S);
 
 	m.attr("TIME") = make_shared_ptr<DuckDBPyType>(LogicalType::TIME);
+	m.attr("TIME_NS") = make_shared_ptr<DuckDBPyType>(LogicalType::TIME_NS);
 
 	m.attr("TIME_TZ") = make_shared_ptr<DuckDBPyType>(LogicalType::TIME_TZ);
 	m.attr("TIMESTAMP_TZ") = make_shared_ptr<DuckDBPyType>(LogicalType::TIMESTAMP_TZ);
@@ -36,6 +37,7 @@ static void DefineBaseTypes(py::handle &m) {
 	m.attr("BLOB") = make_shared_ptr<DuckDBPyType>(LogicalType::BLOB);
 	m.attr("BIT") = make_shared_ptr<DuckDBPyType>(LogicalType::BIT);
 	m.attr("INTERVAL") = make_shared_ptr<DuckDBPyType>(LogicalType::INTERVAL);
+	m.attr("VARIANT") = make_shared_ptr<DuckDBPyType>(LogicalType::VARIANT());
 }
 
 void DuckDBPyTyping::Initialize(py::module_ &parent) {

@@ -1,9 +1,7 @@
 import os
-import sys
 import warnings
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Union
 
 import pytest
 
@@ -20,32 +18,34 @@ except ImportError:
     pandas = None
     pyarrow_dtype = None
 
-    # Only install mock after we've failed to import pandas for conftest.py
-    class MockPandas:
-        def __getattr__(self, name: str) -> object:
-            pytest.skip("pandas not available", allow_module_level=True)
 
-    sys.modules["pandas"] = MockPandas()
-    sys.modules["pandas.testing"] = MockPandas()
-    sys.modules["pandas._testing"] = MockPandas()
+# Version-aware helpers for Pandas 2.x vs 3.0 compatibility
+def _get_pandas_ge_3():
+    if pandas is None:
+        return False
+    from packaging.version import Version
 
-# Check if pandas has arrow dtypes enabled
-if pandas is not None:
-    try:
-        from pandas.compat import pa_version_under7p0
+    return Version(pandas.__version__) >= Version("3.0.0")
 
-        pyarrow_dtypes_enabled = not pa_version_under7p0
-    except (ImportError, AttributeError):
-        pyarrow_dtypes_enabled = False
-else:
-    pyarrow_dtypes_enabled = False
+
+PANDAS_GE_3 = _get_pandas_ge_3()
+
+
+def is_string_dtype(dtype):
+    """Check if a dtype is a string dtype (works across Pandas 2.x and 3.0).
+
+    Uses pd.api.types.is_string_dtype() which handles:
+    - Pandas 2.x: object dtype for strings
+    - Pandas 3.0+: str (StringDtype) for strings
+    """
+    return pandas.api.types.is_string_dtype(dtype)
 
 
 def import_pandas():
     if pandas:
         return pandas
     else:
-        pytest.skip("Couldn't import pandas", allow_module_level=True)
+        pytest.skip("Couldn't import pandas")
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
@@ -126,81 +126,9 @@ def pandas_supports_arrow_backend():
     return pandas_2_or_higher()
 
 
-def numpy_pandas_df(*args, **kwargs):
-    return import_pandas().DataFrame(*args, **kwargs)
-
-
-def arrow_pandas_df(*args, **kwargs):
-    df = numpy_pandas_df(*args, **kwargs)
-    return df.convert_dtypes(dtype_backend="pyarrow")
-
-
-class NumpyPandas:
-    def __init__(self) -> None:
-        self.backend = "numpy_nullable"
-        self.DataFrame = numpy_pandas_df
-        self.pandas = import_pandas()
-
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
-        return getattr(self.pandas, name)
-
-
-def convert_arrow_to_numpy_backend(df):
-    names = df.columns
-    df_content = {}
-    for name in names:
-        df_content[name] = df[name].array.__arrow_array__()
-    # This should convert the pyarrow chunked arrays into numpy arrays
-    return import_pandas().DataFrame(df_content)
-
-
-def convert_to_numpy(df):
-    if (
-        pyarrow_dtypes_enabled
-        and pyarrow_dtype is not None
-        and any(True for x in df.dtypes if isinstance(x, pyarrow_dtype))
-    ):
-        return convert_arrow_to_numpy_backend(df)
-    return df
-
-
-def convert_and_equal(df1, df2, **kwargs):
-    df1 = convert_to_numpy(df1)
-    df2 = convert_to_numpy(df2)
-    import_pandas().testing.assert_frame_equal(df1, df2, **kwargs)
-
-
-class ArrowMockTesting:
-    def __init__(self) -> None:
-        self.testing = import_pandas().testing
-        self.assert_frame_equal = convert_and_equal
-
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
-        return getattr(self.testing, name)
-
-
-# This converts dataframes constructed with 'DataFrame(...)' to pyarrow backed dataframes
-# Assert equal does the opposite, turning all pyarrow backed dataframes into numpy backed ones
-# this is done because we don't produce pyarrow backed dataframes yet
-class ArrowPandas:
-    def __init__(self) -> None:
-        self.pandas = import_pandas()
-        if pandas_2_or_higher() and pyarrow_dtypes_enabled:
-            self.backend = "pyarrow"
-            self.DataFrame = arrow_pandas_df
-        else:
-            # For backwards compatible reasons, just mock regular pandas
-            self.backend = "numpy_nullable"
-            self.DataFrame = self.pandas.DataFrame
-        self.testing = ArrowMockTesting()
-
-    def __getattr__(self, name: str) -> Any:  # noqa: ANN401
-        return getattr(self.pandas, name)
-
-
 @pytest.fixture
 def require():
-    def _require(extension_name, db_name="") -> Union[duckdb.DuckDBPyConnection, None]:
+    def _require(extension_name, db_name="") -> duckdb.DuckDBPyConnection | None:
         # Paths to search for extensions
 
         build = Path(__file__).parent.parent / "build"

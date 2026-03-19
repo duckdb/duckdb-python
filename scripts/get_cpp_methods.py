@@ -1,7 +1,7 @@
 # Requires `python3 -m pip install cxxheaderparser pcpp`
+from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
-from typing import Callable
 
 import cxxheaderparser.parser
 import cxxheaderparser.preprocessor

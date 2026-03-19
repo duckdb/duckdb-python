@@ -2,8 +2,8 @@ import re
 from datetime import date, timedelta
 from typing import NoReturn
 
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
@@ -17,15 +17,13 @@ def evil1(df):
 
 
 class TestMap:
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_evil_map(self, duckdb_cursor, pandas):
+    def test_evil_map(self, duckdb_cursor):
         testrel = duckdb.values([1, 2])
         rel = testrel.map(evil1, schema={"i": str})
         with pytest.raises(duckdb.InvalidInputException, match="Expected 1 columns from UDF, got 2"):
             rel.df()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_map(self, duckdb_cursor, pandas):
+    def test_map(self, duckdb_cursor):
         testrel = duckdb.values([1, 2])
         conn = duckdb_cursor
         conn.execute("CREATE TABLE t (a integer)")
@@ -57,16 +55,16 @@ class TestMap:
             raise TypeError
 
         def return_dataframe(df):
-            return pandas.DataFrame({"A": [1]})
+            return pd.DataFrame({"A": [1]})
 
         def return_big_dataframe(df):
-            return pandas.DataFrame({"A": [1] * 5000})
+            return pd.DataFrame({"A": [1] * 5000})
 
         def return_none(df) -> None:
             return None
 
         def return_empty_df(df):
-            return pandas.DataFrame()
+            return pd.DataFrame()
 
         with pytest.raises(duckdb.InvalidInputException, match="Expected 1 columns from UDF, got 2"):
             print(testrel.map(evil1).df())
@@ -93,14 +91,14 @@ class TestMap:
         with pytest.raises(TypeError):
             print(testrel.map().df())
 
-        testrel.map(return_dataframe).df().equals(pandas.DataFrame({"A": [1]}))
+        testrel.map(return_dataframe).df().equals(pd.DataFrame({"A": [1]}))
 
         with pytest.raises(
             duckdb.InvalidInputException, match="UDF returned more than 2048 rows, which is not allowed"
         ):
             testrel.map(return_big_dataframe).df()
 
-        empty_rel.map(return_dataframe).df().equals(pandas.DataFrame({"A": []}))
+        empty_rel.map(return_dataframe).df().equals(pd.DataFrame({"A": []}))
 
         with pytest.raises(duckdb.InvalidInputException, match="No return value from Python function"):
             testrel.map(return_none).df()
@@ -118,18 +116,20 @@ class TestMap:
         # in this case we assume the returned type should be the same as the input type
         duckdb_cursor.values([b"1234"]).map(return_with_no_modification).fetchall()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_isse_3237(self, duckdb_cursor, pandas):
+    def test_isse_3237(self, duckdb_cursor):
         def process(rel):
             def mapper(x):
                 dates = x["date"].to_numpy("datetime64[us]")
                 days = x["days_to_add"].to_numpy("int")
-                x["result1"] = pandas.Series(
-                    [pandas.to_datetime(y[0]).date() + timedelta(days=y[1].item()) for y in zip(dates, days)],
+                x["result1"] = pd.Series(
+                    [pd.to_datetime(y[0]).date() + timedelta(days=y[1].item()) for y in zip(dates, days, strict=False)],
                     dtype="datetime64[us]",
                 )
-                x["result2"] = pandas.Series(
-                    [pandas.to_datetime(y[0]).date() + timedelta(days=-y[1].item()) for y in zip(dates, days)],
+                x["result2"] = pd.Series(
+                    [
+                        pd.to_datetime(y[0]).date() + timedelta(days=-y[1].item())
+                        for y in zip(dates, days, strict=False)
+                    ],
                     dtype="datetime64[us]",
                 )
                 return x
@@ -140,8 +140,8 @@ class TestMap:
             rel = rel.project("*, IF(ABS(one) > ABS(two), one, two) as three")
             return rel
 
-        df = pandas.DataFrame(
-            {"date": pandas.Series([date(2000, 1, 1), date(2000, 1, 2)], dtype="datetime64[us]"), "days_to_add": [1, 2]}
+        df = pd.DataFrame(
+            {"date": pd.Series([date(2000, 1, 1), date(2000, 1, 2)], dtype="datetime64[us]"), "days_to_add": [1, 2]}
         )
         rel = duckdb.from_df(df)
         rel = process(rel)
@@ -172,10 +172,9 @@ class TestMap:
         ):
             rel.fetchall()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_explicit_schema_name_mismatch(self, pandas):
+    def test_explicit_schema_name_mismatch(self):
         def renames_column(df):
-            return pandas.DataFrame({"a": df["i"]})
+            return pd.DataFrame({"a": df["i"]})
 
         con = duckdb.connect()
         rel = con.sql("select i from range(10) tbl(i)")
@@ -183,8 +182,7 @@ class TestMap:
         with pytest.raises(duckdb.InvalidInputException, match=re.escape("UDF column name mismatch")):
             rel.fetchall()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_explicit_schema_error(self, pandas):
+    def test_explicit_schema_error(self):
         def no_op(df):
             return df
 
@@ -196,8 +194,7 @@ class TestMap:
         ):
             rel.map(no_op, schema=[int])
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_returns_non_dataframe(self, pandas):
+    def test_returns_non_dataframe(self):
         def returns_series(df):
             return df.loc[:, "i"]
 
@@ -205,17 +202,14 @@ class TestMap:
         rel = con.sql("select i, i as j from range(10) tbl(i)")
         with pytest.raises(
             duckdb.InvalidInputException,
-            match=re.escape(
-                "Expected the UDF to return an object of type 'pandas.DataFrame', found "
-                "'<class 'pandas.core.series.Series'>' instead"
-            ),
+            match=r"Expected the UDF to return an object of type 'pandas\.DataFrame', found "
+            r"'<class 'pandas\.(core\.series\.)?Series'>' instead",
         ):
             rel = rel.map(returns_series)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_explicit_schema_columncount_mismatch(self, pandas):
+    def test_explicit_schema_columncount_mismatch(self):
         def returns_subset(df):
-            return pandas.DataFrame({"i": df.loc[:, "i"]})
+            return pd.DataFrame({"i": df.loc[:, "i"]})
 
         con = duckdb.connect()
         rel = con.sql("select i, i as j from range(10) tbl(i)")
@@ -225,14 +219,13 @@ class TestMap:
         ):
             rel.fetchall()
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas()])
-    def test_pyarrow_df(self, pandas):
+    def test_pyarrow_df(self):
         # PyArrow backed dataframes only exist on pandas >= 2.0.0
         pytest.importorskip("pandas", "2.0.0")
 
         def basic_function(df):
             # Create a pyarrow backed dataframe
-            df = pandas.DataFrame({"a": [5, 3, 2, 1, 2]}).convert_dtypes(dtype_backend="pyarrow")
+            df = pd.DataFrame({"a": [5, 3, 2, 1, 2]}).convert_dtypes(dtype_backend="pyarrow")
             return df
 
         con = duckdb.connect()

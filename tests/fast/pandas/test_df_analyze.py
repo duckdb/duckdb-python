@@ -1,58 +1,51 @@
-import numpy as np
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
+from conftest import is_string_dtype
 
 import duckdb
 
 
-def create_generic_dataframe(data, pandas):
-    return pandas.DataFrame({"col0": pandas.Series(data=data, dtype="object")})
+def create_generic_dataframe(data):
+    return pd.DataFrame({"col0": pd.Series(data=data, dtype="object")})
 
 
 class TestResolveObjectColumns:
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_sample_low_correct(self, duckdb_cursor, pandas):
-        print(pandas.backend)
+    def test_sample_low_correct(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("SET pandas_analyze_sample=3")
         data = [1000008, 6, 9, 4, 1, 6]
-        df = create_generic_dataframe(data, pandas)
+        df = create_generic_dataframe(data)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
         duckdb_df = duckdb_conn.query("select * FROM (VALUES (1000008), (6), (9), (4), (1), (6)) as '0'").df()
-        pandas.testing.assert_frame_equal(duckdb_df, roundtripped_df, check_dtype=False)
+        pd.testing.assert_frame_equal(duckdb_df, roundtripped_df, check_dtype=False)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_sample_low_incorrect_detected(self, duckdb_cursor, pandas):
+    def test_sample_low_incorrect_detected(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("SET pandas_analyze_sample=2")
         # size of list (6) divided by 'pandas_analyze_sample' (2) is the increment used
         # in this case index 0 (1000008) and index 3 ([4]) are checked, which dont match
         data = [1000008, 6, 9, [4], 1, 6]
-        df = create_generic_dataframe(data, pandas)
+        df = create_generic_dataframe(data)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
         # Sample high enough to detect mismatch in types, fallback to VARCHAR
-        assert roundtripped_df["col0"].dtype == np.dtype("object")
+        assert is_string_dtype(roundtripped_df["col0"].dtype)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_sample_zero(self, duckdb_cursor, pandas):
+    def test_sample_zero_infers_varchar(self, duckdb_cursor):
+        """Test that with analyze disabled, object columns are treated as VARCHAR."""
         duckdb_conn = duckdb.connect()
         # Disable dataframe analyze
         duckdb_conn.execute("SET pandas_analyze_sample=0")
         data = [1000008, 6, 9, 3, 1, 6]
-        df = create_generic_dataframe(data, pandas)
+        df = create_generic_dataframe(data)
         roundtripped_df = duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
-        # Always converts to VARCHAR
-        if pandas.backend == "pyarrow":
-            assert roundtripped_df["col0"].dtype == np.dtype("int64")
-        else:
-            assert roundtripped_df["col0"].dtype == np.dtype("object")
+        # Always converts to VARCHAR when analyze is disabled
+        assert is_string_dtype(roundtripped_df["col0"].dtype)
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_sample_low_incorrect_undetected(self, duckdb_cursor, pandas):
+    def test_sample_low_incorrect_undetected(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("SET pandas_analyze_sample=1")
         data = [1000008, 6, 9, [4], [1], 6]
-        df = create_generic_dataframe(data, pandas)
+        df = create_generic_dataframe(data)
         # Sample size is too low to detect the mismatch, exception is raised when trying to convert
         with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Unimplemented type for cast"):
             duckdb.query_df(df, "x", "select * from x", connection=duckdb_conn).df()
@@ -65,12 +58,11 @@ class TestResolveObjectColumns:
         res = duckdb_cursor.execute("select current_setting('pandas_analyze_sample')").fetchall()
         assert res == [(1000,)]
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_10750(self, duckdb_cursor, pandas):
+    def test_10750(self, duckdb_cursor):
         max_row_number = 2000
         data = {"id": list(range(max_row_number + 1)), "content": [None for _ in range(max_row_number + 1)]}
 
-        pdf = pandas.DataFrame(data=data)
+        pdf = pd.DataFrame(data=data)
         duckdb_cursor.register("content", pdf)
         res = duckdb_cursor.query("select id from content").fetchall()
         expected = [(i,) for i in range(2001)]

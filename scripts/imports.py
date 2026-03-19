@@ -109,6 +109,8 @@ import polars
 
 polars.DataFrame
 polars.LazyFrame
+polars.col
+polars.lit
 
 import duckdb
 import duckdb.filesystem

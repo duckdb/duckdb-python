@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 import duckdb
@@ -27,7 +29,7 @@ class TestRAPICloseConnRel:
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.arg_min("", "")
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
-            rel.fetch_arrow_table()
+            rel.to_arrow_table()
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.avg("")
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
@@ -182,5 +184,6 @@ class TestRAPICloseConnRel:
         con.execute("INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2)")
         rel = con.table("items")
         del con
-        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
-            print(rel)
+        # Relation keeps the connection alive via connection_owner
+        res = rel.fetchall()
+        assert res == [("jeans", Decimal("20.00"), 1), ("hammer", Decimal("42.20"), 2)]

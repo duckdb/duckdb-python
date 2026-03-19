@@ -21,9 +21,9 @@ class TestPythonResult:
         with pytest.raises(duckdb.InvalidInputException, match="result closed"):
             res.fetchnumpy()
         with pytest.raises(duckdb.InvalidInputException, match="There is no query result"):
-            res.fetch_arrow_table()
+            res.to_arrow_table()
         with pytest.raises(duckdb.InvalidInputException, match="There is no query result"):
-            res.fetch_arrow_reader(1)
+            res.to_arrow_reader(1)
 
     def test_result_describe_types(self, duckdb_cursor):
         connection = duckdb.connect("")

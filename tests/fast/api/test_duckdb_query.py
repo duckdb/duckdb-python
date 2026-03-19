@@ -1,5 +1,5 @@
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 from duckdb import Value
@@ -21,9 +21,8 @@ class TestDuckDBQuery:
         res = duckdb_cursor.sql("select 42; select 84;").fetchall()
         assert res == [(84,)]
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_duckdb_from_query_multiple_statements(self, pandas):
-        tst_df = pandas.DataFrame({"a": [1, 23, 3, 5]})  # noqa: F841
+    def test_duckdb_from_query_multiple_statements(self):
+        tst_df = pd.DataFrame({"a": [1, 23, 3, 5]})  # noqa: F841
 
         res = duckdb.sql(
             """

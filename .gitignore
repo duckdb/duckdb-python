@@ -14,6 +14,8 @@
 .sw?
 #OS X specific files.
 .DS_store
+#VSCode specifics
+.vscode/
 
 #==============================================================================#
 # Build artifacts
@@ -45,6 +47,7 @@ cmake-build-release
 cmake-build-relwithdebinfo
 duckdb_packaging/duckdb_version.txt
 test.db
+tmp/
 
 #==============================================================================#
 # Python

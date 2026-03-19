@@ -1,5 +1,5 @@
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 import duckdb
 
@@ -12,10 +12,9 @@ class TestParameterList:
         res = conn.execute("select count(*) from bool_table where a =?", [True])
         assert res.fetchone()[0] == 1
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_exception(self, duckdb_cursor, pandas):
+    def test_exception(self, duckdb_cursor):
         conn = duckdb.connect()
-        df_in = pandas.DataFrame(
+        df_in = pd.DataFrame(
             {
                 "numbers": [1, 2, 3, 4, 5],
             }

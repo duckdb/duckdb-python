@@ -1,26 +1,27 @@
 import datetime
 
 import pytest
+from packaging.version import Version
 
 import duckdb
 
 # https://pandas.pydata.org/docs/dev/user_guide/copy_on_write.html
 pandas = pytest.importorskip("pandas", "1.5", reason="copy_on_write does not exist in earlier versions")
+# Starting from Pandas 3.0.0 copy-on-write can no longer be disabled and this setting is deprecated
+pre_3_0 = Version(pandas.__version__) < Version("3.0.0")
 
 
 # Make sure the variable get's properly reset even in case of error
 @pytest.fixture(autouse=True)
 def scoped_copy_on_write_setting():
-    old_value = pandas.options.mode.copy_on_write
-    pandas.options.mode.copy_on_write = True
-    yield
-    # Reset it at the end of the function
-    pandas.options.mode.copy_on_write = old_value
-    return
-
-
-def convert_to_result(col):
-    return [(x,) for x in col]
+    if pre_3_0:
+        old_value = pandas.options.mode.copy_on_write
+        pandas.options.mode.copy_on_write = True
+        yield
+        # Reset it at the end of the function
+        pandas.options.mode.copy_on_write = old_value
+    else:
+        yield
 
 
 class TestCopyOnWrite:
@@ -35,7 +36,6 @@ class TestCopyOnWrite:
         ],
     )
     def test_copy_on_write(self, col):
-        assert pandas.options.mode.copy_on_write
         con = duckdb.connect()
         df_in = pandas.DataFrame(  # noqa: F841
             {
@@ -45,5 +45,5 @@ class TestCopyOnWrite:
         rel = con.sql("select * from df_in")
         res = rel.fetchall()
         print(res)
-        expected = convert_to_result(col)
+        expected = [(x,) for x in col]
         assert res == expected

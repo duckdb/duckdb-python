@@ -1,6 +1,6 @@
-import uuid  # noqa: D100
+import uuid
 from collections.abc import Iterable, Sized
-from typing import TYPE_CHECKING, Any, NoReturn, Optional, Union
+from typing import TYPE_CHECKING, Any, NoReturn, Union
 
 import duckdb
 
@@ -38,7 +38,7 @@ def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list[du
 
     new_data = []
     for row in data:
-        new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row, [y.dataType for y in schema])]
+        new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row, [y.dataType for y in schema], strict=False)]
         new_data.append(new_row)
     return new_data
 
@@ -113,7 +113,7 @@ class SparkSession:  # noqa: D101
         return DataFrame(rel, self)
 
     def _createDataFrameFromPandas(
-        self, data: "PandasDataFrame", types: Union[list[str], None], names: Union[list[str], None]
+        self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None
     ) -> DataFrame:
         df = self._create_dataframe(data)
 
@@ -128,8 +128,8 @@ class SparkSession:  # noqa: D101
     def createDataFrame(  # noqa: D102
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
-        schema: Optional[Union[StructType, list[str]]] = None,
-        samplingRatio: Optional[float] = None,
+        schema: StructType | list[str] | None = None,
+        samplingRatio: float | None = None,
         verifySchema: bool = True,
     ) -> DataFrame:
         if samplingRatio:
@@ -194,9 +194,9 @@ class SparkSession:  # noqa: D101
     def range(  # noqa: D102
         self,
         start: int,
-        end: Optional[int] = None,
+        end: int | None = None,
         step: int = 1,
-        numPartitions: Optional[int] = None,
+        numPartitions: int | None = None,
     ) -> "DataFrame":
         if numPartitions:
             raise ContributionsAcceptedError
@@ -281,9 +281,9 @@ class SparkSession:  # noqa: D101
 
         def config(  # noqa: D102
             self,
-            key: Optional[str] = None,
-            value: Optional[Any] = None,  # noqa: ANN401
-            conf: Optional[SparkConf] = None,
+            key: str | None = None,
+            value: Any | None = None,  # noqa: ANN401
+            conf: SparkConf | None = None,
         ) -> "SparkSession.Builder":
             return self
 

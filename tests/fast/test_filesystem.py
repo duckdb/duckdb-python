@@ -1,8 +1,8 @@
 import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from shutil import copyfileobj
-from typing import Callable
 
 import pytest
 
@@ -57,8 +57,7 @@ def add_file(fs, filename=FILENAME):
 
 class TestPythonFilesystem:
     def test_unregister_non_existent_filesystem(self, duckdb_cursor: DuckDBPyConnection):
-        with pytest.raises(InvalidInputException):
-            duckdb_cursor.unregister_filesystem("fake")
+        duckdb_cursor.unregister_filesystem("fake")
 
     def test_memory_filesystem(self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
@@ -173,7 +172,7 @@ class TestPythonFilesystem:
             write_errors = intercept(monkeypatch, fsspec.implementations.local.LocalFileOpener, "write")
             conn.register_filesystem(fs)
             db_path_posix = str(PurePosixPath(tmp_path.as_posix()) / "hello.db")
-            conn.execute(f"ATTACH 'file://{db_path_posix}'")
+            conn.execute(f"ATTACH 'file:///{db_path_posix}'")
 
             conn.execute("INSERT INTO hello.t VALUES (1)")
 

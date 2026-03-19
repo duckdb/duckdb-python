@@ -1,7 +1,5 @@
 #include "duckdb_python/python_replacement_scan.hpp"
-
 #include "duckdb/main/db_instance_cache.hpp"
-
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
@@ -14,12 +12,13 @@
 #include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include <duckdb/main/settings.hpp>
 
 namespace duckdb {
 
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
-                            PyArrowObjectType type, DBConfig &config, DatabaseInstance &db) {
+                            PyArrowObjectType type, DatabaseInstance &db) {
 	shared_ptr<ExternalDependency> external_dependency = make_shared_ptr<ExternalDependency>();
 	if (type == PyArrowObjectType::MessageReader) {
 		if (!db.ExtensionIsLoaded("nanoarrow")) {
@@ -52,12 +51,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 		auto dependency_item = PythonDependencyItem::Create(stream_messages);
 		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
 	} else {
-		if (type == PyArrowObjectType::PyCapsuleInterface) {
-			entry = entry.attr("__arrow_c_stream__")();
-			type = PyArrowObjectType::PyCapsule;
-		}
-
-		auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
+		auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, type);
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -67,8 +61,17 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 		    make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
 
 		if (type == PyArrowObjectType::PyCapsule) {
-			// Disable projection+filter pushdown
+			// Disable projection+filter pushdown for bare capsules (single-use, no PyArrow wrapper)
 			table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+		} else if (type == PyArrowObjectType::PyCapsuleInterface) {
+			// Try to load pyarrow.dataset for pushdown support
+			auto &cache = *DuckDBPyConnection::ImportCache();
+			if (!cache.pyarrow.dataset()) {
+				// No pyarrow.dataset: scan without pushdown, DuckDB handles projection/filter post-scan
+				table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+			} else {
+				table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
+			}
 		} else {
 			table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 		}
@@ -81,7 +84,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 
 static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
 	string error;
-	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
+	auto py_object_type = string(py::str(py::type::of(entry).attr("__name__")));
 	error += StringUtil::Format("Python Object \"%s\" of type \"%s\"", name, py_object_type);
 	if (!location.empty()) {
 		error += StringUtil::Format(" found on line \"%s\"", location);
@@ -114,7 +117,7 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = PandasDataFrame::ToArrowTable(entry);
 			CreateArrowScan(name, table, *table_function, children, client_properties, PyArrowObjectType::Table,
-			                DBConfig::GetConfig(context), *context.db);
+			                *context.db);
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -142,19 +145,18 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		subquery->external_dependency = std::move(dependency);
 		return std::move(subquery);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
+		// Polars DataFrames always go through one-time .to_arrow() materialization.
+		// Polars's __arrow_c_stream__() serializes from its internal layout on every call,
+		// which is expensive for repeated scans. The .to_arrow() path converts once.
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context), *context.db);
+		                *context.db);
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
-		auto materialized = entry.attr("collect")();
-		auto arrow_dataset = materialized.attr("to_arrow")();
-		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context), *context.db);
-	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid &&
-	           !(DuckDBPyConnection::GetArrowType(entry) == PyArrowObjectType::MessageReader && !relation)) {
-		arrow_type = DuckDBPyConnection::GetArrowType(entry);
-		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
-		                DBConfig::GetConfig(context), *context.db);
+		CreateArrowScan(name, entry, *table_function, children, client_properties, PyArrowObjectType::PolarsLazyFrame,
+		                *context.db);
+	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid &&
+	           !(arrow_type == PyArrowObjectType::MessageReader && !relation)) {
+		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type, *context.db);
 	} else if (DuckDBPyConnection::IsAcceptedNumpyObject(entry) != NumpyObjectType::INVALID) {
 		numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry);
 		string np_name = "np_" + StringUtil::GenerateRandomName();
@@ -299,7 +301,7 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
                                                     optional_ptr<ReplacementScanData> data) {
 	auto &table_name = input.table_name;
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
+	if (!Settings::Get<EnableExternalAccessSetting>(config)) {
 		return nullptr;
 	}
 

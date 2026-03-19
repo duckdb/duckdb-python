@@ -1,12 +1,15 @@
-# https://sparkbyexamples.com/pyspark/pyspark-udf-user-defined-function/  # noqa: D100
-from typing import TYPE_CHECKING, Any, Callable, Optional, TypeVar, Union
+# https://sparkbyexamples.com/pyspark/pyspark-udf-user-defined-function/
+from typing import TYPE_CHECKING, Any, Optional, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from .types import DataType
 
 if TYPE_CHECKING:
     from .session import SparkSession
 
-DataTypeOrString = Union[DataType, str]
+DataTypeOrString = DataType | str
 UserDefinedFunctionLike = TypeVar("UserDefinedFunctionLike")
 
 
@@ -17,7 +20,7 @@ class UDFRegistration:  # noqa: D101
     def register(  # noqa: D102
         self,
         name: str,
-        f: Union[Callable[..., Any], "UserDefinedFunctionLike"],
+        f: "Callable[..., Any] | UserDefinedFunctionLike",
         returnType: Optional["DataTypeOrString"] = None,
     ) -> "UserDefinedFunctionLike":
         self.sparkSession.conn.create_function(name, f, return_type=returnType)

@@ -11,6 +11,8 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
+#include <duckdb/function/scalar/variant_utils.hpp>
+
 namespace duckdb {
 
 namespace duckdb_py_convert {
@@ -112,7 +114,7 @@ struct IntervalConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(interval_t val, NumpyAppendData &append_data) {
 		(void)append_data;
-		return Interval::GetNanoseconds(val);
+		return Interval::GetMicro(val);
 	}
 
 	template <class NUMPY_T, bool PANDAS>
@@ -128,6 +130,24 @@ struct TimeConvert {
 		auto &client_properties = append_data.client_properties;
 		auto value = Value::TIME(val);
 		auto py_obj = PythonObject::FromValue(value, LogicalType::TIME, client_properties);
+		// Release ownership of the PyObject* without decreasing refcount
+		// this returns a handle, of which we take the ptr to get the PyObject*
+		return py_obj.release().ptr();
+	}
+
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
+		return nullptr;
+	}
+};
+
+struct TimeNSConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(dtime_ns_t val, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+		auto value = Value::TIME_NS(val);
+		auto py_obj = PythonObject::FromValue(value, LogicalType::TIME_NS, client_properties);
 		// Release ownership of the PyObject* without decreasing refcount
 		// this returns a handle, of which we take the ptr to get the PyObject*
 		return py_obj.release().ptr();
@@ -281,6 +301,19 @@ struct UnionConvert {
 		auto value = UnionValue::GetValue(val);
 
 		return PythonObject::FromValue(value, UnionValue::GetType(val), client_properties);
+	}
+};
+
+struct VariantConvert {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
+		auto &client_properties = append_data.client_properties;
+		auto val = input.GetValue(chunk_offset);
+		Vector tmp(val);
+		RecursiveUnifiedVectorFormat format;
+		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		UnifiedVariantVectorData vector_data(format);
+		auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
+		return PythonObject::FromValue(variant_val, variant_val.type(), client_properties);
 	}
 };
 
@@ -639,6 +672,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 	case LogicalTypeId::TIME:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(append_data);
 		break;
+	case LogicalTypeId::TIME_NS:
+		may_have_null = ConvertColumn<dtime_ns_t, PyObject *, duckdb_py_convert::TimeNSConvert>(append_data);
+		break;
 	case LogicalTypeId::INTERVAL:
 		may_have_null = ConvertColumn<interval_t, int64_t, duckdb_py_convert::IntervalConvert>(append_data);
 		break;
@@ -665,6 +701,9 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		break;
 	case LogicalTypeId::STRUCT:
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::StructConvert>(append_data);
+		break;
+	case LogicalTypeId::VARIANT:
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::VariantConvert>(append_data);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(append_data);

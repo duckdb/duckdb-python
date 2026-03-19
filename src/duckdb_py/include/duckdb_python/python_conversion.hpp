@@ -45,7 +45,7 @@ enum class PythonObjectType {
 
 PythonObjectType GetPythonObjectType(py::handle &ele);
 
-bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN);
+LogicalType SniffPythonIntegerType(py::handle ele);
 bool DictionaryHasMapFormat(const PyDictionary &dict);
 void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset, bool nan_as_null = true);
 Value TransformPythonValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN,

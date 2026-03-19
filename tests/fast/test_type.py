@@ -1,5 +1,4 @@
 import sys
-from typing import Optional, Union
 
 import pytest
 
@@ -138,7 +137,7 @@ class TestType:
         res = duckdb.list_type(list[dict[str, dict[list[str], str]]])
         assert str(res.child) == "MAP(VARCHAR, MAP(VARCHAR[], VARCHAR))[]"
 
-        res = duckdb.list_type(list[Union[str, int]])
+        res = duckdb.list_type(list[str | int])
         assert str(res.child) == "UNION(u1 VARCHAR, u2 BIGINT)[]"
 
     def test_implicit_convert_from_numpy(self, duckdb_cursor):
@@ -227,21 +226,21 @@ class TestType:
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")
     def test_optional(self):
-        type = DuckDBPyType(Optional[str])
+        type = DuckDBPyType(str | None)
         assert type == "VARCHAR"
-        type = DuckDBPyType(Optional[Union[int, bool]])
+        type = DuckDBPyType(int | bool | None)
         assert type == "UNION(u1 BIGINT, u2 BOOLEAN)"
-        type = DuckDBPyType(Optional[list[int]])
+        type = DuckDBPyType(list[int] | None)
         assert type == "BIGINT[]"
-        type = DuckDBPyType(Optional[dict[int, str]])
+        type = DuckDBPyType(dict[int, str] | None)
         assert type == "MAP(BIGINT, VARCHAR)"
-        type = DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        type = DuckDBPyType(dict[int | None, str | None] | None)
         assert type == "MAP(BIGINT, VARCHAR)"
-        type = DuckDBPyType(Optional[dict[Optional[int], Optional[str]]])
+        type = DuckDBPyType(dict[int | None, str | None] | None)
         assert type == "MAP(BIGINT, VARCHAR)"
-        type = DuckDBPyType(Optional[Union[Optional[str], Optional[bool]]])
+        type = DuckDBPyType(str | None | bool)
         assert type == "UNION(u1 VARCHAR, u2 BOOLEAN)"
-        type = DuckDBPyType(Union[str, None])
+        type = DuckDBPyType(str | None)
         assert type == "VARCHAR"
 
     @pytest.mark.skipif(sys.version_info < (3, 10), reason="'str | None' syntax requires Python 3.10 or higher")

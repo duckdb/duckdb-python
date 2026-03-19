@@ -17,10 +17,10 @@ class TestArrowUnregister:
         connection = duckdb.connect(":memory:")
         connection.register("arrow_table", arrow_table_obj)
 
-        connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
+        connection.execute("SELECT * FROM arrow_table;").to_arrow_table()
         connection.unregister("arrow_table")
         with pytest.raises(duckdb.CatalogException, match="Table with name arrow_table does not exist"):
-            connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
+            connection.execute("SELECT * FROM arrow_table;").to_arrow_table()
         with pytest.raises(duckdb.CatalogException, match="View with name arrow_table does not exist"):
             connection.execute("DROP VIEW arrow_table;")
         connection.execute("DROP VIEW IF EXISTS arrow_table;")
@@ -39,7 +39,7 @@ class TestArrowUnregister:
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
         with pytest.raises(duckdb.CatalogException, match="Table with name arrow_table does not exist"):
-            connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
+            connection.execute("SELECT * FROM arrow_table;").to_arrow_table()
         connection.close()
         del arrow_table_obj
         gc.collect()
@@ -47,5 +47,5 @@ class TestArrowUnregister:
         connection = duckdb.connect(db)
         assert len(connection.execute("PRAGMA show_tables;").fetchall()) == 0
         with pytest.raises(duckdb.CatalogException, match="Table with name arrow_table does not exist"):
-            connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
+            connection.execute("SELECT * FROM arrow_table;").to_arrow_table()
         connection.close()

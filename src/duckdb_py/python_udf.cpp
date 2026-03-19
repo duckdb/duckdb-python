@@ -75,7 +75,7 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 	py::gil_scoped_release gil;
 
 	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties(), DBConfig::GetConfig(context));
+	    make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties(), PyArrowObjectType::Table);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -307,40 +307,48 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 		for (idx_t row = 0; row < input.size(); row++) {
 
-			auto bundled_parameters = py::tuple((int)input.ColumnCount());
-			bool contains_null = false;
-			for (idx_t i = 0; i < input.ColumnCount(); i++) {
-				// Fill the tuple with the arguments for this row
-				auto &column = input.data[i];
-				auto value = column.GetValue(row);
-				if (value.IsNull() && default_null_handling) {
-					contains_null = true;
-					break;
+			py::object ret;
+			if (input.ColumnCount() > 0) {
+				auto bundled_parameters = py::tuple((int)input.ColumnCount());
+				bool contains_null = false;
+				for (idx_t i = 0; i < input.ColumnCount(); i++) {
+					// Fill the tuple with the arguments for this row
+					auto &column = input.data[i];
+					auto value = column.GetValue(row);
+					if (value.IsNull() && default_null_handling) {
+						contains_null = true;
+						break;
+					}
+					bundled_parameters[i] = PythonObject::FromValue(value, column.GetType(), client_properties);
 				}
-				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType(), client_properties);
-			}
-			if (contains_null) {
-				// Immediately insert None, no need to call the function
-				FlatVector::SetNull(result, row, true);
-				continue;
-			}
-
-			// Call the function
-			auto ret = py::reinterpret_steal<py::object>(PyObject_CallObject(function, bundled_parameters.ptr()));
-			if (ret == nullptr && PyErr_Occurred()) {
-				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
-					auto exception = py::error_already_set();
-					throw InvalidInputException("Python exception occurred while executing the UDF: %s",
-					                            exception.what());
-				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
-					PyErr_Clear();
+				if (contains_null) {
+					// Immediately insert None, no need to call the function
 					FlatVector::SetNull(result, row, true);
 					continue;
-				} else {
+				}
+				// Call the function
+				ret = py::reinterpret_steal<py::object>(PyObject_CallObject(function, bundled_parameters.ptr()));
+			} else {
+				ret = py::reinterpret_steal<py::object>(PyObject_CallObject(function, nullptr));
+			}
+
+			if (!ret || ret.is_none()) {
+				if (PyErr_Occurred()) {
+					if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
+						auto exception = py::error_already_set();
+						throw InvalidInputException("Python exception occurred while executing the UDF: %s",
+						                            exception.what());
+					}
+					if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
+						PyErr_Clear();
+						FlatVector::SetNull(result, row, true);
+						continue;
+					}
 					throw NotImplementedException("Exception handling type not implemented");
 				}
-			} else if ((!ret || ret == Py_None) && default_null_handling) {
-				throw InvalidInputException(NullHandlingError());
+				if (default_null_handling) {
+					throw InvalidInputException(NullHandlingError());
+				}
 			}
 			TransformPythonObject(ret, result, row);
 		}

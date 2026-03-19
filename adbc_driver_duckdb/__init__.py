@@ -20,7 +20,6 @@
 import enum
 import functools
 import importlib.util
-import typing
 
 import adbc_driver_manager
 
@@ -32,7 +31,7 @@ class StatementOptions(enum.Enum):
     BATCH_ROWS = "adbc.duckdb.query.batch_rows"
 
 
-def connect(path: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabase:
+def connect(path: str | None = None) -> adbc_driver_manager.AdbcDatabase:
     """Create a low level ADBC connection to DuckDB."""
     if path is None:
         return adbc_driver_manager.AdbcDatabase(driver=driver_path(), entrypoint="duckdb_adbc_init")

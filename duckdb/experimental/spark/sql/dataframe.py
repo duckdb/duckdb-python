@@ -1,12 +1,10 @@
 import uuid  # noqa: D100
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import reduce
 from keyword import iskeyword
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
-    Optional,
     Union,
     cast,
     overload,
@@ -209,7 +207,7 @@ class DataFrame:  # noqa: D101
 
         # In case anything is remaining, these are new columns
         # that we need to add to the DataFrame
-        for col_name, col in zip(column_names, columns):
+        for col_name, col in zip(column_names, columns, strict=False):
             cols.append(col.expr.alias(col_name))
 
         rel = self.relation.select(*cols)
@@ -344,7 +342,7 @@ class DataFrame:  # noqa: D101
         )
         return result
 
-    def sort(self, *cols: Union[str, Column, list[Union[str, Column]]], **kwargs: Any) -> "DataFrame":  # noqa: ANN401
+    def sort(self, *cols: str | Column | list[str | Column], **kwargs: Any) -> "DataFrame":  # noqa: ANN401
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
         Parameters
@@ -461,7 +459,7 @@ class DataFrame:  # noqa: D101
             if not ascending:
                 columns = [c.desc() for c in columns]
         elif isinstance(ascending, list):
-            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns)]
+            columns = [c if asc else c.desc() for asc, c in zip(ascending, columns, strict=False)]
         else:
             raise PySparkTypeError(
                 error_class="NOT_BOOL_OR_LIST",
@@ -474,7 +472,7 @@ class DataFrame:  # noqa: D101
 
     orderBy = sort
 
-    def head(self, n: Optional[int] = None) -> Union[Optional[Row], list[Row]]:  # noqa: D102
+    def head(self, n: int | None = None) -> Row | None | list[Row]:  # noqa: D102
         if n is None:
             rs = self.head(1)
             return rs[0] if rs else None
@@ -600,8 +598,8 @@ class DataFrame:  # noqa: D101
     def join(
         self,
         other: "DataFrame",
-        on: Optional[Union[str, list[str], Column, list[Column]]] = None,
-        how: Optional[str] = None,
+        on: str | list[str] | Column | list[Column] | None = None,
+        how: str | None = None,
     ) -> "DataFrame":
         """Joins with another :class:`DataFrame`, using the given join expression.
 
@@ -874,12 +872,12 @@ class DataFrame:  # noqa: D101
         return self._schema
 
     @overload
-    def __getitem__(self, item: Union[int, str]) -> Column: ...
+    def __getitem__(self, item: int | str) -> Column: ...
 
     @overload
-    def __getitem__(self, item: Union[Column, list, tuple]) -> "DataFrame": ...
+    def __getitem__(self, item: Column | list | tuple) -> "DataFrame": ...
 
-    def __getitem__(self, item: Union[int, str, Column, list, tuple]) -> Union[Column, "DataFrame"]:
+    def __getitem__(self, item: int | str | Column | list | tuple) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
 
         Examples:
@@ -922,7 +920,7 @@ class DataFrame:  # noqa: D101
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData": ...
 
     @overload
-    def groupBy(self, __cols: Union[list[Column], list[str]]) -> "GroupedData": ...  # noqa: PYI063
+    def groupBy(self, __cols: list[Column] | list[str]) -> "GroupedData": ...  # noqa: PYI063
 
     def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
         """Groups the :class:`DataFrame` using the specified columns,
@@ -1000,7 +998,7 @@ class DataFrame:  # noqa: D101
     def write(self) -> DataFrameWriter:  # noqa: D102
         return DataFrameWriter(self)
 
-    def printSchema(self, level: Optional[int] = None) -> None:
+    def printSchema(self, level: int | None = None) -> None:
         """Prints out the schema in the tree format.
 
         Parameters
@@ -1070,8 +1068,7 @@ class DataFrame:  # noqa: D101
     unionAll = union
 
     def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
-        """Returns a new :class:`DataFrame` containing union of rows in this and another
-        :class:`DataFrame`.
+        """Returns a new :class:`DataFrame` containing union of rows in this and another :class:`DataFrame`.
 
         This is different from both `UNION ALL` and `UNION DISTINCT` in SQL. To do a SQL-style set
         union (that does deduplication of elements), use this function followed by :func:`distinct`.
@@ -1124,15 +1121,27 @@ class DataFrame:  # noqa: D101
         |   1|   2|   3|NULL|
         |NULL|   4|   5|   6|
         +----+----+----+----+
-        """  # noqa: D205
+        """
         if allowMissingColumns:
-            cols = []
-            for col in self.relation.columns:
-                if col in other.relation.columns:
-                    cols.append(col)
-                else:
-                    cols.append(spark_sql_functions.lit(None))
-            other = other.select(*cols)
+            df1 = self.select(
+                *self.relation.columns,
+                *[
+                    spark_sql_functions.lit(None).alias(c)
+                    for c in other.relation.columns
+                    if c not in self.relation.columns
+                ],
+            )
+
+            df2 = other.select(
+                *[
+                    spark_sql_functions.col(c)
+                    if c in other.relation.columns
+                    else spark_sql_functions.lit(None).alias(c)
+                    for c in df1.relation.columns
+                ]
+            )
+
+            return df1.unionByName(df2, allowMissingColumns=False)
         else:
             other = other.select(*self.relation.columns)
 
@@ -1254,7 +1263,7 @@ class DataFrame:  # noqa: D101
         """  # noqa: D205
         return DataFrame(self.relation.except_(other.relation), self.session)
 
-    def dropDuplicates(self, subset: Optional[list[str]] = None) -> "DataFrame":
+    def dropDuplicates(self, subset: list[str] | None = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
 
@@ -1363,7 +1372,8 @@ class DataFrame:  # noqa: D101
         assert types_count == len(existing_columns)
 
         cast_expressions = [
-            f"{existing}::{target_type} as {existing}" for existing, target_type in zip(existing_columns, types)
+            f"{existing}::{target_type} as {existing}"
+            for existing, target_type in zip(existing_columns, types, strict=False)
         ]
         cast_expressions = ", ".join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
@@ -1376,7 +1386,7 @@ class DataFrame:  # noqa: D101
             raise PySparkValueError(message="Provided column names and number of columns in the DataFrame don't match")
 
         existing_columns = [ColumnExpression(x) for x in existing_columns]
-        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
+        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols, strict=False)]
         new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 

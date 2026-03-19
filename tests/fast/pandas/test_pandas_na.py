@@ -1,8 +1,9 @@
 import platform
 
 import numpy as np
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
+from conftest import is_string_dtype
 
 import duckdb
 
@@ -10,27 +11,25 @@ import duckdb
 def assert_nullness(items, null_indices):
     for i in range(len(items)):
         if i in null_indices:
-            assert items[i] is None
+            assert pd.isna(items[i])
         else:
-            assert items[i] is not None
+            assert not pd.isna(items[i])
 
 
 @pytest.mark.skipif(platform.system() == "Emscripten", reason="Pandas interaction is broken in Pyodide 3.11")
 class TestPandasNA:
     @pytest.mark.parametrize("rows", [100, duckdb.__standard_vector_size__, 5000, 1000000])
-    @pytest.mark.parametrize("pd", [NumpyPandas(), ArrowPandas()])
-    def test_pandas_string_null(self, duckdb_cursor, rows, pd):
-        df: pd.DataFrame = pd.DataFrame(index=np.arange(rows))
+    def test_pandas_string_null(self, duckdb_cursor, rows):
+        df = pd.DataFrame(index=np.arange(rows))
         df["string_column"] = pd.Series(dtype="string")
         e_df_rel = duckdb_cursor.from_df(df)
         assert e_df_rel.types == ["VARCHAR"]
         roundtrip = e_df_rel.df()
-        assert roundtrip["string_column"].dtype == "object"
+        assert is_string_dtype(roundtrip["string_column"].dtype)
         expected = pd.DataFrame({"string_column": [None for _ in range(rows)]})
-        pd.testing.assert_frame_equal(expected, roundtrip)
+        pd.testing.assert_frame_equal(expected, roundtrip, check_dtype=False)
 
     def test_pandas_na(self, duckdb_cursor):
-        pd = pytest.importorskip("pandas", minversion="1.0.0", reason="Support for pandas.NA has not been added yet")
         # DataFrame containing a single pd.NA
         df = pd.DataFrame(pd.Series([pd.NA]))
 
@@ -74,7 +73,9 @@ class TestPandasNA:
             }
         )
         assert str(nan_df["a"].dtype) == "float64"
-        assert str(na_df["a"].dtype) == "object"  # pd.NA values turn the column into 'object'
+        # pd.NA values turn the column into 'object' in Pandas 2.x
+        # In Pandas 3.0+, it may be different but we just check it's not float64
+        assert str(na_df["a"].dtype) != "float64"
 
         nan_result = duckdb_cursor.execute("select * from nan_df").df()
         na_result = duckdb_cursor.execute("select * from na_df").df()

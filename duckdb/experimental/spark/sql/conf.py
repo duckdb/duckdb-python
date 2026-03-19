@@ -1,5 +1,3 @@
-from typing import Optional, Union  # noqa: D100
-
 from duckdb import DuckDBPyConnection
 from duckdb.experimental.spark._globals import _NoValue, _NoValueType
 
@@ -17,7 +15,7 @@ class RuntimeConfig:  # noqa: D101
     def unset(self, key: str) -> None:  # noqa: D102
         raise NotImplementedError
 
-    def get(self, key: str, default: Union[Optional[str], _NoValueType] = _NoValue) -> str:  # noqa: D102
+    def get(self, key: str, default: str | None | _NoValueType = _NoValue) -> str:  # noqa: D102
         raise NotImplementedError
 
 

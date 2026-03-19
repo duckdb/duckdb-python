@@ -118,7 +118,7 @@ class TestADBCStatementBind:
         # Create the StructArray
         struct_array = pa.StructArray.from_arrays(arrays=data_dict.values(), names=data_dict.keys())
 
-        schema = pa.schema([(name, array.type) for name, array in zip(["a"], [struct_array])])
+        schema = pa.schema([(name, array.type) for name, array in zip(["a"], [struct_array], strict=False)])
 
         # Create the RecordBatch
         record_batch = pa.RecordBatch.from_arrays([struct_array], schema=schema)

@@ -1,8 +1,8 @@
 # simple DB API testcase
 
 import numpy
+import pandas as pd
 import pytest
-from conftest import ArrowPandas, NumpyPandas
 
 
 def assert_result_equal(result):
@@ -83,30 +83,29 @@ class TestSimpleDBAPI:
         arr.mask = [False, False, True]
         numpy.testing.assert_array_equal(result["t"], arr, "Incorrect result returned")
 
-    @pytest.mark.parametrize("pandas", [NumpyPandas(), ArrowPandas()])
-    def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps):
+    def test_pandas_selection(self, duckdb_cursor, integers, timestamps):
         import datetime
 
         from packaging.version import Version
 
         # I don't know when this exactly changed, but 2.0.3 does not support this, recent versions do
-        if Version(pandas.__version__) <= Version("2.0.3"):
+        if Version(pd.__version__) <= Version("2.0.3"):
             pytest.skip("The resulting dtype is 'object' when given a Series with dtype Int32DType")
 
         duckdb_cursor.execute("SELECT * FROM integers")
         result = duckdb_cursor.fetchdf()
         array = numpy.ma.masked_array(numpy.arange(11))
         array.mask = [False] * 10 + [True]
-        arr = {"i": pandas.Series(array.data, dtype=pandas.Int32Dtype)}
-        arr["i"][array.mask] = pandas.NA
-        arr = pandas.DataFrame(arr)
-        pandas.testing.assert_frame_equal(result, arr)
+        arr = {"i": pd.Series(array.data, dtype=pd.Int32Dtype)}
+        arr["i"][array.mask] = pd.NA
+        arr = pd.DataFrame(arr)
+        pd.testing.assert_frame_equal(result, arr)
 
         duckdb_cursor.execute("SELECT * FROM timestamps")
         result = duckdb_cursor.fetchdf()
-        df = pandas.DataFrame(
+        df = pd.DataFrame(
             {
-                "t": pandas.Series(
+                "t": pd.Series(
                     data=[
                         datetime.datetime(year=1992, month=10, day=3, hour=18, minute=34, second=45),
                         datetime.datetime(year=2010, month=1, day=1, hour=0, minute=0, second=1),
@@ -116,7 +115,7 @@ class TestSimpleDBAPI:
                 )
             }
         )
-        pandas.testing.assert_frame_equal(result, df)
+        pd.testing.assert_frame_equal(result, df)
 
     # def test_numpy_creation(self, duckdb_cursor):
     #     # numpyarray = {'i': numpy.arange(10), 'v': numpy.random.randint(100, size=(1, 10))}  # segfaults

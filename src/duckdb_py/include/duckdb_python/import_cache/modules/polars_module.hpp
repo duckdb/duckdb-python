@@ -26,13 +26,17 @@ public:
 	static constexpr const char *Name = "polars";
 
 public:
-	PolarsCacheItem() : PythonImportCacheItem("polars"), DataFrame("DataFrame", this), LazyFrame("LazyFrame", this) {
+	PolarsCacheItem()
+	    : PythonImportCacheItem("polars"), DataFrame("DataFrame", this), LazyFrame("LazyFrame", this), col("col", this),
+	      lit("lit", this) {
 	}
 	~PolarsCacheItem() override {
 	}
 
 	PythonImportCacheItem DataFrame;
 	PythonImportCacheItem LazyFrame;
+	PythonImportCacheItem col;
+	PythonImportCacheItem lit;
 
 protected:
 	bool IsRequired() const override final {
