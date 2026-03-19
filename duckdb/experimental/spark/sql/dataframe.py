@@ -1,4 +1,4 @@
-import uuid  # noqa: D100
+import uuid
 from collections.abc import Callable, Iterable
 from functools import reduce
 from keyword import iskeyword
@@ -1435,9 +1435,9 @@ class DataFrame:  # noqa: D101
     def mapInArrow(
         self,
         func: "ArrowMapIterFunction",
-        schema: Union[StructType, str],
+        schema: StructType | str,
         barrier: bool = False,
-        profile: Optional[Any] = None,  # noqa: ANN401
+        profile: object | None = None,
     ) -> "DataFrame":
         """Maps an iterator of batches in the current :class:`DataFrame` using a Python native
         function that is performed on `pyarrow.RecordBatch`\\s both as input and output,
@@ -1521,9 +1521,9 @@ class DataFrame:  # noqa: D101
     def mapInPandas(
         self,
         func: "PandasMapIterFunction",
-        schema: Union[StructType, str],
+        schema: StructType | str,
         barrier: bool = False,
-        profile: Optional[Any] = None,  # noqa: ANN401
+        profile: object | None = None,
     ) -> "DataFrame":
         """Maps an iterator of batches in the current :class:`DataFrame` using a Python native
         function that is performed on pandas DataFrames both as input and output,
