@@ -140,7 +140,7 @@ py::object PolarsFilterPushdown::TransformFilter(const TableFilterSet &filter_co
 
 	py::object expression = py::none();
 	for (auto &entry : filter_collection) {
-		auto column_idx = entry.ColumnIndex();
+		auto column_idx = entry.GetIndex();
 		auto &column_name = columns[column_idx];
 		auto col_expr = import_cache.polars.col()(column_name);
 

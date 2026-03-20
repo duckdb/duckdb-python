@@ -316,7 +316,7 @@ py::object PyArrowFilterPushdown::TransformFilter(TableFilterSet &filter_collect
 
 	py::object expression = py::none();
 	for (auto &entry : filter_collection) {
-		auto column_idx = entry.ColumnIndex();
+		auto column_idx = entry.GetIndex();
 		auto &column_name = columns[column_idx];
 
 		vector<string> column_ref;
