@@ -298,7 +298,8 @@ def parse_strings_and_params(
             if last_thing == "string":
                 # Merge adjacent string parts for efficiency, since the template engine allows that
                 strings[-1] += part
-            strings.append(part)
+            else:
+                strings.append(part)
             last_thing = "string"
         else:
             if last_thing is None or last_thing == "param":
