@@ -6,14 +6,13 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal, NoReturn, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator
 
     from typing_extensions import TypeIs
 
 __all__ = [
     "CompiledSql",
     "IntoInterpolation",
-    "IntoTemplate",
     "Param",
     "SupportsDuckdbTemplate",
     "param",
@@ -259,17 +258,6 @@ class IntoInterpolation(Protocol):
     format_spec: str
 
 
-@runtime_checkable
-class IntoTemplate(Protocol):
-    """Something that can be converted into string.templatelib.Template."""
-
-    strings: Sequence[str]
-    interpolations: Sequence[IntoInterpolation]
-
-    def __iter__(self) -> Iterator[str | IntoInterpolation]:
-        """Iterate over the strings and interpolations in order."""
-
-
 def assert_param_name_legal(name: str) -> None:
     """Eg `$param_1` is legal, but `$1param`, `$param-1`, `$param 1`, and `$p ; DROP TABLE users` are not."""
     # not implemented yet
@@ -387,6 +375,7 @@ def compile_parts(parts: Iterable[str | Param], /) -> CompiledSql:
     params_items = []
 
     def next_name(suffix: str | None = None) -> str:
+        # still count exact params in the count, so we get p0, my_param, p2, p3, my_param_2, p5, etc
         base = f"p{len(params_items)}"
         if suffix is not None:
             return f"{base}_{suffix}"
