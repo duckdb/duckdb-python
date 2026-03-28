@@ -15,6 +15,7 @@ __all__ = [
     "Param",
     "SupportsDuckdbTemplate",
     "compile",
+    "resolve",
     "template",
 ]
 
@@ -25,10 +26,6 @@ class CompiledSql:
 
     sql: str
     params: tuple[Param, ...]
-
-    # def __init__(self, sql: str, params: Iterable[Param]) -> None:
-    #     self.sql = sql
-    #     self.params = tuple(params)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,21 +91,17 @@ def param(value: object, name: str | None = None) -> ParamInterpolation:
     return ParamInterpolation(value=value, expression=name)
 
 
-def template(thing: object, /, **ignored_kwargs) -> SqlTemplate:
-    """Convert something to a Template-ish.
+def template(thing: object, /) -> SqlTemplate:
+    """Convert something to a SqlTemplate.
 
     The rules are:
-    - If the thing has a __duckdb_template__ method, call it and convert the
+    - If the thing has a `.__duckdb_template__()` method, call it and convert the
         resuling strings and IntoParams into a SqlTemplate.
     - If the thing is a `str`, treat it as raw SQL and return a SqlTemplate with that string.
-    - If the thing is an IntoTemplate, resolve it into a SqlTemplate by recursively resolving
-        any inner IntoInterpolations and flattening any nested templates.
-    - If the thing is an IntoInterpolation, resolve it into a SqlTemplate by recursively resolving
-        its value, and if it has a conversion specified (!s, !r, !a), treat it as raw SQL.
     - Otherwise, treat the thing as a param.
     """
     if isinstance(thing, SupportsDuckdbTemplate):
-        raw = thing.__duckdb_template__(**ignored_kwargs)
+        raw = thing.__duckdb_template__()
         parts = [raw] if isinstance(raw, str) or is_into_interpolation(raw) else list(raw)
         return SqlTemplate(*parts)
     if isinstance(thing, str):
@@ -120,15 +113,8 @@ def template(thing: object, /, **ignored_kwargs) -> SqlTemplate:
     return SqlTemplate(param(value=thing))
 
 
-def compile(thing: object) -> CompiledSql:
-    """Compile a thing into a final SQL string with named parameter placeholders, and a list of Params."""
-    t = template(thing)
-    resolved = resolve(t)
-    return compile_parts(resolved)
-
-
-def resolve(parts: Iterable[str | IntoInterpolation]) -> SqlTemplate[str | IntoInterpolation]:
-    """Resolve an OurTemplate by recursively resolving any inner templates and interpolations."""
+def resolve(parts: Iterable[str | IntoInterpolation]) -> SqlTemplate:
+    """Resolve a stream of strings and Interpolations, recursively resolving inner interpolations."""
     resolved: list[str | IntoInterpolation] = []
     for part in parts:
         if isinstance(part, str):
@@ -136,6 +122,13 @@ def resolve(parts: Iterable[str | IntoInterpolation]) -> SqlTemplate[str | IntoI
         else:
             resolved.extend(resolve_interpolation(part))
     return SqlTemplate(*resolved)
+
+
+def compile(thing: object) -> CompiledSql:
+    """Compile a thing into a final SQL string with named parameter placeholders, and a list of Params."""
+    t = template(thing)
+    resolved = resolve(t)
+    return compile_parts(resolved)
 
 
 def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInterpolation]:
@@ -188,7 +181,7 @@ def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInter
 
 
 def compile_parts(parts: Iterable[str | IntoInterpolation], /) -> CompiledSql:
-    """Compile a resolved SqlTemplate into a final SQL string with named parameter placeholders, and a list of Params."""
+    """Compile parts into a final SQL string with named parameter placeholders, and a list of Params."""
     sql_parts: list[str] = []
     params: list[Param] = []
     for part in parts:
@@ -242,13 +235,13 @@ class ParamInterpolation:
 
 
 class SqlTemplate:
-    """A simple implementation of IntoTemplate, for testing purposes."""
+    """A sequence of strings and Interpolations."""
 
     def __init__(
         self,
         *parts: str | IntoInterpolation,
     ) -> None:
-        self.strings, self.interpolations = parse_strings_and_params(parts)
+        self.strings, self.interpolations = parse_parts(parts)
 
     def __iter__(self) -> Iterator[str | IntoInterpolation]:
         """Iterate over the strings and interpolations in order."""
@@ -270,7 +263,7 @@ class SqlTemplate:
 T = TypeVar("T")
 
 
-def parse_strings_and_params(
+def parse_parts(
     parts: Iterable[str | T],
 ) -> tuple[tuple[str, ...], tuple[T, ...]]:
     """Parse an iterable of strings and params into separate tuples of strings and params, merging adjacent strings and ensuring that the number of strings is one more than the number of params."""
