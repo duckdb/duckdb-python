@@ -94,13 +94,13 @@ def param(value: object, name: str | None = None) -> ParamInterpolation:
     return ParamInterpolation(value=value, expression=name)
 
 
-def template(thing: object, /, **ignored_kwargs) -> OurTemplate:
+def template(thing: object, /, **ignored_kwargs) -> SqlTemplate:
     """Convert something to a Template-ish.
 
     The rules are:
     - If the thing has a __duckdb_template__ method, call it and convert the
         resuling strings and IntoParams into a SqlTemplate.
-    - If the thing is a string, treat it as raw SQL and return a SqlTemplate with that string.
+    - If the thing is a `str`, treat it as raw SQL and return a SqlTemplate with that string.
     - If the thing is an IntoTemplate, resolve it into a SqlTemplate by recursively resolving
         any inner IntoInterpolations and flattening any nested templates.
     - If the thing is an IntoInterpolation, resolve it into a SqlTemplate by recursively resolving
@@ -110,23 +110,24 @@ def template(thing: object, /, **ignored_kwargs) -> OurTemplate:
     if isinstance(thing, SupportsDuckdbTemplate):
         raw = thing.__duckdb_template__(**ignored_kwargs)
         parts = [raw] if isinstance(raw, str) or is_into_interpolation(raw) else list(raw)
-        return OurTemplate(*parts)
+        return SqlTemplate(*parts)
     if isinstance(thing, str):
-        return OurTemplate(thing)
+        return SqlTemplate(thing)
     if isinstance(thing, IntoTemplate):
-        return OurTemplate(*thing)
+        return SqlTemplate(*thing)
     if isinstance(thing, IntoInterpolation):
-        return OurTemplate(thing)
-    return OurTemplate(param(value=thing))
+        return SqlTemplate(thing)
+    return SqlTemplate(param(value=thing))
 
 
 def compile(thing: object) -> CompiledSql:
+    """Compile a thing into a final SQL string with named parameter placeholders, and a list of Params."""
     t = template(thing)
     resolved = resolve(t)
     return compile_parts(resolved)
 
 
-def resolve(parts: Iterable[str | IntoInterpolation]) -> OurTemplate[str | IntoInterpolation]:
+def resolve(parts: Iterable[str | IntoInterpolation]) -> SqlTemplate[str | IntoInterpolation]:
     """Resolve an OurTemplate by recursively resolving any inner templates and interpolations."""
     resolved: list[str | IntoInterpolation] = []
     for part in parts:
@@ -134,7 +135,7 @@ def resolve(parts: Iterable[str | IntoInterpolation]) -> OurTemplate[str | IntoI
             resolved.append(part)
         else:
             resolved.extend(resolve_interpolation(part))
-    return OurTemplate(*resolved)
+    return SqlTemplate(*resolved)
 
 
 def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInterpolation]:
@@ -151,15 +152,15 @@ def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInter
     #  Note that this is potentially unsafe if the value comes from an untrusted source,
     # since it could lead to SQL injection vulnerabilities, so it should be used with caution.
     if interp.conversion == "s":
-        return OurTemplate(str(value))
+        return SqlTemplate(str(value))
     elif interp.conversion == "r":
-        return OurTemplate(repr(value))
+        return SqlTemplate(repr(value))
     elif interp.conversion == "a":
-        return OurTemplate(ascii(value))
+        return SqlTemplate(ascii(value))
 
     if isinstance(value, str):
         # do NOT pass to template, since that would treat it as a raw SQL.
-        return OurTemplate(param(value, name=interp.expression))
+        return SqlTemplate(param(value, name=interp.expression))
     templ = template(value)
     # resolved = resolve(templ)
     # If the resolved inner is just a single Interpolation, then just return
@@ -175,7 +176,7 @@ def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInter
     # eg with a friendly param name, rather than
     # "SELECT * FROM people WHERE age = $p0", with a param $p0=37
     if len(templ.strings) == 2 and templ.strings[0] == "" and templ.strings[1] == "" and len(templ.interpolations) == 1:
-        return OurTemplate(param(value=value, name=interp.expression))
+        return SqlTemplate(param(value=value, name=interp.expression))
     else:
         # We got something nested, eg
         # age = 37
@@ -240,7 +241,7 @@ class ParamInterpolation:
         self.format_spec = ""
 
 
-class OurTemplate:
+class SqlTemplate:
     """A simple implementation of IntoTemplate, for testing purposes."""
 
     def __init__(
@@ -256,7 +257,7 @@ class OurTemplate:
             yield i
         yield self.strings[-1]
 
-    def resolve(self) -> OurTemplate:
+    def resolve(self) -> SqlTemplate:
         """Resolve any inner templates and interpolations, returning a new OurTemplate with only strings and ParamInterpolations."""
         return resolve(self)
 
