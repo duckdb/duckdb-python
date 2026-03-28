@@ -91,7 +91,7 @@ def param(value: object, name: str | None = None) -> ParamInterpolation:
     """Helper function to create an IntoParam with an optional name."""
     if name is not None:
         assert_param_name_legal(name)
-    return ParamInterpolation(value=value, expression=name, conversion=None)
+    return ParamInterpolation(value=value, expression=name)
 
 
 def template(thing: object, /, **ignored_kwargs) -> OurTemplate:
@@ -198,7 +198,6 @@ def compile_parts(parts: Iterable[str | IntoInterpolation], /) -> CompiledSql:
             if passed_name := part.expression:
                 param_name += f"_{passed_name}"
             sql_parts.append(f"${param_name}")
-            # params.append({"name": param_name, "value": part.value})
             params.append(Param(name=param_name, value=part.value))
     return CompiledSql(sql="".join(sql_parts), params=tuple(params))
 
@@ -234,12 +233,10 @@ def assert_param_name_legal(name: str) -> None:
 class ParamInterpolation:
     """A simple implementation of IntoInterpolation, for testing purposes."""
 
-    def __init__(
-        self, value: object, conversion: Literal["s", "r", "a"] | None = None, expression: str | None = None
-    ) -> None:
+    def __init__(self, value: object, expression: str | None = None) -> None:
         self.value = value
-        self.conversion = conversion
         self.expression = expression
+        self.conversion = None
         self.format_spec = ""
 
 
