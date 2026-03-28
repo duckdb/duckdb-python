@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, runtime_checkable
+import dataclasses
+from typing import TYPE_CHECKING, Literal, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -18,38 +19,24 @@ __all__ = [
 ]
 
 
-class CompiledSql(TypedDict):
+@dataclasses.dataclass(frozen=True)
+class CompiledSql:
     """Represents a compiled SQL statement, with the final SQL string and a list of Params to be passed to duckdb."""
 
     sql: str
-    params: list[Param]
+    params: tuple[Param, ...]
+
+    # def __init__(self, sql: str, params: Iterable[Param]) -> None:
+    #     self.sql = sql
+    #     self.params = tuple(params)
 
 
-class Param(TypedDict):
+@dataclasses.dataclass(frozen=True)
+class Param:
     """Represents a parameter to be passed to duckdb, with a name and a value."""
 
     value: object
     name: str
-
-
-# class IntoParam(TypedDict):
-#     """A Param with a name that is None, which can be used as input to the template engine, which will assign it a name based on its position and optionally an expression."""
-
-#     value: object
-#     name: NotRequired[str | None]
-
-
-# def is_into_param(thing: object) -> TypeIs[IntoParam]:
-#     try:
-#         value = thing["value"]  # ty:ignore[not-subscriptable]
-#     except (TypeError, KeyError):
-#         return False
-#     try:
-#         name = thing["name"]  # ty:ignore[not-subscriptable]
-#     except KeyError:
-#         name = None
-
-#     return isinstance(value, object) and isinstance(name, (str, type(None)))
 
 
 def is_into_interpolation(thing: object) -> TypeIs[IntoInterpolation]:
@@ -211,11 +198,9 @@ def compile_parts(parts: Iterable[str | IntoInterpolation], /) -> CompiledSql:
             if passed_name := part.expression:
                 param_name += f"_{passed_name}"
             sql_parts.append(f"${param_name}")
-            params.append({"name": param_name, "value": part.value})
-    return {
-        "sql": "".join(sql_parts),
-        "params": params,
-    }
+            # params.append({"name": param_name, "value": part.value})
+            params.append(Param(name=param_name, value=part.value))
+    return CompiledSql(sql="".join(sql_parts), params=tuple(params))
 
 
 @runtime_checkable
