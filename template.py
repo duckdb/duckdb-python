@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import dataclasses
 from collections import Counter
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal, NoReturn, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Iterator, Sequence
 
     from typing_extensions import TypeIs
 
@@ -15,8 +16,7 @@ __all__ = [
     "IntoTemplate",
     "Param",
     "SupportsDuckdbTemplate",
-    "compile",
-    "resolve",
+    "param",
     "template",
 ]
 
@@ -27,10 +27,6 @@ class CompiledSql:
 
     sql: str
     params: dict[str, object]
-
-
-def is_into_interpolation(thing: object) -> TypeIs[IntoInterpolation]:
-    return isinstance(thing, IntoInterpolation)
 
 
 @runtime_checkable
@@ -169,12 +165,12 @@ def template(
         return SqlTemplate(ParamInterpolation(thing))
     if isinstance(thing, IntoInterpolation):
         return SqlTemplate(thing)
-    if is_iterable(thing):
+    if _is_iterable(thing):
         return SqlTemplate(*thing)
     return SqlTemplate(ParamInterpolation(param(value=thing)))
 
 
-def is_iterable(thing: object) -> TypeIs[Iterable]:
+def _is_iterable(thing: object) -> TypeIs[Iterable]:
     return isinstance(thing, Iterable) and not isinstance(thing, (str, bytes))
 
 
@@ -188,25 +184,18 @@ class ParamInterpolation:
         self.format_spec = ""
 
 
-def resolve(parts: Iterable[str | IntoInterpolation]) -> ResolvedSqlTemplate:
+def _resolve(parts: Iterable[str | IntoInterpolation]) -> ResolvedSqlTemplate:
     """Resolve a stream of strings and Interpolations, recursively resolving inner interpolations."""
     resolved: list[str | Param] = []
     for part in parts:
         if isinstance(part, str):
             resolved.append(part)
         else:
-            resolved.extend(resolve_interpolation(part))
+            resolved.extend(_resolve_interpolation(part))
     return ResolvedSqlTemplate(resolved)
 
 
-def compile(thing: object) -> CompiledSql:
-    """Compile a thing into a final SQL string with named parameter placeholders, and a list of Params."""
-    t = template(thing)
-    resolved = resolve(t)
-    return compile_parts(resolved)
-
-
-def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
+def _resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
     value = interp.value
     if isinstance(value, Param):
         # If it's already a Param, we can skip the template resolution and just return it as a param.
@@ -235,8 +224,7 @@ def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
     if isinstance(value, str):
         # do NOT pass to template, since that would treat it as a raw SQL.
         return (param(value, name=interp.expression),)
-    templ = template(value)
-    # resolved = resolve(templ)
+    templ = template(value)  # ty:ignore[invalid-argument-type]
     # If the resolved inner is just a single Interpolation, then just return
     # the original value so that we preserve the expression name.
     # For example, if we have
@@ -258,7 +246,7 @@ def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
         # names = t"SELECT name FROM ({foo})"
         # names should resolve to:
         # "SELECT name FROM (SELECT * FROM people WHERE age = $age)", with a param $age=37
-        return resolve(templ)
+        return _resolve(templ)
 
 
 @runtime_checkable
@@ -305,7 +293,8 @@ class SqlTemplate:
                 # it's a Param, so we need to wrap it in a ParamInterpolation
                 interps.append(ParamInterpolation(part))
             else:
-                raise TypeError(f"Unexpected part type: {type(part)}. Expected str, IntoInterpolation, or Param.")
+                msg = f"Unexpected part type: {type(part)}. Expected str, IntoInterpolation, or Param."
+                raise TypeError(msg)
         self.interpolations = interps
 
     def __iter__(self) -> Iterator[str | IntoInterpolation]:
@@ -317,7 +306,7 @@ class SqlTemplate:
 
     def resolve(self) -> ResolvedSqlTemplate:
         """Recursively resolve Interpolations into Params, returning a ResolvedSqlTemplate."""
-        return resolve(self)
+        return _resolve(self)
 
     def compile(self) -> CompiledSql:
         """Compile this template into a final SQL string with named parameter placeholders, and a list of Params."""
