@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, NoReturn, Protocol, TypedDict, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, TypedDict, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-    from typing_extensions import NotRequired, TypeIs
+    from typing_extensions import TypeIs
 
 __all__ = [
     "CompiledSql",
     "IntoInterpolation",
-    "IntoParam",
     "IntoTemplate",
     "Param",
     "SupportsDuckdbTemplate",
@@ -33,32 +32,36 @@ class Param(TypedDict):
     name: str
 
 
-class IntoParam(TypedDict):
-    """A Param with a name that is None, which can be used as input to the template engine, which will assign it a name based on its position and optionally an expression."""
+# class IntoParam(TypedDict):
+#     """A Param with a name that is None, which can be used as input to the template engine, which will assign it a name based on its position and optionally an expression."""
 
-    value: object
-    name: NotRequired[str | None]
+#     value: object
+#     name: NotRequired[str | None]
 
 
-def is_into_param(thing: object) -> TypeIs[IntoParam]:
-    try:
-        value = thing["value"]  # ty:ignore[not-subscriptable]
-    except (TypeError, KeyError):
-        return False
-    try:
-        name = thing["name"]  # ty:ignore[not-subscriptable]
-    except KeyError:
-        name = None
+# def is_into_param(thing: object) -> TypeIs[IntoParam]:
+#     try:
+#         value = thing["value"]  # ty:ignore[not-subscriptable]
+#     except (TypeError, KeyError):
+#         return False
+#     try:
+#         name = thing["name"]  # ty:ignore[not-subscriptable]
+#     except KeyError:
+#         name = None
 
-    return isinstance(value, object) and isinstance(name, (str, type(None)))
+#     return isinstance(value, object) and isinstance(name, (str, type(None)))
+
+
+def is_into_interpolation(thing: object) -> TypeIs[IntoInterpolation]:
+    return isinstance(thing, IntoInterpolation)
 
 
 @runtime_checkable
 class SupportsDuckdbTemplate(Protocol):
-    """Something that can be converted into a SqlTemplate by implementing the __duckdb_template__ method."""
+    """Something that can be converted into a Template by implementing the __duckdb_template__ method."""
 
-    def __duckdb_template__(self, /, **future_kwargs) -> str | IntoParam | Iterable[str | IntoParam]:
-        """Convert self into a SqlTemplate, by returning either a string, an IntoParam, or an iterable of these.
+    def __duckdb_template__(self, /, **future_kwargs) -> str | IntoInterpolation | Iterable[str | IntoInterpolation]:
+        """Convert self into an IntoTemplate, by returning either a string, an IntoInterpolation, or an iterable of these.
 
         The future_kwargs are for future extensibility, in case duckdb wants
         to pass additional information in the future.
@@ -83,10 +86,8 @@ class SupportsDuckdbTemplate(Protocol):
                 self.user_id = user_id
 
             def __duckdb_template__(self, **kwargs):
-                return [
-                    "SELECT * FROM users WHERE id = ",
-                    {"value": self.user_id, "name": "user_id"},
-                ]
+                user_id = self.user_id
+                return t"SELECT * FROM users WHERE id = {user_id}"
         ```
 
         This will resolve to the final SQL and params:
@@ -99,15 +100,15 @@ class SupportsDuckdbTemplate(Protocol):
         """
 
 
-def param(value: object, name: str | None = None) -> IntoParam:
+def param(value: object, name: str | None = None) -> ParamInterpolation:
     """Helper function to create an IntoParam with an optional name."""
     if name is not None:
         assert_param_name_legal(name)
-    return IntoParam(value=value, name=name)
+    return ParamInterpolation(value=value, expression=name, conversion=None)
 
 
-def template(thing: object, /, **ignored_kwargs) -> SqlTemplate:
-    """Convert something to a SqlTemplate.
+def template(thing: object, /, **ignored_kwargs) -> OurTemplate:
+    """Convert something to a Template-ish.
 
     The rules are:
     - If the thing has a __duckdb_template__ method, call it and convert the
@@ -121,35 +122,35 @@ def template(thing: object, /, **ignored_kwargs) -> SqlTemplate:
     """
     if isinstance(thing, SupportsDuckdbTemplate):
         raw = thing.__duckdb_template__(**ignored_kwargs)
-        return SqlTemplate(raw)
+        parts = [raw] if isinstance(raw, str) or is_into_interpolation(raw) else list(raw)
+        return OurTemplate(*parts)
     if isinstance(thing, str):
-        return SqlTemplate(thing)
+        return OurTemplate(thing)
     if isinstance(thing, IntoTemplate):
-        return resolve_into_template(thing)
+        return OurTemplate(*thing)
     if isinstance(thing, IntoInterpolation):
-        return resolve_interpolation(thing)
-    return SqlTemplate(param(value=thing))
+        return OurTemplate(thing)
+    return OurTemplate(param(value=thing))
 
 
 def compile(thing: object) -> CompiledSql:
-    resolved_template = template(thing)
-    return compile_sql_template(resolved_template)
+    t = template(thing)
+    resolved = resolve(t)
+    return compile_parts(resolved)
 
 
-def resolve_into_template(template: IntoTemplate) -> SqlTemplate:
-    """Resolve a Template, recursively resolving interpolations and flattening nested templates."""
-    parts: list[str | IntoParam] = []
-    for part in template:
+def resolve(parts: Iterable[str | IntoInterpolation]) -> OurTemplate[str | IntoInterpolation]:
+    """Resolve an OurTemplate by recursively resolving any inner templates and interpolations."""
+    resolved: list[str | IntoInterpolation] = []
+    for part in parts:
         if isinstance(part, str):
-            parts.append(part)
+            resolved.append(part)
         else:
-            inner_parts = resolve_interpolation(part)
-            parts.extend(inner_parts)
-    return SqlTemplate(*parts)
+            resolved.extend(resolve_interpolation(part))
+    return OurTemplate(*resolved)
 
 
-def resolve_interpolation(interp: IntoInterpolation) -> SqlTemplate:
-    """Resolve something that can be converted into an Interpolation, recursively resolving any inner templates."""
+def resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | IntoInterpolation]:
     value = interp.value
     # if conversion specified (!s, !r, !a), treat as raw sql, eg
     # name = "Alice"
@@ -163,16 +164,17 @@ def resolve_interpolation(interp: IntoInterpolation) -> SqlTemplate:
     #  Note that this is potentially unsafe if the value comes from an untrusted source,
     # since it could lead to SQL injection vulnerabilities, so it should be used with caution.
     if interp.conversion == "s":
-        return SqlTemplate(str(value))
+        return OurTemplate(str(value))
     elif interp.conversion == "r":
-        return SqlTemplate(repr(value))
+        return OurTemplate(repr(value))
     elif interp.conversion == "a":
-        return SqlTemplate(ascii(value))
+        return OurTemplate(ascii(value))
 
     if isinstance(value, str):
         # do NOT pass to template, since that would treat it as a raw SQL.
-        return SqlTemplate(param(value, name=interp.expression))
+        return OurTemplate(param(value, name=interp.expression))
     templ = template(value)
+    # resolved = resolve(templ)
     # If the resolved inner is just a single Interpolation, then just return
     # the original value so that we preserve the expression name.
     # For example, if we have
@@ -185,8 +187,8 @@ def resolve_interpolation(interp: IntoInterpolation) -> SqlTemplate:
     # "SELECT * FROM people WHERE age = $age", with a param $age=37,
     # eg with a friendly param name, rather than
     # "SELECT * FROM people WHERE age = $p0", with a param $p0=37
-    if len(templ.strings) == 2 and templ.strings[0] == "" and templ.strings[1] == "" and len(templ.params) == 1:
-        return SqlTemplate(param(value=value, name=interp.expression))
+    if len(templ.strings) == 2 and templ.strings[0] == "" and templ.strings[1] == "" and len(templ.interpolations) == 1:
+        return OurTemplate(param(value=value, name=interp.expression))
     else:
         # We got something nested, eg
         # age = 37
@@ -197,58 +199,25 @@ def resolve_interpolation(interp: IntoInterpolation) -> SqlTemplate:
         return templ
 
 
-# class DuckdDbPyRelation:
-#     def __duckdb_template__(self, /, **future_kwargs) -> str:
-#         # this would just return the existing SQL.
-#         return "SELECT * FROM some_table"
-
-
-class SqlTemplate:
-    """Very similar to string.templatelib.Template, but instead of Interpolations, we use IntoParams."""
-
-    def __init__(self, thing: str | IntoParam | Iterable[str | IntoParam]) -> None:
-        parts = [thing] if isinstance(thing, str) or is_into_param(thing) else list(thing)
-        strings, params = parse_strings_and_params(parts)
-        for param in params:
-            if name := param.get("name"):
-                assert_param_name_legal(name)
-        self.strings = tuple(strings)
-        self.params = tuple(params)
-
-    def __iter__(self) -> Iterator[str | IntoParam]:
-        for s, i in zip(self.strings, self.params, strict=False):
-            yield s
-            yield i
-        yield self.strings[-1]
-
-    def __str__(self) -> NoReturn:
-        msg = f"{self.__class__.__name__} cannot be directly converted to string. It needs to be processed by the SQL engine to produce the final SQL string."  # noqa: E501
-        raise NotImplementedError(msg)
-
-    def compile(self) -> CompiledSql:
-        return compile_sql_template(self)
-
-
-def compile_sql_template(template: SqlTemplate) -> CompiledSql:
+def compile_parts(parts: Iterable[str | IntoInterpolation], /) -> CompiledSql:
     """Compile a resolved SqlTemplate into a final SQL string with named parameter placeholders, and a list of Params."""
     sql_parts: list[str] = []
     params: list[Param] = []
-    for part in template:
+    for part in parts:
         if isinstance(part, str):
             sql_parts.append(part)
         else:
             param_name = f"p{len(params)}"
-            if passed_name := part.get("name"):
+            if passed_name := part.expression:
                 param_name += f"_{passed_name}"
             sql_parts.append(f"${param_name}")
-            params.append({"name": param_name, "value": part["value"]})
+            params.append({"name": param_name, "value": part.value})
     return {
         "sql": "".join(sql_parts),
         "params": params,
     }
 
 
-# from string.templatelib import Interpolation, Template
 @runtime_checkable
 class IntoInterpolation(Protocol):
     """Something that can be converted into a string.templatelib.Interpolation."""
@@ -256,6 +225,7 @@ class IntoInterpolation(Protocol):
     value: object
     conversion: Literal["s", "r", "a"] | None
     expression: str | None
+    format_spec: str
 
 
 @runtime_checkable
@@ -276,9 +246,50 @@ def assert_param_name_legal(name: str) -> None:
     # or perhaps we shouldn't even check, just pass it to duckdb and let it error if it's illegal
 
 
+class ParamInterpolation:
+    """A simple implementation of IntoInterpolation, for testing purposes."""
+
+    def __init__(
+        self, value: object, conversion: Literal["s", "r", "a"] | None = None, expression: str | None = None
+    ) -> None:
+        self.value = value
+        self.conversion = conversion
+        self.expression = expression
+        self.format_spec = ""
+
+
+class OurTemplate:
+    """A simple implementation of IntoTemplate, for testing purposes."""
+
+    def __init__(
+        self,
+        *parts: str | IntoInterpolation,
+    ) -> None:
+        self.strings, self.interpolations = parse_strings_and_params(parts)
+
+    def __iter__(self) -> Iterator[str | IntoInterpolation]:
+        """Iterate over the strings and interpolations in order."""
+        for s, i in zip(self.strings, self.interpolations, strict=False):
+            yield s
+            yield i
+        yield self.strings[-1]
+
+    def resolve(self) -> OurTemplate:
+        """Resolve any inner templates and interpolations, returning a new OurTemplate with only strings and ParamInterpolations."""
+        return resolve(self)
+
+    def compile(self) -> CompiledSql:
+        """Compile this template into a final SQL string with named parameter placeholders, and a list of Params."""
+        resolved = self.resolve()
+        return compile_parts(resolved)
+
+
+T = TypeVar("T")
+
+
 def parse_strings_and_params(
-    parts: Iterable[str | IntoParam],
-) -> tuple[tuple[str, ...], tuple[IntoParam, ...]]:
+    parts: Iterable[str | T],
+) -> tuple[tuple[str, ...], tuple[T, ...]]:
     """Parse an iterable of strings and params into separate tuples of strings and params, merging adjacent strings and ensuring that the number of strings is one more than the number of params."""
     strings, params = [], []
     last_thing: Literal["string", "param"] | None = None
