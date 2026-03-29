@@ -699,6 +699,18 @@ class TestSupportsDuckdbTemplate:
         compiled = t.compile()
         assert 42 in compiled.params.values()
 
+    def test_supports_duckdb_template_priority_over_iterable(self):
+        class IterableWithTemplate:
+            def __duckdb_template__(self, **kwargs) -> str:
+                return "SELECT 1"
+
+            def __iter__(self) -> list[str]:
+                return ["SELECT 2"]
+
+        result = template(IterableWithTemplate()).compile()
+        expected = CompiledSql(sql="SELECT 1")
+        assert result == expected
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # IntoInterpolation protocol
@@ -918,18 +930,6 @@ class TestEdgeCases:
         interp = FakeInterpolation(value=p, expression="p")
         result = template("SELECT ", interp, "").compile()
         expected = CompiledSql(sql="SELECT $custom_name", params={"custom_name": 42})
-        assert result == expected
-
-    def test_supports_duckdb_template_priority_over_iterable(self):
-        class IterableWithTemplate:
-            def __duckdb_template__(self, **kwargs) -> str:
-                return "SELECT 1"
-
-            def __iter__(self) -> list[str]:
-                return ["SELECT 2"]
-
-        result = template(IterableWithTemplate()).compile()
-        expected = CompiledSql(sql="SELECT 1")
         assert result == expected
 
     def test_same_expression_used_twice(self):
