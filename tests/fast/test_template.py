@@ -788,12 +788,10 @@ class TestEndToEndCompile:
 
     def test_multiple_params_in_list(self):
         result = template(
-            [
-                "SELECT * FROM users WHERE name = ",
-                Param(value="Alice", name="name"),
-                " AND age > ",
-                Param(value=18, name="age"),
-            ]
+            "SELECT * FROM users WHERE name = ",
+            Param(value="Alice", name="name"),
+            " AND age > ",
+            Param(value=18, name="age"),
         ).compile()
         assert result.sql == "SELECT * FROM users WHERE name = $p0_name AND age > $p1_age"
         assert result.params == {"p0_name": "Alice", "p1_age": 18}
@@ -867,10 +865,8 @@ class TestEndToEndCompile:
 
     def test_exact_param_name(self):
         result = template(
-            [
-                "SELECT * FROM t WHERE id = ",
-                Param(value=42, name="my_id", exact=True),
-            ]
+            "SELECT * FROM t WHERE id = ",
+            Param(value=42, name="my_id", exact=True),
         ).compile()
         assert result.sql == "SELECT * FROM t WHERE id = $my_id"
         assert result.params == {"my_id": 42}
@@ -887,16 +883,16 @@ class TestEdgeCases:
         assert result == CompiledSql(sql="", params={})
 
     def test_param_with_none_value(self):
-        result = template([Param(value=None, name="x")]).compile()
+        result = template(Param(value=None, name="x")).compile()
         assert result.params["p0_x"] is None
 
     def test_param_with_list_value(self):
-        result = template([Param(value=[1, 2, 3], name="ids")]).compile()
+        result = template(Param(value=[1, 2, 3], name="ids")).compile()
         assert result.params["p0_ids"] == [1, 2, 3]
 
     def test_param_with_dict_value(self):
         d = {"key": "value"}
-        result = template([Param(value=d, name="data")]).compile()
+        result = template(Param(value=d, name="data")).compile()
         assert result.params["p0_data"] == d
 
     def test_bool_param(self):
