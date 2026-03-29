@@ -15,6 +15,7 @@ __all__ = [
     "IntoInterpolation",
     "Param",
     "SupportsDuckdbTemplate",
+    "compile",
     "param",
     "template",
 ]
@@ -22,10 +23,21 @@ __all__ = [
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class CompiledSql:
-    """Represents a compiled SQL statement, with the final SQL string and a list of Params to be passed to duckdb."""
+    """Represents a compiled SQL statement, with the final SQL string and a dict of params to be passed to duckdb.
+
+    You will typically not create this directly, but will get it as the result
+    of calling .compile() on a SqlTemplate or ResolvedSqlTemplate.
+
+    Example:
+    >>> age = 37
+    >>> c = compile(t"SELECT * FROM users WHERE age >= {age}")
+    >>> c
+    >>> CompiledSql(sql="SELECT * FROM users WHERE age >= $p0_age", params={"p0_age": 37})
+    duckdb.query(c.sql, c.params)
+    """
 
     sql: str
-    params: dict[str, object]
+    params: dict[str, object] = dataclasses.field(default_factory=dict)
 
 
 @runtime_checkable
@@ -114,7 +126,7 @@ def template(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | o
     This is very useful for versions of python before 3.14 that don't have tstrings,
     since it allows you to build up a template from smaller pieces:
 
-    >>> t = template(["SELECT * FROM (", all_people, ") WHERE age >= ", age])
+    >>> t = template("SELECT * FROM (", all_people, ") WHERE age >= ", age)
     >>> t.compile()
     CompiledSql(sql='SELECT * FROM (SELECT * FROM people) WHERE age >= $p0_age', params={'p0_age': 18})
 
@@ -136,6 +148,17 @@ def template(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | o
     """  # noqa: E501
     expanded = _expand_part(part)
     return SqlTemplate(*expanded)
+
+
+def compile(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | object) -> CompiledSql:
+    """Compile a sequence of things into a final SQL string with named parameter placeholders, and a list of Params.
+
+    This is a convenience function that combines template() and .compile() into one step.
+
+    For more details and examples, see template().
+    """
+    t = template(*part)
+    return t.compile()
 
 
 def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
@@ -164,7 +187,7 @@ def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
 
 
 class ParamInterpolation:
-    """A simple wrapper that implements the IntoInterpolation protocol for a given IntoParam."""
+    """A simple wrapper that implements the IntoInterpolation protocol for a given Param."""
 
     def __init__(self, param: Param):  # noqa: ANN204
         self.value = param
