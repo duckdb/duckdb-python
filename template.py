@@ -1,3 +1,5 @@
+"""Template system for duckdb SQL statements, based on Python's string.templatelib."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -7,8 +9,6 @@ from typing import TYPE_CHECKING, Literal, NoReturn, Protocol, TypeVar, runtime_
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-
-    from typing_extensions import TypeIs
 
 __all__ = [
     "CompiledSql",
@@ -32,40 +32,17 @@ class CompiledSql:
 class SupportsDuckdbTemplate(Protocol):
     """Something that can be converted into a Template by implementing the __duckdb_template__ method."""
 
-    def __duckdb_template__(self, /, **future_kwargs) -> str | IntoInterpolation | Iterable[str | IntoInterpolation]:
-        """Convert self into an IntoTemplate, by returning either a string, an IntoInterpolation, or an iterable of these.
-
-        The future_kwargs are for future extensibility, in case duckdb wants
-        to pass additional information in the future.
-        To be future-proof, implementations should accept any additional kwargs,
-        and ignore them at this point.
-
-        Examples:
-        A simple implementation might just return a string, eg
-
-        >>> class MyRelation:
-        ...     def __duckdb_template__(self, **kwargs):
-        ...         return "SELECT * FROM my_table"
-        >>> t = template(MyRelation())
-        >>> t.compile()
-        CompiledSql(sql='SELECT * FROM my_table', params={})
-
-        A more complex implementation might return an iterable of strings and Params.
-        A Param is a dict with a "value" key, and optionally a "name" key.
-
-        For example:
-        >>> class Record:
-        ...     def __init__(self, table: str, id: int):
-        ...         self.table = table
-        ...         self.id = id
-        ...
-        ...     def __duckdb_template__(self, **kwargs):
-        ...         id = self.id
-        ...         return t"SELECT * FROM {self.table!s} WHERE id = {id}"
-        >>> t = template(Record("users", 123))
-        >>> t.compile()
-        CompiledSql(sql='SELECT * FROM users WHERE id = $p0_id', params={'p0_id': 123})
-        """
+    def __duckdb_template__(
+        self, /, **future_kwargs
+    ) -> (
+        str
+        | IntoInterpolation
+        | Param
+        | SupportsDuckdbTemplate
+        | object
+        | Iterable[str | IntoInterpolation | Param | SupportsDuckdbTemplate | object]
+    ):
+        """Convert self into something that template() understands."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -77,6 +54,7 @@ class Param:
     exact: bool = False
 
     def __post_init__(self) -> None:
+        """Ensure passed args were valid."""
         if self.exact:
             if self.name is None:
                 msg = "Param with exact=True must have a name."
@@ -90,16 +68,17 @@ def param(value: object, name: str | None = None, *, exact: bool = False) -> Par
     return Param(value=value, name=name, exact=exact)
 
 
-def template(
-    thing: str | Param | IntoInterpolation | SupportsDuckdbTemplate | Iterable[str | IntoInterpolation | Param], /
-) -> SqlTemplate:
-    """Convert something to a SqlTemplate.
+def template(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | object) -> SqlTemplate:
+    """Convert a sequence of things into a SqlTemplate.
 
-    The rules are:
-    - If the thing has a `.__duckdb_template__()` method, call it and convert the
-        resuling strings and IntoParams into a SqlTemplate.
+    We go through the parts and convert it into a sequence of str and Interpolations,
+    which we then hand off to SqlTemplate.
+    - If the thing has a `.__duckdb_template__()` method, call it,
+      and call template() recursively on the result.
     - If the thing is a `str`, treat it as raw SQL and return a SqlTemplate with that string.
-    - Otherwise, treat the thing as a param.
+    - If it's an Interpolation, leave it as is, treating it as an interpolation.
+    - It it's a Param, wrap it in an Interpolation.
+    - Otherwise, treat the thing as a param, and then wrap the Param in an Interpolation.
 
     Examples:
     A very simple example is just passing a string, which will be treated as raw SQL:
@@ -155,32 +134,46 @@ def template(
     >>> t.compile()
     CompiledSql(sql='SELECT * FROM users WHERE id = $p0_id', params={'p0_id': 123})
     """  # noqa: E501
-    if isinstance(thing, SupportsDuckdbTemplate):
-        raw = thing.__duckdb_template__()
-        return template(raw)
-    if isinstance(thing, str):
-        return SqlTemplate(thing)
-    if isinstance(thing, Param):
-        return SqlTemplate(ParamInterpolation(thing))
-    if isinstance(thing, IntoInterpolation):
-        return SqlTemplate(thing)
-    if _is_iterable(thing):
-        return SqlTemplate(*thing)
-    return SqlTemplate(ParamInterpolation(param(value=thing)))
+    expanded = _expand_part(part)
+    return SqlTemplate(*expanded)
 
 
-def _is_iterable(thing: object) -> TypeIs[Iterable]:
-    return isinstance(thing, Iterable) and not isinstance(thing, (str, bytes))
+def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
+    if isinstance(part, SupportsDuckdbTemplate):
+        raw = part.__duckdb_template__()
+        if isinstance(raw, str):  # noqa: SIM114
+            yield raw
+        elif isinstance(raw, IntoInterpolation):
+            yield raw
+        elif isinstance(raw, Param):
+            yield ParamInterpolation(raw)
+        elif isinstance(raw, Iterable):
+            yield from _expand_part(raw)
+        else:
+            p = param(value=raw)
+            yield ParamInterpolation(p)
+    elif isinstance(part, str):  # noqa: SIM114
+        yield part
+    elif isinstance(part, IntoInterpolation):
+        yield part
+    elif isinstance(part, Param):
+        yield ParamInterpolation(part)
+    else:
+        p = param(value=part)
+        yield ParamInterpolation(p)
 
 
 class ParamInterpolation:
     """A simple wrapper that implements the IntoInterpolation protocol for a given IntoParam."""
 
-    def __init__(self, param: Param):
+    def __init__(self, param: Param):  # noqa: ANN204
         self.value = param
         self.expression = param.name
         self.conversion = None
         self.format_spec = ""
+
+    def __repr__(self) -> str:
+        return repr(self.value)
 
 
 def _resolve(parts: Iterable[str | IntoInterpolation]) -> ResolvedSqlTemplate:
@@ -211,19 +204,25 @@ def _resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
     # or if the user just wants to write raw SQL and doesn't care about safety
     #  Note that this is potentially unsafe if the value comes from an untrusted source,
     # since it could lead to SQL injection vulnerabilities, so it should be used with caution.
-    formatted = format(value, interp.format_spec)
-
+    #
+    # Follow Python's f-string semantics: apply conversion first, then format_spec.
+    # e.g. {x!r:.10} means format(repr(x), ".10")
     if interp.conversion == "s":
-        return (str(formatted),)
+        converted = str(value)
     elif interp.conversion == "r":
-        return (repr(formatted),)
+        converted = repr(value)
     elif interp.conversion == "a":
-        return (ascii(formatted),)
+        converted = ascii(value)
+    else:
+        converted = None
+
+    if converted is not None:
+        return (format(converted, interp.format_spec),)
 
     if isinstance(value, str):
         # do NOT pass to template, since that would treat it as a raw SQL.
         return (param(value, name=interp.expression),)
-    templ = template(value)  # ty:ignore[invalid-argument-type]
+    templ = template(value)
     # If the resolved inner is just a single Interpolation, then just return
     # the original value so that we preserve the expression name.
     # For example, if we have
@@ -270,20 +269,9 @@ class SqlTemplate:
 
     def __init__(
         self,
-        *parts: str | IntoInterpolation | Param,
+        *parts: str | IntoInterpolation,
     ) -> None:
-        self.strings, interps_and_params = parse_parts(parts)
-        interps = []
-        for part in interps_and_params:
-            if isinstance(part, IntoInterpolation):
-                interps.append(part)
-            elif isinstance(part, Param):
-                # it's a Param, so we need to wrap it in a ParamInterpolation
-                interps.append(ParamInterpolation(part))
-            else:
-                msg = f"Unexpected part type: {type(part)}. Expected str, IntoInterpolation, or Param."
-                raise TypeError(msg)
-        self.interpolations = interps
+        self.strings, self.interpolations = parse_parts(parts)
 
     def __iter__(self) -> Iterator[str | IntoInterpolation]:
         """Iterate over the strings and interpolations in order."""
@@ -362,7 +350,10 @@ def parse_parts(parts: Iterable[str | T]) -> tuple[tuple[str, ...], tuple[T, ...
                 strings.append("")
             others.append(part)
             last_thing = "other"
-    if last_thing == "other":
+    if last_thing is None:
+        # Empty input — return a single empty string to maintain the invariant
+        strings.append("")
+    elif last_thing == "other":
         # If the last part was an other, we need to end with an empty string
         strings.append("")
     assert len(strings) == len(others) + 1
