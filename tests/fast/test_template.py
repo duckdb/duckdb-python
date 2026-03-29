@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from template import (
+from duckdb.template import (
     CompiledSql,
     IntoInterpolation,
     Param,

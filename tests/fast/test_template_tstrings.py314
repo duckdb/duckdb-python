@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from template import (
+from duckdb.template import (
     Param,
     param,
     template,
