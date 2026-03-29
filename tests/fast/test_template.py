@@ -208,19 +208,20 @@ class TestSqlTemplateConstruction:
     def test_plain_string(self):
         t = SqlTemplate("SELECT 1")
         assert t.strings == ("SELECT 1",)
-        assert t.interpolations == []
+        assert t.interpolations == ()
 
     def test_multiple_strings_merged(self):
         t = SqlTemplate("SELECT ", "1")
         assert t.strings == ("SELECT 1",)
-        assert t.interpolations == []
+        assert t.interpolations == ()
 
-    def test_with_param(self):
+    def test_bare_param_raises(self):
         p = Param(value=42, name="x")
-        t = SqlTemplate("SELECT ", p, " FROM t")
-        assert t.strings == ("SELECT ", " FROM t")
+        with pytest.raises(TypeError, match="Unexpected part type"):
+            SqlTemplate("SELECT ", p, " FROM t")  # ty:ignore[invalid-argument-type]
+        wrapped = ParamInterpolation(p)
+        t = SqlTemplate("SELECT ", wrapped, " FROM t")
         assert len(t.interpolations) == 1
-        assert t.interpolations[0].value is p
 
     def test_with_interpolation(self):
         interp = FakeInterpolation(value=42, expression="x")
@@ -242,7 +243,7 @@ class TestSqlTemplateConstruction:
         """Empty SqlTemplate should produce a single empty string."""
         t = SqlTemplate()
         assert t.strings == ("",)
-        assert t.interpolations == []
+        assert t.interpolations == ()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
