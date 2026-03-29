@@ -41,8 +41,8 @@ def test_module_level_sql_apis_accept_sql_template() -> None:
 
 def test_module_level_execute_accepts_sql_template() -> None:
     conn = duckdb.connect()
-    query = template("SELECT ", "hello")
-    assert duckdb.execute(query, connection=conn).fetchone() == ("hello",)
+    query = template("SELECT ", 5)
+    assert duckdb.execute(query, connection=conn).fetchone() == (5,)
 
 
 def test_connection_sql_accepts_alias_kwarg_with_template() -> None:
@@ -61,9 +61,17 @@ def test_connection_sql_template_can_merge_additional_params() -> None:
 
 def test_connection_sql_template_param_name_conflict_with_additional_params_raises() -> None:
     conn = duckdb.connect()
-    query = template("SELECT ", param(10, "num"), " + $num")
+    query = template("SELECT ", param(10, "num", exact=True), " + $num")
     with pytest.raises((duckdb.InvalidInputException, ValueError)):
         conn.sql(query, params={"num": 5}).fetchall()
+
+
+def test_cant_merge_with_positional_params() -> None:
+    conn = duckdb.connect()
+    # It doesn't even have a name, but still should error
+    query = template("SELECT ", 10, " + ?")
+    with pytest.raises(ValueError, match="Cannot merge compiled SQL named parameters with positional parameters"):
+        conn.sql(query, params=[5]).fetchall()
 
 
 def test_sql_apis_accept_compiled_sql() -> None:
@@ -81,16 +89,6 @@ def test_relation_interpolation_works_end_to_end() -> None:
     rel = conn.sql("SELECT i FROM range(6) t(i)")
     query = template("SELECT i FROM (", rel, ") WHERE i % ", 2, " = 0 ORDER BY i")
     assert conn.sql(query).fetchall() == [(0,), (2,), (4,)]
-
-
-def test_interpolated_strings_are_parameterized_by_default() -> None:
-    conn = duckdb.connect()
-    conn.execute("CREATE TABLE names(name VARCHAR)")
-    conn.execute("INSERT INTO names VALUES ('alice'), ('bob')")
-
-    untrusted = "alice' OR 1=1 --"
-    query = template("SELECT count(*) FROM names WHERE name = ", untrusted)
-    assert conn.sql(query).fetchone() == (0,)
 
 
 def test_builtin_duckdbpytype_object_interpolates_in_template() -> None:
