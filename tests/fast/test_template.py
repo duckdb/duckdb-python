@@ -255,8 +255,7 @@ class TestSqlTemplateIterRepr:
         assert parts == ["hello"]
 
     def test_iter_with_interpolations(self):
-        p = Param(value=1, name="x")
-        t = SqlTemplate("a ", p, " b")
+        t = template("a ", param(1, "x"), " b")
         parts = list(t)
         assert len(parts) == 3
         assert parts[0] == "a "
