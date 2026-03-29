@@ -1,4 +1,4 @@
-"""Exhaustive tests for template.py — the SQL template / t-string system."""
+"""Pure-python tests that don't require a compiled extension module."""
 
 from __future__ import annotations
 
