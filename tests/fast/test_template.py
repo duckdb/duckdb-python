@@ -25,7 +25,7 @@ from duckdb.template import (
 class FakeInterpolation:
     """Minimal object satisfying IntoInterpolation protocol."""
 
-    def __init__(self, value, expression=None, conversion=None, format_spec="") -> None:
+    def __init__(self, value, *, expression=None, conversion=None, format_spec="") -> None:
         self.value = value
         self.expression = expression
         self.conversion = conversion
@@ -43,8 +43,14 @@ class SimpleRelation:
 
 
 class Cafe:
-    def __ascii__(self) -> str:
-        return "cafe"
+    """Test for ascii(obj) conversion."""
+
+    def __repr__(self) -> str:
+        return "Café"
+
+    @classmethod
+    def ascii(cls) -> str:
+        return r"Caf\xe9"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -363,7 +369,7 @@ class TestTemplateFactory:
         """Bytes should not be iterated — _is_iterable excludes bytes."""
         t = template(b"hello")  # type: ignore[arg-type]
         compiled = t.compile()
-        expected = CompiledSql(sql="$p0", params={"p0": b"hello"})
+        expected = CompiledSql("$p0", params={"p0": b"hello"})
         assert compiled == expected
 
 
@@ -394,14 +400,14 @@ class TestTemplateWithInterpolations:
 
     def test_no_params(self):
         compiled = compile("SELECT 1")
-        expected = CompiledSql("SELECT 1", {})
+        expected = CompiledSql("SELECT 1")
         assert expected == compiled
 
     def test_string_conversion_s(self):
         """!s should inline the value as raw SQL (no param)."""
         interp = FakeInterpolation(value="users", expression="table", conversion="s")
         compiled = compile("SELECT * FROM ", interp, "")
-        expected = CompiledSql("SELECT * FROM users", {})
+        expected = CompiledSql("SELECT * FROM users")
         assert expected == compiled
 
     def test_repr_conversion_r(self):
@@ -409,13 +415,13 @@ class TestTemplateWithInterpolations:
         interp = FakeInterpolation(value="hello", expression="val", conversion="r")
         compiled = compile("SELECT ", interp, "")
         # repr of "hello" is "'hello'"
-        expected = CompiledSql("SELECT 'hello'", {})
+        expected = CompiledSql("SELECT 'hello'")
         assert expected == compiled
 
     def test_ascii_conversion_a(self):
         interp = FakeInterpolation(value=Cafe(), expression="val", conversion="a")
         compiled = compile("SELECT ", interp)
-        expected = CompiledSql("SELECT cafe", {})
+        expected = CompiledSql("SELECT " + Cafe.ascii())
         assert expected == compiled
 
     def test_string_value_becomes_param_not_raw_sql(self):
@@ -466,7 +472,7 @@ class TestTemplateWithInterpolations:
         t = template("SELECT ", interp, "")
         compiled = t.compile()
         # Python semantics: str(3.14159) = "3.14159", then format("3.14159", ".5") = "3.141"
-        expected = CompiledSql("SELECT 3.141", {})
+        expected = CompiledSql("SELECT 3.141")
         assert expected == compiled
 
     def test_format_spec_without_conversion_is_ignored(self):
@@ -493,20 +499,20 @@ class TestResolve:
         interp = FakeInterpolation(value=42, expression="x", conversion="s")
         t = SqlTemplate("SELECT ", interp)
         resolved = t.compile()
-        expected = CompiledSql(sql="SELECT 42", params={})
+        expected = CompiledSql("SELECT 42")
         assert resolved == expected
 
     def test_conversion_r_resolves_to_repr(self):
         interp = FakeInterpolation(value="hello", expression="x", conversion="r")
         t = SqlTemplate("SELECT ", interp)
         resolved = t.resolve()
-        expected = CompiledSql(sql="SELECT 'hello'", params={})
+        expected = CompiledSql("SELECT 'hello'")
         assert resolved == expected
 
     def test_conversion_a_resolves_to_ascii(self):
         interp = FakeInterpolation(value=Cafe(), expression="x", conversion="a")
         actual = compile("SELECT ", interp)
-        expected = CompiledSql(sql="SELECT cafe")
+        expected = CompiledSql("SELECT " + Cafe.ascii())
         assert actual == expected
 
     def test_string_value_without_conversion_becomes_param(self):
@@ -514,7 +520,7 @@ class TestResolve:
         interp = FakeInterpolation(value="DROP TABLE users", expression="val")
         t = SqlTemplate("SELECT ", interp)
         resolved = t.resolve()
-        expected = CompiledSql(sql="SELECT $p0_val", params={"p0_val": "DROP TABLE users"})
+        expected = CompiledSql("SELECT $p0_val", params={"p0_val": "DROP TABLE users"})
         assert resolved == expected
 
     def test_nested_supports_duckdb_template(self):
@@ -522,7 +528,7 @@ class TestResolve:
         interp = FakeInterpolation(value=rel, expression="rel")
         t = SqlTemplate("SELECT * FROM (", interp, ")")
         resolved = t.resolve()
-        expected = CompiledSql(sql="SELECT * FROM (SELECT 1)", params={})
+        expected = CompiledSql("SELECT * FROM (SELECT 1)")
         assert resolved == expected
 
     def test_expression_name_preserved_for_simple_param(self):
@@ -530,7 +536,7 @@ class TestResolve:
         interp = FakeInterpolation(value=42, expression="my_age")
         t = SqlTemplate("age = ", interp)
         resolved = t.resolve()
-        expected = CompiledSql(sql="age = $p0_my_age", params={"p0_my_age": 42})
+        expected = CompiledSql("age = $p0_my_age", params={"p0_my_age": 42})
         assert resolved == expected
 
 
@@ -576,26 +582,26 @@ class TestResolvedSqlTemplate:
 class TestCompileParts:
     def test_all_strings(self):
         result = compile_parts(["SELECT 1"])
-        assert result == CompiledSql(sql="SELECT 1", params={})
+        assert result == CompiledSql("SELECT 1")
 
     def test_single_unnamed_param(self):
         result = compile_parts(["SELECT ", Param(value=42)])
-        expected = CompiledSql(sql="SELECT $p0", params={"p0": 42})
+        expected = CompiledSql("SELECT $p0", params={"p0": 42})
         assert result == expected
 
     def test_single_named_param(self):
         result = compile_parts(["SELECT ", Param(value=42, name="x")])
-        expected = CompiledSql(sql="SELECT $p0_x", params={"p0_x": 42})
+        expected = CompiledSql("SELECT $p0_x", params={"p0_x": 42})
         assert result == expected
 
     def test_exact_param_uses_literal_name(self):
         result = compile_parts(["SELECT ", Param(value=42, name="my_param", exact=True)])
-        expected = CompiledSql(sql="SELECT $my_param", params={"my_param": 42})
+        expected = CompiledSql("SELECT $my_param", params={"my_param": 42})
         assert result == expected
 
     def test_multiple_params_numbered_sequentially(self):
         result = compile_parts(["SELECT * WHERE a = ", Param(value=1, name="a"), " AND b = ", Param(value=2, name="b")])
-        expected = CompiledSql(sql="SELECT * WHERE a = $p0_a AND b = $p1_b", params={"p0_a": 1, "p1_b": 2})
+        expected = CompiledSql("SELECT * WHERE a = $p0_a AND b = $p1_b", params={"p0_a": 1, "p1_b": 2})
         assert result == expected
 
     def test_duplicate_param_names_raises(self):
@@ -616,7 +622,7 @@ class TestCompileParts:
                 Param(value=2),
             ]
         )
-        expected = CompiledSql(sql="a = $p0 AND b = $p1", params={"p0": 1, "p1": 2})
+        expected = CompiledSql("a = $p0 AND b = $p1", params={"p0": 1, "p1": 2})
         assert result == expected
 
     def test_exact_param_causes_counter_gap(self):
@@ -631,22 +637,22 @@ class TestCompileParts:
                 Param(value=3, name="y"),  # → p2_y (not p1_y!)
             ]
         )
-        expected = CompiledSql(sql="a = $p0_x AND b = $b AND c = $p2_y", params={"p0_x": 1, "b": 2, "p2_y": 3})
+        expected = CompiledSql("a = $p0_x AND b = $b AND c = $p2_y", params={"p0_x": 1, "b": 2, "p2_y": 3})
         assert result == expected
 
     def test_empty_parts(self):
         result = compile_parts([])
-        expected = CompiledSql(sql="", params={})
+        expected = CompiledSql("")
         assert result == expected
 
     def test_adjacent_strings(self):
         result = compile_parts(["SELECT ", "1"])
-        expected = CompiledSql(sql="SELECT 1", params={})
+        expected = CompiledSql("SELECT 1")
         assert result == expected
 
     def test_param_with_none_value(self):
         result = compile_parts(["SELECT ", Param(value=None, name="x")])
-        expected = CompiledSql(sql="SELECT $p0_x", params={"p0_x": None})
+        expected = CompiledSql("SELECT $p0_x", params={"p0_x": None})
         assert result == expected
 
 
@@ -696,7 +702,7 @@ class TestSupportsDuckdbTemplate:
 
         t = template(InterpolationReturner())
         compiled = t.compile()
-        expected = CompiledSql(sql="$p0_val", params={"p0_val": 42})
+        expected = CompiledSql("$p0_val", params={"p0_val": 42})
         assert compiled == expected
 
     def test_supports_duckdb_template_priority_over_iterable(self):
@@ -708,7 +714,7 @@ class TestSupportsDuckdbTemplate:
                 return ["SELECT 2"]
 
         result = template(IterableWithTemplate()).compile()
-        expected = CompiledSql(sql="SELECT 1")
+        expected = CompiledSql("SELECT 1")
         assert result == expected
 
 
@@ -738,7 +744,7 @@ class TestIntoInterpolation:
 
 class TestCompiledSql:
     def test_basic(self):
-        c = CompiledSql(sql="SELECT $p0", params={"p0": 42})
+        c = CompiledSql("SELECT $p0", params={"p0": 42})
         assert c.sql == "SELECT $p0"
         assert c.params == {"p0": 42}
 
@@ -748,29 +754,34 @@ class TestCompiledSql:
         assert c.params == {"p0": 42}
 
     def test_empty_params(self):
-        c = CompiledSql(sql="SELECT 1", params={})
+        c = CompiledSql("SELECT 1")
         assert c.sql == "SELECT 1"
         assert c.params == {}
 
     def test_optional_params(self):
-        c = CompiledSql(sql="SELECT 1")
+        c = CompiledSql("SELECT 1")
         assert c.sql == "SELECT 1"
         assert c.params == {}
 
     def test_frozen(self):
-        c = CompiledSql(sql="SELECT 1", params={})
+        c = CompiledSql("SELECT 1")
         with pytest.raises(AttributeError):
             c.sql = "SELECT 2"  # ty:ignore[invalid-assignment]
 
     def test_equality(self):
-        a = CompiledSql(sql="SELECT 1", params={})
-        b = CompiledSql(sql="SELECT 1", params={})
+        a = CompiledSql("SELECT 1")
+        b = CompiledSql("SELECT 1")
         assert a == b
 
     def test_repr(self):
-        c = CompiledSql(sql="SELECT 1", params={})
+        c = CompiledSql("SELECT 1")
         expected = "CompiledSql(sql='SELECT 1', params={})"
         assert repr(c) == expected
+
+    def test_str(self):
+        c = CompiledSql("SELECT 1")
+        with pytest.raises(NotImplementedError):
+            str(c)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -814,12 +825,14 @@ class TestEndToEndCompile:
         expected = CompiledSql("SELECT * FROM my_table", {})
         assert expected == result
 
-    def test_interpolations_end_to_end(self):
+    def test_unparameterized_strings(self):
         result = compile("SELECT * FROM users WHERE id = ", 42, " AND name = ", "Alice")
-        expected = CompiledSql(
-            "SELECT * FROM users WHERE id = $p0 AND name = $p1",
-            {"p0": 42, "p1": "Alice"},
-        )
+        expected = CompiledSql("SELECT * FROM users WHERE id = $p0 AND name = Alice", {"p0": 42})
+        assert expected == result
+
+    def test_parameterized_strings(self):
+        result = compile("SELECT * FROM users WHERE id = ", 42, " AND name = ", param("Alice"))
+        expected = CompiledSql("SELECT * FROM users WHERE id = $p0 AND name = $p1", {"p0": 42, "p1": "Alice"})
         assert expected == result
 
     def test_nested_template_relations(self):
@@ -888,40 +901,40 @@ class TestEndToEndCompile:
 class TestEdgeCases:
     def test_empty_string_template(self):
         result = compile("")
-        expected = CompiledSql(sql="", params={})
+        expected = CompiledSql("")
         assert result == expected
 
     def test_param_with_none_value(self):
         result = compile(param(value=None, name="x"))
-        expected = CompiledSql(sql="$p0_x", params={"p0_x": None})
+        expected = CompiledSql("$p0_x", params={"p0_x": None})
         assert result == expected
 
     def test_param_with_list_value(self):
         result = compile(param(value=[1, 2, 3], name="ids"))
-        expected = CompiledSql(sql="$p0_ids", params={"p0_ids": [1, 2, 3]})
+        expected = CompiledSql("$p0_ids", params={"p0_ids": [1, 2, 3]})
         assert result == expected
 
     def test_param_with_dict_value(self):
         d = {"key": "value"}
         result = compile(param(value=d, name="data"))
-        expected = CompiledSql(sql="$p0_data", params={"p0_data": d})
+        expected = CompiledSql("$p0_data", params={"p0_data": d})
         assert result == expected
 
     def test_bool_param(self):
         result = compile("SELECT * FROM t WHERE active = ", True)
-        expected = CompiledSql(sql="SELECT * FROM t WHERE active = $p0", params={"p0": True})
+        expected = CompiledSql("SELECT * FROM t WHERE active = $p0", params={"p0": True})
         assert result == expected
 
     def test_float_param(self):
         interp = FakeInterpolation(value=3.14, expression="threshold")
         result = template("SELECT * FROM t WHERE score > ", interp, "").compile()
-        expected = CompiledSql(sql="SELECT * FROM t WHERE score > $p0_threshold", params={"p0_threshold": 3.14})
+        expected = CompiledSql("SELECT * FROM t WHERE score > $p0_threshold", params={"p0_threshold": 3.14})
         assert result == expected
 
     def test_none_param(self):
         interp = FakeInterpolation(value=None, expression="val")
         result = template("SELECT * FROM t WHERE x IS ", interp, "").compile()
-        expected = CompiledSql(sql="SELECT * FROM t WHERE x IS $p0_val", params={"p0_val": None})
+        expected = CompiledSql("SELECT * FROM t WHERE x IS $p0_val", params={"p0_val": None})
         assert result == expected
 
     def test_param_object_in_interpolation_preserves_name(self):
@@ -929,7 +942,7 @@ class TestEdgeCases:
         p = Param(value=42, name="custom_name")
         interp = FakeInterpolation(value=p, expression="p")
         result = template("SELECT ", interp, "").compile()
-        expected = CompiledSql(sql="SELECT $custom_name", params={"custom_name": 42})
+        expected = CompiledSql("SELECT $custom_name", params={"custom_name": 42})
         assert result == expected
 
     def test_same_expression_used_twice(self):
@@ -937,7 +950,7 @@ class TestEdgeCases:
         interp1 = FakeInterpolation(value=42, expression="x")
         interp2 = FakeInterpolation(value=42, expression="x")
         result = template("SELECT * FROM t WHERE a = ", interp1, " AND b = ", interp2, "").compile()
-        expected = CompiledSql(sql="SELECT * FROM t WHERE a = $p0_x AND b = $p1_x", params={"p0_x": 42, "p1_x": 42})
+        expected = CompiledSql("SELECT * FROM t WHERE a = $p0_x AND b = $p1_x", params={"p0_x": 42, "p1_x": 42})
         assert result == expected
 
     def test_mixed_conversion_and_param(self):
@@ -945,7 +958,7 @@ class TestEdgeCases:
         table_interp = FakeInterpolation(value="users", expression="table", conversion="s")
         id_interp = FakeInterpolation(value=5, expression="user_id")
         result = template("SELECT * FROM ", table_interp, " WHERE id = ", id_interp, "").compile()
-        expected = CompiledSql(sql="SELECT * FROM users WHERE id = $p0_user_id", params={"p0_user_id": 5})
+        expected = CompiledSql("SELECT * FROM users WHERE id = $p0_user_id", params={"p0_user_id": 5})
         assert result == expected
 
 
@@ -959,48 +972,41 @@ class TestConversionSemantics:
 
     def test_s_conversion_on_int(self):
         interp = FakeInterpolation(value=42, expression="x", conversion="s")
-        t = SqlTemplate(interp)
-        resolved = list(t.resolve())
-        assert len(resolved) == 1
-        assert resolved[0] == "42"
+        actual = compile(interp)
+        expected = CompiledSql("42")
+        assert actual == expected
 
     def test_r_conversion_on_string(self):
         """repr('hello') = "'hello'"."""
         interp = FakeInterpolation(value="hello", expression="x", conversion="r")
-        t = SqlTemplate(interp)
-        resolved = list(t.resolve())
-        assert len(resolved) == 1
-        assert resolved[0] == "'hello'"
+        actual = compile(interp)
+        expected = CompiledSql("'hello'")
+        assert actual == expected
 
     def test_r_conversion_on_int(self):
         """repr(42) = '42', no quotes."""
         interp = FakeInterpolation(value=42, expression="x", conversion="r")
-        t = SqlTemplate(interp)
-        resolved = list(t.resolve())
-        assert resolved[0] == "42"
+        actual = compile(interp)
+        expected = CompiledSql("42")
+        assert actual == expected
 
     def test_s_conversion_with_format_spec(self):
         """Conversion first, then format_spec: str(3.14159) then format with '.5' truncates."""
         interp = FakeInterpolation(value=3.14159, expression="x", conversion="s", format_spec=".5")
-        t = SqlTemplate(interp)
-        resolved = list(t.resolve())
-        # str(3.14159) = "3.14159", then format("3.14159", ".5") = "3.141" (truncates string to 5 chars)
-        assert resolved[0] == "3.141"
+        actual = compile(interp)
+        expected = CompiledSql("3.141")
+        assert actual == expected
 
     def test_r_conversion_with_format_spec(self):
         """Python semantics: repr first, then format."""
         interp = FakeInterpolation(value="hi", expression="x", conversion="r", format_spec=".4")
-        t = SqlTemplate(interp)
-        resolved = t.resolve()
-        # repr("hi") = "'hi'", then format("'hi'", ".4") = "'hi'" (already 4 chars)
-        expected = CompiledSql(sql="'hi'", params={})
-        assert resolved == expected
+        actual = compile(interp)
+        expected = CompiledSql("'hi'")
+        assert actual == expected
 
     def test_format_spec_ignored_for_parameterized_values(self):
         """When no conversion is specified, format_spec is silently ignored — the value is parameterized as-is."""
         interp = FakeInterpolation(value=3.14159, expression="x", format_spec=".2f")
-        t = SqlTemplate(interp)
-        compiled = t.compile()
-        # The value is parameterized with its original value, format_spec is dropped
-        expected = CompiledSql(sql="SELECT $p0_x", params={"p0_x": 3.14159})
-        assert compiled == expected
+        actual = compile(interp)
+        expected = CompiledSql("$p0_x", params={"p0_x": 3.14159})
+        assert actual == expected

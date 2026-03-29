@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Literal, NoReturn, Protocol, TypeVar, runtime_
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from typing_extensions import TypeIs
+
 __all__ = [
     "CompiledSql",
     "IntoInterpolation",
@@ -38,6 +40,11 @@ class CompiledSql:
 
     sql: str
     params: dict[str, object] = dataclasses.field(default_factory=dict)
+
+    def __str__(self) -> NoReturn:
+        """Disallow accidentally converting to a string, since that would lose the parameters."""
+        msg = "CompiledSql cannot be directly converted to a string, since it may contain parameters. Please use the .sql attribute for the SQL string, and the .params attribute for the parameters."  # noqa: E501
+        raise NotImplementedError(msg)
 
 
 @runtime_checkable
@@ -163,6 +170,10 @@ def compile(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | ob
     return t.compile()
 
 
+def _is_iterable_nonstring(value: object) -> TypeIs[Iterable]:
+    return isinstance(value, Iterable) and not isinstance(value, str | bytes)
+
+
 def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
     if isinstance(part, SupportsDuckdbTemplate):
         raw = part.__duckdb_template__()
@@ -172,8 +183,9 @@ def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
             yield raw
         elif isinstance(raw, Param):
             yield ParamInterpolation(raw)
-        elif isinstance(raw, Iterable):
-            yield from _expand_part(raw)
+        elif _is_iterable_nonstring(raw):
+            for item in raw:
+                yield from _expand_part(item)
         else:
             p = param(value=raw)
             yield ParamInterpolation(p)
@@ -183,6 +195,9 @@ def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
         yield part
     elif isinstance(part, Param):
         yield ParamInterpolation(part)
+    elif _is_iterable_nonstring(part):
+        for item in part:
+            yield from _expand_part(item)
     else:
         p = param(value=part)
         yield ParamInterpolation(p)
@@ -215,8 +230,12 @@ def _resolve(parts: Iterable[str | IntoInterpolation]) -> ResolvedSqlTemplate:
 def _resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
     value = interp.value
     if isinstance(value, Param):
-        # If it's already a Param, we can skip the template resolution and just return it as a param.
-        return (value,)
+        # Preserve direct ParamInterpolation behavior while allowing nested named Params to keep exact names.
+        if isinstance(interp, ParamInterpolation):
+            return (value,)
+        if value.name is None:
+            return (param(value.value),)
+        return (param(value.value, name=value.name, exact=True),)
 
     # if conversion specified (!s, !r, !a), treat as raw sql, eg
     # name = "Alice"
@@ -293,6 +312,10 @@ class SqlTemplate:
     """A sequence of strings and Interpolations."""
 
     def __init__(self, *parts: str | IntoInterpolation) -> None:
+        for part in parts:
+            if not isinstance(part, str | IntoInterpolation):
+                msg = f"Unexpected part type in SqlTemplate: {type(part).__name__}. Expected str or IntoInterpolation."
+                raise TypeError(msg)
         self.strings, self.interpolations = parse_parts(parts)
 
     def __iter__(self) -> Iterator[str | IntoInterpolation]:
@@ -344,7 +367,20 @@ class ResolvedSqlTemplate:
         return f"ResolvedSqlTemplate({', '.join(part_strings)})"
 
     def __iter__(self) -> Iterator[str | Param]:
-        yield from self.parts
+        start = 0
+        end = len(self.parts)
+        while start < end and self.parts[start] == "":
+            start += 1
+        while end > start and self.parts[end - 1] == "":
+            end -= 1
+        yield from self.parts[start:end]
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, CompiledSql):
+            return self.compile() == other
+        if isinstance(other, ResolvedSqlTemplate):
+            return self.parts == other.parts
+        return False
 
 
 T = TypeVar("T")
