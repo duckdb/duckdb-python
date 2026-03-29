@@ -697,7 +697,8 @@ class TestSupportsDuckdbTemplate:
 
         t = template(InterpolationReturner())
         compiled = t.compile()
-        assert 42 in compiled.params.values()
+        expected = CompiledSql(sql="$p0_val", params={"p0_val": 42})
+        assert compiled == expected
 
     def test_supports_duckdb_template_priority_over_iterable(self):
         class IterableWithTemplate:
