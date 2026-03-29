@@ -215,14 +215,6 @@ class TestSqlTemplateConstruction:
         assert t.strings == ("SELECT 1",)
         assert t.interpolations == ()
 
-    def test_bare_param_raises(self):
-        p = Param(value=42, name="x")
-        with pytest.raises(TypeError, match="Unexpected part type"):
-            SqlTemplate("SELECT ", p, " FROM t")  # ty:ignore[invalid-argument-type]
-        wrapped = ParamInterpolation(p)
-        t = SqlTemplate("SELECT ", wrapped, " FROM t")
-        assert len(t.interpolations) == 1
-
     def test_with_interpolation(self):
         interp = FakeInterpolation(value=42, expression="x")
         t = SqlTemplate("a ", interp, " b")
@@ -233,6 +225,11 @@ class TestSqlTemplateConstruction:
         p = Param(value=42)
         with pytest.raises(TypeError, match="Unexpected part type"):
             SqlTemplate("SELECT ", p)  # ty:ignore[invalid-argument-type]
+
+    def test_wrapped_param(self):
+        wrapped = ParamInterpolation(Param(value=42, name="x"))
+        t = SqlTemplate("SELECT ", wrapped, " FROM t")
+        assert len(t.interpolations) == 1
 
     def test_rejects_invalid_types(self):
         """Items that are not str, IntoInterpolation, or Param should raise TypeError."""
