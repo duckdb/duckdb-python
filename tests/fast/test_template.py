@@ -70,6 +70,12 @@ class TestParam:
         assert p.name == "greeting"
         assert p.exact is False
 
+    def test_positional_creation(self):
+        p = Param(42, "greeting", True)
+        assert p.value == 42
+        assert p.name == "greeting"
+        assert p.exact is True
+
     def test_exact_param_requires_name(self):
         with pytest.raises(ValueError, match="exact=True must have a name"):
             Param(value=1, exact=True)
@@ -94,8 +100,8 @@ class TestParam:
     def test_param_repr(self):
         p = Param(value=42, name="x")
         r = repr(p)
-        assert "42" in r
-        assert "x" in r
+        expected = "Param(value=42, name='x', exact=False)"
+        assert r == expected
 
     def test_param_equality(self):
         """Frozen dataclasses support equality by default."""
@@ -108,6 +114,32 @@ class TestParam:
             p = Param(value=val)
             assert p.value is val
 
+    def test_param_factory_function_defaults(self):
+        """param() should allow defaults for name and exact."""
+        expected = Param(value=42, name=None, exact=False)
+        assert param(42) == expected
+        assert param(value=42) == expected
+
+    def test_param_factory_function_named(self):
+        p = param(42, name="x")
+        assert p.value == 42
+        assert p.name == "x"
+        assert p.exact is False
+
+    def test_param_factory_function_exact(self):
+        p = param(42, name="x", exact=True)
+        assert p.value == 42
+        assert p.name == "x"
+        assert p.exact is True
+
+    def test_param_factory_function_exact_requires_name(self):
+        with pytest.raises(ValueError, match="exact=True must have a name"):
+            param(42, exact=True)
+
+    def test_param_factory_function_exact_with_name(self):
+        with pytest.raises(TypeError):
+            param(42, "x", True)  # ty:ignore[too-many-positional-arguments]
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ParamInterpolation
@@ -116,7 +148,7 @@ class TestParam:
 
 class TestParamInterpolation:
     def test_wraps_param(self):
-        p = Param(value=42, name="x")
+        p = param(42, "x")
         pi = ParamInterpolation(p)
         assert pi.value is p
         assert pi.expression == "x"
@@ -124,12 +156,12 @@ class TestParamInterpolation:
         assert pi.format_spec == ""
 
     def test_unnamed_param_expression_is_none(self):
-        p = Param(value=42)
+        p = param(42)
         pi = ParamInterpolation(p)
         assert pi.expression is None
 
     def test_satisfies_into_interpolation_protocol(self):
-        pi = ParamInterpolation(Param(value=1, name="x"))
+        pi = ParamInterpolation(param(1, "x"))
         assert isinstance(pi, IntoInterpolation)
 
 
@@ -234,12 +266,11 @@ class TestSqlTemplateConstruction:
         assert t.interpolations[0] is interp
 
     def test_bare_param_errors(self):
-        p = Param(value=42)
         with pytest.raises(TypeError, match="Unexpected part type"):
-            SqlTemplate("SELECT ", p)  # ty:ignore[invalid-argument-type]
+            SqlTemplate("SELECT ", param(42))  # ty:ignore[invalid-argument-type]
 
     def test_wrapped_param(self):
-        wrapped = ParamInterpolation(Param(value=42, name="x"))
+        wrapped = ParamInterpolation(param(42, "x"))
         t = SqlTemplate("SELECT ", wrapped, " FROM t")
         assert len(t.interpolations) == 1
 
@@ -299,8 +330,7 @@ class TestTemplateFactory:
         assert expected == compiled
 
     def test_param(self):
-        p = Param(value=42, name="answer")
-        t = template(p)
+        t = template(param(42, "answer"))
         compiled = t.compile()
         expected = CompiledSql("$p0_answer", {"p0_answer": 42})
         assert expected == compiled
@@ -346,7 +376,7 @@ class TestTemplateFactory:
         assert expected == compiled
 
     def test_iterable_with_params(self):
-        t = template("SELECT * FROM t WHERE id = ", Param(value=5, name="id"))
+        t = template("SELECT * FROM t WHERE id = ", param(5, "id"))
         compiled = t.compile()
         expected = CompiledSql("SELECT * FROM t WHERE id = $p0_id", {"p0_id": 5})
         assert expected == compiled
@@ -547,12 +577,12 @@ class TestResolve:
 
 class TestResolvedSqlTemplate:
     def test_basic(self):
-        r = ResolvedSqlTemplate(["SELECT ", Param(value=42, name="x")])
+        r = ResolvedSqlTemplate(["SELECT ", param(42, "x")])
         parts = list(r)
         assert len(parts) == 2
 
     def test_compile(self):
-        r = ResolvedSqlTemplate(["SELECT ", Param(value=42, name="x")])
+        r = ResolvedSqlTemplate(["SELECT ", param(42, "x")])
         compiled = r.compile()
         assert isinstance(compiled, CompiledSql)
         assert 42 in compiled.params.values()
@@ -563,13 +593,13 @@ class TestResolvedSqlTemplate:
             str(r)
 
     def test_repr(self):
-        r = ResolvedSqlTemplate(["SELECT ", Param(value=42, name="x")])
+        r = ResolvedSqlTemplate(["SELECT ", param(42, "x")])
         rep = repr(r)
         assert "ResolvedSqlTemplate" in rep
         assert "x=42" in rep
 
     def test_iter(self):
-        parts_in = ["a", Param(value=1, name="x"), "b"]
+        parts_in = ["a", param(1, "x"), "b"]
         r = ResolvedSqlTemplate(parts_in)
         assert list(r) == parts_in
 
@@ -585,43 +615,31 @@ class TestCompileParts:
         assert result == CompiledSql("SELECT 1")
 
     def test_single_unnamed_param(self):
-        result = compile_parts(["SELECT ", Param(value=42)])
+        result = compile_parts(["SELECT ", param(42)])
         expected = CompiledSql("SELECT $p0", params={"p0": 42})
         assert result == expected
 
     def test_single_named_param(self):
-        result = compile_parts(["SELECT ", Param(value=42, name="x")])
+        result = compile_parts(["SELECT ", param(42, "x")])
         expected = CompiledSql("SELECT $p0_x", params={"p0_x": 42})
         assert result == expected
 
     def test_exact_param_uses_literal_name(self):
-        result = compile_parts(["SELECT ", Param(value=42, name="my_param", exact=True)])
+        result = compile_parts(["SELECT ", param(42, "my_param", exact=True)])
         expected = CompiledSql("SELECT $my_param", params={"my_param": 42})
         assert result == expected
 
     def test_multiple_params_numbered_sequentially(self):
-        result = compile_parts(["SELECT * WHERE a = ", Param(value=1, name="a"), " AND b = ", Param(value=2, name="b")])
+        result = compile_parts(["SELECT * WHERE a = ", param(1, "a"), " AND b = ", param(2, "b")])
         expected = CompiledSql("SELECT * WHERE a = $p0_a AND b = $p1_b", params={"p0_a": 1, "p1_b": 2})
         assert result == expected
 
     def test_duplicate_param_names_raises(self):
         with pytest.raises(ValueError, match="Duplicate parameter names"):
-            compile_parts(
-                [
-                    Param(value=1, name="x", exact=True),
-                    Param(value=2, name="x", exact=True),
-                ]
-            )
+            compile_parts([param(1, "x", exact=True), param(2, "x", exact=True)])
 
     def test_unnamed_params_get_sequential_names(self):
-        result = compile_parts(
-            [
-                "a = ",
-                Param(value=1),
-                " AND b = ",
-                Param(value=2),
-            ]
-        )
+        result = compile_parts(["a = ", param(1), " AND b = ", param(2)])
         expected = CompiledSql("a = $p0 AND b = $p1", params={"p0": 1, "p1": 2})
         assert result == expected
 
@@ -630,11 +648,11 @@ class TestCompileParts:
         result = compile_parts(
             [
                 "a = ",
-                Param(value=1, name="x"),  # → p0_x
+                param(1, "x"),  # → p0_x
                 " AND b = ",
-                Param(value=2, name="b", exact=True),  # → b (exact), but counter increments
+                param(2, "b", exact=True),  # → b (exact), but counter increments
                 " AND c = ",
-                Param(value=3, name="y"),  # → p2_y (not p1_y!)
+                param(3, "y"),  # → p2_y (not p1_y!)
             ]
         )
         expected = CompiledSql("a = $p0_x AND b = $b AND c = $p2_y", params={"p0_x": 1, "b": 2, "p2_y": 3})
@@ -651,7 +669,7 @@ class TestCompileParts:
         assert result == expected
 
     def test_param_with_none_value(self):
-        result = compile_parts(["SELECT ", Param(value=None, name="x")])
+        result = compile_parts(["SELECT ", param(None, "x")])
         expected = CompiledSql("SELECT $p0_x", params={"p0_x": None})
         assert result == expected
 
@@ -733,7 +751,7 @@ class TestIntoInterpolation:
         assert not isinstance(42, IntoInterpolation)
 
     def test_param_interpolation_satisfies(self):
-        pi = ParamInterpolation(Param(value=1))
+        pi = ParamInterpolation(param(1))
         assert isinstance(pi, IntoInterpolation)
 
 
@@ -799,17 +817,12 @@ class TestEndToEndCompile:
         assert result == CompiledSql("SELECT * FROM users", {})
 
     def test_param_in_list(self):
-        result = compile("SELECT * FROM users WHERE id = ", Param(value=5, name="id"))
+        result = compile("SELECT * FROM users WHERE id = ", param(5, "id"))
         expected = CompiledSql("SELECT * FROM users WHERE id = $p0_id", {"p0_id": 5})
         assert expected == result
 
     def test_multiple_params_in_list(self):
-        result = compile(
-            "SELECT * FROM users WHERE name = ",
-            Param(value="Alice", name="name"),
-            " AND age > ",
-            Param(value=18, name="age"),
-        )
+        result = compile("SELECT * FROM users WHERE name = ", param("Alice", "name"), " AND age > ", param(18, "age"))
         expected = CompiledSql(
             "SELECT * FROM users WHERE name = $p0_name AND age > $p1_age",
             {"p0_name": "Alice", "p1_age": 18},
@@ -939,8 +952,7 @@ class TestEdgeCases:
 
     def test_param_object_in_interpolation_preserves_name(self):
         """An explicit Param used in an interpolation should keep its name."""
-        p = Param(value=42, name="custom_name")
-        interp = FakeInterpolation(value=p, expression="p")
+        interp = FakeInterpolation(value=param(42, "custom_name"), expression="p")
         result = template("SELECT ", interp, "").compile()
         expected = CompiledSql("SELECT $custom_name", params={"custom_name": 42})
         assert result == expected
