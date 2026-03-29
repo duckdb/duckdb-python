@@ -80,7 +80,7 @@ def param(value: object, name: str | None = None, *, exact: bool = False) -> Par
     return Param(value=value, name=name, exact=exact)
 
 
-def template(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | object) -> SqlTemplate:
+def template(*parts: str | IntoInterpolation | Param | SupportsDuckdbTemplate | object) -> SqlTemplate:
     """Convert a sequence of things into a SqlTemplate.
 
     We go through the parts and convert it into a sequence of str and Interpolations,
@@ -146,7 +146,9 @@ def template(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | o
     >>> t.compile()
     CompiledSql(sql='SELECT * FROM users WHERE id = $p0_id', params={'p0_id': 123})
     """  # noqa: E501
-    expanded = _expand_part(part)
+    expanded = []
+    for part in parts:
+        expanded.extend(_expand_part(part))
     return SqlTemplate(*expanded)
 
 
@@ -290,10 +292,7 @@ def assert_param_name_legal(name: str) -> None:
 class SqlTemplate:
     """A sequence of strings and Interpolations."""
 
-    def __init__(
-        self,
-        *parts: str | IntoInterpolation,
-    ) -> None:
+    def __init__(self, *parts: str | IntoInterpolation) -> None:
         self.strings, self.interpolations = parse_parts(parts)
 
     def __iter__(self) -> Iterator[str | IntoInterpolation]:

@@ -779,7 +779,7 @@ class TestCompiledSql:
 class TestEndToEndCompile:
     def test_plain_sql(self):
         result = template("SELECT * FROM users").compile()
-        assert result == CompiledSql(sql="SELECT * FROM users", params={})
+        assert result == CompiledSql("SELECT * FROM users", {})
 
     def test_param_in_list(self):
         result = template(["SELECT * FROM users WHERE id = ", Param(value=5, name="id")]).compile()
