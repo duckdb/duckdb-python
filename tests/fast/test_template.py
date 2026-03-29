@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from sympy import comp
 
-from duckdb.experimental.spark.sql.functions import exp
 from duckdb.template import (
     CompiledSql,
     IntoInterpolation,
@@ -503,6 +501,7 @@ class TestResolve:
         t = SqlTemplate("SELECT ", interp)
         resolved = t.resolve()
         expected = CompiledSql(sql="SELECT 'hello'", params={})
+        assert resolved == expected
 
     def test_conversion_a_resolves_to_ascii(self):
         interp = FakeInterpolation(value=Cafe(), expression="x", conversion="a")
