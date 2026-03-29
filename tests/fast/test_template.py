@@ -745,6 +745,16 @@ class TestCompiledSql:
         assert c.sql == "SELECT $p0"
         assert c.params == {"p0": 42}
 
+    def test_empty_params(self):
+        c = CompiledSql(sql="SELECT 1", params={})
+        assert c.sql == "SELECT 1"
+        assert c.params == {}
+
+    def test_optional_params(self):
+        c = CompiledSql(sql="SELECT 1")
+        assert c.sql == "SELECT 1"
+        assert c.params == {}
+
     def test_frozen(self):
         c = CompiledSql(sql="SELECT 1", params={})
         with pytest.raises(AttributeError):
@@ -757,7 +767,8 @@ class TestCompiledSql:
 
     def test_repr(self):
         c = CompiledSql(sql="SELECT 1", params={})
-        assert "SELECT 1" in repr(c)
+        expected = "CompiledSql(sql='SELECT 1', params={})"
+        assert repr(c) == expected
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
