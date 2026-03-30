@@ -329,6 +329,7 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	auto type_module = py::class_<DuckDBPyType, shared_ptr<DuckDBPyType>>(m, "DuckDBPyType", py::module_local());
 
 	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object");
+	type_module.def("__duckdb_template__", &DuckDBPyType::ToString);
 	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", py::arg("other"),
 	                py::is_operator());
 	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", py::arg("other"),

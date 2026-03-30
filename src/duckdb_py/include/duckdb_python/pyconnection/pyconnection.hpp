@@ -363,6 +363,7 @@ private:
 	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
 	                               bool side_effects);
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
+	pair<string, py::object> ExtractCompiledSqlAndParams(const py::object &query, py::object params);
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
 	static PythonEnvironmentType environment;

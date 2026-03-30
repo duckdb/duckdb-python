@@ -314,6 +314,7 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 		Print the stringified version of the expression.
 	)";
 	expression.def("show", &DuckDBPyExpression::Print, docs);
+	expression.def("__duckdb_template__", &DuckDBPyExpression::ToString);
 
 	docs = R"(
 		Set the order by modifier to ASCENDING.
