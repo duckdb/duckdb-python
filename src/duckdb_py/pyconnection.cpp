@@ -483,6 +483,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
+	connection_module.def("subcursor", &DuckDBPyConnection::Subcursor,
+	                      "Create a cursor sharing the same connection and transaction");
 	connection_module.def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                                        "Get result set attributes, mainly column names");
 	connection_module.def_property_readonly("rowcount", &DuckDBPyConnection::GetRowcount, "Get result set row count");
@@ -623,7 +625,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 	{
 		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
-		unique_lock<mutex> lock(py_connection_lock);
+		unique_lock<mutex> lock(*py_connection_lock);
 
 		prep = connection.Prepare(std::move(statement));
 		if (prep->HasError()) {
@@ -644,7 +646,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &p
 	{
 		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
-		unique_lock<std::mutex> lock(py_connection_lock);
+		unique_lock<std::mutex> lock(*py_connection_lock);
 
 		auto pending_query = prep.PendingQuery(named_values);
 		if (pending_query->HasError()) {
@@ -671,7 +673,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndExecuteInternal(unique_ptr
 	{
 		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
-		unique_lock<std::mutex> lock(py_connection_lock);
+		unique_lock<std::mutex> lock(*py_connection_lock);
 
 		auto pending_query = con.GetConnection().PendingQuery(std::move(statement), named_values, true);
 
@@ -1855,11 +1857,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const 
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Begin() {
+	if (is_subcursor) {
+		throw InvalidInputException("Cannot manage transactions from a subcursor — use the parent connection");
+	}
 	ExecuteFromString("BEGIN TRANSACTION");
 	return shared_from_this();
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
+	if (is_subcursor) {
+		throw InvalidInputException("Cannot manage transactions from a subcursor — use the parent connection");
+	}
 	auto &connection = con.GetConnection();
 	if (connection.context->transaction.IsAutoCommit()) {
 		return shared_from_this();
@@ -1869,6 +1877,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Commit() {
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Rollback() {
+	if (is_subcursor) {
+		throw InvalidInputException("Cannot manage transactions from a subcursor — use the parent connection");
+	}
 	ExecuteFromString("ROLLBACK");
 	return shared_from_this();
 }
@@ -2020,6 +2031,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = make_shared_ptr<DuckDBPyConnection>();
 	res->con.SetDatabase(con);
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
+	cursors.AddCursor(res);
+	return res;
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Subcursor() {
+	auto res = make_shared_ptr<DuckDBPyConnection>();
+	res->con.SetDatabase(con);
+	res->con.ShareConnection(con.GetSharedConnection());
+	res->is_subcursor = true;
+	// Share the parent's py_connection_lock so concurrent subcursor access is serialized
+	res->py_connection_lock = py_connection_lock;
 	cursors.AddCursor(res);
 	return res;
 }
@@ -2185,7 +2207,7 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	{
 		D_ASSERT(py::gil_check());
 		py::gil_scoped_release release;
-		unique_lock<mutex> lock(res->py_connection_lock);
+		unique_lock<mutex> lock(*res->py_connection_lock);
 		auto database =
 		    instance_cache.GetOrCreateInstance(database_path, config, cache_instance, InstantiateNewInstance);
 		res->con.SetDatabase(std::move(database));
