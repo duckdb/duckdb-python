@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import Iterable, Sized
-from typing import TYPE_CHECKING, Any, NoReturn, Union
+from functools import reduce
+from typing import TYPE_CHECKING, Any, List, NoReturn, Optional, Union
 
 import duckdb
 
@@ -12,13 +13,13 @@ if TYPE_CHECKING:
 
 from ..conf import SparkConf
 from ..context import SparkContext
-from ..errors import PySparkTypeError
+from ..errors import PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
 from .conf import RuntimeConfig
 from .dataframe import DataFrame
 from .readwriter import DataFrameReader
 from .streaming import DataStreamReader
-from .types import StructType
+from .types import StructType, _has_nulltype, _infer_schema, _merge_type
 from .udf import UDFRegistration
 
 # In spark:
@@ -38,7 +39,11 @@ def _combine_data_and_schema(data: Iterable[Any], schema: StructType) -> list[du
 
     new_data = []
     for row in data:
-        new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row, [y.dataType for y in schema], strict=False)]
+        if isinstance(row, dict):
+            row_values = list(map(row.get, schema.fieldNames()))
+        else:
+            row_values = list(row)
+        new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row_values, [y.dataType for y in schema], strict=False)]
         new_data.append(new_row)
     return new_data
 
@@ -150,6 +155,9 @@ class SparkSession:  # noqa: D101
                 types, names = schema.extract_types_and_names()
             else:
                 names = schema
+        elif isinstance(data, list) and data:
+            schema = self._inferSchemaFromList(data)
+            types, names = schema.extract_types_and_names()
 
         try:
             import pandas
@@ -187,6 +195,53 @@ class SparkSession:  # noqa: D101
         if names:
             df = df.toDF(*names)
         return df
+
+    def _inferSchemaFromList(
+        self, data: Iterable[Any], names: Optional[List[str]] = None
+    ) -> StructType:
+        """Infer schema from list of Row, dict, or tuple.
+
+        Parameters
+        ----------
+        data : iterable
+            list of Row, dict, or tuple
+        names : list, optional
+            list of column names
+
+        Returns
+        -------
+        :class:`duckdb.experimental.spark.sql.types.StructType`
+        """
+        if not data:
+            raise PySparkValueError(
+                error_class="CANNOT_INFER_EMPTY_SCHEMA",
+                message_parameters={},
+            )
+
+        # TODO: These should be configurable
+        infer_dict_as_struct = False
+        infer_array_from_first_element = False
+        prefer_timestamp_ntz = False
+
+        schema = reduce(
+            _merge_type,
+            (
+                _infer_schema(
+                    row,
+                    names,
+                    infer_dict_as_struct=infer_dict_as_struct,
+                    infer_array_from_first_element=infer_array_from_first_element,
+                    prefer_timestamp_ntz=prefer_timestamp_ntz,
+                )
+                for row in data
+            ),
+        )
+        if _has_nulltype(schema):
+            raise PySparkValueError(
+                error_class="CANNOT_DETERMINE_TYPE",
+                message_parameters={},
+            )
+        return schema
 
     def newSession(self) -> "SparkSession":  # noqa: D102
         return SparkSession(self._context)
