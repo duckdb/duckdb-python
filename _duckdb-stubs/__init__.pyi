@@ -13,7 +13,7 @@ if typing.TYPE_CHECKING:
     import pandas
     import pyarrow.lib
     from collections.abc import Callable, Iterable, Sequence, Mapping
-    from duckdb import sqltypes, func
+    from duckdb import sqltypes, func, template
     from builtins import list as lst  # needed to avoid mypy error on DuckDBPyRelation.list method shadowing
 
     # the field_ids argument to to_parquet and write_parquet has a recursive structure
@@ -241,8 +241,12 @@ class DuckDBPyConnection:
     def dtype(self, type_str: str) -> sqltypes.DuckDBPyType: ...
     def duplicate(self) -> DuckDBPyConnection: ...
     def enum_type(self, name: str, type: sqltypes.DuckDBPyType, values: lst[typing.Any]) -> sqltypes.DuckDBPyType: ...
-    def execute(self, query: Statement | str, parameters: object = None) -> DuckDBPyConnection: ...
-    def executemany(self, query: Statement | str, parameters: object = None) -> DuckDBPyConnection: ...
+    def execute(
+        self, query: Statement | str | template.SqlTemplate | template.CompiledSql, parameters: object = None
+    ) -> DuckDBPyConnection: ...
+    def executemany(
+        self, query: Statement | str | template.SqlTemplate | template.CompiledSql, parameters: object = None
+    ) -> DuckDBPyConnection: ...
     def extract_statements(self, query: str) -> lst[Statement]: ...
     def fetch_arrow_table(self, rows_per_batch: typing.SupportsInt = 1000000) -> pyarrow.lib.Table:
         """Deprecated: use to_arrow_table() instead."""
@@ -331,7 +335,9 @@ class DuckDBPyConnection:
         union_by_name: bool = False,
         compression: str | None = None,
     ) -> DuckDBPyRelation: ...
-    def from_query(self, query: str, *, alias: str = "", params: object = None) -> DuckDBPyRelation: ...
+    def from_query(
+        self, query: str | template.SqlTemplate | template.CompiledSql, *, alias: str = "", params: object = None
+    ) -> DuckDBPyRelation: ...
     def get_table_names(self, query: str, *, qualified: bool = False) -> set[str]: ...
     def install_extension(
         self,
@@ -360,7 +366,9 @@ class DuckDBPyConnection:
     def pl(
         self, rows_per_batch: typing.SupportsInt = 1000000, *, lazy: bool = False
     ) -> polars.DataFrame | polars.LazyFrame: ...
-    def query(self, query: str, *, alias: str = "", params: object = None) -> DuckDBPyRelation: ...
+    def query(
+        self, query: str | template.SqlTemplate | template.CompiledSql, *, alias: str = "", params: object = None
+    ) -> DuckDBPyRelation: ...
     def query_progress(self) -> float: ...
     def read_csv(
         self,
@@ -462,7 +470,13 @@ class DuckDBPyConnection:
     def row_type(
         self, fields: dict[str, sqltypes.DuckDBPyType] | lst[sqltypes.DuckDBPyType]
     ) -> sqltypes.DuckDBPyType: ...
-    def sql(self, query: Statement | str, *, alias: str = "", params: object = None) -> DuckDBPyRelation: ...
+    def sql(
+        self,
+        query: Statement | str | template.SqlTemplate | template.CompiledSql,
+        *,
+        alias: str = "",
+        params: object = None,
+    ) -> DuckDBPyRelation: ...
     def sqltype(self, type_str: str) -> sqltypes.DuckDBPyType: ...
     def string_type(self, collation: str = "") -> sqltypes.DuckDBPyType: ...
     def struct_type(
@@ -1160,7 +1174,7 @@ def enum_type(
     connection: DuckDBPyConnection | None = None,
 ) -> sqltypes.DuckDBPyType: ...
 def execute(
-    query: Statement | str,
+    query: Statement | str | template.SqlTemplate | template.CompiledSql,
     parameters: object = None,
     *,
     connection: DuckDBPyConnection | None = None,
@@ -1282,7 +1296,7 @@ def from_parquet(
     connection: DuckDBPyConnection | None = None,
 ) -> DuckDBPyRelation: ...
 def from_query(
-    query: Statement | str,
+    query: Statement | str | template.SqlTemplate | template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
@@ -1350,7 +1364,7 @@ def project(
     df: pandas.DataFrame, *args: _ExpressionLike, groups: str = "", connection: DuckDBPyConnection | None = None
 ) -> DuckDBPyRelation: ...
 def query(
-    query: Statement | str,
+    query: Statement | str | template.SqlTemplate | template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
@@ -1474,7 +1488,7 @@ def row_type(
 def rowcount(*, connection: DuckDBPyConnection | None = None) -> int: ...
 def set_default_connection(connection: DuckDBPyConnection) -> None: ...
 def sql(
-    query: Statement | str,
+    query: Statement | str | template.SqlTemplate | template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
