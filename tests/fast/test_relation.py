@@ -172,15 +172,72 @@ class TestRelation:
 
     def test_create_operator(self):
         conn = duckdb.connect()
+
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel.create("test_df")
+
         assert conn.query("select * from test_df").execute().fetchall() == [
             (1, "one"),
             (2, "two"),
             (3, "three"),
             (4, "four"),
         ]
+
+    def test_create_replace_false(self):
+        conn = duckdb.connect()
+
+        test_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "j": ["a", "b", "c"]})
+        rel = conn.from_df(test_df)
+        rel.create("test_replace_tbl", replace=False)
+
+        assert conn.query("select * from test_replace_tbl").execute().fetchall() == [
+            (1, "a"),
+            (2, "b"),
+            (3, "c"),
+        ]
+
+    def test_create_replace_true_different_schema(self):
+        conn = duckdb.connect()
+
+        test_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "j": ["a", "b", "c"]})
+        rel = conn.from_df(test_df)
+        rel.create("test_replace_tbl", replace=True)
+
+        assert conn.query("select * from test_replace_tbl").execute().fetchall() == [
+            (1, "a"),
+            (2, "b"),
+            (3, "c"),
+        ]
+
+        test_df2 = pd.DataFrame.from_dict({"a": [10, 20], "b": ["x", "y"], "c": [1.5, 2.5]})
+        rel2 = conn.from_df(test_df2)
+        rel2.create("test_replace_tbl", replace=True)
+
+        assert conn.query("select * from test_replace_tbl").execute().fetchall() == [
+            (10, "x", 1.5),
+            (20, "y", 2.5),
+        ]
+
+    def test_create_replace_false_error_on_existing(self):
+        conn = duckdb.connect()
+
+        test_df = pd.DataFrame.from_dict({"i": [1], "j": ["a"]})
+        rel = conn.from_df(test_df)
+        rel.create("test_replace_existing_tbl")
+
+        with pytest.raises(duckdb.CatalogException):
+            rel.create("test_replace_existing_tbl", replace=False)
+
+    def test_create_replace_true_error_on_non_existent(self):
+        conn = duckdb.connect()
+
+        test_df = pd.DataFrame.from_dict({"i": [1], "j": ["a"]})
+        rel = conn.from_df(test_df)
+        conn.execute("drop table if exists test_replace_tbl2")
+        rel.create("test_replace_tbl2", replace=True)
+
+        assert conn.query("select * from test_replace_tbl2").execute().fetchall() == [(1, "a")]
 
     def test_create_view_operator(self):
         conn = duckdb.connect()

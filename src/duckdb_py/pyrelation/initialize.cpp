@@ -330,7 +330,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 
 	DefineMethod({"create", "to_table"}, relation_module, &DuckDBPyRelation::Create,
 	             "Creates a new table named table_name with the contents of the relation object",
-	             py::arg("table_name"));
+	             py::arg("table_name"), py::arg("replace") = false);
 
 	DefineMethod({"create_view", "to_view"}, relation_module, &DuckDBPyRelation::CreateView,
 	             "Creates a view named view_name that refers to the relation object", py::arg("view_name"),
