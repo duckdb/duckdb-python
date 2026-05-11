@@ -10,6 +10,9 @@
 #include "datetime.h" //From Python
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 
 namespace duckdb {
 
@@ -860,7 +863,7 @@ struct PythonVectorConversion {
 		auto &struct_children = StructVector::GetEntries(result);
 		for (idx_t i = 0; i < child_count; i++) {
 			auto child_ele = PyTuple_GetItem(ele.ptr(), i);
-			TransformPythonObject(child_ele, *struct_children[i], result_offset);
+			TransformPythonObject(child_ele, struct_children[i], result_offset);
 		}
 	}
 

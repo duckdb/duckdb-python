@@ -4,6 +4,8 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/struct_vector.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
@@ -136,7 +138,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 	if (out.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(out);
 		for (idx_t i = 0; i < children.size(); i++) {
-			SetInvalidRecursive(*children[i], index);
+			SetInvalidRecursive(children[i], index);
 		}
 	}
 }
