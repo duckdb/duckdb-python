@@ -131,6 +131,12 @@ public:
 	void SetConnection(unique_ptr<Connection> con) {
 		connection = std::move(con);
 	}
+	void ShareConnection(shared_ptr<Connection> con) {
+		connection = std::move(con);
+	}
+	shared_ptr<Connection> GetSharedConnection() {
+		return connection;
+	}
 	void SetResult(unique_ptr<DuckDBPyRelation> res) {
 		result = std::move(res);
 	}
@@ -142,7 +148,7 @@ private:
 
 private:
 	shared_ptr<DuckDB> database;
-	unique_ptr<Connection> connection;
+	shared_ptr<Connection> connection;
 	unique_ptr<DuckDBPyRelation> result;
 };
 
@@ -165,7 +171,11 @@ private:
 public:
 	ConnectionGuard con;
 	Cursors cursors;
-	std::mutex py_connection_lock;
+	std::mutex owned_py_connection_lock;
+	//! Points to owned_py_connection_lock by default, or to parent's lock for subcursors
+	std::mutex *py_connection_lock = &owned_py_connection_lock;
+	//! Whether this is a subcursor (shares connection with parent)
+	bool is_subcursor = false;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
@@ -302,6 +312,10 @@ public:
 
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
+
+	//! Create a subcursor that shares the same connection and transaction.
+	//! This enables interleaved streaming + DML within a single transaction.
+	shared_ptr<DuckDBPyConnection> Subcursor();
 
 	Optional<py::list> GetDescription();
 
