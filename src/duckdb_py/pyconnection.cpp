@@ -1,5 +1,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/types.hpp"
@@ -51,6 +53,17 @@ DBInstanceCache instance_cache;                                                 
 shared_ptr<PythonImportCache> DuckDBPyConnection::import_cache = nullptr;              // NOLINT: allow global
 PythonEnvironmentType DuckDBPyConnection::environment = PythonEnvironmentType::NORMAL; // NOLINT: allow global
 std::string DuckDBPyConnection::formatted_python_version = "";
+
+static shared_ptr<PythonRegisteredObjectState> GetPythonRegisteredObjectState(ClientContext &context) {
+	return context.registered_state->GetOrCreate<PythonRegisteredObjectState>(PythonRegisteredObjectState::Key);
+}
+
+static bool TemporaryObjectExists(ClientContext &context, const string &name) {
+	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	EntryLookupInfo lookup_info(CatalogType::TABLE_ENTRY, name);
+	auto entry = catalog.GetEntry(context, DEFAULT_SCHEMA, lookup_info, OnEntryNotFound::RETURN_NULL);
+	return entry != nullptr;
+}
 
 DuckDBPyConnection::~DuckDBPyConnection() {
 	try {
@@ -743,11 +756,16 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
                                                                         const py::object &python_object) {
 	auto &connection = con.GetConnection();
 	auto &client = *connection.context;
-	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
-	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object), name);
-	bool replace = registered_objects.count(name);
-	view_rel->CreateView(name, replace, true);
-	registered_objects.insert(name);
+	auto registered_state = GetPythonRegisteredObjectState(client);
+	if (!registered_state->Contains(name)) {
+		bool temp_object_exists = false;
+		client.RunFunctionInTransaction([&]() { temp_object_exists = TemporaryObjectExists(client, name); }, false);
+		if (temp_object_exists) {
+			throw CatalogException("View with name \"%s\" already exists!", name);
+		}
+	}
+	PythonReplacementScan::ReplacementObject(python_object, name, client);
+	registered_state->Register(name, python_object);
 	return shared_from_this();
 }
 
@@ -1821,15 +1839,12 @@ unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query, boo
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	auto &connection = con.GetConnection();
-	if (!registered_objects.count(name)) {
+	auto registered_state = GetPythonRegisteredObjectState(*connection.context);
+	if (!registered_state->Contains(name)) {
 		return shared_from_this();
 	}
 	D_ASSERT(py::gil_check());
-	py::gil_scoped_release release;
-	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
-	const auto quoted_name = SQLQuotedIdentifier::ToString(name);
-	connection.Query("DROP VIEW " + quoted_name + "");
-	registered_objects.erase(name);
+	registered_state->Unregister(name);
 	return shared_from_this();
 }
 

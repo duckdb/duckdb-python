@@ -16,6 +16,34 @@
 
 namespace duckdb {
 
+void PythonRegisteredObjectState::Register(const string &name, const py::object &object) {
+	py::gil_scoped_acquire gil;
+	lock_guard<mutex> guard(lock);
+	registered_objects[name] = PythonDependencyItem::Create(object);
+}
+
+void PythonRegisteredObjectState::Unregister(const string &name) {
+	py::gil_scoped_acquire gil;
+	lock_guard<mutex> guard(lock);
+	registered_objects.erase(name);
+}
+
+py::object PythonRegisteredObjectState::Get(const string &name) {
+	py::gil_scoped_acquire gil;
+	lock_guard<mutex> guard(lock);
+	auto entry = registered_objects.find(name);
+	if (entry == registered_objects.end()) {
+		return py::none();
+	}
+	auto &dependency = entry->second->Cast<PythonDependencyItem>();
+	return dependency.object->obj;
+}
+
+bool PythonRegisteredObjectState::Contains(const string &name) {
+	lock_guard<mutex> guard(lock);
+	return registered_objects.find(name) != registered_objects.end();
+}
+
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
                             PyArrowObjectType type, DatabaseInstance &db) {
@@ -236,6 +264,16 @@ static unique_ptr<TableRef> ReplaceInternal(ClientContext &context, const string
 
 	if (!enabled) {
 		return nullptr;
+	}
+
+	auto registered_objects =
+	    context.registered_state->Get<PythonRegisteredObjectState>(PythonRegisteredObjectState::Key);
+	if (registered_objects) {
+		py::gil_scoped_acquire acquire;
+		auto entry = registered_objects->Get(table_name);
+		if (!entry.is_none()) {
+			return PythonReplacementScan::TryReplacementObject(entry, table_name, context);
+		}
 	}
 
 	lookup_result = context.TryGetCurrentSetting("python_scan_all_frames", result);

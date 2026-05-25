@@ -1,5 +1,6 @@
 import gc
 import tempfile
+import weakref
 
 import pandas as pd
 import pytest
@@ -50,3 +51,20 @@ class TestPandasUnregister:
         with pytest.raises(duckdb.CatalogException, match="Table with name dataframe does not exist"):
             connection.execute("SELECT * FROM dataframe;").fetchdf()
         connection.close()
+
+    def test_pandas_unregister_releases_object_inside_transaction(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t(i BIGINT)")
+        duckdb_cursor.begin()
+
+        df = pd.DataFrame({"i": [1, 2, 3]})
+        ref = weakref.ref(df)
+
+        duckdb_cursor.register("dataframe", df)
+        duckdb_cursor.execute("INSERT INTO t SELECT * FROM dataframe")
+        duckdb_cursor.unregister("dataframe")
+
+        del df
+        gc.collect()
+
+        assert ref() is None
+        duckdb_cursor.rollback()
