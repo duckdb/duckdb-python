@@ -278,6 +278,10 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
 
 def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -> pl.LazyFrame:
     """A polars IO plugin for DuckDB."""
+    # Result-backed relations (from `con.execute(...)`) are one-shot iterators —
+    # they cannot replay project/filter/limit, so we stream raw batches and let
+    # polars apply the pushdown args itself. Memory stays bounded by batch_size.
+    can_pushdown = relation._has_relation
 
     def source_generator(
         with_columns: list[str] | None,
@@ -285,6 +289,10 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
         n_rows: int | None,
         batch_size: int | None,
     ) -> Iterator[pl.DataFrame]:
+        if not can_pushdown:
+            yield from _streaming_source_generator(relation, with_columns, predicate, n_rows, batch_size)
+            return
+
         duck_predicate = None
         relation_final = relation
         if with_columns is not None:
@@ -309,3 +317,32 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
                 yield pl.from_arrow(record_batch)  # type: ignore[misc,unused-ignore]
 
     return register_io_source(source_generator, schema=schema)
+
+
+def _streaming_source_generator(
+    relation: duckdb.DuckDBPyRelation,
+    with_columns: list[str] | None,
+    predicate: pl.Expr | None,
+    n_rows: int | None,
+    batch_size: int | None,
+) -> Iterator[pl.DataFrame]:
+    """Streaming generator for one-shot result-backed relations.
+
+    Applies polars-side projection/filter/limit per batch so memory stays bounded
+    by `batch_size`. No DuckDB-side pushdown — the underlying result is a single
+    Arrow C stream that cannot be filtered or projected after the fact.
+    """
+    reader = relation.to_arrow_reader() if batch_size is None else relation.to_arrow_reader(batch_size)
+    rows_left = n_rows
+    for record_batch in iter(reader.read_next_batch, None):
+        df: pl.DataFrame = pl.from_arrow(record_batch)  # type: ignore[assignment,misc,unused-ignore]
+        if with_columns is not None:
+            df = df.select(with_columns)
+        if predicate is not None:
+            df = df.filter(predicate)
+        if rows_left is not None:
+            if df.height >= rows_left:
+                yield df.head(rows_left)
+                return
+            rows_left -= df.height
+        yield df
