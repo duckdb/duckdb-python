@@ -123,6 +123,43 @@ class TestPolars:
         lazy_df = result.pl(lazy=True)
         assert lazy_df.collect().to_dicts() == [{"bla": 42}]
 
+    # Regression: https://github.com/duckdb/duckdb/issues/20094
+    # `con.execute(...).pl(lazy=True)` returns a result-backed relation. Any polars
+    # operation that triggered with_columns / predicate / n_rows pushdown used to
+    # raise `AttributeError: 'NoneType' object has no attribute 'fetch_arrow_reader'`
+    # because project/filter/limit return None on result-backed relations.
+    def test_polars_lazy_from_conn_select_len(self, duckdb_cursor):
+        con = duckdb.connect()
+        lf = con.execute("SELECT 1 AS id, 'banana' AS fruit").pl(lazy=True)
+        assert lf.select(pl.len()).collect().item() == 1
+
+    def test_polars_lazy_from_conn_select_subset(self, duckdb_cursor):
+        con = duckdb.connect()
+        lf = con.execute("SELECT 1 AS id, 'banana' AS fruit").pl(lazy=True)
+        assert lf.select("id").collect().to_dicts() == [{"id": 1}]
+
+    def test_polars_lazy_from_conn_filter(self, duckdb_cursor):
+        con = duckdb.connect()
+        lf = con.execute("SELECT * FROM (VALUES (1, 'a'), (2, 'b'), (3, 'c')) t(id, name)").pl(lazy=True)
+        assert lf.filter(pl.col("id") >= 2).collect().to_dicts() == [
+            {"id": 2, "name": "b"},
+            {"id": 3, "name": "c"},
+        ]
+
+    def test_polars_lazy_from_conn_limit(self, duckdb_cursor):
+        con = duckdb.connect()
+        lf = con.execute("SELECT * FROM range(100) t(i)").pl(lazy=True)
+        assert lf.head(3).collect().to_dicts() == [{"i": 0}, {"i": 1}, {"i": 2}]
+
+    def test_polars_lazy_from_conn_consumed_once(self, duckdb_cursor):
+        # Result-backed relations are one-shot. The second collect should raise a
+        # clear error instead of silently returning None or AttributeError.
+        con = duckdb.connect()
+        lf = con.execute("SELECT 1 AS bla").pl(lazy=True)
+        assert lf.collect().to_dicts() == [{"bla": 1}]
+        with pytest.raises((duckdb.InvalidInputException, pl.exceptions.ComputeError)):
+            lf.collect()
+
     def test_polars_lazy(self, duckdb_cursor):
         con = duckdb.connect()
         con.execute("Create table names (a varchar, b integer)")

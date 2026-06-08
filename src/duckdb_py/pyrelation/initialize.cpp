@@ -23,7 +23,11 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyRelation> &m) {
 	    .def_property_readonly("description", &DuckDBPyRelation::Description, "Return the description of the result")
 	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
 	    .def("__len__", &DuckDBPyRelation::Length, "Number of rows in relation.")
-	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.");
+	    .def_property_readonly("shape", &DuckDBPyRelation::Shape, " Tuple of # of rows, # of columns in relation.")
+	    .def_property_readonly("_has_relation", &DuckDBPyRelation::HasRelation,
+	                           "Internal: True if this object wraps a replayable Relation (supports "
+	                           "project/filter/limit). False for one-shot result-backed relations from "
+	                           "con.execute(...). Used by the polars IO plugin.");
 }
 
 static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {

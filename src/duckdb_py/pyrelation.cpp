@@ -1044,7 +1044,9 @@ PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size, bool lazy) {
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
 	if (!result) {
 		if (!rel) {
-			return py::none();
+			throw InvalidInputException(
+			    "This result-backed relation has already been consumed and cannot be read again. "
+			    "Result-backed relations (from `con.execute(...)`) are one-shot.");
 		}
 		ExecuteOrThrow(true);
 	}
@@ -1071,6 +1073,10 @@ void DuckDBPyRelation::Close() {
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
 	return std::find_if(names.begin(), names.end(),
 	                    [&](const string &item) { return StringUtil::CIEquals(name, item); }) != names.end();
+}
+
+bool DuckDBPyRelation::HasRelation() const {
+	return rel != nullptr;
 }
 
 void DuckDBPyRelation::SetConnectionOwner(py::object owner) {

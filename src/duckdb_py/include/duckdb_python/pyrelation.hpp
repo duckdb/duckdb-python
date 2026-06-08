@@ -254,6 +254,10 @@ public:
 
 	static bool IsRelation(const py::object &object);
 
+	//! True if this object wraps a replayable Relation (supports project/filter/limit).
+	//! False for result-backed relations produced by `con.execute(...)`, which are one-shot.
+	bool HasRelation() const;
+
 	bool CanBeRegisteredBy(Connection &con);
 	bool CanBeRegisteredBy(ClientContext &context);
 	bool CanBeRegisteredBy(shared_ptr<ClientContext> &context);
