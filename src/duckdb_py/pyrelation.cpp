@@ -1,5 +1,6 @@
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pyresult.hpp"
@@ -1651,10 +1652,11 @@ void DuckDBPyRelation::Insert(const py::object &params) const {
 	rel->Insert(values);
 }
 
-void DuckDBPyRelation::Create(const string &table) {
+void DuckDBPyRelation::Create(const string &table, bool replace) {
 	AssertRelation();
 	auto parsed_info = QualifiedName::Parse(table);
-	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name, false);
+	auto on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	auto create = rel->CreateRel(parsed_info.schema, parsed_info.name, false, on_conflict);
 	PyExecuteRelation(create);
 }
 

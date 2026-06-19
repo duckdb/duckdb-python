@@ -233,7 +233,7 @@ public:
 	void Insert(const py::object &params = py::list()) const;
 	void Update(const py::object &set, const py::object &where = py::none());
 
-	void Create(const string &table);
+	void Create(const string &table, bool replace = false);
 
 	py::str Type();
 	py::list Columns();
