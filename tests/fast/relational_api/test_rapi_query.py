@@ -38,6 +38,19 @@ class TestRAPIQuery:
         result = rel.execute()
         assert len(result.fetchall()) == amount
 
+    def test_query_chain_using_alias(self):
+        # Test query chaining using DuckDBPyRelation.alias
+        con = duckdb.connect()
+        con.execute("CREATE TABLE raw (yr INT, facility VARCHAR, val DOUBLE)")
+        con.execute("INSERT INTO raw VALUES (2020, 'F001', 1.0), (2021, 'F001', 2.0)")
+        data = con.sql("SELECT * FROM raw")
+        step1 = data.query(data.alias, f"SELECT *, val * 2 AS val_doubled FROM {data.alias}")
+        step2 = step1.query(step1.alias, f"SELECT *, val_doubled + 1 AS val_incremented FROM {step1.alias}")
+        assert step2.fetchall() == [
+            (2020, "F001", 1.0, 2.0, 3.0),
+            (2021, "F001", 2.0, 4.0, 5.0),
+        ]
+
     @pytest.mark.parametrize("input", [[5, 4, 3], [], [1000]])
     def test_query_table(self, tbl_table, input):
         con = duckdb.default_connection()
