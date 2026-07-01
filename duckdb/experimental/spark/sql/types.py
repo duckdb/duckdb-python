@@ -49,7 +49,6 @@ __all__ = [
     "TimestampMillisecondNTZType",
     "TimestampNTZType",
     "TimestampNanosecondNTZType",
-    "TimestampNanosecondType",
     "TimestampSecondNTZType",
     "TimestampType",
     "UUIDType",
@@ -238,26 +237,6 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
         if ts is not None:
             # using int to avoid precision loss in float
             return datetime.datetime.fromtimestamp(ts // 1000000).replace(microsecond=ts % 1000000)
-
-
-class TimestampNanosecondType(AtomicType, metaclass=DataTypeSingleton):
-    """Timestamp (datetime.datetime) data type with timezone information with nanosecond precision."""
-
-    def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMPTZ_NS"))
-
-    def needConversion(self) -> bool:  # noqa: D102
-        return True
-
-    @classmethod
-    def typeName(cls) -> str:  # noqa: D102
-        return "timestamptz_ns"
-
-    def toInternal(self, dt: datetime.datetime) -> int:  # noqa: D102
-        raise ContributionsAcceptedError
-
-    def fromInternal(self, ts: int) -> datetime.datetime:  # noqa: D102
-        raise ContributionsAcceptedError
 
 
 class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):

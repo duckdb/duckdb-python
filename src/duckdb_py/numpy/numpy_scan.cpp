@@ -4,8 +4,6 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector/struct_vector.hpp"
-#include "duckdb/common/vector/map_vector.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
@@ -14,16 +12,15 @@
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
-#include "duckdb_python/numpy/numpy_array.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
 namespace duckdb {
 
 template <class T>
-void ScanNumpyColumn(NumpyArray &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
-	auto src_ptr = (T *)numpy_col.Data();
+void ScanNumpyColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
+	auto src_ptr = (T *)numpy_col.data();
 	if (stride == sizeof(T)) {
-		FlatVector::SetData(out, data_ptr_cast(src_ptr + offset), count_t(count));
+		FlatVector::SetData(out, data_ptr_cast(src_ptr + offset));
 	} else {
 		auto tgt_ptr = (T *)FlatVector::GetData(out);
 		for (idx_t i = 0; i < count; i++) {
@@ -33,10 +30,10 @@ void ScanNumpyColumn(NumpyArray &numpy_col, idx_t stride, idx_t offset, Vector &
 }
 
 template <class T, class V>
-void ScanNumpyCategoryTemplated(NumpyArray &column, idx_t offset, Vector &out, idx_t count) {
-	auto src_ptr = (T *)column.Data();
+void ScanNumpyCategoryTemplated(py::array &column, idx_t offset, Vector &out, idx_t count) {
+	auto src_ptr = (T *)column.data();
 	auto tgt_ptr = (V *)FlatVector::GetData(out);
-	auto &tgt_mask = FlatVector::ValidityMutable(out);
+	auto &tgt_mask = FlatVector::Validity(out);
 	for (idx_t i = 0; i < count; i++) {
 		if (src_ptr[i + offset] == -1) {
 			// Null value
@@ -48,7 +45,7 @@ void ScanNumpyCategoryTemplated(NumpyArray &column, idx_t offset, Vector &out, i
 }
 
 template <class T>
-void ScanNumpyCategory(NumpyArray &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
+void ScanNumpyCategory(py::array &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
 	if (src_type == "int8") {
 		ScanNumpyCategoryTemplated<int8_t, T>(column, offset, out, count);
 	} else if (src_type == "int16") {
@@ -64,7 +61,7 @@ void ScanNumpyCategory(NumpyArray &column, idx_t count, idx_t offset, Vector &ou
 
 static void ApplyMask(PandasColumnBindData &bind_data, ValidityMask &validity, idx_t count, idx_t offset) {
 	D_ASSERT(bind_data.mask);
-	auto mask = reinterpret_cast<const bool *>(bind_data.mask->numpy_array.Data());
+	auto mask = reinterpret_cast<const bool *>(bind_data.mask->numpy_array.data());
 	for (idx_t i = 0; i < count; i++) {
 		auto is_null = mask[offset + i];
 		if (is_null) {
@@ -79,7 +76,7 @@ void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	ScanNumpyColumn<T>(numpy_col.array, numpy_col.stride, offset, out, count);
 	if (bind_data.mask) {
-		auto &result_mask = FlatVector::ValidityMutable(out);
+		auto &result_mask = FlatVector::Validity(out);
 		ApplyMask(bind_data, result_mask, count, offset);
 	}
 }
@@ -87,26 +84,27 @@ void ScanNumpyMasked(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 template <class T>
 void ScanNumpyFpColumn(PandasColumnBindData &bind_data, const T *src_ptr, idx_t stride, idx_t count, idx_t offset,
                        Vector &out) {
+	auto &mask = FlatVector::Validity(out);
 	if (stride == sizeof(T)) {
-		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset), count_t(count)); // NOLINT
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset)); // NOLINT
 		// Turn NaN values into NULL
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 		for (idx_t i = 0; i < count; i++) {
 			if (Value::IsNan<T>(tgt_ptr[i])) {
-				FlatVector::ValidityMutable(out).SetInvalid(i);
+				mask.SetInvalid(i);
 			}
 		}
 	} else {
-		auto tgt_ptr = FlatVector::GetDataMutable<T>(out);
+		auto tgt_ptr = FlatVector::GetData<T>(out);
 		for (idx_t i = 0; i < count; i++) {
 			tgt_ptr[i] = src_ptr[stride / sizeof(T) * (i + offset)];
 			if (Value::IsNan<T>(tgt_ptr[i])) {
-				FlatVector::ValidityMutable(out).SetInvalid(i);
+				mask.SetInvalid(i);
 			}
 		}
 	}
 	if (bind_data.mask) {
-		auto &result_mask = FlatVector::ValidityMutable(out);
+		auto &result_mask = FlatVector::Validity(out);
 		ApplyMask(bind_data, result_mask, count, offset);
 	}
 }
@@ -133,26 +131,26 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 }
 
 static void SetInvalidRecursive(Vector &out, idx_t index) {
-	auto &validity = FlatVector::ValidityMutable(out);
+	auto &validity = FlatVector::Validity(out);
 	validity.SetInvalid(index);
 	if (out.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(out);
 		for (idx_t i = 0; i < children.size(); i++) {
-			SetInvalidRecursive(children[i], index);
+			SetInvalidRecursive(*children[i], index);
 		}
 	}
 }
 
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
-void ScanNumpyObject(optional_ptr<ClientContext> context, PyObject *object, idx_t offset, Vector &out) {
+void ScanNumpyObject(PyObject *object, idx_t offset, Vector &out) {
 	// handle None
 	if (object == Py_None) {
 		SetInvalidRecursive(out, offset);
 		return;
 	}
 
-	TransformPythonObject(context, object, out, offset);
+	TransformPythonObject(object, out, offset);
 }
 
 static void VerifyMapConstraints(Vector &vec, idx_t count) {
@@ -180,8 +178,7 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void NumpyScan::ScanObjectColumn(ClientContext &context, PyObject **col, idx_t stride, idx_t count, idx_t offset,
-                                 Vector &out) {
+void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
 	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
@@ -189,12 +186,12 @@ void NumpyScan::ScanObjectColumn(ClientContext &context, PyObject **col, idx_t s
 	if (stride == sizeof(PyObject *)) {
 		auto src_ptr = col + offset;
 		for (idx_t i = 0; i < count; i++) {
-			ScanNumpyObject(context, src_ptr[i], i, out);
+			ScanNumpyObject(src_ptr[i], i, out);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			auto src_ptr = col[stride / sizeof(PyObject *) * (i + offset)];
-			ScanNumpyObject(context, src_ptr, i, out);
+			ScanNumpyObject(src_ptr, i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -202,7 +199,7 @@ void NumpyScan::ScanObjectColumn(ClientContext &context, PyObject **col, idx_t s
 
 //! 'offset' is the offset within the column
 //! 'count' is the amount of values we will convert in this batch
-void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
@@ -237,19 +234,20 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 		ScanNumpyMasked<int64_t>(bind_data, count, offset, out);
 		break;
 	case NumpyNullableType::FLOAT_32:
-		ScanNumpyFpColumn<float>(bind_data, reinterpret_cast<const float *>(array.Data()), numpy_col.stride, count,
+		ScanNumpyFpColumn<float>(bind_data, reinterpret_cast<const float *>(array.data()), numpy_col.stride, count,
 		                         offset, out);
 		break;
 	case NumpyNullableType::FLOAT_64:
-		ScanNumpyFpColumn<double>(bind_data, reinterpret_cast<const double *>(array.Data()), numpy_col.stride, count,
+		ScanNumpyFpColumn<double>(bind_data, reinterpret_cast<const double *>(array.data()), numpy_col.stride, count,
 		                          offset, out);
 		break;
 	case NumpyNullableType::DATETIME_NS:
 	case NumpyNullableType::DATETIME_MS:
 	case NumpyNullableType::DATETIME_US:
 	case NumpyNullableType::DATETIME_S: {
-		auto src_ptr = reinterpret_cast<const int64_t *>(array.Data());
-		auto tgt_ptr = FlatVector::GetDataMutable<timestamp_t>(out);
+		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
+		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
+		auto &mask = FlatVector::Validity(out);
 
 		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
 		timestamp_convert_func convert_func;
@@ -290,13 +288,13 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 			auto source_idx = stride / sizeof(int64_t) * (row + offset);
 			if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
 				// pandas Not a Time (NaT)
-				FlatVector::ValidityMutable(out).SetInvalid(row);
+				mask.SetInvalid(row);
 				continue;
 			}
 
 			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
 			auto input = timestamp_t(src_ptr[source_idx]);
-			if (Value::IsFinite(input)) {
+			if (Timestamp::IsFinite(input)) {
 				tgt_ptr[row] = convert_func(src_ptr[source_idx]);
 			} else {
 				tgt_ptr[row] = input;
@@ -308,9 +306,9 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 	case NumpyNullableType::TIMEDELTA_US:
 	case NumpyNullableType::TIMEDELTA_MS:
 	case NumpyNullableType::TIMEDELTA_S: {
-		auto src_ptr = reinterpret_cast<const int64_t *>(array.Data());
-		auto tgt_ptr = FlatVector::GetDataMutable<interval_t>(out);
-		auto &mask = FlatVector::ValidityMutable(out);
+		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
+		auto tgt_ptr = FlatVector::GetData<interval_t>(out);
+		auto &mask = FlatVector::Validity(out);
 
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = stride / sizeof(int64_t) * (row + offset);
@@ -353,17 +351,17 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 	case NumpyNullableType::STRING:
 	case NumpyNullableType::OBJECT: {
 		// Get the source pointer of the numpy array
-		auto src_ptr = (PyObject **)array.Data(); // NOLINT
+		auto src_ptr = (PyObject **)array.data(); // NOLINT
 		const bool is_object_col = bind_data.numpy_type.type == NumpyNullableType::OBJECT;
 		if (is_object_col && out.GetType().id() != LogicalTypeId::VARCHAR) {
 			//! We have determined the underlying logical type of this object column
-			return NumpyScan::ScanObjectColumn(context, src_ptr, numpy_col.stride, count, offset, out);
+			return NumpyScan::ScanObjectColumn(src_ptr, numpy_col.stride, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector
-		auto tgt_ptr = FlatVector::GetDataMutable<string_t>(out);
-		auto &out_mask = FlatVector::ValidityMutable(out);
-		std::unique_ptr<PythonGILWrapper> gil;
+		auto tgt_ptr = FlatVector::GetData<string_t>(out);
+		auto &out_mask = FlatVector::Validity(out);
+		unique_ptr<PythonGILWrapper> gil;
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 
 		// Loop over every row of the arrays contents
@@ -400,7 +398,7 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 				}
 				if (!py::isinstance<py::str>(val)) {
 					if (!gil) {
-						gil = std::make_unique<PythonGILWrapper>();
+						gil = make_uniq<PythonGILWrapper>();
 					}
 					bind_data.object_str_val.Push(std::move(py::str(val)));
 					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.LastAddedObject().ptr());

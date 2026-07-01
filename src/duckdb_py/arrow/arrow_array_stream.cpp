@@ -43,7 +43,7 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 	auto &filter_to_col = parameters.projected_columns.filter_to_col;
 	py::list projection_list = py::cast(column_list);
 
-	bool has_filter = filters && filters->HasFilters();
+	bool has_filter = filters && !filters->filters.empty();
 	py::dict kwargs;
 	if (!column_list.empty()) {
 		kwargs["columns"] = projection_list;
@@ -73,20 +73,18 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		auto filters = parameters.filters;
 		bool filters_pushed = false;
 
-		// Translate DuckDB filters to Polars expressions and push into the lazy plan.
-		// The walker only fails (throws / returns py::none()) for filters that are not
-		// required for correctness — optional/runtime wrappers it skips, or shapes the
-		// optimizer keeps above the scan. A throw here would mean the optimizer fully
-		// pushed something we can't translate (a correctness bug), so we let it surface
-		// rather than silently returning unfiltered rows — the arrow scan does not
-		// re-apply pushed filters. Mirrors the pyarrow ProduceScanner path.
-		if (filters && filters->HasFilters()) {
-			auto filter_expr = PolarsFilterPushdown::TransformFilter(
-			    *filters, parameters.projected_columns.projection_map, parameters.projected_columns.filter_to_col,
-			    factory->client_properties);
-			if (!filter_expr.is(py::none())) {
-				lf = lf.attr("filter")(filter_expr);
-				filters_pushed = true;
+		// Translate DuckDB filters to Polars expressions and push into the lazy plan
+		if (filters && !filters->filters.empty()) {
+			try {
+				auto filter_expr = PolarsFilterPushdown::TransformFilter(
+				    *filters, parameters.projected_columns.projection_map, parameters.projected_columns.filter_to_col,
+				    factory->client_properties);
+				if (!filter_expr.is(py::none())) {
+					lf = lf.attr("filter")(filter_expr);
+					filters_pushed = true;
+				}
+			} catch (...) {
+				// Fallback: DuckDB handles filtering post-scan
 			}
 		}
 

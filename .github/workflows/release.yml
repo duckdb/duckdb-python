@@ -39,6 +39,7 @@ defaults:
 jobs:
   build_sdist:
     name: Build an sdist and determine versions
+    if: ${{ github.ref != 'refs/heads/main' }}
     uses: ./.github/workflows/packaging_sdist.yml
     with:
       testsuite: all

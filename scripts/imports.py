@@ -111,8 +111,6 @@ polars.DataFrame
 polars.LazyFrame
 polars.col
 polars.lit
-polars.Series
-polars.Decimal
 
 import duckdb
 import duckdb.filesystem

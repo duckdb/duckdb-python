@@ -33,11 +33,12 @@ def list_test_cases():
             )
             ]
         }),
-        # An untyped NULL list now has child type SQLNULL (previously it defaulted to INTEGER), so it
-        # converts to an object array of None rather than a masked integer array.
         ("SELECT list_value(NULL,NULL,NULL) as a", {
             'a': [
-                np.array([None, None, None], dtype=object)
+                np.ma.array(
+                    [0, 0, 0],
+                mask=[1, 1, 1],
+            )
             ]
         }),
         ("SELECT list_value() as a", {

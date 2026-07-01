@@ -47,7 +47,7 @@ void InitializeStaticMethods(py::module_ &m) {
 	m.def("SQLExpression", &DuckDBPyExpression::SQLExpression, docs, py::arg("expression"));
 }
 
-static void InitializeDunderMethods(py::class_<DuckDBPyExpression, std::shared_ptr<DuckDBPyExpression>> &m) {
+static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
 	const char *docs;
 
 	docs = R"(
@@ -287,13 +287,13 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, std::shared_p
 	    py::is_operator());
 }
 
-static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, std::shared_ptr<DuckDBPyExpression>> &m) {
+static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
 	m.def(py::init<>([](const string &name) {
 		auto names = py::make_tuple(py::str(name));
 		return DuckDBPyExpression::ColumnExpression(names);
 	}));
 	m.def(py::init<>([](const py::object &obj) {
-		auto val = TransformPythonValue(nullptr, obj);
+		auto val = TransformPythonValue(obj);
 		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
 	}));
 	py::implicitly_convertible<py::str, DuckDBPyExpression>();
@@ -301,7 +301,8 @@ static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, std::sha
 }
 
 void DuckDBPyExpression::Initialize(py::module_ &m) {
-	auto expression = py::class_<DuckDBPyExpression, std::shared_ptr<DuckDBPyExpression>>(m, "Expression");
+	auto expression =
+	    py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>>(m, "Expression", py::module_local());
 
 	InitializeStaticMethods(m);
 	InitializeDunderMethods(expression);

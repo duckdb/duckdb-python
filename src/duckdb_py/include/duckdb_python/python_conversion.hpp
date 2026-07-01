@@ -47,9 +47,8 @@ PythonObjectType GetPythonObjectType(py::handle &ele);
 
 LogicalType SniffPythonIntegerType(py::handle ele);
 bool DictionaryHasMapFormat(const PyDictionary &dict);
-void TransformPythonObject(optional_ptr<ClientContext> context, py::handle ele, Vector &vector, idx_t result_offset,
+void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset, bool nan_as_null = true);
+Value TransformPythonValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN,
                            bool nan_as_null = true);
-Value TransformPythonValue(optional_ptr<ClientContext> context, py::handle ele,
-                           const LogicalType &target_type = LogicalType::UNKNOWN, bool nan_as_null = true);
 
 } // namespace duckdb

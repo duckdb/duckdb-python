@@ -532,9 +532,7 @@
             "polars.DataFrame",
             "polars.LazyFrame",
             "polars.col",
-            "polars.lit",
-            "polars.Series",
-            "polars.Decimal"
+            "polars.lit"
         ],
         "required": false
     },
@@ -823,18 +821,6 @@
         "type": "attribute",
         "full_path": "polars.lit",
         "name": "lit",
-        "children": []
-    },
-    "polars.Series": {
-        "type": "attribute",
-        "full_path": "polars.Series",
-        "name": "Series",
-        "children": []
-    },
-    "polars.Decimal": {
-        "type": "attribute",
-        "full_path": "polars.Decimal",
-        "name": "Decimal",
         "children": []
     }
 }

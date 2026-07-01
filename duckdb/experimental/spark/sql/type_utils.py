@@ -19,7 +19,6 @@ from .types import (
     IntegerType,
     LongType,
     MapType,
-    NullType,
     ShortType,
     StringType,
     StructField,
@@ -28,7 +27,6 @@ from .types import (
     TimeNTZType,
     TimestampMillisecondNTZType,
     TimestampNanosecondNTZType,
-    TimestampNanosecondType,
     TimestampNTZType,
     TimestampSecondNTZType,
     TimestampType,
@@ -43,7 +41,6 @@ from .types import (
 )
 
 _sqltype_to_spark_class = {
-    "null": NullType,
     "boolean": BooleanType,
     "utinyint": UnsignedByteType,
     "tinyint": ByteType,
@@ -65,10 +62,9 @@ _sqltype_to_spark_class = {
     "time with time zone": TimeType,
     "timestamp": TimestampNTZType,
     "timestamp with time zone": TimestampType,
-    "timestamp_ms": TimestampMillisecondNTZType,
-    "timestamp_ns": TimestampNanosecondNTZType,
+    "timestamp_ms": TimestampNanosecondNTZType,
+    "timestamp_ns": TimestampMillisecondNTZType,
     "timestamp_s": TimestampSecondNTZType,
-    "timestamptz_ns": TimestampNanosecondType,
     "interval": DayTimeIntervalType,
     "list": ArrayType,
     "struct": StructType,

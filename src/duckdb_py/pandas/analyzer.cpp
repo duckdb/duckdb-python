@@ -1,7 +1,10 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
@@ -41,7 +44,7 @@ static bool SameTypeRealm(const LogicalType &a, const LogicalType &b) {
 	return true;
 }
 
-static bool UpgradeType(ClientContext &context, LogicalType &left, const LogicalType &right);
+static bool UpgradeType(LogicalType &left, const LogicalType &right);
 
 static bool CheckTypeCompatibility(const LogicalType &left, const LogicalType &right) {
 	if (!SameTypeRealm(left, right)) {
@@ -69,12 +72,13 @@ static bool IsStructColumnValid(const LogicalType &left, const LogicalType &righ
 		return false;
 	}
 	//! Compare keys of struct case-insensitively
+	auto compare = CaseInsensitiveStringEquality();
 	for (idx_t i = 0; i < left_children.size(); i++) {
 		auto &left_child = left_children[i];
 		auto &right_child = right_children[i];
 
 		// keys in left and right don't match
-		if (left_child.first != right_child.first) {
+		if (!compare(left_child.first, right_child.first)) {
 			return false;
 		}
 		// Types are not compatible with each other
@@ -85,25 +89,24 @@ static bool IsStructColumnValid(const LogicalType &left, const LogicalType &righ
 	return true;
 }
 
-static bool CombineStructTypes(ClientContext &context, LogicalType &result, const LogicalType &input) {
+static bool CombineStructTypes(LogicalType &result, const LogicalType &input) {
 	D_ASSERT(input.id() == LogicalTypeId::STRUCT);
 	auto &children = StructType::GetChildTypes(input);
 	for (auto &type : children) {
-		if (!UpgradeType(context, result, type.second)) {
+		if (!UpgradeType(result, type.second)) {
 			return false;
 		}
 	}
 	return true;
 }
 
-static bool SatisfiesMapConstraints(ClientContext &context, const LogicalType &left, const LogicalType &right,
-                                    LogicalType &map_value_type) {
+static bool SatisfiesMapConstraints(const LogicalType &left, const LogicalType &right, LogicalType &map_value_type) {
 	D_ASSERT(left.id() == LogicalTypeId::STRUCT && left.id() == right.id());
 
-	if (!CombineStructTypes(context, map_value_type, left)) {
+	if (!CombineStructTypes(map_value_type, left)) {
 		return false;
 	}
-	if (!CombineStructTypes(context, map_value_type, right)) {
+	if (!CombineStructTypes(map_value_type, right)) {
 		return false;
 	}
 	return true;
@@ -116,7 +119,7 @@ static LogicalType ConvertStructToMap(LogicalType &map_value_type) {
 
 // This is similar to ForceMaxLogicalType but we have custom rules around combining STRUCT types
 // And because of that we have to avoid ForceMaxLogicalType for every nested type
-static bool UpgradeType(ClientContext &context, LogicalType &left, const LogicalType &right) {
+static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	if (left.id() == LogicalTypeId::SQLNULL) {
 		// Early out for upgrading null
 		left = right;
@@ -135,10 +138,10 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 			return false;
 		}
 		LogicalType child_type = LogicalType::SQLNULL;
-		if (!UpgradeType(context, child_type, ListType::GetChildType(left))) {
+		if (!UpgradeType(child_type, ListType::GetChildType(left))) {
 			return false;
 		}
-		if (!UpgradeType(context, child_type, ListType::GetChildType(right))) {
+		if (!UpgradeType(child_type, ListType::GetChildType(right))) {
 			return false;
 		}
 		left = LogicalType::LIST(child_type);
@@ -160,7 +163,7 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 					auto new_child = StructType::GetChildType(left, i);
 
 					auto child_name = StructType::GetChildName(left, i);
-					if (!UpgradeType(context, new_child, right_child)) {
+					if (!UpgradeType(new_child, right_child)) {
 						return false;
 					}
 					children.push_back(std::make_pair(child_name, new_child));
@@ -168,7 +171,7 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 				left = LogicalType::STRUCT(std::move(children));
 			} else {
 				LogicalType value_type = LogicalType::SQLNULL;
-				if (SatisfiesMapConstraints(context, left, right, value_type)) {
+				if (SatisfiesMapConstraints(left, right, value_type)) {
 					// Combine all the child types together, becoming the value_type for the resulting MAP
 					left = ConvertStructToMap(value_type);
 				} else {
@@ -179,7 +182,7 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 			// Left: STRUCT, Right: MAP
 			// Combine all the child types of the STRUCT into the value type of the MAP
 			auto value_type = MapType::ValueType(right);
-			if (!CombineStructTypes(context, value_type, left)) {
+			if (!CombineStructTypes(value_type, left)) {
 				return false;
 			}
 			left = LogicalType::MAP(LogicalType::VARCHAR, value_type);
@@ -195,25 +198,25 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 		if (right.id() == LogicalTypeId::MAP) {
 			// Key Type
 			LogicalType key_type = LogicalType::SQLNULL;
-			if (!UpgradeType(context, key_type, MapType::KeyType(left))) {
+			if (!UpgradeType(key_type, MapType::KeyType(left))) {
 				return false;
 			}
-			if (!UpgradeType(context, key_type, MapType::KeyType(right))) {
+			if (!UpgradeType(key_type, MapType::KeyType(right))) {
 				return false;
 			}
 
 			// Value Type
 			LogicalType value_type = LogicalType::SQLNULL;
-			if (!UpgradeType(context, value_type, MapType::ValueType(left))) {
+			if (!UpgradeType(value_type, MapType::ValueType(left))) {
 				return false;
 			}
-			if (!UpgradeType(context, value_type, MapType::ValueType(right))) {
+			if (!UpgradeType(value_type, MapType::ValueType(right))) {
 				return false;
 			}
 			left = LogicalType::MAP(key_type, value_type);
 		} else if (right.id() == LogicalTypeId::STRUCT) {
 			auto value_type = MapType::ValueType(left);
-			if (!CombineStructTypes(context, value_type, right)) {
+			if (!CombineStructTypes(value_type, right)) {
 				return false;
 			}
 			left = LogicalType::MAP(LogicalType::VARCHAR, value_type);
@@ -226,7 +229,7 @@ static bool UpgradeType(ClientContext &context, LogicalType &left, const Logical
 		if (!CheckTypeCompatibility(left, right)) {
 			return false;
 		}
-		left = LogicalType::ForceMaxLogicalType(context, left, right);
+		left = LogicalType::ForceMaxLogicalType(left, right);
 		return true;
 	}
 	}
@@ -247,7 +250,7 @@ LogicalType PandasAnalyzer::GetListType(py::object &ele, bool &can_convert) {
 		if (!i) {
 			list_type = item_type;
 		} else {
-			if (!UpgradeType(context, list_type, item_type)) {
+			if (!UpgradeType(list_type, item_type)) {
 				can_convert = false;
 			}
 		}
@@ -270,7 +273,7 @@ static bool StructKeysAreEqual(idx_t row, const child_list_t<LogicalType> &refer
 	for (idx_t i = 0; i < reference.size(); i++) {
 		auto &ref = reference[i].first;
 		auto &comp = compare[i].first;
-		if (ref != comp) {
+		if (!duckdb::CaseInsensitiveStringEquality()(ref, comp)) {
 			return false;
 		}
 	}
@@ -338,7 +341,7 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 		auto dict_key = dict.keys.attr("__getitem__")(i);
 
 		//! Have to already transform here because the child_list needs a string as key
-		auto key = Identifier(py::str(dict_key));
+		auto key = string(py::str(dict_key));
 
 		auto dict_val = dict.values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);
@@ -480,7 +483,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, i
 		auto next_item_type = GetItemType(obj, can_convert);
 		types.push_back(next_item_type);
 
-		if (!can_convert || !UpgradeType(context, item_type, next_item_type)) {
+		if (!can_convert || !UpgradeType(item_type, next_item_type)) {
 			can_convert = false;
 			return next_item_type;
 		}

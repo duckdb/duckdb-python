@@ -10,7 +10,13 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/enums/stream_execution_result.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
@@ -220,7 +226,7 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 	}
 }
 
-std::unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool pandas) {
+unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool pandas) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -233,12 +239,12 @@ std::unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion
 	}
 
 	auto conversion =
-	    std::make_unique<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
+	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
 	return conversion;
 }
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
-                                            std::unique_ptr<NumpyResultConversion> conversion_p) {
+                                            unique_ptr<NumpyResultConversion> conversion_p) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
@@ -430,13 +436,7 @@ static unique_ptr<SelectStatement> MakeColumnDataScanStatement(unique_ptr<Column
 	// The binder rejects duplicate column names; callers restore the originals afterwards.
 	auto deduplicated_names = names;
 	QueryResult::DeduplicateColumns(deduplicated_names);
-	// Core's ColumnDataRef now takes case-insensitive Identifiers; promote the runtime names explicitly.
-	vector<Identifier> expected_names;
-	expected_names.reserve(deduplicated_names.size());
-	for (auto &name : deduplicated_names) {
-		expected_names.emplace_back(std::move(name));
-	}
-	auto table_ref = make_uniq<ColumnDataRef>(std::move(collection), std::move(expected_names));
+	auto table_ref = make_uniq<ColumnDataRef>(std::move(collection), std::move(deduplicated_names));
 	table_ref->alias = "materialized"; // binding asserts on an unset alias
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
