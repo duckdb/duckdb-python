@@ -21,7 +21,7 @@ public:
 	static bool check_(const py::handle &object);
 };
 
-class DuckDBPyType : public enable_shared_from_this<DuckDBPyType> {
+class DuckDBPyType : public std::enable_shared_from_this<DuckDBPyType> {
 public:
 	explicit DuckDBPyType(LogicalType type);
 
@@ -29,9 +29,9 @@ public:
 	static void Initialize(py::handle &m);
 
 public:
-	bool Equals(const shared_ptr<DuckDBPyType> &other) const;
+	bool Equals(const std::shared_ptr<DuckDBPyType> &other) const;
 	bool EqualsString(const string &type_str) const;
-	shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
+	std::shared_ptr<DuckDBPyType> GetAttribute(const string &name) const;
 	py::list Children() const;
 	string ToString() const;
 	const LogicalType &Type() const;

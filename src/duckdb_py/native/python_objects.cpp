@@ -4,7 +4,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/operator/add.hpp"
@@ -13,7 +12,7 @@
 
 #include "datetime.h" // Python datetime initialize #1
 
-#include <duckdb/common/types/variant_value.hpp>
+#include <duckdb/common/types/variant.hpp>
 #include <duckdb/function/scalar/variant_utils.hpp>
 
 namespace duckdb {
@@ -108,7 +107,6 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
 	} // LCOV_EXCL_STOP
 	}
-	return true;
 }
 // LCOV_EXCL_START
 static void ExponentNotRecognized() {
@@ -439,6 +437,7 @@ static bool KeyIsHashable(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::DATE:
@@ -463,6 +462,9 @@ static bool KeyIsHashable(const LogicalType &type) {
 	}
 	case LogicalTypeId::STRUCT:
 		return false;
+	case LogicalTypeId::SQLNULL:
+		// A SQLNULL key is always NULL, and Python's None is hashable.
+		return true;
 	default:
 		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
 	}
@@ -520,7 +522,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIMESTAMP_TZ: {
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
 
@@ -534,7 +537,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
-		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
+		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
 			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
@@ -557,7 +560,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			// Failed to convert, fall back to str
 			return py::str(val.ToString());
 		}
-		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
 			// We have to add the timezone info
 			auto tz_utc = import_cache.pytz.timezone()("UTC");
 			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
@@ -617,7 +620,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
-		if (!duckdb::Date::IsFinite(date)) {
+		if (!Value::IsFinite(date)) {
 			if (date == date_t::infinity()) {
 				return py::reinterpret_borrow<py::object>(import_cache.datetime.date.max());
 			}
@@ -707,9 +710,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		                                         py::arg("microseconds") = interval_value.micros);
 	}
 	case LogicalTypeId::VARIANT: {
-		Vector tmp(val);
+		Vector tmp(val, count_t(1));
 		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 		return FromValue(variant_val, variant_val.type(), client_properties);

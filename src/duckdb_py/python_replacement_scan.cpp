@@ -3,6 +3,7 @@
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
+#include "duckdb_python/numpy/numpy_array.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
@@ -166,13 +167,15 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		case NumpyObjectType::NDARRAY1D:
 			data["column0"] = entry;
 			break;
-		case NumpyObjectType::NDARRAY2D:
+		case NumpyObjectType::NDARRAY2D: {
 			idx = 0;
-			for (auto item : py::cast<py::array>(entry)) {
+			NumpyArray ndarray(entry);
+			for (auto item : ndarray.GetArray()) {
 				data[("column" + std::to_string(idx)).c_str()] = item;
 				idx++;
 			}
 			break;
+		}
 		case NumpyObjectType::LIST:
 			idx = 0;
 			for (auto item : py::cast<py::list>(entry)) {

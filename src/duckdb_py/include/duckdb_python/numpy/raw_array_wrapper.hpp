@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/numpy/numpy_array.hpp"
 #include "duckdb.hpp"
 
 namespace duckdb {
@@ -17,7 +18,7 @@ struct RawArrayWrapper {
 
 	explicit RawArrayWrapper(const LogicalType &type);
 
-	py::array array;
+	NumpyArray array;
 	data_ptr_t data;
 	LogicalType type;
 	idx_t type_width;

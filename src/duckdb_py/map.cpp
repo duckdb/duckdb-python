@@ -23,10 +23,10 @@ struct MapFunctionData : public TableFunctionData {
 	}
 	PyObject *function;
 	vector<LogicalType> in_types, out_types;
-	vector<string> in_names, out_names;
+	vector<Identifier> in_names, out_names;
 };
 
-static py::object FunctionCall(NumpyResultConversion &conversion, const vector<string> &names, PyObject *function) {
+static py::object FunctionCall(NumpyResultConversion &conversion, const vector<Identifier> &names, PyObject *function) {
 	py::dict in_numpy_dict;
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
@@ -71,8 +71,8 @@ static bool ContainsNullType(const vector<LogicalType> &types) {
 	return false;
 }
 
-static void OverrideNullType(vector<LogicalType> &return_types, const vector<string> &return_names,
-                             const vector<LogicalType> &original_types, const vector<string> &original_names) {
+static void OverrideNullType(vector<LogicalType> &return_types, const vector<Identifier> &return_names,
+                             const vector<LogicalType> &original_types, const vector<Identifier> &original_names) {
 	if (!ContainsNullType(return_types)) {
 		// Nothing to override, none of the returned types are NULL
 		return;
@@ -115,13 +115,15 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 	for (auto &item : schema) {
 		auto name = item.first;
 		auto type_p = item.second;
-		names.push_back(std::string(py::str(name)));
+		names.push_back(string(py::str(name)));
 		// TODO: replace with py::try_cast so we can catch the error and throw a better exception
-		auto type = py::cast<shared_ptr<DuckDBPyType>>(type_p);
+		auto type = py::cast<std::shared_ptr<DuckDBPyType>>(type_p);
 		types.push_back(type->Type());
 	}
 
-	function_data->out_names = names;
+	for (auto &name : names) {
+		function_data->out_names.push_back(Identifier(name));
+	}
 	function_data->out_types = types;
 
 	return std::move(function_data);
@@ -149,10 +151,15 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
 
-	// output types are potentially NULL, this happens for types that map to 'object' dtype
-	OverrideNullType(return_types, names, data.in_types, data.in_names);
+	// Build the Identifier names only after Pandas::Bind has populated 'names'.
+	vector<Identifier> name_identifiers(names.size());
+	std::transform(names.begin(), names.end(), name_identifiers.begin(),
+	               [](const string &name) { return Identifier(name); });
 
-	data.out_names = names;
+	// output types are potentially NULL, this happens for types that map to 'object' dtype
+	OverrideNullType(return_types, name_identifiers, data.in_types, data.in_names);
+
+	data.out_names = name_identifiers;
 	data.out_types = return_types;
 	return std::move(data_uptr);
 }
@@ -191,7 +198,10 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 		throw InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
 		                            TypeVectorToString(data.out_types), TypeVectorToString(pandas_return_types));
 	}
-	if (pandas_names != data.out_names) {
+	vector<Identifier> pandas_name_identifiers(pandas_names.size());
+	std::transform(pandas_names.begin(), pandas_names.end(), pandas_name_identifiers.begin(),
+	               [](const string &name) { return Identifier(name); });
+	if (pandas_name_identifiers != data.out_names) {
 		throw InvalidInputException("UDF column name mismatch, expected [%s], got [%s]",
 		                            StringUtil::Join(data.out_names, ", "), StringUtil::Join(pandas_names, ", "));
 	}
@@ -206,9 +216,9 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &bind_data = pandas_bind_data[col_idx];
-		PandasScanFunction::PandasBackendScanSwitch(bind_data, row_count, 0, output.data[col_idx]);
+		PandasScanFunction::PandasBackendScanSwitch(context.client, bind_data, row_count, 0, output.data[col_idx]);
 	}
-	output.SetCardinality(row_count);
+	output.SetChildCardinality(row_count);
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

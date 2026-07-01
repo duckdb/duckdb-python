@@ -37,17 +37,17 @@ class TestArrowTimestampsTimezone:
             with pytest.raises(duckdb.ConversionException, match="Could not convert"):
                 duckdb.from_arrow(arrow_table).execute().fetchall()
 
-    def test_timestamp_tz_to_arrow(self, duckdb_cursor):
-        precisions = ["us", "s", "ns", "ms"]
+    @pytest.mark.parametrize("precision", ["us", "s", "ns", "ms"])
+    def test_timestamp_tz_to_arrow(self, duckdb_cursor, precision):
         current_time = datetime.datetime(2017, 11, 28, 23, 55, 59)
         con = duckdb.connect()
-        for precision in precisions:
-            for timezone in timezones:
-                con.execute("SET TimeZone = '" + timezone + "'")
-                arrow_table = generate_table(current_time, precision, timezone)
-                res = con.from_arrow(arrow_table).to_arrow_table()
-                assert res[0].type == pa.timestamp("us", tz=timezone)
-                assert res == generate_table(current_time, "us", timezone)
+        expected_precision = "ns" if precision == "ns" else "us"
+        for timezone in timezones:
+            con.execute("SET TimeZone = '" + timezone + "'")
+            arrow_table = generate_table(current_time, precision, timezone)
+            res = con.from_arrow(arrow_table).to_arrow_table()
+            assert res[0].type == pa.timestamp(expected_precision, tz=timezone)
+            assert res == generate_table(current_time, expected_precision, timezone)
 
     def test_timestamp_tz_with_null(self, duckdb_cursor):
         con = duckdb.connect()

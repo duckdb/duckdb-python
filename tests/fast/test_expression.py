@@ -202,8 +202,8 @@ class TestExpression:
         res = rel.explain()
         assert "c0" in res
         assert "c1" in res
-        # 'c2' is not in the explain result because it shows NULL instead
-        assert "NULL" in res
+        # the physical plan now renders projection column names (c0, c1, c2) rather than literal constant values
+        assert "c2" in res
         res = rel.fetchall()
         assert res == [("a", 42, None)]
 

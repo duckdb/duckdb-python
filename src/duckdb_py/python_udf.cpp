@@ -94,7 +94,7 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 	children.push_back(Value::POINTER(CastPointerToValue(stream_factory_get_schema)));
 	named_parameter_map_t named_params;
 	vector<LogicalType> input_types;
-	vector<string> input_names;
+	vector<Identifier> input_names;
 
 	TableFunctionRef empty;
 	TableFunction dummy_table_function;
@@ -130,8 +130,8 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 	}
 
 	VectorOperations::Cast(context, result.data[0], out, count);
-	out.Flatten(count);
-	out.Verify(count);
+	out.Flatten();
+	out.Verify();
 }
 
 static string NullHandlingError() {
@@ -150,7 +150,7 @@ static ValidityMask &GetResultValidity(Vector &result) {
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
 		return ConstantVector::Validity(result);
 	} else if (vector_type == VectorType::FLAT_VECTOR) {
-		return FlatVector::Validity(result);
+		return FlatVector::ValidityMutable(result);
 	} else {
 		throw InternalException("VectorType %s was not expected here (GetResultValidity)",
 		                        EnumUtil::ToString(vector_type));
@@ -158,9 +158,8 @@ static ValidityMask &GetResultValidity(Vector &result) {
 }
 
 static void VerifyVectorizedNullHandling(Vector &result, idx_t count) {
-	auto &validity = GetResultValidity(result);
 
-	if (validity.AllValid()) {
+	if (const auto &validity = GetResultValidity(result); validity.CannotHaveNull()) {
 		return;
 	}
 
@@ -186,13 +185,12 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		auto options = context.GetClientProperties();
 		//		}
 
-		auto result_validity = FlatVector::Validity(result);
 		SelectionVector selvec(input.size());
 		idx_t input_size = input.size();
 		if (default_null_handling) {
 			vector<UnifiedVectorFormat> vec_data(input.ColumnCount());
 			for (idx_t i = 0; i < input.ColumnCount(); i++) {
-				input.data[i].ToUnifiedFormat(input.size(), vec_data[i]);
+				input.data[i].ToUnifiedFormat(vec_data[i]);
 			}
 
 			idx_t index = 0;
@@ -206,7 +204,6 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 					}
 				}
 				if (any_null) {
-					result_validity.SetInvalid(i);
 					continue;
 				}
 				selvec.set_index(index++, i);
@@ -264,13 +261,14 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 			if (count) {
 				SelectionVector inverted(input_size);
-				// Create a SelVec that inverts the filtering
-				// example: count: 6, null_indices: 1,3
-				// input selvec: [0, 2, 4, 5]
-				// inverted selvec: [0, 0, 1, 1, 2, 3]
+				// Map each target row back to a source row in temp. Non-null target rows map to
+				// their UDF output; null target rows point at the next non-null source row (their
+				// data is later masked out by SetNull).
+				// example: input_size: 6, null_indices: 1,3
+				// selvec (non-null indices): [0, 2, 4, 5]
+				// inverted selvec:           [0, 1, 1, 2, 2, 3]
 				idx_t src_index = 0;
 				for (idx_t i = 0; i < input_size; i++) {
-					// Fill the gaps with the previous index
 					inverted.set_index(i, src_index);
 					if (src_index + 1 < count && selvec.get_index(src_index) == i) {
 						src_index++;
@@ -278,10 +276,18 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 				}
 				VectorOperations::Copy(temp, result, inverted, count, 0, 0, input_size);
 			}
+			// Apply the null mask: any position not present in selvec was a null input row.
+			// VectorOperations::Copy unconditionally overwrites the result's validity from
+			// the source's, so we must do this after the Copy.
+			idx_t sel_idx = 0;
 			for (idx_t i = 0; i < input_size; i++) {
-				FlatVector::SetNull(result, i, !result_validity.RowIsValid(i));
+				if (sel_idx < count && selvec.get_index(sel_idx) == i) {
+					sel_idx++;
+				} else {
+					FlatVector::SetNull(result, i, true);
+				}
 			}
-			result.Verify(input_size);
+			result.Verify();
 		} else {
 			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
 			if (default_null_handling && !exception_occurred) {
@@ -351,7 +357,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					throw InvalidInputException(NullHandlingError());
 				}
 			}
-			TransformPythonObject(ret, result, row);
+			TransformPythonObject(state.GetContext(), ret, result, row);
 		}
 
 		if (input.size() == 1) {
@@ -417,7 +423,7 @@ public:
 		}
 	}
 
-	void OverrideReturnType(const shared_ptr<DuckDBPyType> &type) {
+	void OverrideReturnType(const std::shared_ptr<DuckDBPyType> &type) {
 		if (!type) {
 			return;
 		}
@@ -445,7 +451,7 @@ public:
 		}
 		idx_t i = 0;
 		for (auto &param : params) {
-			auto type = py::cast<shared_ptr<DuckDBPyType>>(param);
+			auto type = py::cast<std::shared_ptr<DuckDBPyType>>(param);
 			parameters[i++] = type->Type();
 		}
 	}
@@ -468,8 +474,8 @@ public:
 		auto return_annotation = signature.attr("return_annotation");
 		auto empty = py::module_::import("inspect").attr("Signature").attr("empty");
 		if (!py::none().is(return_annotation) && !empty.is(return_annotation)) {
-			shared_ptr<DuckDBPyType> pytype;
-			if (py::try_cast<shared_ptr<DuckDBPyType>>(return_annotation, pytype)) {
+			std::shared_ptr<DuckDBPyType> pytype;
+			if (py::try_cast<std::shared_ptr<DuckDBPyType>>(return_annotation, pytype)) {
 				return_type = pytype->Type();
 			}
 		}
@@ -478,8 +484,8 @@ public:
 		auto params = py::dict(sig_params);
 		for (auto &item : params) {
 			auto &value = item.second;
-			shared_ptr<DuckDBPyType> pytype;
-			if (py::try_cast<shared_ptr<DuckDBPyType>>(value.attr("annotation"), pytype)) {
+			std::shared_ptr<DuckDBPyType> pytype;
+			if (py::try_cast<std::shared_ptr<DuckDBPyType>>(value.attr("annotation"), pytype)) {
 				parameters.push_back(pytype->Type());
 			} else {
 				std::string kind = py::str(value.attr("kind"));
@@ -519,7 +525,7 @@ public:
 		}
 		FunctionStability function_side_effects =
 		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
-		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
+		ScalarFunction scalar_function(Identifier(name), std::move(parameters), return_type, func, nullptr, nullptr,
 		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;
 	}
@@ -529,7 +535,7 @@ public:
 
 ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py::function &udf,
                                                    const py::object &parameters,
-                                                   const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
+                                                   const std::shared_ptr<DuckDBPyType> &return_type, bool vectorized,
                                                    FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);

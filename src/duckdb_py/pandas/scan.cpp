@@ -167,12 +167,12 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 	return percentage;
 }
 
-void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
-                                                 Vector &out) {
+void PandasScanFunction::PandasBackendScanSwitch(ClientContext &context, PandasColumnBindData &bind_data, idx_t count,
+                                                 idx_t offset, Vector &out) {
 	auto backend = bind_data.pandas_col->Backend();
 	switch (backend) {
 	case PandasColumnBackend::NUMPY: {
-		NumpyScan::Scan(bind_data, count, offset, out);
+		NumpyScan::Scan(context, bind_data, count, offset, out);
 		break;
 	}
 	default: {
@@ -194,13 +194,13 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 		}
 	}
 	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, state.end - state.start);
-	output.SetCardinality(this_count);
+	output.SetChildCardinality(this_count);
 	for (idx_t idx = 0; idx < state.column_ids.size(); idx++) {
 		auto col_idx = state.column_ids[idx];
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
-			PandasBackendScanSwitch(data.pandas_bind_data[col_idx], this_count, state.start, output.data[idx]);
+			PandasBackendScanSwitch(context, data.pandas_bind_data[col_idx], this_count, state.start, output.data[idx]);
 		}
 	}
 	state.start += this_count;

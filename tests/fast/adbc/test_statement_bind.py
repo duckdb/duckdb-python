@@ -191,6 +191,6 @@ class TestADBCStatementBind:
             statement.bind(array, schema)
             with pytest.raises(
                 adbc_driver_manager.ProgrammingError,
-                match="Values were not provided for the following prepared statement parameters: 2",
+                match="Values were not provided for the following parameters: 2",
             ):
                 statement.execute_query()

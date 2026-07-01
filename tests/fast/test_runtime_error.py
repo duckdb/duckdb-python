@@ -120,7 +120,7 @@ class TestRuntimeError:
         conn.execute("create table integers (a integer, b integer)")
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="Values were not provided for the following prepared statement parameters: 2",
+            match="Values were not provided for the following parameters: 2",
         ):
             conn.execute("select * from integers where a =? and b=?", [1])
 

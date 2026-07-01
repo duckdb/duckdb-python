@@ -4,7 +4,7 @@ namespace duckdb {
 
 enum class ExpectedResultType : uint8_t { QUERY_RESULT, NOTHING, CHANGED_ROWS, UNKNOWN };
 
-static void InitializeReadOnlyProperties(py::class_<DuckDBPyStatement, unique_ptr<DuckDBPyStatement>> &m) {
+static void InitializeReadOnlyProperties(py::class_<DuckDBPyStatement, std::unique_ptr<DuckDBPyStatement>> &m) {
 	m.def_property_readonly("type", &DuckDBPyStatement::Type, "Get the type of the statement.")
 	    .def_property_readonly("query", &DuckDBPyStatement::Query, "Get the query equivalent to this statement.")
 	    .def_property_readonly("named_parameters", &DuckDBPyStatement::NamedParameters,
@@ -15,8 +15,7 @@ static void InitializeReadOnlyProperties(py::class_<DuckDBPyStatement, unique_pt
 }
 
 void DuckDBPyStatement::Initialize(py::handle &m) {
-	auto relation_module =
-	    py::class_<DuckDBPyStatement, unique_ptr<DuckDBPyStatement>>(m, "Statement", py::module_local());
+	auto relation_module = py::class_<DuckDBPyStatement, std::unique_ptr<DuckDBPyStatement>>(m, "Statement");
 	InitializeReadOnlyProperties(relation_module);
 }
 
@@ -37,7 +36,7 @@ py::set DuckDBPyStatement::NamedParameters() const {
 	py::set result;
 	auto &named_parameters = statement->named_param_map;
 	for (auto &param : named_parameters) {
-		result.add(param.first);
+		result.add(param.first.GetIdentifierName());
 	}
 	return result;
 }

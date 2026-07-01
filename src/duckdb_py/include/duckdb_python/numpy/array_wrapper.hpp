@@ -41,8 +41,8 @@ public:
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type, const ClientProperties &client_properties, bool pandas = false);
 
-	unique_ptr<RawArrayWrapper> data;
-	unique_ptr<RawArrayWrapper> mask;
+	std::unique_ptr<RawArrayWrapper> data;
+	std::unique_ptr<RawArrayWrapper> mask;
 	bool requires_mask;
 	const ClientProperties client_properties;
 	bool pandas;

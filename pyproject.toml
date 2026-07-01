@@ -88,6 +88,12 @@ version_scheme = "duckdb_packaging.setuptools_scm_version:version_scheme"
 local_scheme = "no-local-version"
 fallback_version = "0.0.1.dev1"
 
+# main only: count dev distance from the last *minor* tag (v*.*.0), so a patch
+# tag (e.g. v1.5.4) merged in from a release branch can't reset .devN.
+# Release branches must NOT have this, they correctly count from v*.*.* (the default).
+[tool.setuptools_scm.scm.git]
+describe_command = "git describe --dirty --tags --long --abbrev=40 --match v*.*.0"
+
 # Override: if COVERAGE is set then:
 # - we create a RelWithDebInfo build
 # - we make sure we use a persistent build dir so we get access to the .gcda files
@@ -122,7 +128,7 @@ cmake.build-type = "Debug"
 [[tool.scikit-build.overrides]]
 if.state = "editable"
 if.env.COVERAGE = false
-if.platform-system = "Darwin"
+if.platform-system = "(?i)darwin"
 inherit.cmake.define = "append"
 cmake.define.DISABLE_UNITY = "1"
 

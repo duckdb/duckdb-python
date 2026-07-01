@@ -172,7 +172,7 @@ class TestPythonFilesystem:
             write_errors = intercept(monkeypatch, fsspec.implementations.local.LocalFileOpener, "write")
             conn.register_filesystem(fs)
             db_path_posix = str(PurePosixPath(tmp_path.as_posix()) / "hello.db")
-            conn.execute(f"ATTACH 'file://{db_path_posix}'")
+            conn.execute(f"ATTACH 'file:///{db_path_posix}'")
 
             conn.execute("INSERT INTO hello.t VALUES (1)")
 

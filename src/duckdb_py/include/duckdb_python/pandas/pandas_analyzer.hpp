@@ -12,14 +12,13 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pybind11/gil_wrapper.hpp"
-#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
 class PandasAnalyzer {
 public:
-	explicit PandasAnalyzer(const ClientContext &context) {
+	explicit PandasAnalyzer(ClientContext &context) : context(context) {
 		analyzed_type = LogicalType::SQLNULL;
 
 		Value result;
@@ -48,6 +47,7 @@ private:
 	PythonGILWrapper gil;
 	//! The resulting analyzed type
 	LogicalType analyzed_type;
+	ClientContext &context;
 };
 
 } // namespace duckdb

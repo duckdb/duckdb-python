@@ -1,8 +1,57 @@
 # ruff: noqa: F841
-import sys
+"""Filter pushdown tests for the arrow scan integration.
+
+What's tested here:
+
+* **Comparison correctness** across every supported type:
+  ``=``, ``!=``, ``<``, ``<=``, ``>``, ``>=``, ``IS NULL``, ``IS NOT NULL``,
+  ``AND``, ``OR``.
+* **Optimizer pushdown decisions** — which predicate shapes get pushed into
+  the ``ARROW_SCAN`` operator and which the optimizer keeps above. Verified
+  by inspecting the EXPLAIN plan, not just row counts.
+* **Special filter shapes** — ``IN``, ``LIKE``, ``CAST(ts AS DATE) = …``,
+  ``IS DISTINCT FROM NULL`` inside ``OR``, NaN ordering, struct extraction
+  (one- and multi-level), optional filter, dynamic top-N filter, join
+  filter pushdown.
+* **Unsupported-type fallback** — ``UHUGEINT``, ``string_view``,
+  ``binary_view`` columns must not crash; the filter is applied above the
+  scan instead.
+* **Regressions** — issues that were fixed previously and need to stay
+  fixed.
+* **Canaries** — markers for behaviour we expect to change upstream
+  (pyarrow gaining view-filter support, DuckDB starting to push IS_NULL or
+  struct IN, etc.).
+
+Two conversion paths are exercised everywhere it makes sense — `.to_arrow_table()`
+and `pandas`-via-pyarrow `df()`. Some tests also run through
+`pyarrow.dataset` to cover the dataset-scanner code path.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import re
 
 import pytest
-from conftest import PANDAS_GE_3
+from _pushdown_helpers import (
+    ARROW_FACTORIES,
+    ARROW_FACTORIES_WITH_DATASET,
+    COMPARABLE_TYPES,
+    COMPARISON_CASES,
+    to_arrow_table,
+)
+from _pushdown_helpers import (
+    arrow_scan_block as _arrow_scan_block,
+)
+from _pushdown_helpers import (
+    count as _count,
+)
+from _pushdown_helpers import (
+    make_typed_table as _make_typed_table,
+)
+from _pushdown_helpers import (
+    was_pushed as _was_pushed,
+)
 from packaging.version import Version
 
 import duckdb
@@ -13,942 +62,408 @@ pa_lib = pytest.importorskip("pyarrow.lib")
 pa_parquet = pytest.importorskip("pyarrow.parquet")
 pd = pytest.importorskip("pandas")
 np = pytest.importorskip("numpy")
-re = pytest.importorskip("re")
 
 
-def create_pyarrow_pandas(rel):
-    if PANDAS_GE_3:
-        return rel.df()
-    else:
-        return rel.df().convert_dtypes(dtype_backend="pyarrow")
+# ===========================================================================
+# 1. Comparison correctness across types
+# ===========================================================================
 
 
-def create_pyarrow_table(rel):
-    return rel.to_arrow_table()
+@pytest.mark.parametrize("factory", ARROW_FACTORIES)
+@pytest.mark.parametrize("case", COMPARABLE_TYPES, ids=lambda c: c.id)
+@pytest.mark.parametrize(("predicate_tpl", "expected"), COMPARISON_CASES)
+def test_comparisons(duckdb_cursor, factory, case, predicate_tpl, expected):
+    """Each (type, factory, predicate) tuple produces the expected row count."""
+    _make_typed_table(duckdb_cursor, factory, case)
+    predicate = predicate_tpl.format(low=case.low, mid=case.mid, high=case.high)
+    assert _count(duckdb_cursor, predicate) == expected
 
 
-def create_pyarrow_dataset(rel):
-    table = create_pyarrow_table(rel)
-    return pa_ds.dataset(table)
+# BOOL has no ordering, so it gets its own tiny suite.
+@pytest.mark.parametrize("factory", ARROW_FACTORIES)
+def test_bool_comparisons(duckdb_cursor, factory):
+    """Equality / IS NULL / AND / OR on BOOL columns."""
+    duckdb_cursor.execute("CREATE TABLE _b (a BOOL, b BOOL)")
+    duckdb_cursor.execute("INSERT INTO _b VALUES (TRUE, TRUE), (TRUE, FALSE), (FALSE, TRUE), (NULL, NULL)")
+    arrow_table = factory(duckdb_cursor.table("_b"))
+    duckdb_cursor.register("arrow_table", arrow_table)
+
+    assert _count(duckdb_cursor, "a = TRUE") == 2
+    assert _count(duckdb_cursor, "a IS NULL") == 1
+    assert _count(duckdb_cursor, "a IS NOT NULL") == 3
+    assert _count(duckdb_cursor, "a = TRUE AND b = TRUE") == 1
+    assert _count(duckdb_cursor, "a = TRUE OR b = TRUE") == 3
 
 
-def test_decimal_filter_pushdown(duckdb_cursor):
-    pl = pytest.importorskip("polars")
-    np = pytest.importorskip("numpy")
-    np.random.seed(10)
+# Integer boundary values are worth a separate test because the GetScalar path
+# has to coerce each (DuckDB Value) -> (pyarrow scalar) at the limit.
+@pytest.mark.parametrize("factory", ARROW_FACTORIES)
+@pytest.mark.parametrize(
+    ("data_type", "max_value"),
+    [
+        ("TINYINT", 127),
+        ("SMALLINT", 32767),
+        ("INTEGER", 2147483647),
+        ("BIGINT", 9223372036854775807),
+        ("UTINYINT", 255),
+        ("USMALLINT", 65535),
+        ("UINTEGER", 4294967295),
+        ("UBIGINT", 18446744073709551615),
+    ],
+)
+def test_integer_max_value(duckdb_cursor, factory, data_type, max_value):
+    """Pushdown round-trips through every integer's maximum representable value."""
+    duckdb_cursor.execute(f"CREATE TABLE _t AS SELECT {max_value}::{data_type} AS i")
+    arrow_table = factory(duckdb_cursor.table("_t"))
+    duckdb_cursor.register("arrow_table", arrow_table)
+    expected = [(max_value,)]
+    assert duckdb_cursor.sql("SELECT * FROM arrow_table WHERE i > 0").fetchall() == expected
+    assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE i > ?", (0,)).fetchall() == expected
+    assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE i = ?", (max_value,)).fetchall() == expected
 
-    df = pl.DataFrame({"x": pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
 
-    query = """
-        SELECT
-            x,
-            x > 0.05 AS is_x_good,
-            x::FLOAT > 0.05 AS is_float_x_good
-        FROM {}
-        WHERE
-            is_x_good
-        ORDER BY x ASC
-    """
-
-    assert len(duckdb_cursor.sql(query.format("df")).fetchall()) == 495
+# ===========================================================================
+# 2. OR pushdown decisions
+#
+# The optimizer pushes only a subset of OR shapes. These tests verify which
+# shapes survive by inspecting the EXPLAIN plan.
+# ===========================================================================
 
 
-def numeric_operators(connection, data_type, tbl_name, create_table):
-    connection.execute(
-        f"""
-        CREATE TABLE {tbl_name} (
-            a {data_type},
-            b {data_type},
-            c {data_type}
+class TestOrPushdownDecisions:
+    """Same-column ORs push; multi-column ORs and OR-with-LIKE/NULL don't."""
+
+    @pytest.fixture(autouse=True)
+    def _arrow_table(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _o (a INTEGER, b INTEGER, c INTEGER)")
+        duckdb_cursor.execute("INSERT INTO _o VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
+        duckdb_cursor.register("arrow_table", to_arrow_table(duckdb_cursor.table("_o")))
+
+    def test_single_column_or_pushes(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a = 1 OR a = 10")
+
+    def test_single_column_or_with_and_does_not_push(self, duckdb_cursor):
+        # The optimizer does not currently push ``a = 1 OR (a > 3 AND a < 5)``
+        # — the AND inside the OR keeps it as a filter node above the scan.
+        # The original test had a vacuous regex (``...|$``) that always matched;
+        # this is the real behavior on current DuckDB main.
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a = 1 OR (a > 3 AND a < 5)")
+
+    def test_multiple_or_terms_push(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a = 1 OR a > 3 OR a < 5")
+
+    def test_or_with_not_equal_pushes(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a != 1 OR a > 3 OR a < 2")
+
+    def test_multi_column_or_does_not_push(self, duckdb_cursor):
+        # Optimizer refuses to push a root OR that references multiple columns.
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a = 1 OR b = 2 AND (a > 3 OR b < 5)")
+
+
+class TestStringOrSpecifics:
+    """VARCHAR has stricter OR-pushdown rules than numeric types."""
+
+    @pytest.fixture(autouse=True)
+    def _arrow_table(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _v (a VARCHAR, b VARCHAR, c VARCHAR)")
+        duckdb_cursor.execute(
+            "INSERT INTO _v VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)"
         )
+        duckdb_cursor.register("arrow_table", to_arrow_table(duckdb_cursor.table("_v")))
+
+    def test_string_range_or_pushes(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a >= '1' OR a <= '10'")
+
+    def test_or_with_is_null_does_not_push(self, duckdb_cursor):
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a IS NULL OR a = '1'")
+
+    def test_or_with_is_not_null_does_not_push(self, duckdb_cursor):
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a IS NOT NULL OR a = '1'")
+
+    def test_or_with_like_does_not_push(self, duckdb_cursor):
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a = '1' OR a LIKE '10%'")
+
+
+# ===========================================================================
+# 3. IN-list pushdown
+# ===========================================================================
+
+
+class TestInPushdown:
+    """IN (...) pushdown test.
+
+    IN (...) reaches the walker as a ``COMPARE_IN`` ``BOUND_OPERATOR``, wrapped in an
+    ``__internal_tablefilter_optional`` function that the walker must unwrap before it
+    sees the operator.
     """
-    )
-    connection.execute(
-        f"""
-        INSERT INTO {tbl_name} VALUES
-            (1,1,1),
-            (10,10,10),
-            (100,10,100),
-            (NULL,NULL,NULL)
-    """
-    )
-    duck_tbl = connection.table(tbl_name)
-    arrow_table = create_table(duck_tbl)
 
-    # Try ==
-    assert connection.execute("SELECT count(*) from arrow_table where a = 1").fetchone()[0] == 1
-    # Try >
-    assert connection.execute("SELECT count(*) from arrow_table where a > 1").fetchone()[0] == 2
-    # Try >=
-    assert connection.execute("SELECT count(*) from arrow_table where a >= 10").fetchone()[0] == 2
-    # Try <
-    assert connection.execute("SELECT count(*) from arrow_table where a < 10").fetchone()[0] == 1
-    # Try <=
-    assert connection.execute("SELECT count(*) from arrow_table where a <= 10").fetchone()[0] == 2
+    def test_basic(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _t AS SELECT range a FROM range(1000)")
+        duckdb_cursor.register("arrow_table", to_arrow_table(duckdb_cursor.table("_t")))
+        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE a = ANY([1, 999])").fetchall() == [(1,), (999,)]
 
-    # Try Is Null
-    assert connection.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-    # Try Is Not Null
-    assert connection.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
+    @pytest.mark.timeout(10)
+    def test_large_in_list_does_not_hang(self):
+        """Regression: https://github.com/duckdb/duckdb-python/issues/52."""
+        duckdb.register("arrow_table", pa.table({"a": pa.array(range(5000))}))
+        in_list = ", ".join(str(i) for i in range(0, 5000, 2))
+        result = duckdb.sql(f"SELECT count(*) FROM arrow_table WHERE a IN ({in_list})").fetchone()
+        assert result == (2500,)
 
-    # Try And
-    assert connection.execute("SELECT count(*) from arrow_table where a = 10 and b = 1").fetchone()[0] == 0
-    assert (
-        connection.execute("SELECT count(*) from arrow_table where a = 100 and b = 10 and c = 100").fetchone()[0] == 1
-    )
+    def test_in_with_no_nulls_in_list(self):
+        duckdb.register("arrow_table", pa.table({"a": pa.array([1, 2, None, 4, None, 6])}))
+        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4) ORDER BY a").fetchall()
+        assert result == [(1,), (4,)]
 
-    # Try Or
-    assert connection.execute("SELECT count(*) from arrow_table where a = 100 or b = 1").fetchone()[0] == 2
+    def test_in_with_null_in_list(self):
+        """SQL semantics: NULL in the IN list still doesn't match NULL rows."""
+        duckdb.register("arrow_table", pa.table({"a": pa.array([1, 2, None, 4, None, 6])}))
+        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4, NULL) ORDER BY a").fetchall()
+        assert result == [(1,), (4,)]
 
-    connection.execute("EXPLAIN SELECT count(*) from arrow_table where a = 100 or b = 1")
-    print(connection.fetchall())
+    def test_in_varchar(self):
+        duckdb.register("arrow_table", pa.table({"s": pa.array(["alice", "bob", "charlie", "dave", None])}))
+        result = duckdb.sql("SELECT s FROM arrow_table WHERE s IN ('bob', 'dave') ORDER BY s").fetchall()
+        assert result == [("bob",), ("dave",)]
+
+    def test_in_float(self):
+        duckdb.register("arrow_table", pa.table({"f": pa.array([1.0, 2.5, 3.75, 4.0, None], type=pa.float64())}))
+        result = duckdb.sql("SELECT f FROM arrow_table WHERE f IN (2.5, 4.0) ORDER BY f").fetchall()
+        assert result == [(2.5,), (4.0,)]
 
 
-def numeric_check_or_pushdown(connection, tbl_name, create_table):
-    duck_tbl = connection.table(tbl_name)
-    arrow_table = create_table(duck_tbl)
-
-    # Multiple column in the root OR node, don't push down
-    query_res = connection.execute(
-        """
-        EXPLAIN SELECT * FROM arrow_table WHERE
-            a = 1 OR b = 2 AND (a > 3 OR b < 5)
-    """
-    ).fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters:.*", query_res[0][1])
-    assert not match
-
-    # Single column in the root OR node
-    query_res = connection.execute(
-        """
-        EXPLAIN SELECT * FROM arrow_table WHERE
-            a = 1 OR a = 10
-    """
-    ).fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a=1 OR a=10.*|$", query_res[0][1])
-    assert match
-
-    # Single column + root OR node with AND
-    query_res = connection.execute(
-        """
-        EXPLAIN SELECT * FROM arrow_table
-            WHERE a = 1 OR (a > 3 AND a < 5)
-    """
-    ).fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a=1 OR a>3 AND a<5.*|$", query_res[0][1])
-    assert match
-
-    # Single column multiple ORs
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a=1 OR a>3 OR a<5").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a=1 OR a>3 OR a<5.*|$", query_res[0][1])
-    assert match
-
-    # Testing not equal
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a!=1 OR a>3 OR a<2").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a!=1 OR a>3 OR a<2.*|$", query_res[0][1])
-    assert match
-
-    # Multiple OR filters connected with ANDs
-    query_res = connection.execute(
-        "EXPLAIN SELECT * FROM arrow_table WHERE (a<2 OR a>3) AND (a=1 OR a=4) AND (b=1 OR b<5)"
-    ).fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a<2 OR a>3 AND a=1|\n.*OR a=4.*\n.*b=2 OR b<5.*|$", query_res[0][1])
-    assert match
+# ===========================================================================
+# 4. NaN pushdown
+#
+# DuckDB intentionally violates IEEE-754: NaN is the greatest value.
+# The pyarrow_filter_pushdown special-cases this so the pyarrow side gets
+# is_nan() / its inverse / constant(true|false) depending on the operator.
+# ===========================================================================
 
 
-def string_check_or_pushdown(connection, tbl_name, create_table):
-    duck_tbl = connection.table(tbl_name)
-    arrow_table = create_table(duck_tbl)
+class TestNaNPushdown:
+    """Six comparison operators against a NaN constant on a DOUBLE column."""
 
-    # Check string zonemap
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a >= '1' OR a <= '10'").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters: a>=1 OR a<=10.*|$", query_res[0][1])
-    assert match
+    @pytest.fixture(autouse=True)
+    def _nan_arrow_table(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            "CREATE TABLE _n AS SELECT a::DOUBLE a FROM VALUES "
+            "('inf'), ('nan'), ('0.34234'), ('34234234.00005'), ('-nan') t(a)"
+        )
+        arrow_table = to_arrow_table(duckdb_cursor.table("_n"))
+        duckdb_cursor.register("arrow_table", arrow_table)
 
-    # No support for OR with is null
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a IS NULL or a = '1'").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters:.*", query_res[0][1])
-    assert not match
-
-    # No support for OR with is not null
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a IS NOT NULL OR a = '1'").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters:.*", query_res[0][1])
-    assert not match
-
-    # OR with the like operator
-    query_res = connection.execute("EXPLAIN SELECT * FROM arrow_table WHERE a = 1 OR a LIKE '10%'").fetchall()
-    match = re.search(".*ARROW_SCAN.*Filters:.*", query_res[0][1])
-    assert not match
-
-
-class TestArrowFilterPushdown:
     @pytest.mark.parametrize(
-        "data_type",
-        [
-            "TINYINT",
-            "SMALLINT",
-            "INTEGER",
-            "BIGINT",
-            "UTINYINT",
-            "USMALLINT",
-            "UINTEGER",
-            "UBIGINT",
-            "FLOAT",
-            "DOUBLE",
-            "HUGEINT",
-            "DECIMAL(4,1)",
-            "DECIMAL(9,1)",
-            "DECIMAL(18,4)",
-            "DECIMAL(30,12)",
-        ],
+        "op",
+        ["=", "!=", "<", "<=", ">", ">="],
     )
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_numeric(self, data_type, duckdb_cursor, create_table):
-        tbl_name = "tbl"
-        numeric_operators(duckdb_cursor, data_type, tbl_name, create_table)
-        numeric_check_or_pushdown(duckdb_cursor, tbl_name, create_table)
+    def test_nan_comparison_matches_duckdb(self, duckdb_cursor, op):
+        """Each NaN comparison through the arrow scan agrees with DuckDB's own answer."""
+        q_arrow = f"SELECT count(*) FROM arrow_table WHERE a {op} 'NaN'::FLOAT"
+        q_duck = f"SELECT count(*) FROM _n WHERE a {op} 'NaN'::FLOAT"
+        assert duckdb_cursor.execute(q_arrow).fetchone() == duckdb_cursor.execute(q_duck).fetchone()
 
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_varchar(self, duckdb_cursor, create_table):
+
+# ===========================================================================
+# 5. Struct extract pushdown
+# ===========================================================================
+
+
+class TestOneLevelStruct:
+    """``struct_extract`` chains build the path inside ``ResolveColumn``.
+
+    The EXPLAIN plan renders the predicate using the function form
+    ``(struct_extract(s, 'a') < 2)`` rather than the dot form ``s.a < 2``.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _one_level_struct(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _s (s STRUCT(a INTEGER, b BOOL))")
         duckdb_cursor.execute(
-            """
-            CREATE TABLE test_varchar (
-                a VARCHAR,
-                b VARCHAR,
-                c VARCHAR
-            )
-        """
+            "INSERT INTO _s VALUES "
+            "({'a': 1, 'b': true}), ({'a': 2, 'b': false}), (NULL), "
+            "({'a': 3, 'b': true}), ({'a': NULL, 'b': NULL})"
         )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_varchar VALUES
-                ('1','1','1'),
-                ('10','10','10'),
-                ('100','10','100'),
-                (NULL, NULL, NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_varchar")
-        arrow_table = create_table(duck_tbl)
+        arrow_table = to_arrow_table(duckdb_cursor.table("_s"))
+        duckdb_cursor.register("arrow_table", arrow_table)
 
-        # Try ==
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '1'").fetchone()[0] == 1
-        # Try >
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '1'").fetchone()[0] == 2
-        # Try >=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >= '10'").fetchone()[0] == 2
-        # Try <
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a < '10'").fetchone()[0] == 1
-        # Try <=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a <= '10'").fetchone()[0] == 2
+    def test_one_level_comparison_is_pushed(self, duckdb_cursor):
+        plan = duckdb_cursor.execute("EXPLAIN SELECT * FROM arrow_table WHERE s.a < 2").fetchone()[1]
+        assert re.search(r"struct_extract\(s,\s*'a'\)\s*<", plan)
 
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '10' and b = '1'").fetchone()[0] == 0
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '100' and b = '10' and c = '100'"
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '100' or b ='1'").fetchone()[0] == 2
-
-        # More complex tests for OR pushed down on string
-        string_check_or_pushdown(duckdb_cursor, "test_varchar", create_table)
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_bool(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_bool (
-                a BOOL,
-                b BOOL
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_bool VALUES
-                (TRUE,TRUE),
-                (TRUE,FALSE),
-                (FALSE,TRUE),
-                (NULL,NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_bool")
-        arrow_table = create_table(duck_tbl)
-
-        # Try ==
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = True").fetchone()[0] == 2
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a= True and b = True").fetchone()[0] == 1
-        # Try Or
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = True or b = True").fetchone()[0] == 3
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_time(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_time (
-                a TIME,
-                b TIME,
-                c TIME
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_time VALUES
-                ('00:01:00','00:01:00','00:01:00'),
-                ('00:10:00','00:10:00','00:10:00'),
-                ('01:00:00','00:10:00','01:00:00'),
-                (NULL,NULL,NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_time")
-        arrow_table = create_table(duck_tbl)
-
-        # Try ==
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a ='00:01:00'").fetchone()[0] == 1
-        # Try >
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >'00:01:00'").fetchone()[0] == 2
-        # Try >=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >='00:10:00'").fetchone()[0] == 2
-        # Try <
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a <'00:10:00'").fetchone()[0] == 1
-        # Try <=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a <='00:10:00'").fetchone()[0] == 2
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a='00:10:00' and b ='00:01:00'").fetchone()[0]
-            == 0
-        )
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a ='01:00:00' and b = '00:10:00' and c = '01:00:00'"
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '01:00:00' or b ='00:01:00'").fetchone()[
-                0
-            ]
-            == 2
-        )
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_timestamp(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_timestamp (
-                a TIMESTAMP,
-                b TIMESTAMP,
-                c TIMESTAMP
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_timestamp VALUES
-                ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),
-                ('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),
-                ('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),
-                (NULL,NULL,NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_timestamp")
-        arrow_table = create_table(duck_tbl)
-
-        # Try ==
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a ='2008-01-01 00:00:01'").fetchone()[0] == 1
-        )
-        # Try >
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a >'2008-01-01 00:00:01'").fetchone()[0] == 2
-        )
-        # Try >=
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a >='2010-01-01 10:00:01'").fetchone()[0] == 2
-        )
-        # Try <
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a <'2010-01-01 10:00:01'").fetchone()[0] == 1
-        )
-        # Try <=
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a <='2010-01-01 10:00:01'").fetchone()[0] == 2
-        )
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a='2010-01-01 10:00:01' and b ='2008-01-01 00:00:01'"
-            ).fetchone()[0]
-            == 0
-        )
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a ='2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'"
-            ).fetchone()[0]
-            == 2
-        )
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_timestamp_TZ(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_timestamptz (
-                a TIMESTAMPTZ,
-                b TIMESTAMPTZ,
-                c TIMESTAMPTZ
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_timestamptz VALUES
-                ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),
-                ('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),
-                ('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),
-                (NULL,NULL,NULL)
-            """
-        )
-        duck_tbl = duckdb_cursor.table("test_timestamptz")
-        arrow_table = create_table(duck_tbl)
-
-        # Try ==
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '2008-01-01 00:00:01'").fetchone()[0] == 1
-        )
-        # Try >
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '2008-01-01 00:00:01'").fetchone()[0] == 2
-        )
-        # Try >=
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a >= '2010-01-01 10:00:01'").fetchone()[0]
-            == 2
-        )
-        # Try <
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a < '2010-01-01 10:00:01'").fetchone()[0] == 1
-        )
-        # Try <=
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a <= '2010-01-01 10:00:01'").fetchone()[0]
-            == 2
-        )
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2010-01-01 10:00:01' and b = '2008-01-01 00:00:01'"
-            ).fetchone()[0]
-            == 0
-        )
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' and b = '2010-01-01 10:00:01' and c = '2020-03-01 10:00:01'"  # noqa: E501
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'"
-            ).fetchone()[0]
-            == 2
-        )
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    @pytest.mark.parametrize(
-        ("data_type", "value"),
-        [
-            ("TINYINT", 127),
-            ("SMALLINT", 32767),
-            ("INTEGER", 2147483647),
-            ("BIGINT", 9223372036854775807),
-            ("UTINYINT", 255),
-            ("USMALLINT", 65535),
-            ("UINTEGER", 4294967295),
-            ("UBIGINT", 18446744073709551615),
-        ],
-    )
-    def test_filter_pushdown_integers(self, duckdb_cursor, data_type, value, create_table):
-        duckdb_cursor.execute(
-            f"""
-            CREATE TABLE tbl as select {value}::{data_type} as i
-        """
-        )
-        expected = duckdb_cursor.table("tbl").fetchall()
-        filter = "i > 0"
-        rel = duckdb_cursor.table("tbl")
-        arrow_table = create_table(rel)
-        actual = duckdb_cursor.sql(f"select * from arrow_table where {filter}").fetchall()
-        assert expected == actual
-
-        # Test with equivalent prepared statement
-        actual = duckdb_cursor.execute("select * from arrow_table where i > ?", (0,)).fetchall()
-        assert expected == actual
-        # Test equality
-        actual = duckdb_cursor.execute("select * from arrow_table where i = ?", (value,)).fetchall()
-        assert expected == actual
-
-    @pytest.mark.skipif(
-        Version(pa.__version__) < Version("15.0.0"), reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning"
-    )
-    def test_9371(self, duckdb_cursor, tmp_path):
-        import datetime
-
-        # connect to an in-memory database
-        duckdb_cursor.execute("SET TimeZone='UTC';")
-        base_path = tmp_path / "parquet_folder"
-        base_path.mkdir(exist_ok=True)
-        file_path = base_path / "test.parquet"
-
-        duckdb_cursor.execute("SET TimeZone='UTC';")
-
-        # Example data
-        dt = datetime.datetime(2023, 8, 29, 1, tzinfo=datetime.timezone.utc)
-
-        my_arrow_table = pa.Table.from_pydict({"ts": [dt, dt, dt], "value": [1, 2, 3]})
-        df = my_arrow_table.to_pandas()
-        df = df.set_index("ts")  # SET INDEX! (It all works correctly when the index is not set)
-        df.to_parquet(str(file_path))
-
-        my_arrow_dataset = pa_ds.dataset(str(file_path))
-        res = duckdb_cursor.execute("SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[dt]).to_arrow_table()
-        output = duckdb_cursor.sql("select * from res").fetchall()
-        expected = [(1, dt), (2, dt), (3, dt)]
-        assert output == expected
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_date(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_date (
-                a DATE,
-                b DATE,
-                c DATE
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_date VALUES
-                ('2000-01-01','2000-01-01','2000-01-01'),
-                ('2000-10-01','2000-10-01','2000-10-01'),
-                ('2010-01-01','2000-10-01','2010-01-01'),
-                (NULL,NULL,NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_date")
-        arrow_table = create_table(duck_tbl)
-
-        # Try ==
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '2000-01-01'").fetchone()[0] == 1
-        # Try >
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '2000-01-01'").fetchone()[0] == 2
-        # Try >=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >= '2000-10-01'").fetchone()[0] == 2
-        # Try <
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a < '2000-10-01'").fetchone()[0] == 1
-        # Try <=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a <= '2000-10-01'").fetchone()[0] == 2
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2000-10-01' and b = '2000-01-01'"
-            ).fetchone()[0]
-            == 0
-        )
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2010-01-01' and b = '2000-10-01' and c = '2010-01-01'"
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '2010-01-01' or b = '2000-01-01'"
-            ).fetchone()[0]
-            == 2
-        )
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_blob(self, duckdb_cursor, create_table):
-        import pandas
-
-        df = pandas.DataFrame(
-            {
-                "a": [bytes([1]), bytes([2]), bytes([3]), None],
-                "b": [bytes([1]), bytes([2]), bytes([3]), None],
-                "c": [bytes([1]), bytes([2]), bytes([3]), None],
-            }
-        )
-        rel = duckdb.from_df(df)
-        arrow_table = create_table(rel)
-
-        # Try ==
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '\x01'").fetchone()[0] == 1
-        # # Try >
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a > '\x01'").fetchone()[0] == 2
-        # Try >=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a >= '\x02'").fetchone()[0] == 2
-        # Try <
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a < '\x02'").fetchone()[0] == 1
-        # Try <=
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a <= '\x02'").fetchone()[0] == 2
-
-        # Try Is Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NULL").fetchone()[0] == 1
-        # Try Is Not Null
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a IS NOT NULL").fetchone()[0] == 3
-
-        # Try And
-        assert duckdb_cursor.execute("SELECT count(*) from arrow_table where a='\x02' and b ='\x01'").fetchone()[0] == 0
-        assert (
-            duckdb_cursor.execute(
-                "SELECT count(*) from arrow_table where a = '\x02' and b = '\x02' and c = '\x02'"
-            ).fetchone()[0]
-            == 1
-        )
-        # Try Or
-        assert (
-            duckdb_cursor.execute("SELECT count(*) from arrow_table where a = '\x01' or b = '\x02'").fetchone()[0] == 2
-        )
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table, create_pyarrow_dataset])
-    def test_filter_pushdown_no_projection(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_int (
-                a INTEGER,
-                b INTEGER,
-                c INTEGER
-            )
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_int VALUES
-                (1,1,1),
-                (10,10,10),
-                (100,10,100),
-                (NULL,NULL,NULL)
-        """
-        )
-        duck_tbl = duckdb_cursor.table("test_int")
-        arrow_table = create_table(duck_tbl)
-
-        assert duckdb_cursor.execute("SELECT * FROM arrow_table VALUES where a = 1").fetchall() == [(1, 1, 1)]
-
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_filter_pushdown_2145(self, duckdb_cursor, tmp_path, create_table):
-        import pandas
-
-        date1 = pandas.date_range("2018-01-01", "2018-12-31", freq="B")
-        df1 = pandas.DataFrame(np.random.randn(date1.shape[0], 5), columns=list("ABCDE"))
-        df1["date"] = date1
-
-        date2 = pandas.date_range("2019-01-01", "2019-12-31", freq="B")
-        df2 = pandas.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
-        df2["date"] = date2
-
-        data1 = tmp_path / "data1.parquet"
-        data2 = tmp_path / "data2.parquet"
-        duckdb_cursor.execute(f"copy (select * from df1) to '{data1.as_posix()}'")
-        duckdb_cursor.execute(f"copy (select * from df2) to '{data2.as_posix()}'")
-
-        glob_pattern = tmp_path / "data*.parquet"
-        table = duckdb_cursor.read_parquet(glob_pattern.as_posix()).to_arrow_table()
-
-        output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
-        expected_df = duckdb.from_parquet(glob_pattern.as_posix()).filter("date > '2019-01-01'").df()
-        pandas.testing.assert_frame_equal(expected_df, output_df)
-
-    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_struct_filter_pushdown(self, duckdb_cursor, create_table):
-        duckdb_cursor.execute(
-            """
-            CREATE TABLE test_structs (s STRUCT(a integer, b bool))
-        """
-        )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_structs VALUES
-                ({'a': 1, 'b': true}),
-                ({'a': 2, 'b': false}),
-                (NULL),
-                ({'a': 3, 'b': true}),
-                ({'a': NULL, 'b': NULL});
-        """
-        )
-
-        duck_tbl = duckdb_cursor.table("test_structs")
-        arrow_table = create_table(duck_tbl)
-
-        # Ensure that the filter is pushed down
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE
-                s.a < 2
-        """
-        ).fetchall()
-
-        input = query_res[0][1]
-        if "PANDAS_SCAN" in input:
-            pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a<2.*", input, flags=re.DOTALL)
-        assert match
-
-        # Check that the filter is applied correctly
+    def test_one_level_comparison_correct(self, duckdb_cursor):
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a < 2").fetchone()[0] == {"a": 1, "b": True}
 
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true
-        """
-        ).fetchall()
+    def test_one_level_and_across_fields_is_pushed(self, duckdb_cursor):
+        # Strip box-drawing/padding so we can pattern-match across line wraps.
+        plan = duckdb_cursor.execute("EXPLAIN SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone()[1]
+        block = _arrow_scan_block(plan)
+        assert block is not None
+        flat = re.sub(r"[│|\s]+", " ", block)
+        assert re.search(r"struct_extract\(s, 'a'\).*struct_extract\(s, 'b'\)", flat)
 
-        # the explain-output is pretty cramped, so just make sure we see both struct references.
-        match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a<3.*AND s\.b=true.*",
-            query_res[0][1],
-            flags=re.DOTALL,
-        )
-        assert match
-
-        # Check that the filter is applied correctly
-        assert duckdb_cursor.execute("SELECT COUNT(*) FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone()[0] == 1
+    def test_one_level_and_correct(self, duckdb_cursor):
+        assert duckdb_cursor.execute("SELECT count(*) FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone() == (1,)
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a < 3 AND s.b = true").fetchone()[0] == {
             "a": 1,
             "b": True,
         }
 
-        # This should not produce a pushdown
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE
-                s.a IS NULL
-        """
-        ).fetchall()
 
-        match = re.search(".*ARROW_SCAN.*Filters: s\\.a IS NULL.*", query_res[0][1], flags=re.DOTALL)
-        assert not match
+class TestNestedStruct:
+    """Two-level ``struct_extract`` chains."""
 
-    @pytest.mark.skipif(sys.version_info < (3, 9), reason="Requires python 3.9")
-    @pytest.mark.parametrize("create_table", [create_pyarrow_pandas, create_pyarrow_table])
-    def test_nested_struct_filter_pushdown(self, duckdb_cursor, create_table):
+    @pytest.fixture(autouse=True)
+    def _nested_struct(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _n (s STRUCT(a STRUCT(b INTEGER, c BOOL), d STRUCT(e INTEGER, f VARCHAR)))")
         duckdb_cursor.execute(
-            """
-            CREATE TABLE test_nested_structs(s STRUCT(a STRUCT(b integer, c bool), d STRUCT(e integer, f varchar)));
-        """
+            "INSERT INTO _n VALUES "
+            "({'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': 'foo'}}), "
+            "(NULL), "
+            "({'a': {'b': 3, 'c': true}, 'd': {'e': 4, 'f': 'bar'}}), "
+            "({'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': 'qux'}}), "
+            "({'a': NULL, 'd': NULL})"
         )
-        duckdb_cursor.execute(
-            """
-            INSERT INTO test_nested_structs VALUES
-                ({'a': {'b': 1, 'c': false}, 'd': {'e': 2, 'f': 'foo'}}),
-                (NULL),
-                ({'a': {'b': 3, 'c': true}, 'd': {'e': 4, 'f': 'bar'}}),
-                ({'a': {'b': NULL, 'c': true}, 'd': {'e': 5, 'f': 'qux'}}),
-                ({'a': NULL, 'd': NULL});
-        """
+        arrow_table = to_arrow_table(duckdb_cursor.table("_n"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+
+    def test_nested_two_level_is_pushed(self, duckdb_cursor):
+        plan = duckdb_cursor.execute("EXPLAIN SELECT * FROM arrow_table WHERE s.a.b < 2").fetchone()[1]
+        # Outer struct_extract(_, 'b') around inner struct_extract(s, 'a').
+        assert re.search(
+            r"struct_extract.*\(struct_extract\(s,\s*'a'\),.*'b'\)\s*<\s*2",
+            plan,
+            flags=re.DOTALL,
         )
 
-        duck_tbl = duckdb_cursor.table("test_nested_structs")
-        arrow_table = create_table(duck_tbl)
-
-        # Ensure that the filter is pushed down
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a.b < 2;
-        """
-        ).fetchall()
-
-        input = query_res[0][1]
-        if "PANDAS_SCAN" in input:
-            pytest.skip(reason="This version of pandas does not produce an Arrow object")
-        match = re.search(r".*ARROW_SCAN.*Filters:.*s\.a\.b<2.*", input, flags=re.DOTALL)
-        assert match
-
-        # Check that the filter is applied correctly
+    def test_nested_two_level_correct(self, duckdb_cursor):
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.b < 2").fetchone()[0] == {
             "a": {"b": 1, "c": False},
             "d": {"e": 2, "f": "foo"},
         }
 
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5
-        """
-        ).fetchall()
+    def test_nested_and_across_branches(self, duckdb_cursor):
+        assert duckdb_cursor.execute(
+            "SELECT count(*) FROM arrow_table WHERE s.a.c = true AND s.d.e = 5"
+        ).fetchone() == (1,)
 
-        # the explain-output is pretty cramped, so just make sure we see both struct references.
-        match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.a\.c=true.*AND s\.d\.e=5.*",
-            query_res[0][1],
+    def test_nested_varchar_comparison(self, duckdb_cursor):
+        plan = duckdb_cursor.execute("EXPLAIN SELECT * FROM arrow_table WHERE s.d.f = 'bar'").fetchone()[1]
+        assert re.search(
+            r"struct_extract.*\(struct_extract\(s,\s*'d'\),.*'f'\)\s*=\s*'bar'",
+            plan,
             flags=re.DOTALL,
         )
-        assert match
-
-        # Check that the filter is applied correctly
-        assert duckdb_cursor.execute("SELECT COUNT(*) FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == 1
-        assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.a.c=true AND s.d.e=5").fetchone()[0] == {
-            "a": {"b": None, "c": True},
-            "d": {"e": 5, "f": "qux"},
-        }
-
-        query_res = duckdb_cursor.execute(
-            """
-            EXPLAIN SELECT * FROM arrow_table WHERE s.d.f = 'bar';
-        """
-        )
-
-        res = query_res.fetchone()[1]
-        match = re.search(
-            r".*ARROW_SCAN.*Filters:.*s\.d\.f='bar'.*",
-            res,
-            flags=re.DOTALL,
-        )
-
-        assert match
-
-        # Check that the filter is applied correctly
         assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE s.d.f = 'bar'").fetchone()[0] == {
             "a": {"b": 3, "c": True},
             "d": {"e": 4, "f": "bar"},
         }
 
-    def test_filter_pushdown_not_supported(self):
-        con = duckdb.connect()
-        con.execute(
-            "CREATE TABLE T as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d FROM range(5) tbl(i)"
+
+# ===========================================================================
+# 6. LIKE pushdown
+# ===========================================================================
+
+
+class TestLikePushdown:
+    """Test LIKE filter pushdown.
+
+    LIKE with a fixed prefix decomposes into ``>= prefix AND < prefix+1``; a
+    constant LIKE (no wildcards) decomposes into ``=``. Both produce regular
+    comparison ExpressionFilters that the walker handles.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _s_arrow_table(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _l AS SELECT 'str_' || lpad(i::VARCHAR, 4, '0') AS s FROM range(100) t(i)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_l"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+
+    def test_like_with_prefix_is_pushed(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT s FROM arrow_table WHERE s LIKE 'str_001%'")
+
+    def test_like_constant_is_pushed(self, duckdb_cursor):
+        assert _was_pushed(duckdb_cursor, "SELECT s FROM arrow_table WHERE s LIKE 'str_0042'")
+
+    def test_like_with_prefix_correct(self, duckdb_cursor):
+        rows = duckdb_cursor.execute("SELECT s FROM arrow_table WHERE s LIKE 'str_001%' ORDER BY s").fetchall()
+        assert rows == [(f"str_001{d}",) for d in "0123456789"]
+
+
+# ===========================================================================
+# 7. CAST temporal pushdown
+# ===========================================================================
+
+
+class TestTemporalCastPushdown:
+    """``CAST(timestamp_col AS DATE) = …`` pushes an optional relaxed range filter.
+
+    See `TryPushdownTemporalCastFilter`.
+    """
+
+    def test_cast_timestamp_to_date_is_pushed(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            "CREATE TABLE _ct AS "
+            "SELECT TIMESTAMP '2024-01-01 00:00:00' + INTERVAL (i) SECOND AS ts FROM range(86400) t(i)"
         )
-        arrow_tbl = con.execute("FROM T").to_arrow_table()
-
-        # No projection just unsupported filter
-        assert con.execute("from arrow_tbl where c == 3").fetchall() == [(3, "3", 3, 3)]
-
-        # No projection unsupported + supported filter
-        assert con.execute("from arrow_tbl where c < 4 and a > 2").fetchall() == [(3, "3", 3, 3)]
-
-        # No projection supported + unsupported + supported filter
-        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, "3", 3, 3)]
-        assert con.execute("from arrow_tbl where a > 2 and c < 4 and  b == '0' ").fetchall() == []
-
-        # Projection with unsupported filter column + unsupported + supported filter
-        assert con.execute("select c, b from arrow_tbl where c < 4 and  b == '3' and a > 2 ").fetchall() == [(3, "3")]
-        assert con.execute("select c, b from arrow_tbl where a > 2 and c < 4 and  b == '3'").fetchall() == [(3, "3")]
-
-        # Projection without unsupported filter column + unsupported + supported filter
-        assert con.execute("select a, b from arrow_tbl where a > 2 and c < 4 and  b == '3' ").fetchall() == [(3, "3")]
-
-        # Lets also experiment with multiple unpush-able filters
-        con.execute(
-            "CREATE TABLE T_2 as SELECT i::integer a, i::varchar b, i::uhugeint c, i::integer d , i::uhugeint e, i::smallint f, i::uhugeint g FROM range(50) tbl(i)"  # noqa: E501
+        arrow_table = to_arrow_table(duckdb_cursor.table("_ct"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+        assert _was_pushed(
+            duckdb_cursor,
+            "SELECT * FROM arrow_table WHERE CAST(ts AS DATE) = DATE '2024-01-01'",
         )
 
-        arrow_tbl = con.execute("FROM T_2").to_arrow_table()
 
-        assert con.execute(
-            "select a, b from arrow_tbl where a > 2 and c < 40 and b == '28' and g > 15 and e < 30"
-        ).fetchall() == [(28, "28")]
+# ===========================================================================
+# 8. IS DISTINCT FROM NULL inside OR
+#
+# This is the one realistic SQL path that produces an
+# ExpressionFilter(OPERATOR_IS_NULL / IS_NOT_NULL) for the walker — see
+# filter_combiner.cpp:615-625.
+# ===========================================================================
 
-    def test_join_filter_pushdown(self, duckdb_cursor):
-        duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("CREATE TABLE probe as select range a from range(10000);")
-        duckdb_conn.execute("CREATE TABLE build as select (random()*9999)::INT b from range(20);")
-        duck_probe = duckdb_conn.table("probe")
-        duck_build = duckdb_conn.table("build")
-        duck_probe_arrow = duck_probe.to_arrow_table()
-        duck_build_arrow = duck_build.to_arrow_table()
-        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
-        duckdb_conn.register("duck_build_arrow", duck_build_arrow)
-        assert duckdb_conn.execute("SELECT count(*) from duck_probe_arrow, duck_build_arrow where a=b").fetchall() == [
-            (20,)
-        ]
 
-    def test_in_filter_pushdown(self, duckdb_cursor):
-        duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("CREATE TABLE probe as select range a from range(1000);")
-        duck_probe = duckdb_conn.table("probe")
-        duck_probe_arrow = duck_probe.to_arrow_table()
-        duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
-        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
+class TestDistinctFromNullOrPushdown:
+    """``IS DISTINCT FROM NULL OR ...`` produces an IS_NOT_NULL ExpressionFilter."""
 
-    @pytest.mark.timeout(10)
-    def test_in_filter_pushdown_large_list(self, duckdb_cursor):
-        """Large IN lists must not hang. Regression test for https://github.com/duckdb/duckdb-python/issues/52."""
-        arrow_table = pa.table({"a": pa.array(range(5000))})
-        in_list = ", ".join(str(i) for i in range(0, 5000, 2))
-        result = duckdb.sql(f"SELECT count(*) FROM arrow_table WHERE a IN ({in_list})").fetchone()
-        assert result == (2500,)
+    @pytest.fixture(autouse=True)
+    def _with_nulls(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _d AS SELECT * FROM (VALUES (1), (NULL), (5), (10)) t(a)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_d"))
+        duckdb_cursor.register("arrow_table", arrow_table)
 
-    def test_in_filter_pushdown_with_nulls(self, duckdb_cursor):
-        arrow_table = pa.table({"a": pa.array([1, 2, None, 4, None, 6])})
-        # IN list without NULL: null rows should not match
-        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4) ORDER BY a").fetchall()
-        assert result == [(1,), (4,)]
-        # IN list with NULL: null rows still should not match (SQL semantics)
-        result = duckdb.sql("SELECT a FROM arrow_table WHERE a IN (1, 4, NULL) ORDER BY a").fetchall()
-        assert result == [(1,), (4,)]
+    def test_distinct_from_null_or_eq_is_pushed(self, duckdb_cursor):
+        assert _was_pushed(
+            duckdb_cursor,
+            "SELECT a FROM arrow_table WHERE a IS DISTINCT FROM NULL OR a = 5",
+        )
 
-    def test_in_filter_pushdown_varchar(self, duckdb_cursor):
-        arrow_table = pa.table({"s": pa.array(["alice", "bob", "charlie", "dave", None])})
-        result = duckdb.sql("SELECT s FROM arrow_table WHERE s IN ('bob', 'dave') ORDER BY s").fetchall()
-        assert result == [("bob",), ("dave",)]
+    def test_distinct_from_null_or_eq_correct(self, duckdb_cursor):
+        rows = duckdb_cursor.execute(
+            "SELECT a FROM arrow_table WHERE a IS DISTINCT FROM NULL OR a = 5 ORDER BY a"
+        ).fetchall()
+        assert rows == [(1,), (5,), (10,)]
 
-    def test_in_filter_pushdown_float(self, duckdb_cursor):
-        arrow_table = pa.table({"f": pa.array([1.0, 2.5, 3.75, 4.0, None], type=pa.float64())})
-        result = duckdb.sql("SELECT f FROM arrow_table WHERE f IN (2.5, 4.0) ORDER BY f").fetchall()
-        assert result == [(2.5,), (4.0,)]
+    def test_not_distinct_from_null_or_eq_correct(self, duckdb_cursor):
+        rows = duckdb_cursor.execute(
+            "SELECT a FROM arrow_table WHERE a IS NOT DISTINCT FROM NULL OR a = 5 ORDER BY a NULLS FIRST"
+        ).fetchall()
+        # NULL row + a=5 row
+        assert rows == [(None,), (5,)]
 
-    def test_pushdown_of_optional_filter(self, duckdb_cursor):
+
+# ===========================================================================
+# 9. Special-shape filters: optional, dynamic top-N, join
+# ===========================================================================
+
+
+class TestOptionalFilter:
+    """An OptionalFilter is allowed to silently fail.
+
+    The engine reapplies it above the scan. The result must remain correct.
+    """
+
+    def test_no_crash_correct_result(self):
         cardinality_table = pa.Table.from_pydict(
             {
                 "column_name": [
@@ -965,17 +480,10 @@ class TestArrowFilterPushdown:
                 "cardinality": [100, 100, 100, 45, 5, 3, 6, 39, 5],
             }
         )
-
         result = duckdb.query(
-            """
-            SELECT *
-            FROM cardinality_table
-            WHERE cardinality > 1
-            ORDER BY cardinality ASC
-        """
-        )
-        res = result.fetchall()
-        assert res == [
+            "SELECT * FROM cardinality_table WHERE cardinality > 1 ORDER BY cardinality ASC"
+        ).fetchall()
+        assert result == [
             ("is_available", 3),
             ("category", 5),
             ("color", 5),
@@ -987,39 +495,55 @@ class TestArrowFilterPushdown:
             ("price", 100),
         ]
 
-    # DuckDB intentionally violates IEEE-754 when it comes to NaNs, ensuring a total ordering where NaN is the
-    # greatest value
-    def test_nan_filter_pushdown(self, duckdb_cursor):
-        duckdb_cursor.execute(
-            """
-            create table test as select a::DOUBLE a from VALUES
-                ('inf'),
-                ('nan'),
-                ('0.34234'),
-                ('34234234.00005'),
-                ('-nan')
-            t(a);
-        """
-        )
 
-        def assert_equal_results(con, arrow_table, query) -> None:
-            duckdb_res = con.sql(query.format(table="test")).fetchall()
-            arrow_res = con.sql(query.format(table="arrow_table")).fetchall()
-            assert len(duckdb_res) == len(arrow_res)
+class TestDynamicFilter:
+    """The top-N optimization installs a dynamic filter.
 
-        arrow_table = duckdb_cursor.table("test").to_arrow_table()
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a > 'NaN'::FLOAT")
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a >= 'NaN'::FLOAT")
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a < 'NaN'::FLOAT")
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a <= 'NaN'::FLOAT")
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a = 'NaN'::FLOAT")
-        assert_equal_results(duckdb_cursor, arrow_table, "select * from {table} where a != 'NaN'::FLOAT")
+    The walker returns ``py::none()`` for those (DuckDB applies them above the scan).
+    """
 
-    def test_dynamic_filter(self, duckdb_cursor):
+    def test_topn_dynamic_filter(self, duckdb_cursor):
         t = pa.Table.from_pydict({"a": [3, 24, 234, 234, 234, 234, 234, 234, 234, 45, 2, 5, 2, 45]})
         duckdb_cursor.register("t", t)
-        res = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
-        assert len(res) == 11
+        rows = duckdb_cursor.sql("SELECT a FROM t ORDER BY a LIMIT 11").fetchall()
+        assert len(rows) == 11
+
+
+class TestJoinFilterPushdown:
+    """Join pushdown between two arrow tables must produce the right count.
+
+    The join's runtime filters take a separate code path that doesn't
+    reach the static-filter walker — see TestCanaries below.
+    """
+
+    def test_two_arrow_tables(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE probe AS SELECT range a FROM range(10000)")
+        con.execute("CREATE TABLE build AS SELECT (random()*9999)::INT b FROM range(20)")
+        con.register("probe_arrow", to_arrow_table(con.table("probe")))
+        con.register("build_arrow", to_arrow_table(con.table("build")))
+        assert con.execute("SELECT count(*) FROM probe_arrow, build_arrow WHERE a = b").fetchall() == [(20,)]
+
+
+# ===========================================================================
+# 10. Unsupported-type fallback (filter applied above the scan)
+# ===========================================================================
+
+
+class TestUnsupportedTypes:
+    """``UHUGEINT``, ``string_view``, ``binary_view`` filters must not crash.
+
+    The filter is applied above the scan instead of being pushed down.
+    """
+
+    def test_uhugeint_single_filter(self):
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE t AS SELECT i::INTEGER a, i::VARCHAR b, i::UHUGEINT c, i::INTEGER d FROM range(5) tbl(i)"
+        )
+        arrow_tbl = to_arrow_table(con.table("t"))
+        con.register("arrow_tbl", arrow_tbl)
+        assert con.execute("FROM arrow_tbl WHERE c = 3").fetchall() == [(3, "3", 3, 3)]
 
     def test_dynamic_filter_nulls_first_pyarrow(self, duckdb_cursor):
         # Regression for #460(a): TOP_N with ASC NULLS FIRST pushes an
@@ -1041,39 +565,304 @@ class TestArrowFilterPushdown:
         res = duckdb_cursor.sql("SELECT * FROM src ORDER BY x ASC NULLS FIRST LIMIT 1").fetchall()
         assert res == [(1,)]
 
-    def test_binary_view_filter(self, duckdb_cursor):
-        """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
+    def test_uhugeint_mixed_with_supported(self):
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE t AS SELECT i::INTEGER a, i::VARCHAR b, i::UHUGEINT c, i::INTEGER d FROM range(5) tbl(i)"
+        )
+        arrow_tbl = to_arrow_table(con.table("t"))
+        con.register("arrow_tbl", arrow_tbl)
+        assert con.execute("FROM arrow_tbl WHERE c < 4 AND a > 2").fetchall() == [(3, "3", 3, 3)]
+        assert con.execute("FROM arrow_tbl WHERE a > 2 AND c < 4 AND b = '3'").fetchall() == [(3, "3", 3, 3)]
+        assert con.execute("FROM arrow_tbl WHERE a > 2 AND c < 4 AND b = '0'").fetchall() == []
+
+    def test_uhugeint_with_projection(self):
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE t AS SELECT i::INTEGER a, i::VARCHAR b, i::UHUGEINT c, i::INTEGER d FROM range(5) tbl(i)"
+        )
+        arrow_tbl = to_arrow_table(con.table("t"))
+        con.register("arrow_tbl", arrow_tbl)
+        assert con.execute("SELECT c, b FROM arrow_tbl WHERE c < 4 AND b = '3' AND a > 2").fetchall() == [(3, "3")]
+        # Projection list doesn't include the unpushable column
+        assert con.execute("SELECT a, b FROM arrow_tbl WHERE a > 2 AND c < 4 AND b = '3'").fetchall() == [(3, "3")]
+
+    def test_multiple_unpushable_filters(self):
+        con = duckdb.connect()
+        con.execute(
+            "CREATE TABLE t AS SELECT i::INTEGER a, i::VARCHAR b, i::UHUGEINT c, "
+            "i::INTEGER d, i::UHUGEINT e, i::SMALLINT f, i::UHUGEINT g "
+            "FROM range(50) tbl(i)"
+        )
+        arrow_tbl = to_arrow_table(con.table("t"))
+        con.register("arrow_tbl", arrow_tbl)
+        assert con.execute(
+            "SELECT a, b FROM arrow_tbl WHERE a > 2 AND c < 40 AND b = '28' AND g > 15 AND e < 30"
+        ).fetchall() == [(28, "28")]
+
+    def test_binary_view_filter_does_not_crash(self):
+        """Binary view filters cannot be pushed (pyarrow limitation).
+
+        Results must still be correct.
+        """
         table = pa.table({"col": pa.array([b"abc", b"efg"], type=pa.binary_view())})
         dset = pa_ds.dataset(table)
-        res = duckdb_cursor.sql("select * from dset where col = 'abc'::binary")
-        assert len(res) == 1
+        res = duckdb.sql("SELECT * FROM dset WHERE col = 'abc'::BINARY").fetchall()
+        assert res == [(b"abc",)]
 
-    def test_string_view_filter(self, duckdb_cursor):
-        """Filters on a view column work (without pushdown because pyarrow does not support view filters yet)."""
+    def test_string_view_filter_does_not_crash(self):
+        """String view filters cannot be pushed (pyarrow limitation).
+
+        Results must still be correct.
+        """
         table = pa.table({"col": pa.array(["abc", "efg"], type=pa.string_view())})
         dset = pa_ds.dataset(table)
-        res = duckdb_cursor.sql("select * from dset where col = 'abc'")
-        assert len(res) == 1
+        res = duckdb.sql("SELECT * FROM dset WHERE col = 'abc'").fetchall()
+        assert res == [("abc",)]
 
-    @pytest.mark.xfail(raises=pa_lib.ArrowNotImplementedError)
-    def test_canary_for_pyarrow_string_view_filter_support(self, duckdb_cursor):
-        """This canary will xpass when pyarrow implements string view filter support."""
-        # predicate: field == "string value"
+
+# ===========================================================================
+# 11. Projection / scanner-path interactions
+# ===========================================================================
+
+
+@pytest.mark.parametrize("factory", ARROW_FACTORIES_WITH_DATASET)
+def test_filter_without_projection(duckdb_cursor, factory):
+    """Filter applied when no projection is specified.
+
+    Covers all three conversion paths including the dataset scanner.
+    """
+    duckdb_cursor.execute("CREATE TABLE _np (a INTEGER, b INTEGER, c INTEGER)")
+    duckdb_cursor.execute("INSERT INTO _np VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
+    arrow_table = factory(duckdb_cursor.table("_np"))
+    duckdb_cursor.register("arrow_table", arrow_table)
+    assert duckdb_cursor.execute("SELECT * FROM arrow_table WHERE a = 1").fetchall() == [(1, 1, 1)]
+
+
+# ===========================================================================
+# 12. Decimal pushdown via polars (the only path that exercises decimal
+# scalar coercion in the walker)
+# ===========================================================================
+
+
+def test_decimal_filter_pushdown_via_polars(duckdb_cursor):
+    """Polars decimal frames stress GetScalar's decimal branch."""
+    pl = pytest.importorskip("polars")
+    np.random.seed(10)
+    df = pl.DataFrame({"x": pl.Series(np.random.uniform(-10, 10, 1000)).cast(pl.Decimal(precision=18, scale=4))})
+    rows = duckdb_cursor.sql(
+        """
+        SELECT x, x > 0.05 AS is_x_good, x::FLOAT > 0.05 AS is_float_x_good
+        FROM df
+        WHERE is_x_good
+        ORDER BY x ASC
+        """
+    ).fetchall()
+    assert len(rows) == 495
+
+
+# ===========================================================================
+# 13. Regressions
+# ===========================================================================
+
+
+class TestRegressions:
+    """Issues that were fixed and need to stay fixed."""
+
+    @pytest.mark.skipif(
+        Version(pa.__version__) < Version("15.0.0"),
+        reason="pyarrow 14.0.2 'to_pandas' causes a DeprecationWarning",
+    )
+    def test_9371_arrow_dataset_with_tz_parameter(self, duckdb_cursor, tmp_path):
+        """Parameterized timestamp filter against a pandas-indexed parquet dataset.
+
+        https://github.com/duckdb/duckdb/issues/9371
+        """
+        duckdb_cursor.execute("SET TimeZone='UTC'")
+        file_path = tmp_path / "test.parquet"
+        timestamp = dt.datetime(2023, 8, 29, 1, tzinfo=dt.timezone.utc)
+        my_arrow_table = pa.Table.from_pydict({"ts": [timestamp] * 3, "value": [1, 2, 3]})
+        df = my_arrow_table.to_pandas().set_index("ts")
+        df.to_parquet(str(file_path))
+
+        my_arrow_dataset = pa_ds.dataset(str(file_path))
+        res = duckdb_cursor.execute(
+            "SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[timestamp]
+        ).to_arrow_table()
+        assert duckdb_cursor.sql("SELECT * FROM res").fetchall() == [(1, timestamp), (2, timestamp), (3, timestamp)]
+
+    def test_2145_parquet_glob_through_arrow(self, duckdb_cursor, tmp_path):
+        """Filter pushdown into a parquet glob via the arrow scan.
+
+        https://github.com/duckdb/duckdb/issues/2145
+        """
+        date1 = pd.date_range("2018-01-01", "2018-12-31", freq="B")
+        df1 = pd.DataFrame(np.random.randn(date1.shape[0], 5), columns=list("ABCDE"))
+        df1["date"] = date1
+        date2 = pd.date_range("2019-01-01", "2019-12-31", freq="B")
+        df2 = pd.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
+        df2["date"] = date2
+
+        data1 = tmp_path / "data1.parquet"
+        data2 = tmp_path / "data2.parquet"
+        duckdb_cursor.execute(f"COPY (SELECT * FROM df1) TO '{data1.as_posix()}'")
+        duckdb_cursor.execute(f"COPY (SELECT * FROM df2) TO '{data2.as_posix()}'")
+
+        glob_pattern = (tmp_path / "data*.parquet").as_posix()
+        table = duckdb_cursor.read_parquet(glob_pattern).to_arrow_table()
+        output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
+        expected_df = duckdb.from_parquet(glob_pattern).filter("date > '2019-01-01'").df()
+        pd.testing.assert_frame_equal(expected_df, output_df)
+
+
+# ===========================================================================
+# 14. Canaries
+#
+# Each canary documents a current limitation or an expected future change.
+# When upstream behaviour shifts, a canary either xpasses (failing the suite
+# and forcing us to update) or fails outright.
+# ===========================================================================
+
+
+class TestCanaries:
+    """Markers for behaviours we expect to change upstream eventually."""
+
+    # ----- pyarrow capabilities ----------------------------------------
+
+    @pytest.mark.xfail(
+        raises=pa_lib.ArrowNotImplementedError,
+        reason="pyarrow does not yet implement string_view filter compare kernels",
+        strict=True,
+    )
+    def test_pyarrow_gains_string_view_filter_support(self):
+        """When pyarrow adds string_view comparison kernels this will xpass.
+
+        At that point we should remove the post-scan fallback in TestUnsupportedTypes.
+        """
         filter_expr = pa_ds.field("col") == pa_ds.scalar("val1")
-        # dataset with a string view column
         table = pa.table({"col": pa.array(["val1", "val2"], type=pa.string_view())})
-        dset = pa_ds.dataset(table)
-        # creating the scanner fails
-        dset.scanner(columns=["col"], filter=filter_expr)
+        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
 
-    @pytest.mark.xfail(raises=pa_lib.ArrowNotImplementedError)
-    def test_canary_for_pyarrow_binary_view_filter_support(self, duckdb_cursor):
-        """This canary will xpass when pyarrow implements binary view filter support."""
-        # predicate: field == const
-        const = pa_ds.scalar(pa.scalar(b"bin1", pa.binary_view()))
-        filter_expr = pa_ds.field("col") == const
-        # dataset with a string view column
+    @pytest.mark.xfail(
+        raises=pa_lib.ArrowNotImplementedError,
+        reason="pyarrow does not yet implement binary_view filter compare kernels",
+        strict=True,
+    )
+    def test_pyarrow_gains_binary_view_filter_support(self):
+        """When pyarrow adds binary_view comparison kernels this will xpass."""
+        filter_expr = pa_ds.field("col") == pa_ds.scalar(pa.scalar(b"bin1", pa.binary_view()))
         table = pa.table({"col": pa.array([b"bin1", b"bin2"], type=pa.binary_view())})
-        dset = pa_ds.dataset(table)
-        # creating the scanner fails
-        dset.scanner(columns=["col"], filter=filter_expr)
+        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+
+    # ----- DuckDB optimizer decisions we expect to change --------------
+
+    @pytest.mark.xfail(
+        reason="DuckDB does not currently push IS NULL into the arrow scan",
+        strict=True,
+    )
+    def test_is_null_pushes_into_arrow_scan(self, duckdb_cursor):
+        """If the optimizer starts pushing standalone IS NULL into arrow scans, this canary xpasses.
+
+        The walker already has the OPERATOR_IS_NULL arm.
+        """
+        duckdb_cursor.execute("CREATE TABLE _t AS SELECT * FROM (VALUES (1), (NULL), (3)) v(a)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_t"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+        assert _was_pushed(duckdb_cursor, "SELECT a FROM arrow_table WHERE a IS NULL")
+
+    @pytest.mark.xfail(
+        reason="DuckDB does not currently push IS NULL on struct fields into the arrow scan",
+        strict=True,
+    )
+    def test_struct_is_null_pushes(self, duckdb_cursor):
+        """If the optimizer starts pushing struct-field IS NULL, this canary xpasses."""
+        duckdb_cursor.execute("CREATE TABLE _s (s STRUCT(a INTEGER))")
+        duckdb_cursor.execute("INSERT INTO _s VALUES ({'a': 1}), ({'a': NULL}), (NULL)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_s"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE s.a IS NULL")
+
+    @pytest.mark.xfail(
+        reason="DuckDB does not currently push struct.a IN (...) into the arrow scan; "
+        "TryPushdownInFilter requires a bare BoundColumnRef (filter_combiner.cpp:505-508)",
+        strict=True,
+    )
+    def test_struct_in_pushes(self, duckdb_cursor):
+        """When DuckDB extends TryPushdownInFilter to allow struct_extract column sides, this canary xpasses.
+
+        ResolveColumn already handles the path.
+        """
+        duckdb_cursor.execute("CREATE TABLE _s (s STRUCT(a INTEGER))")
+        duckdb_cursor.execute("INSERT INTO _s VALUES ({'a': 1}), ({'a': 2}), ({'a': 42}), (NULL)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_s"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+        assert _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE s.a IN (1, 42, 99)")
+
+    # ----- Join filter pushdown ----------------------------------------
+    #
+    # BLOOM_FILTER, PERFECT_HASH_JOIN_FILTER, and PREFIX_RANGE_FILTER are
+    # generated by hash joins. Today they take a separate runtime path
+    # (`info.dynamic_filters->PushFilter(...)` in physical_hash_join.cpp) that
+    # does NOT reach PyArrowFilterPushdown::TransformFilter. These canaries
+    # document the current behaviour: the join runs to the correct answer but
+    # the walker is not invoked, so the new filter types never surface to the
+    # bindings. The day arrow_array_stream.cpp starts receiving them via the
+    # static filter set, we'll fail here.
+
+    @pytest.mark.xfail(
+        reason="BLOOM_FILTER from joins reaches arrow scans via runtime dynamic_filters, "
+        "not PyArrowFilterPushdown::TransformFilter",
+        strict=True,
+    )
+    def test_bloom_filter_reaches_walker(self, duckdb_cursor):
+        """When join bloom filters start flowing through the static filter set, this canary xpasses.
+
+        Used by arrow_array_stream.cpp. We'll need to add a BLOOM_FILTER case in
+        TransformFilterRecursive.
+        """
+        duckdb_cursor.execute("CREATE TABLE _probe AS SELECT range AS k FROM range(100_000)")
+        duckdb_cursor.execute("CREATE TABLE _build AS SELECT (i*2)::BIGINT AS k FROM range(50_000) t(i)")
+        probe_arrow = to_arrow_table(duckdb_cursor.table("_probe"))
+        duckdb_cursor.register("probe_arrow", probe_arrow)
+        assert _was_pushed(duckdb_cursor, "SELECT count(*) FROM probe_arrow JOIN _build USING(k)")
+
+    @pytest.mark.xfail(
+        reason="PERFECT_HASH_JOIN_FILTER from joins reaches arrow scans via runtime dynamic_filters, "
+        "not PyArrowFilterPushdown::TransformFilter",
+        strict=True,
+    )
+    def test_perfect_hash_join_filter_reaches_walker(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE _probe AS SELECT range AS k FROM range(10_000)")
+        duckdb_cursor.execute("CREATE TABLE _build AS SELECT i AS k FROM range(100) t(i)")
+        probe_arrow = to_arrow_table(duckdb_cursor.table("_probe"))
+        duckdb_cursor.register("probe_arrow", probe_arrow)
+        assert _was_pushed(duckdb_cursor, "SELECT count(*) FROM probe_arrow JOIN _build USING(k)")
+
+    @pytest.mark.xfail(
+        reason="PREFIX_RANGE_FILTER from joins reaches arrow scans via runtime dynamic_filters, "
+        "not PyArrowFilterPushdown::TransformFilter",
+        strict=True,
+    )
+    def test_prefix_range_filter_reaches_walker(self, duckdb_cursor):
+        duckdb_cursor.execute(
+            "CREATE TABLE _probe AS SELECT 'str_' || lpad(i::VARCHAR, 4, '0') AS k FROM range(10_000) t(i)"
+        )
+        duckdb_cursor.execute(
+            "CREATE TABLE _build AS SELECT 'str_' || lpad((i*2)::VARCHAR, 4, '0') AS k FROM range(500) t(i)"
+        )
+        probe_arrow = to_arrow_table(duckdb_cursor.table("_probe"))
+        duckdb_cursor.register("probe_arrow", probe_arrow)
+        assert _was_pushed(duckdb_cursor, "SELECT count(*) FROM probe_arrow JOIN _build USING(k)")
+
+    # ----- Optimizer canonicalization expected to stay -----------------
+
+    def test_not_in_does_not_push(self, duckdb_cursor):
+        """``NOT IN`` is rewritten to AND-of-!= by the optimizer rather than being pushed as a single operator.
+
+        If this ever changes the assertion flips to ``_was_pushed`` and the walker's
+        BOUND_OPERATOR arm needs an ``OPERATOR_NOT`` case.
+        """
+        duckdb_cursor.execute("CREATE TABLE _t AS SELECT range AS a FROM range(1000)")
+        arrow_table = to_arrow_table(duckdb_cursor.table("_t"))
+        duckdb_cursor.register("arrow_table", arrow_table)
+        assert not _was_pushed(duckdb_cursor, "SELECT * FROM arrow_table WHERE a NOT IN (1, 5, 100)")

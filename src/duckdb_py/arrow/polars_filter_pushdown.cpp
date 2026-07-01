@@ -1,151 +1,141 @@
 #include "duckdb_python/arrow/polars_filter_pushdown.hpp"
 
-#include "duckdb/planner/filter/in_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/table_filter.hpp"
-
+#include "duckdb_python/arrow/filter_pushdown_visitor.hpp"
+#include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/python_objects.hpp"
 
 namespace duckdb {
 
-static py::object TransformFilterRecursive(TableFilter &filter, py::object col_expr,
-                                           const ClientProperties &client_properties) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
+namespace {
 
-	switch (filter.filter_type) {
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &constant = constant_filter.constant;
-		auto &constant_type = constant.type();
+struct PolarsBackend : public FilterBackend {
+	explicit PolarsBackend(const ClientProperties &client_properties_p)
+	    : client_properties(client_properties_p), import_cache(*DuckDBPyConnection::ImportCache()) {
+	}
 
-		// Check for NaN
-		bool is_nan = false;
-		if (constant_type.id() == LogicalTypeId::FLOAT) {
-			is_nan = Value::IsNan(constant.GetValue<float>());
-		} else if (constant_type.id() == LogicalTypeId::DOUBLE) {
-			is_nan = Value::IsNan(constant.GetValue<double>());
+	py::object MakeColumnRef(const vector<Identifier> &path) override {
+		// pl.col(path[0]).struct.field(path[1]).struct.field(...) — polars supports arbitrary
+		// chaining for nested struct access, verified empirically up to 3 levels.
+		py::object col = import_cache.polars.col()(path[0]);
+		for (idx_t i = 1; i < path.size(); i++) {
+			col = col.attr("struct").attr("field")(path[i].GetIdentifierName());
 		}
+		return col;
+	}
 
-		if (is_nan) {
-			switch (constant_filter.comparison_type) {
-			case ExpressionType::COMPARE_EQUAL:
-			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-				return col_expr.attr("is_nan")();
-			case ExpressionType::COMPARE_LESSTHAN:
-			case ExpressionType::COMPARE_NOTEQUAL:
-				return col_expr.attr("is_nan")().attr("__invert__")();
-			case ExpressionType::COMPARE_GREATERTHAN:
-				return import_cache.polars.lit()(false);
-			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-				return import_cache.polars.lit()(true);
-			default:
-				return py::none();
-			}
-		}
+	py::object MakeScalar(const Value &v, const ArrowType *arrow_type, const string &timezone_config) override {
+		// Polars handles type coercion for primitives; no ArrowType lookup is needed.
+		(void)arrow_type;
+		(void)timezone_config;
+		return PythonObject::FromValue(v, v.type(), client_properties);
+	}
 
-		// Convert DuckDB Value to Python object
-		auto py_value = PythonObject::FromValue(constant, constant_type, client_properties);
-
-		switch (constant_filter.comparison_type) {
+	py::object Compare(ExpressionType op, py::object col, py::object scalar) override {
+		switch (op) {
 		case ExpressionType::COMPARE_EQUAL:
-			return col_expr.attr("__eq__")(py_value);
-		case ExpressionType::COMPARE_LESSTHAN:
-			return col_expr.attr("__lt__")(py_value);
-		case ExpressionType::COMPARE_GREATERTHAN:
-			return col_expr.attr("__gt__")(py_value);
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return col_expr.attr("__le__")(py_value);
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return col_expr.attr("__ge__")(py_value);
+			return col.attr("__eq__")(scalar);
 		case ExpressionType::COMPARE_NOTEQUAL:
-			return col_expr.attr("__ne__")(py_value);
+			return col.attr("__ne__")(scalar);
+		case ExpressionType::COMPARE_LESSTHAN:
+			return col.attr("__lt__")(scalar);
+		case ExpressionType::COMPARE_GREATERTHAN:
+			return col.attr("__gt__")(scalar);
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			return col.attr("__le__")(scalar);
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return col.attr("__ge__")(scalar);
 		default:
-			return py::none();
+			throw NotImplementedException("Comparison Type %s can't be a polars pushdown filter",
+			                              ExpressionTypeToString(op));
 		}
 	}
-	case TableFilterType::IS_NULL: {
-		return col_expr.attr("is_null")();
-	}
-	case TableFilterType::IS_NOT_NULL: {
-		return col_expr.attr("is_not_null")();
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-		py::object expression = py::none();
-		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
-			auto child_expression = TransformFilterRecursive(*and_filter.child_filters[i], col_expr, client_properties);
-			if (child_expression.is(py::none())) {
-				continue;
-			}
-			if (expression.is(py::none())) {
-				expression = std::move(child_expression);
-			} else {
-				expression = expression.attr("__and__")(child_expression);
-			}
+
+	py::object NaNCompare(ExpressionType op, py::object col) override {
+		switch (op) {
+		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			return col.attr("is_nan")();
+		case ExpressionType::COMPARE_LESSTHAN:
+		case ExpressionType::COMPARE_NOTEQUAL:
+			return col.attr("is_nan")().attr("__invert__")();
+		case ExpressionType::COMPARE_GREATERTHAN:
+			// Nothing is greater than NaN.
+			return import_cache.polars.lit()(false);
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			// Everything is less than or equal to NaN.
+			return import_cache.polars.lit()(true);
+		default:
+			throw NotImplementedException("Unsupported comparison type (%s) for NaN values",
+			                              ExpressionTypeToString(op));
 		}
-		return expression;
 	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &or_filter = filter.Cast<ConjunctionOrFilter>();
-		py::object expression = py::none();
-		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
-			auto child_expression = TransformFilterRecursive(*or_filter.child_filters[i], col_expr, client_properties);
-			if (child_expression.is(py::none())) {
-				// Can't skip children in OR
-				return py::none();
-			}
-			if (expression.is(py::none())) {
-				expression = std::move(child_expression);
-			} else {
-				expression = expression.attr("__or__")(child_expression);
-			}
-		}
-		return expression;
+
+	py::object IsNull(py::object col) override {
+		return col.attr("is_null")();
 	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		auto child_col = col_expr.attr("struct").attr("field")(struct_filter.child_name);
-		return TransformFilterRecursive(*struct_filter.child_filter, child_col, client_properties);
+
+	py::object IsNotNull(py::object col) override {
+		return col.attr("is_not_null")();
 	}
-	case TableFilterType::IN_FILTER: {
-		auto &in_filter = filter.Cast<InFilter>();
+
+	py::object IsIn(py::object col, const vector<Value> &values, const LogicalType &col_logical_type,
+	                const string &timezone_config) override {
+		(void)timezone_config;
 		py::list py_values;
-		for (const auto &value : in_filter.values) {
-			py_values.append(PythonObject::FromValue(value, value.type(), client_properties));
+		for (auto &val : values) {
+			py_values.append(PythonObject::FromValue(val, val.type(), client_properties));
 		}
-		return col_expr.attr("is_in")(py_values);
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = filter.Cast<OptionalFilter>();
-		if (!optional_filter.child_filter) {
-			return py::none();
+		if (col_logical_type.id() == LogicalTypeId::DECIMAL) {
+			// Polars infers Decimal(38, scale) for a plain list of Python Decimal values,
+			// which doesn't match the column's declared Decimal(precision, scale) — the call
+			// then fails with `'is_in' cannot check for List(Decimal(38, _)) values in
+			// Decimal(p, s) data`. Build a typed Series matching the column to side-step
+			// that, and wrap it with `.implode()` to silence the
+			// `is_in`-with-same-dtype-Series deprecation (issue 22149).
+			uint8_t width;
+			uint8_t scale;
+			col_logical_type.GetDecimalProperties(width, scale);
+			py::object dtype = import_cache.polars.Decimal()(py::arg("precision") = width, py::arg("scale") = scale);
+			py::object typed_series =
+			    import_cache.polars.Series()(py::arg("values") = py_values, py::arg("dtype") = dtype);
+			return col.attr("is_in")(typed_series.attr("implode")());
 		}
-		return TransformFilterRecursive(*optional_filter.child_filter, col_expr, client_properties);
+		return col.attr("is_in")(py_values);
 	}
-	default:
-		// We skip DYNAMIC_FILTER, EXPRESSION_FILTER, BLOOM_FILTER
-		return py::none();
+
+	py::object And(py::object a, py::object b) override {
+		return a.attr("__and__")(b);
 	}
-}
+
+	py::object Or(py::object a, py::object b) override {
+		return a.attr("__or__")(b);
+	}
+
+private:
+	const ClientProperties &client_properties;
+	PythonImportCache &import_cache;
+};
+
+} // anonymous namespace
 
 py::object PolarsFilterPushdown::TransformFilter(const TableFilterSet &filter_collection,
                                                  unordered_map<idx_t, string> &columns,
                                                  const unordered_map<idx_t, idx_t> &filter_to_col,
                                                  const ClientProperties &client_properties) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto &filters_map = filter_collection.filters;
-
+	(void)filter_to_col;
+	PolarsBackend backend(client_properties);
 	py::object expression = py::none();
-	for (auto &it : filters_map) {
-		auto column_idx = it.first;
+	for (auto &entry : filter_collection) {
+		auto column_idx = entry.GetIndex();
 		auto &column_name = columns[column_idx];
-		auto col_expr = import_cache.polars.col()(column_name);
+		D_ASSERT(columns.find(column_idx) != columns.end());
 
-		auto child_expression = TransformFilterRecursive(*it.second, col_expr, client_properties);
+		vector<Identifier> column_path = {Identifier(column_name)};
+		// Polars does not need ArrowType information — `nullptr` here propagates through the
+		// shared walker; the PolarsBackend ignores the parameter in MakeScalar.
+		py::object child_expression = duckdb::TransformFilter(entry.Filter(), std::move(column_path), backend, nullptr,
+		                                                      client_properties.time_zone);
 		if (child_expression.is(py::none())) {
 			continue;
 		}

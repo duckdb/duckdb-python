@@ -32,7 +32,7 @@ public:
 	py::dict FetchNumpy();
 
 	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1,
-	                            unique_ptr<NumpyResultConversion> conversion = nullptr);
+	                            std::unique_ptr<NumpyResultConversion> conversion = nullptr);
 
 	PandasDataFrame FetchDF(bool date_as_object);
 
@@ -67,7 +67,7 @@ private:
 	void ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_object) const;
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
-	unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
+	std::unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
 
 	//! Re-feed an already-MATERIALIZED result (a ColumnDataCollection, e.g. from
 	//! rel.execute()) back through the engine on the user's own context. The eager

@@ -11,6 +11,15 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
+// Custom type_caster specializations must be visible in every TU that converts the type (otherwise it is
+// UB); keep ALL of them here, in this universally-included umbrella, never in scattered per-feature headers.
+#include "duckdb_python/pybind11/conversions/identifier.hpp"
+#include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
+#include "duckdb_python/pybind11/conversions/null_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/render_mode_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/helper.hpp"

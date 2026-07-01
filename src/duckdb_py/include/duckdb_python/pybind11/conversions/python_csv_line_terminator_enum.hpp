@@ -3,10 +3,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-
-using duckdb::InvalidInputException;
-using duckdb::string;
-using duckdb::StringUtil;
+#include "duckdb_python/pybind11/conversions/enum_string_caster.hpp"
 
 namespace duckdb {
 
@@ -45,34 +42,7 @@ public:
 
 } // namespace duckdb
 
-using duckdb::PythonCSVLineTerminator;
-
-namespace py = pybind11;
-
-namespace PYBIND11_NAMESPACE {
-namespace detail {
-
-template <>
-struct type_caster<PythonCSVLineTerminator::Type> : public type_caster_base<PythonCSVLineTerminator::Type> {
-	using base = type_caster_base<PythonCSVLineTerminator::Type>;
-	PythonCSVLineTerminator::Type tmp;
-
-public:
-	bool load(handle src, bool convert) {
-		if (base::load(src, convert)) {
-			return true;
-		} else if (py::isinstance<py::str>(src)) {
-			tmp = duckdb::PythonCSVLineTerminator::FromString(py::str(src));
-			value = &tmp;
-			return true;
-		}
-		return false;
-	}
-
-	static handle cast(PythonCSVLineTerminator::Type src, return_value_policy policy, handle parent) {
-		return base::cast(src, policy, parent);
-	}
-};
-
-} // namespace detail
-} // namespace PYBIND11_NAMESPACE
+//! See enum_string_caster.hpp for the rationale (composition over inheritance, umbrella visibility).
+//! Only a string or the enum itself are accepted (no integer form).
+DUCKDB_PY_ENUM_STRING_CASTER(duckdb::PythonCSVLineTerminator::Type, duckdb::PythonCSVLineTerminator::FromString,
+                             "CSVLineTerminator")

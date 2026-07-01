@@ -158,12 +158,17 @@ def test_connection_get_table_schema(duck_conn):
             ]
         )
 
+        # The schema/tables created above must survive the rollback below, so commit them first.
+        duck_conn.commit()
+
         # Test invalid catalog name
         with pytest.raises(
             adbc_driver_manager.InternalError,
             match=r'Catalog "bla" does not exist',
         ):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
+        # The failed lookup aborts the (autocommit-off) transaction; roll it back before continuing.
+        duck_conn.rollback()
 
         # Catalog and DB Schema name
         assert duck_conn.adbc_get_table_schema(
@@ -214,6 +219,9 @@ def test_insertion(duck_conn):
         cursor.execute("SELECT * FROM ingest")
         assert cursor.fetch_arrow_table() == table
 
+    # The created tables must survive the rollback below, so commit them first.
+    duck_conn.commit()
+
     # Test Append
     with duck_conn.cursor() as cursor:
         with pytest.raises(
@@ -221,6 +229,8 @@ def test_insertion(duck_conn):
             match=r"ALREADY_EXISTS",
         ):
             cursor.adbc_ingest("ingest_table", table, "create")
+        # The failed create aborts the (autocommit-off) transaction; roll it back before continuing.
+        duck_conn.rollback()
         cursor.adbc_ingest("ingest_table", table, "append")
         cursor.execute("SELECT count(*) FROM ingest_table")
         assert cursor.fetch_arrow_table().to_pydict() == {"count_star()": [8]}

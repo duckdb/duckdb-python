@@ -1,6 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pybind11/conversions/explain_enum.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
@@ -262,11 +263,18 @@ static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	m.def("describe", &DuckDBPyRelation::Describe,
 	      "Gives basic statistics (e.g., min, max) and if NULL exists for each column of the relation.")
-	    .def("explain", &DuckDBPyRelation::Explain, py::arg("type") = "standard");
+	    .def(
+	        "explain",
+	        [](DuckDBPyRelation &self, ExplainType type, const py::object &format) {
+		        // An omitted format (None) maps to "" = auto-select (default, or HTML under Jupyter).
+		        string format_str = format.is_none() ? string() : string(py::str(format));
+		        return self.Explain(type, format_str);
+	        },
+	        py::arg("type") = ExplainType::EXPLAIN_STANDARD, py::arg("format") = py::none());
 }
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
-	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
+	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation");
 	InitializeReadOnlyProperties(relation_module);
 	InitializeAggregates(relation_module);
 	InitializeWindowOperators(relation_module);

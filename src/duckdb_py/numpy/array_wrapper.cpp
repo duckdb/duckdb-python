@@ -8,8 +8,9 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
-#include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 
 #include <duckdb/function/scalar/variant_utils.hpp>
 
@@ -35,7 +36,7 @@ struct TimestampConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
 		(void)append_data;
-		if (!Timestamp::IsFinite(val)) {
+		if (!Value::IsFinite(val)) {
 			return val.value;
 		}
 		return Timestamp::GetEpochNanoSeconds(val);
@@ -52,7 +53,7 @@ struct TimestampConvertSec {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
 		(void)append_data;
-		if (!Timestamp::IsFinite(val)) {
+		if (!Value::IsFinite(val)) {
 			return val.value;
 		}
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochSeconds(val.value));
@@ -69,7 +70,7 @@ struct TimestampConvertMilli {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(timestamp_t val, NumpyAppendData &append_data) {
 		(void)append_data;
-		if (!Timestamp::IsFinite(val)) {
+		if (!Value::IsFinite(val)) {
 			return val.value;
 		}
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochMs(val.value));
@@ -179,6 +180,25 @@ struct StringConvert {
 	}
 };
 
+struct NullConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(DUCKDB_T val, NumpyAppendData &append_data) {
+		// A SQLNULL column contains only NULLs, so ConvertValue is never reached; every row takes NullValue.
+		(void)val;
+		(void)append_data;
+		Py_RETURN_NONE;
+	}
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		if (PANDAS) {
+			set_mask = false;
+			Py_RETURN_NONE;
+		}
+		set_mask = true;
+		return nullptr;
+	}
+};
+
 struct BlobConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(string_t val, NumpyAppendData &append_data) {
@@ -237,7 +257,6 @@ static py::object InternalCreateList(Vector &input, idx_t total_size, idx_t offs
 
 struct ListConvert {
 	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
-		auto &client_properties = append_data.client_properties;
 		auto &list_data = append_data.idata;
 
 		// Get the list entry information from the parent
@@ -249,7 +268,7 @@ struct ListConvert {
 		auto list_size = list_entry.length;
 		auto list_offset = list_entry.offset;
 		auto child_size = ListVector::GetListSize(input);
-		auto &child_vector = ListVector::GetEntry(input);
+		auto &child_vector = ListVector::GetChildMutable(input);
 
 		return InternalCreateList(child_vector, child_size, list_offset, list_size, append_data);
 	}
@@ -269,7 +288,7 @@ struct ArrayConvert {
 		auto array_size = ArrayType::GetSize(array_type);
 		auto array_offset = array_index * array_size;
 		auto child_size = ArrayVector::GetTotalSize(input);
-		auto &child_vector = ArrayVector::GetEntry(input);
+		auto &child_vector = ArrayVector::GetChildMutable(input);
 
 		return InternalCreateList(child_vector, child_size, array_offset, array_size, append_data);
 	}
@@ -308,9 +327,9 @@ struct VariantConvert {
 	static py::object ConvertValue(Vector &input, idx_t chunk_offset, NumpyAppendData &append_data) {
 		auto &client_properties = append_data.client_properties;
 		auto val = input.GetValue(chunk_offset);
-		Vector tmp(val);
+		Vector tmp(val, count_t(1));
 		RecursiveUnifiedVectorFormat format;
-		Vector::RecursiveToUnifiedFormat(tmp, 1, format);
+		Vector::RecursiveToUnifiedFormat(tmp, format);
 		UnifiedVariantVectorData vector_data(format);
 		auto variant_val = VariantUtils::ConvertVariantToValue(vector_data, 0, 0);
 		return PythonObject::FromValue(variant_val, variant_val.type(), client_properties);
@@ -391,22 +410,16 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
-	if (!idata.validity.AllValid()) {
+	if (!idata.validity.CannotHaveNull()) {
 		if (append_data.pandas) {
 			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/true, /*pandas=*/true>(append_data);
-		} else {
-			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/true, /*pandas=*/false>(
-			    append_data);
 		}
-	} else {
-		if (append_data.pandas) {
-			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/true>(
-			    append_data);
-		} else {
-			return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/false>(
-			    append_data);
-		}
+		return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/true, /*pandas=*/false>(append_data);
 	}
+	if (append_data.pandas) {
+		return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/true>(append_data);
+	}
+	return ConvertColumnTemplated<DUCKDB_T, NUMPY_T, CONVERT, /*has_nulls=*/false, /*pandas=*/false>(append_data);
 }
 
 template <class DUCKDB_T, class NUMPY_T>
@@ -419,23 +432,23 @@ static bool ConvertColumnCategoricalTemplate(NumpyAppendData &append_data) {
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
-	if (!idata.validity.AllValid()) {
+	if (!idata.validity.CannotHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				out_ptr[offset] = static_cast<NUMPY_T>(-1);
 			} else {
-				out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(
-				    src_ptr[src_idx], append_data);
+				out_ptr[offset] =
+				    duckdb_py_convert::RegularConvert::ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx], append_data);
 			}
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(
-			    src_ptr[src_idx], append_data);
+			out_ptr[offset] =
+			    duckdb_py_convert::RegularConvert::ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx], append_data);
 		}
 	}
 	// Null values are encoded in the data itself
@@ -449,12 +462,11 @@ static bool ConvertNested(NumpyAppendData &append_data) {
 	auto target_mask = append_data.target_mask;
 	auto &input = append_data.input;
 	auto &idata = append_data.idata;
-	auto &client_properties = append_data.client_properties;
 	auto count = append_data.count;
 	auto source_offset = append_data.source_offset;
 
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
-	if (!idata.validity.AllValid()) {
+	if (!idata.validity.CannotHaveNull()) {
 		bool requires_mask = false;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t index = i + source_offset;
@@ -514,7 +526,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<double *>(target_data);
-	if (!idata.validity.AllValid()) {
+	if (!idata.validity.CannotHaveNull()) {
 		bool requires_mask = false;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
@@ -563,8 +575,8 @@ static bool ConvertDecimal(NumpyAppendData &append_data) {
 
 ArrayWrapper::ArrayWrapper(const LogicalType &type, const ClientProperties &client_properties_p, bool pandas)
     : requires_mask(false), client_properties(client_properties_p), pandas(pandas) {
-	data = make_uniq<RawArrayWrapper>(type);
-	mask = make_uniq<RawArrayWrapper>(LogicalType::BOOLEAN);
+	data = std::make_unique<RawArrayWrapper>(type);
+	mask = std::make_unique<RawArrayWrapper>(LogicalType::BOOLEAN);
 }
 
 void ArrayWrapper::Initialize(idx_t capacity) {
@@ -586,7 +598,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 	bool may_have_null;
 
 	UnifiedVectorFormat idata;
-	input.ToUnifiedFormat(source_size, idata);
+	input.ToUnifiedFormat(idata);
 
 	if (count == DConstants::INVALID_INDEX) {
 		D_ASSERT(source_size != DConstants::INVALID_INDEX);
@@ -661,6 +673,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
@@ -709,6 +722,11 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(append_data);
 		break;
+	case LogicalTypeId::SQLNULL:
+		// An all-NULL column (e.g. an untyped NULL literal): emit an object column of None. SQLNULL's physical
+		// type is INT32, but its data is never read since every row is NULL.
+		may_have_null = ConvertColumn<int32_t, PyObject *, duckdb_py_convert::NullConvert>(append_data);
+		break;
 
 	default:
 		throw NotImplementedException("Unsupported type \"%s\"", input.GetType().ToString());
@@ -721,15 +739,15 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 }
 
 py::object ArrayWrapper::ToArray() const {
-	D_ASSERT(data->array && mask->array);
+	D_ASSERT(data->array.GetArray() && mask->array.GetArray());
 	data->Resize(data->count);
 	if (!requires_mask) {
-		return std::move(data->array);
+		return std::move(data->array.GetArray());
 	}
 	mask->Resize(mask->count);
 	// construct numpy arrays from the data and the mask
-	auto values = std::move(data->array);
-	auto nullmask = std::move(mask->array);
+	auto values = std::move(data->array.GetArray());
+	auto nullmask = std::move(mask->array.GetArray());
 
 	// create masked array and return it
 	auto masked_array = py::module::import("numpy.ma").attr("masked_array")(values, nullmask);

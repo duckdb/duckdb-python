@@ -37,11 +37,14 @@ class TestReadJSON:
         assert res == (1, "O Brother, Where Art Thou?")
 
     def test_read_json_format(self):
+        # Use a dedicated connection: a binder error now invalidates the active transaction, and the shared
+        # default connection can carry an open transaction from a previous test's unexhausted fetchone().
+        con = duckdb.connect()
         # Wrong option
         with pytest.raises(duckdb.BinderException, match=r"format must be one of .* not 'test'"):
-            rel = duckdb.read_json(TestFile("example.json"), format="test")
+            rel = con.read_json(TestFile("example.json"), format="test")
 
-        rel = duckdb.read_json(TestFile("example.json"), format="unstructured")
+        rel = con.read_json(TestFile("example.json"), format="unstructured")
         res = rel.fetchone()
         print(res)
         assert res == (
@@ -72,11 +75,13 @@ class TestReadJSON:
         assert res[0][2] != res[1][2]
 
     def test_read_json_records(self):
+        # Dedicated connection (see test_read_json_format): avoid inheriting a poisoned transaction.
+        con = duckdb.connect()
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="""read_json requires "records" to be one of"""):
-            rel = duckdb.read_json(TestFile("example.json"), records="none")
+            rel = con.read_json(TestFile("example.json"), records="none")
 
-        rel = duckdb.read_json(TestFile("example.json"), records="true")
+        rel = con.read_json(TestFile("example.json"), records="true")
         res = rel.fetchone()
         print(res)
         assert res == (1, "O Brother, Where Art Thou?")

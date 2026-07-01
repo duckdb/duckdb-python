@@ -28,7 +28,7 @@ public:
 public:
 	PolarsCacheItem()
 	    : PythonImportCacheItem("polars"), DataFrame("DataFrame", this), LazyFrame("LazyFrame", this), col("col", this),
-	      lit("lit", this) {
+	      lit("lit", this), Series("Series", this), Decimal("Decimal", this) {
 	}
 	~PolarsCacheItem() override {
 	}
@@ -37,6 +37,8 @@ public:
 	PythonImportCacheItem LazyFrame;
 	PythonImportCacheItem col;
 	PythonImportCacheItem lit;
+	PythonImportCacheItem Series;
+	PythonImportCacheItem Decimal;
 
 protected:
 	bool IsRequired() const override final {
