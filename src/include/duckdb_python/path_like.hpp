@@ -9,6 +9,9 @@ namespace duckdb {
 
 struct DuckDBPyConnection;
 
+bool TryDecodePath(const nb::object &object, string &result);
+string PathToString(const nb::object &object);
+
 struct PathLike {
 	static PathLike Create(const nb::object &object, DuckDBPyConnection &connection);
 	// The file(s) extracted from object

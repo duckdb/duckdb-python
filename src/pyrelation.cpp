@@ -1,5 +1,6 @@
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/path_like.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/pyresult.hpp"
@@ -1253,12 +1254,14 @@ static Value NestedDictToStruct(const nb::object &dictionary) {
 	return Value::STRUCT(std::move(children));
 }
 
-void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compression, const nb::object &field_ids,
-                                 const nb::object &row_group_size_bytes, const nb::object &row_group_size,
-                                 const nb::object &overwrite, const nb::object &per_thread_output,
-                                 const nb::object &use_tmp_file, const nb::object &partition_by,
-                                 const nb::object &write_partition_columns, const nb::object &append,
-                                 const nb::object &filename_pattern, const nb::object &file_size_bytes) {
+void DuckDBPyRelation::ToParquet(const nb::object &file_name, const nb::object &compression,
+                                 const nb::object &field_ids, const nb::object &row_group_size_bytes,
+                                 const nb::object &row_group_size, const nb::object &overwrite,
+                                 const nb::object &per_thread_output, const nb::object &use_tmp_file,
+                                 const nb::object &partition_by, const nb::object &write_partition_columns,
+                                 const nb::object &append, const nb::object &filename_pattern,
+                                 const nb::object &file_size_bytes) {
+	auto filename = PathToString(file_name);
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!nb::none().is(compression)) {
@@ -1371,13 +1374,14 @@ void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compr
 	PyExecuteRelation(write_parquet);
 }
 
-void DuckDBPyRelation::ToCSV(const string &filename, const nb::object &sep, const nb::object &na_rep,
+void DuckDBPyRelation::ToCSV(const nb::object &file_name, const nb::object &sep, const nb::object &na_rep,
                              const nb::object &header, const nb::object &quotechar, const nb::object &escapechar,
                              const nb::object &date_format, const nb::object &timestamp_format,
                              const nb::object &quoting, const nb::object &encoding, const nb::object &compression,
                              const nb::object &overwrite, const nb::object &per_thread_output,
                              const nb::object &use_tmp_file, const nb::object &partition_by,
                              const nb::object &write_partition_columns) {
+	auto filename = PathToString(file_name);
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!nb::none().is(sep)) {
