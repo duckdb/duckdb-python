@@ -530,26 +530,26 @@ public:
 	ScalarFunction GetFunction(const nb::callable &udf, PythonExceptionHandling exception_handling, bool side_effects,
 	                           const ClientProperties &client_properties) {
 
-		// Import this module, because importing this from a non-main thread causes a segfault
-
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		nb::handle core;
-		auto numpy = import_cache.numpy();
-		if (!numpy) {
-			throw InvalidInputException("'numpy' is required for this operation, but it wasn't installed");
-		}
-		// numpy.__version__ is a string; nb::cast<nb::tuple> rejects a non-tuple, so convert it explicitly.
-		nb::object numpy_version_str = numpy.attr("__version__");
-		auto numpy_version = nb::tuple(numpy_version_str);
-		if (NumpyDeprecatesAccessToCore(numpy_version)) {
-			core = numpy.attr("_core");
-		} else {
-			core = numpy.attr("core");
-		}
-		(void)core.attr("multiarray");
-
 		scalar_function_t func;
 		if (vectorized) {
+			// Only the vectorized (pyarrow) path needs numpy; import it here rather than before
+			// the branch. Importing off the main thread causes a segfault.
+			auto &import_cache = *DuckDBPyConnection::ImportCache();
+			nb::handle core;
+			auto numpy = import_cache.numpy();
+			if (!numpy) {
+				throw InvalidInputException("'numpy' is required for this operation, but it wasn't installed");
+			}
+			// numpy.__version__ is a string; nb::cast<nb::tuple> rejects a non-tuple, so convert it explicitly.
+			nb::object numpy_version_str = numpy.attr("__version__");
+			auto numpy_version = nb::tuple(numpy_version_str);
+			if (NumpyDeprecatesAccessToCore(numpy_version)) {
+				core = numpy.attr("_core");
+			} else {
+				core = numpy.attr("core");
+			}
+			(void)core.attr("multiarray");
+
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling, null_handling);
 		} else {
 			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties, null_handling);
