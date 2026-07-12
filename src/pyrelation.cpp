@@ -1261,7 +1261,7 @@ void DuckDBPyRelation::ToParquet(const nb::object &file_name, const nb::object &
                                  const nb::object &partition_by, const nb::object &write_partition_columns,
                                  const nb::object &append, const nb::object &filename_pattern,
                                  const nb::object &file_size_bytes) {
-	auto filename = PathToString(file_name);
+	auto filename = EnsurePathString(file_name);
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!nb::none().is(compression)) {
@@ -1381,7 +1381,7 @@ void DuckDBPyRelation::ToCSV(const nb::object &file_name, const nb::object &sep,
                              const nb::object &overwrite, const nb::object &per_thread_output,
                              const nb::object &use_tmp_file, const nb::object &partition_by,
                              const nb::object &write_partition_columns) {
-	auto filename = PathToString(file_name);
+	auto filename = EnsurePathString(file_name);
 	case_insensitive_map_t<vector<Value>> options;
 
 	if (!nb::none().is(sep)) {

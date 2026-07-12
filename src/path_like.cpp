@@ -34,7 +34,7 @@ public:
 	vector<string> fs_files;
 };
 
-bool TryDecodePath(const nb::object &object, string &result) {
+bool TryEnsurePathString(const nb::object &object, string &result) {
 	if (nb::isinstance<nb::str>(object)) {
 		result = nb::cast<string>(object);
 		return true;
@@ -48,9 +48,9 @@ bool TryDecodePath(const nb::object &object, string &result) {
 	return false;
 }
 
-string PathToString(const nb::object &object) {
+string EnsurePathString(const nb::object &object) {
 	string result;
-	if (!TryDecodePath(object, result)) {
+	if (!TryEnsurePathString(object, result)) {
 		throw InvalidInputException("Expected a str, bytes, or os.PathLike object for the file path, not '%s'",
 		                            Py_TYPE(object.ptr())->tp_name);
 	}
@@ -59,7 +59,7 @@ string PathToString(const nb::object &object) {
 
 void PathLikeProcessor::AddFile(const nb::object &object) {
 	string decoded;
-	if (TryDecodePath(object, decoded)) {
+	if (TryEnsurePathString(object, decoded)) {
 		all_files.push_back(std::move(decoded));
 		return;
 	}
