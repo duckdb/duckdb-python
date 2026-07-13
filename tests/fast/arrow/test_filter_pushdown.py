@@ -754,28 +754,40 @@ class TestCanaries:
 
     @pytest.mark.xfail(
         raises=pa_lib.ArrowNotImplementedError,
-        reason="pyarrow does not yet implement string_view filter compare kernels",
+        reason="pyarrow does not yet implement string_view filter kernels",
         strict=True,
     )
     def test_pyarrow_gains_string_view_filter_support(self):
-        """When pyarrow adds string_view comparison kernels this will xpass.
+        """When pyarrow can execute a string_view filter end-to-end this will xpass.
 
         At that point we should remove the post-scan fallback in TestUnsupportedTypes.
+        Today the scanner cannot even be constructed ('equal' has no string_view
+        kernel); executing it is included so this canary only fires on full support
+        (see the binary_view canary below for how compare kernels can land first).
         """
         filter_expr = pa_ds.field("col") == pa_ds.scalar("val1")
         table = pa.table({"col": pa.array(["val1", "val2"], type=pa.string_view())})
-        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr).to_table()
 
-    @pytest.mark.xfail(
-        raises=pa_lib.ArrowNotImplementedError,
-        reason="pyarrow does not yet implement binary_view filter compare kernels",
-        strict=True,
-    )
     def test_pyarrow_gains_binary_view_filter_support(self):
-        """When pyarrow adds binary_view comparison kernels this will xpass."""
+        """Canary tracking pyarrow's binary_view filter support.
+
+        pyarrow 25.0.0 added binary_view compare kernels, so constructing a
+        scanner with a binary_view filter now succeeds. Executing the scan still
+        raises: 'array_filter' has no binary_view kernel. Once execution works
+        too, this test fails and we should remove the post-scan fallback in
+        TestUnsupportedTypes.
+        """
         filter_expr = pa_ds.field("col") == pa_ds.scalar(pa.scalar(b"bin1", pa.binary_view()))
         table = pa.table({"col": pa.array([b"bin1", b"bin2"], type=pa.binary_view())})
-        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+        if Version(pa.__version__) < Version("25.0.0"):
+            # No binary_view compare kernels: the scanner cannot even be constructed.
+            with pytest.raises(pa_lib.ArrowNotImplementedError, match="binary_view"):
+                pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+        else:
+            scanner = pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+            with pytest.raises(pa_lib.ArrowNotImplementedError, match="binary_view"):
+                scanner.to_table()
 
     # ----- DuckDB optimizer decisions we expect to change --------------
 
