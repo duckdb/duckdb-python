@@ -49,6 +49,11 @@ class TestSQLExpression:
         rel = duckdb_cursor.sql("SELECT 1").select(expr)
         assert rel.fetchall() == [("hello world",)]
 
+        # The annotation widens this to plain str, so passing it where a
+        # LiteralString is expected must give a typechecking error.
+        dangerous: str = "'untrusted input'"
+        SQLExpression("'this is ' || " + dangerous)  # type: ignore[arg-type]
+
     def test_sql_expression_with_columns(self, duckdb_cursor):
         # Create a test table
         duckdb_cursor.execute(
