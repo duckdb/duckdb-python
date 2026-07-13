@@ -1,5 +1,6 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
