@@ -52,7 +52,7 @@ class SupportsDuckdbTemplate(Protocol):
     """Something that can be converted into a Template by implementing the __duckdb_template__ method."""
 
     def __duckdb_template__(
-        self, /, **future_kwargs
+        self, /, **future_kwargs: object
     ) -> (
         str
         | IntoInterpolation
@@ -153,7 +153,7 @@ def template(*parts: str | IntoInterpolation | Param | SupportsDuckdbTemplate | 
     >>> t.compile()
     CompiledSql(sql='SELECT * FROM users WHERE id = $p0_id', params={'p0_id': 123})
     """  # noqa: E501
-    expanded = []
+    expanded: list[str | IntoInterpolation] = []
     for part in parts:
         expanded.extend(_expand_part(part))
     return SqlTemplate(*expanded)
@@ -170,7 +170,7 @@ def compile(*part: str | IntoInterpolation | Param | SupportsDuckdbTemplate | ob
     return t.compile()
 
 
-def _is_iterable_nonstring(value: object) -> TypeIs[Iterable]:
+def _is_iterable_nonstring(value: object) -> TypeIs[Iterable[object]]:
     return isinstance(value, Iterable) and not isinstance(value, str | bytes)
 
 
@@ -206,7 +206,12 @@ def _expand_part(part: object) -> Iterable[str | IntoInterpolation]:
 class ParamInterpolation:
     """A simple wrapper that implements the IntoInterpolation protocol for a given Param."""
 
-    def __init__(self, param: Param):  # noqa: ANN204
+    value: object
+    expression: str | None
+    conversion: Literal["s", "r", "a"] | None
+    format_spec: str
+
+    def __init__(self, param: Param) -> None:
         self.value = param
         self.expression = param.name
         self.conversion = None
@@ -251,6 +256,7 @@ def _resolve_interpolation(interp: IntoInterpolation) -> Iterable[str | Param]:
     #
     # Follow Python's f-string semantics: apply conversion first, then format_spec.
     # e.g. {x!r:.10} means format(repr(x), ".10")
+    converted: str | None
     if interp.conversion == "s":
         converted = str(value)
     elif interp.conversion == "r":
@@ -314,7 +320,8 @@ class SqlTemplate:
     def __init__(self, *parts: str | IntoInterpolation) -> None:
         for part in parts:
             if not isinstance(part, str | IntoInterpolation):
-                msg = f"Unexpected part type in SqlTemplate: {type(part).__name__}. Expected str or IntoInterpolation."
+                # Guard for untyped callers; mypy considers this unreachable given the declared parameter type.
+                msg = f"Unexpected part type in SqlTemplate: {type(part).__name__}. Expected str or IntoInterpolation."  # type: ignore[unreachable]
                 raise TypeError(msg)
         self.strings, self.interpolations = parse_parts(parts)
 
@@ -391,7 +398,8 @@ def parse_parts(parts: Iterable[str | T]) -> tuple[tuple[str, ...], tuple[T, ...
 
     This merges adjacent strings and ensuring that the number of strings is one more than the number of others.
     """
-    strings, others = [], []
+    strings: list[str] = []
+    others: list[T] = []
     last_thing: Literal["string", "other"] | None = None
     for part in parts:
         if isinstance(part, str):
@@ -421,7 +429,7 @@ def parse_parts(parts: Iterable[str | T]) -> tuple[tuple[str, ...], tuple[T, ...
 def compile_parts(parts: Iterable[str | Param], /) -> CompiledSql:
     """Compile parts into a final SQL string with named parameter placeholders, and a list of Params."""
     sql_parts: list[str] = []
-    params_items = []
+    params_items: list[tuple[str, object]] = []
 
     def next_name(suffix: str | None = None) -> str:
         # still count exact params in the count, so we get p0, my_param, p2, p3, my_param_2, p5, etc
