@@ -287,10 +287,12 @@ struct DescribeAggregateInfo {
 	bool numeric_only;
 };
 
-vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
-                                    const vector<DescribeAggregateInfo> &aggregates) {
-	vector<string> expressions;
-	expressions.reserve(columns.size());
+// Build the Describe query as two levels. The inner single-group aggregate computes one
+// scalar per (column, aggregate); the outer projection pivots them into rows via parallel
+// UNNESTs. This avoids GROUP BY ALL, which core rejects for UNNEST/UNLIST expressions.
+void CreateDescribeExpressions(const vector<ColumnDefinition> &columns, const vector<DescribeAggregateInfo> &aggregates,
+                               vector<string> &inner_aggregates, vector<string> &outer_projection) {
+	outer_projection.reserve(columns.size() + 1);
 
 	string aggr_names = "UNNEST([";
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -303,33 +305,35 @@ vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
 	}
 	aggr_names += "])";
 	aggr_names += " AS aggr";
-	expressions.push_back(aggr_names);
+	outer_projection.push_back(aggr_names);
+
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
-		string expr = "UNNEST([";
+		bool numeric = col.GetType().IsNumeric();
+		string unnest = "UNNEST([";
 		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto alias = "__describe_" + std::to_string(c) + "_" + std::to_string(i);
 			if (i > 0) {
-				expr += ", ";
+				unnest += ", ";
 			}
-			if (aggregates[i].numeric_only && !col.GetType().IsNumeric()) {
-				expr += "NULL";
-				continue;
-			}
-			expr += aggregates[i].name;
-			expr += "(";
-			expr += SQLIdentifier(col.GetName());
-			expr += ")";
-			if (col.GetType().IsNumeric()) {
-				expr += "::DOUBLE";
+			unnest += SQLIdentifier(alias);
+			string stat;
+			if (aggregates[i].numeric_only && !numeric) {
+				stat = "NULL";
 			} else {
-				expr += "::VARCHAR";
+				stat = aggregates[i].name;
+				stat += "(";
+				stat += SQLIdentifier(col.GetName());
+				stat += ")";
+				stat += numeric ? "::DOUBLE" : "::VARCHAR";
 			}
+			stat += " AS " + SQLIdentifier(alias);
+			inner_aggregates.push_back(stat);
 		}
-		expr += "])";
-		expr += " AS " + SQLIdentifier(col.GetName());
-		expressions.push_back(expr);
+		unnest += "])";
+		unnest += " AS " + SQLIdentifier(col.GetName());
+		outer_projection.push_back(unnest);
 	}
-	return expressions;
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
@@ -338,8 +342,11 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	aggregates = {DescribeAggregateInfo("count"),        DescribeAggregateInfo("mean", true),
 	              DescribeAggregateInfo("stddev", true), DescribeAggregateInfo("min"),
 	              DescribeAggregateInfo("max"),          DescribeAggregateInfo("median", true)};
-	auto expressions = CreateExpressionList(columns, aggregates);
-	return DeriveRelation(rel->Aggregate(expressions));
+	vector<string> inner_aggregates;
+	vector<string> outer_projection;
+	CreateDescribeExpressions(columns, aggregates, inner_aggregates, outer_projection);
+	auto stats = rel->Aggregate(inner_aggregates);
+	return DeriveRelation(stats->Project(outer_projection));
 }
 
 string DuckDBPyRelation::ToSQL() {
