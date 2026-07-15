@@ -747,35 +747,58 @@ class TestRegressions:
 # ===========================================================================
 
 
+# pyarrow view type filter pushdown canaries.
+# No released pyarrow fully executes view type filters (compare plus array_filter/take); checked
+# against 25.0.0. These stay xfail until one does. They run .to_table() so scanner construction
+# alone does not flip them: pyarrow accepts a binary_view predicate at build time but still fails
+# inside array_filter at execution. When one XPASSes: bump its version below, enable view type
+# filter pushdown, and drop the matching TestUnsupportedTypes fallback. See the view type filter
+# pushdown tracking issue.
+_PA_VERSION = Version(pa.__version__)
+_PYARROW_STRING_VIEW_FILTER_VERSION = Version("99")
+_PYARROW_BINARY_VIEW_FILTER_VERSION = Version("99")
+
+
 class TestCanaries:
     """Markers for behaviours we expect to change upstream eventually."""
 
     # ----- pyarrow capabilities ----------------------------------------
 
     @pytest.mark.xfail(
+        _PA_VERSION < _PYARROW_STRING_VIEW_FILTER_VERSION,
         raises=pa_lib.ArrowNotImplementedError,
-        reason="pyarrow does not yet implement string_view filter compare kernels",
+        reason="pyarrow does not execute string_view filters fully (equal kernel)",
         strict=True,
     )
     def test_pyarrow_gains_string_view_filter_support(self):
-        """When pyarrow adds string_view comparison kernels this will xpass.
+        """XPASSes when pyarrow executes a string_view filter fully.
 
-        At that point we should remove the post-scan fallback in TestUnsupportedTypes.
+        Runs .to_table() so it reflects execution, not just scanner construction. When it
+        XPASSes: bump the version, enable view type pushdown, drop the TestUnsupportedTypes
+        fallback.
         """
         filter_expr = pa_ds.field("col") == pa_ds.scalar("val1")
         table = pa.table({"col": pa.array(["val1", "val2"], type=pa.string_view())})
-        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+        result = pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr).to_table()
+        assert result.num_rows == 1
 
     @pytest.mark.xfail(
+        _PA_VERSION < _PYARROW_BINARY_VIEW_FILTER_VERSION,
         raises=pa_lib.ArrowNotImplementedError,
-        reason="pyarrow does not yet implement binary_view filter compare kernels",
+        reason="pyarrow does not execute binary_view filters fully (array_filter kernel)",
         strict=True,
     )
     def test_pyarrow_gains_binary_view_filter_support(self):
-        """When pyarrow adds binary_view comparison kernels this will xpass."""
+        """XPASSes when pyarrow executes a binary_view filter fully.
+
+        Runs .to_table() so it reflects execution, not just scanner construction. When it
+        XPASSes: bump the version, enable view type pushdown, drop the TestUnsupportedTypes
+        fallback.
+        """
         filter_expr = pa_ds.field("col") == pa_ds.scalar(pa.scalar(b"bin1", pa.binary_view()))
         table = pa.table({"col": pa.array([b"bin1", b"bin2"], type=pa.binary_view())})
-        pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr)
+        result = pa_ds.dataset(table).scanner(columns=["col"], filter=filter_expr).to_table()
+        assert result.num_rows == 1
 
     # ----- DuckDB optimizer decisions we expect to change --------------
 
