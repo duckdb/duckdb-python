@@ -38,8 +38,27 @@ class DataFrame:  # noqa: D101
         if self.relation is not None:
             self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types)
 
-    def show(self, **kwargs) -> None:  # noqa: D102
-        self.relation.show()
+    def show(
+        self,
+        n: int = 20,
+        truncate: Union[bool, int] = True,
+        vertical: bool = False,
+        **kwargs,
+    ) -> None:  # noqa: D102
+        if isinstance(truncate, int):
+            max_col_width = truncate
+        elif truncate:
+            max_col_width = 20
+        else:
+            max_col_width = 9999
+
+        render_mode = 'COLUMNS' if vertical else None
+
+        self.relation.show(
+            max_rows=n,
+            max_col_width=max_col_width,
+            render_mode=render_mode
+        )
 
     def toPandas(self) -> "PandasDataFrame":  # noqa: D102
         return self.relation.df()

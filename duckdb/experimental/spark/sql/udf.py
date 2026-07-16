@@ -23,7 +23,8 @@ class UDFRegistration:  # noqa: D101
         f: "Callable[..., Any] | UserDefinedFunctionLike",
         returnType: Optional["DataTypeOrString"] = None,
     ) -> "UserDefinedFunctionLike":
-        self.sparkSession.conn.create_function(name, f, return_type=returnType)
+        self.sparkSession.conn.create_function(name, f, None,
+                                               return_type=returnType.duckdb_type)
 
     def registerJavaFunction(  # noqa: D102
         self,
