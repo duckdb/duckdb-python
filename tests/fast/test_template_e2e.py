@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 import duckdb
-from duckdb.template import param, template
+from duckdb import param, template
 
 
 def test_connection_sql_accepts_sql_template() -> None:

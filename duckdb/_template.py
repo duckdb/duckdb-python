@@ -16,6 +16,8 @@ __all__ = [
     "CompiledSql",
     "IntoInterpolation",
     "Param",
+    "ResolvedSqlTemplate",
+    "SqlTemplate",
     "SupportsDuckdbTemplate",
     "compile",
     "param",

@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import pytest
 
-from duckdb.template import (
+from duckdb import (
     CompiledSql,
     IntoInterpolation,
     Param,
-    ParamInterpolation,
     ResolvedSqlTemplate,
     SqlTemplate,
     SupportsDuckdbTemplate,
     compile,
-    compile_parts,
     param,
-    parse_parts,
     template,
+)
+from duckdb._template import (
+    ParamInterpolation,
+    compile_parts,
+    parse_parts,
 )
 
 # ── helpers ───────────────────────────────────────────────────────────────────

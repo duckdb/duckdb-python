@@ -43,7 +43,7 @@ if typing.TYPE_CHECKING:
         ArrowUDF,
     )
     from ._enums import ExplainTypeLiteral, RenderModeLiteral
-    from duckdb import sqltypes, func, template
+    from duckdb import sqltypes, func, _template
 
 __all__: lst[str] = [
     "BinderException",
@@ -244,10 +244,10 @@ class DuckDBPyConnection:
     def duplicate(self) -> DuckDBPyConnection: ...
     def enum_type(self, name: str, type: sqltypes.DuckDBPyType, values: lst[typing.Any]) -> sqltypes.DuckDBPyType: ...
     def execute(
-        self, query: Statement | str | template.SqlTemplate | template.CompiledSql, parameters: object = None
+        self, query: Statement | str | _template.SqlTemplate | _template.CompiledSql, parameters: object = None
     ) -> DuckDBPyConnection: ...
     def executemany(
-        self, query: Statement | str | template.SqlTemplate | template.CompiledSql, parameters: object = None
+        self, query: Statement | str | _template.SqlTemplate | _template.CompiledSql, parameters: object = None
     ) -> DuckDBPyConnection: ...
     def extract_statements(self, query: str) -> lst[Statement]: ...
     def fetch_arrow_table(self, rows_per_batch: typing.SupportsInt = 1000000) -> pyarrow.lib.Table:
@@ -331,7 +331,7 @@ class DuckDBPyConnection:
         compression: ParquetCompression | None = None,
     ) -> DuckDBPyRelation: ...
     def from_query(
-        self, query: str | template.SqlTemplate | template.CompiledSql, *, alias: str = "", params: object = None
+        self, query: str | _template.SqlTemplate | _template.CompiledSql, *, alias: str = "", params: object = None
     ) -> DuckDBPyRelation: ...
     def get_table_names(self, query: str, *, qualified: bool = False) -> set[str]: ...
     def install_extension(
@@ -362,7 +362,7 @@ class DuckDBPyConnection:
         self, rows_per_batch: typing.SupportsInt = 1000000, *, lazy: bool = False
     ) -> polars.DataFrame | polars.LazyFrame: ...
     def query(
-        self, query: str | template.SqlTemplate | template.CompiledSql, *, alias: str = "", params: object = None
+        self, query: str | _template.SqlTemplate | _template.CompiledSql, *, alias: str = "", params: object = None
     ) -> DuckDBPyRelation: ...
     def query_progress(self) -> float: ...
     def read_csv(
@@ -458,7 +458,7 @@ class DuckDBPyConnection:
     def row_type(self, fields: IntoFields) -> sqltypes.DuckDBPyType: ...
     def sql(
         self,
-        query: Statement | str | template.SqlTemplate | template.CompiledSql,
+        query: Statement | str | _template.SqlTemplate | _template.CompiledSql,
         *,
         alias: str = "",
         params: object = None,
@@ -966,7 +966,7 @@ def enum_type(
     connection: DuckDBPyConnection | None = None,
 ) -> sqltypes.DuckDBPyType: ...
 def execute(
-    query: Statement | str | template.SqlTemplate | template.CompiledSql,
+    query: Statement | str | _template.SqlTemplate | _template.CompiledSql,
     parameters: object = None,
     *,
     connection: DuckDBPyConnection | None = None,
@@ -1081,7 +1081,7 @@ def from_parquet(
     connection: DuckDBPyConnection | None = None,
 ) -> DuckDBPyRelation: ...
 def from_query(
-    query: Statement | str | template.SqlTemplate | template.CompiledSql,
+    query: Statement | str | _template.SqlTemplate | _template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
@@ -1146,7 +1146,7 @@ def project(
     df: pandas.DataFrame, *args: IntoExpr, groups: str = "", connection: DuckDBPyConnection | None = None
 ) -> DuckDBPyRelation: ...
 def query(
-    query: Statement | str | template.SqlTemplate | template.CompiledSql,
+    query: Statement | str | _template.SqlTemplate | _template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
@@ -1259,7 +1259,7 @@ def row_type(fields: IntoFields, *, connection: DuckDBPyConnection | None = None
 def rowcount(*, connection: DuckDBPyConnection | None = None) -> int: ...
 def set_default_connection(connection: DuckDBPyConnection) -> None: ...
 def sql(
-    query: Statement | str | template.SqlTemplate | template.CompiledSql,
+    query: Statement | str | _template.SqlTemplate | _template.CompiledSql,
     *,
     alias: str = "",
     params: object = None,
