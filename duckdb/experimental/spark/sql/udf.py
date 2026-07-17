@@ -28,7 +28,7 @@ class UDFRegistration:  # noqa: D101
             f,
             None,
             return_type=returnType.duckdb_type,
-            null_handling='special',
+            null_handling='special',  # PySpark UDFs handle nulls
         )
 
     def registerJavaFunction(  # noqa: D102
