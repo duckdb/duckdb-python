@@ -43,7 +43,6 @@ class DataFrame:  # noqa: D101
         n: int = 20,
         truncate: Union[bool, int] = True,
         vertical: bool = False,
-        **kwargs,
     ) -> None:  # noqa: D102
         if isinstance(truncate, int):
             max_col_width = truncate
