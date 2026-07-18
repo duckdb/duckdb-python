@@ -27,7 +27,7 @@ class UDFRegistration:  # noqa: D101
             name,
             f,
             None,
-            return_type=returnType.duckdb_type,
+            return_type=returnType.duckdb_type if returnType else None,
             null_handling='special',  # PySpark UDFs handle nulls
         )
 
