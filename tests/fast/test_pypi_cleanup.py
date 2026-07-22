@@ -170,11 +170,13 @@ class TestPyPICleanup:
         )
 
     def test_determine_versions_to_delete_max_2(self, cleanup_dryrun_max_2):
+        # PyPI serves normalized version strings: pre-releases have no separator
         start_state = {
             "0.1.0",
             "1.0.0.dev1",
             "1.0.0.dev2",
-            "1.0.0.rc1",
+            "1.0.0a1",
+            "1.0.0rc1",
             "1.0.0",
             "1.0.1.dev3",
             "1.0.1.dev5",
@@ -191,20 +193,25 @@ class TestPyPICleanup:
             "1.1.1.dev230",
             "1.1.1.dev372",
             "2.0.0.dev602",
-            "2.0.0.rc1",
-            "2.0.0.rc2",
-            "2.0.0.rc3",
-            "2.0.0.rc4",
+            "2.0.0a1",
+            "2.0.0b1",
+            "2.0.0rc1",
+            "2.0.0rc2",
+            "2.0.0rc3",
+            "2.0.0rc4",
             "2.0.0",
             "2.0.1.dev974",
-            "2.0.1.rc1",
-            "2.0.1.rc2",
-            "2.0.1.rc3",
+            "2.0.1a1",
+            "2.0.1b1",
+            "2.0.1rc1",
+            "2.0.1rc2",
+            "2.0.1rc3",
         }
         expected_deletions = {
             "1.0.0.dev1",
             "1.0.0.dev2",
-            "1.0.0.rc1",
+            "1.0.0a1",
+            "1.0.0rc1",
             "1.0.1.dev3",
             "1.0.1.dev5",
             "1.0.1.dev8",
@@ -215,10 +222,12 @@ class TestPyPICleanup:
             "1.1.0.dev88",
             "1.1.1.dev142",
             "2.0.0.dev602",
-            "2.0.0.rc1",
-            "2.0.0.rc2",
-            "2.0.0.rc3",
-            "2.0.0.rc4",
+            "2.0.0a1",
+            "2.0.0b1",
+            "2.0.0rc1",
+            "2.0.0rc2",
+            "2.0.0rc3",
+            "2.0.0rc4",
             "2.0.1.dev974",
         }
         versions_to_delete = cleanup_dryrun_max_2._determine_versions_to_delete(start_state)
@@ -229,7 +238,8 @@ class TestPyPICleanup:
             "0.1.0",
             "1.0.0.dev1",
             "1.0.0.dev2",
-            "1.0.0.rc1",
+            "1.0.0a1",
+            "1.0.0rc1",
             "1.0.0",
             "1.0.1.dev3",
             "1.0.1.dev5",
@@ -246,20 +256,25 @@ class TestPyPICleanup:
             "1.1.1.dev230",
             "1.1.1.dev372",
             "2.0.0.dev602",
-            "2.0.0.rc1",
-            "2.0.0.rc2",
-            "2.0.0.rc3",
-            "2.0.0.rc4",
+            "2.0.0a1",
+            "2.0.0b1",
+            "2.0.0rc1",
+            "2.0.0rc2",
+            "2.0.0rc3",
+            "2.0.0rc4",
             "2.0.0",
             "2.0.1.dev974",
-            "2.0.1.rc1",
-            "2.0.1.rc2",
-            "2.0.1.rc3",
+            "2.0.1a1",
+            "2.0.1b1",
+            "2.0.1rc1",
+            "2.0.1rc2",
+            "2.0.1rc3",
         }
         expected_deletions = {
             "1.0.0.dev1",
             "1.0.0.dev2",
-            "1.0.0.rc1",
+            "1.0.0a1",
+            "1.0.0rc1",
             "1.0.1.dev3",
             "1.0.1.dev5",
             "1.0.1.dev8",
@@ -272,10 +287,12 @@ class TestPyPICleanup:
             "1.1.1.dev230",
             "1.1.1.dev372",
             "2.0.0.dev602",
-            "2.0.0.rc1",
-            "2.0.0.rc2",
-            "2.0.0.rc3",
-            "2.0.0.rc4",
+            "2.0.0a1",
+            "2.0.0b1",
+            "2.0.0rc1",
+            "2.0.0rc2",
+            "2.0.0rc3",
+            "2.0.0rc4",
             "2.0.1.dev974",
         }
         versions_to_delete = cleanup_dryrun_max_0._determine_versions_to_delete(start_state)
@@ -437,8 +454,22 @@ class TestPyPICleanup:
 
     def test_delete_single_version_safety_check(self, cleanup_max_2):
         """Test single version deletion safety check."""
-        with pytest.raises(PyPICleanupError, match="Refusing to delete non-\\[dev\\|rc\\] version"):
-            cleanup_max_2._delete_single_version(None, "1.0.0")  # Non-dev version
+        for version in ["1.0.0", "1.0.0.post1"]:
+            with pytest.raises(PyPICleanupError, match="Refusing to delete non-dev, non-pre-release version"):
+                cleanup_max_2._delete_single_version(None, version)
+
+    @patch("duckdb_packaging.pypi_cleanup.PyPICleanup._get_csrf_token")
+    @patch("requests.Session.post")
+    def test_delete_single_version_allows_dev_and_pre(self, mock_post, mock_csrf, cleanup_max_2):
+        """Dev and pre-release versions pass the safety check and get deleted."""
+        mock_csrf.return_value = "csrf123"
+        mock_post.return_value = Mock()
+
+        with session_with_retries() as session:
+            for version in ["1.0.0.dev1", "1.0.0a1", "1.0.0b2", "1.0.0rc3"]:
+                cleanup_max_2._delete_single_version(session, version)
+
+        assert mock_post.call_count == 4
 
 
 class TestArgumentParser:

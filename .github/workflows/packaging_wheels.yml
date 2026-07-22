@@ -20,7 +20,7 @@ on:
         description: Override the DuckDB submodule commit or ref to build against
         required: false
       set-version:
-        description: Force version (vX.Y.Z-((rc|post)N))
+        description: Force version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
         required: false
         type: string
 

@@ -10,6 +10,7 @@ import pytest
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging._versioning import (  # noqa: E402
+    duckdb_tag_from_pep440,
     format_version,
     get_current_version,
     get_git_describe,
@@ -30,19 +31,46 @@ class TestVersionParsing(unittest.TestCase):
 
     def test_parse_version_basic(self):
         """Test parsing basic semantic versions."""
-        assert parse_version("1.2.3") == (1, 2, 3, 0, 0)
-        assert parse_version("0.0.1") == (0, 0, 1, 0, 0)
-        assert parse_version("10.20.30") == (10, 20, 30, 0, 0)
+        assert parse_version("1.2.3") == (1, 2, 3, 0, None)
+        assert parse_version("0.0.1") == (0, 0, 1, 0, None)
+        assert parse_version("10.20.30") == (10, 20, 30, 0, None)
 
     def test_parse_version_post_release(self):
         """Test parsing post-release versions."""
-        assert parse_version("1.2.3.post1") == (1, 2, 3, 1, 0)
-        assert parse_version("1.2.3.post10") == (1, 2, 3, 10, 0)
+        assert parse_version("1.2.3.post1") == (1, 2, 3, 1, None)
+        assert parse_version("1.2.3.post10") == (1, 2, 3, 10, None)
 
     def test_parse_version_rc_release(self):
-        """Test parsing post-release versions."""
-        assert parse_version("1.2.3rc1") == (1, 2, 3, 0, 1)
-        assert parse_version("1.2.3rc10") == (1, 2, 3, 0, 10)
+        """Test parsing rc versions."""
+        assert parse_version("1.2.3rc1") == (1, 2, 3, 0, ("rc", 1))
+        assert parse_version("1.2.3rc10") == (1, 2, 3, 0, ("rc", 10))
+
+    def test_parse_version_alpha_beta_release(self):
+        """Test parsing alpha and beta versions."""
+        assert parse_version("1.2.3a1") == (1, 2, 3, 0, ("a", 1))
+        assert parse_version("1.2.3a10") == (1, 2, 3, 0, ("a", 10))
+        assert parse_version("1.2.3b1") == (1, 2, 3, 0, ("b", 1))
+        assert parse_version("1.2.3b10") == (1, 2, 3, 0, ("b", 10))
+
+    def test_parse_version_alternative_pre_release_spellings(self):
+        """Test the PEP440 alternative pre-release spellings and separators."""
+        # alternative spellings normalize to a, b and rc
+        assert parse_version("1.2.3alpha1") == (1, 2, 3, 0, ("a", 1))
+        assert parse_version("1.2.3beta2") == (1, 2, 3, 0, ("b", 2))
+        assert parse_version("1.2.3c3") == (1, 2, 3, 0, ("rc", 3))
+        assert parse_version("1.2.3pre4") == (1, 2, 3, 0, ("rc", 4))
+        assert parse_version("1.2.3preview5") == (1, 2, 3, 0, ("rc", 5))
+        # separators before the signifier and before the numeral are allowed
+        assert parse_version("1.2.3-a1") == (1, 2, 3, 0, ("a", 1))
+        assert parse_version("1.2.3.b2") == (1, 2, 3, 0, ("b", 2))
+        assert parse_version("1.2.3_rc3") == (1, 2, 3, 0, ("rc", 3))
+        assert parse_version("1.2.3-alpha.1") == (1, 2, 3, 0, ("a", 1))
+        # case insensitive
+        assert parse_version("1.2.3RC1") == (1, 2, 3, 0, ("rc", 1))
+        assert parse_version("1.2.3Alpha2") == (1, 2, 3, 0, ("a", 2))
+        # an omitted numeral means 0
+        assert parse_version("1.2.3a") == (1, 2, 3, 0, ("a", 0))
+        assert parse_version("1.2.3-alpha") == (1, 2, 3, 0, ("a", 0))
 
     def test_parse_version_invalid(self):
         """Test parsing invalid version formats."""
@@ -53,7 +81,9 @@ class TestVersionParsing(unittest.TestCase):
         with pytest.raises(ValueError, match="Invalid version format"):
             parse_version("v1.2.3")
         with pytest.raises(ValueError, match="Invalid version format"):
-            parse_version("1.2.3-alpha")
+            parse_version("1.2.3x1")
+        with pytest.raises(ValueError, match="Invalid version format"):
+            parse_version("1.2.3.dev4")
         with pytest.raises(ValueError, match="Invalid version format"):
             parse_version("1.2.3rc5.post2")
 
@@ -68,10 +98,22 @@ class TestVersionParsing(unittest.TestCase):
         assert format_version(1, 2, 3, post=1) == "1.2.3.post1"
         assert format_version(1, 2, 3, post=10) == "1.2.3.post10"
 
-    def test_format_version_rc_release(self):
-        """Test formatting post-release versions."""
-        assert format_version(1, 2, 3, rc=1) == "1.2.3rc1"
-        assert format_version(1, 2, 3, rc=10) == "1.2.3rc10"
+    def test_format_version_pre_release(self):
+        """Test formatting pre-release versions."""
+        assert format_version(1, 2, 3, pre=("rc", 1)) == "1.2.3rc1"
+        assert format_version(1, 2, 3, pre=("rc", 10)) == "1.2.3rc10"
+        assert format_version(1, 2, 3, pre=("a", 1)) == "1.2.3a1"
+        assert format_version(1, 2, 3, pre=("b", 2)) == "1.2.3b2"
+
+    def test_format_version_post_pre_exclusive(self):
+        """Test that post and pre-release are mutually exclusive."""
+        with pytest.raises(ValueError, match="post and pre are mutually exclusive"):
+            format_version(1, 2, 3, post=1, pre=("rc", 1))
+
+    def test_format_version_invalid_pre_kind(self):
+        """Test that invalid pre-release kinds are rejected."""
+        with pytest.raises(ValueError, match="Invalid pre-release kind"):
+            format_version(1, 2, 3, pre=("alpha", 1))
 
 
 class TestGitTagConversion(unittest.TestCase):
@@ -87,6 +129,16 @@ class TestGitTagConversion(unittest.TestCase):
         assert git_tag_to_pep440("v1.2.3-post1") == "1.2.3.post1"
         assert git_tag_to_pep440("1.2.3-post10") == "1.2.3.post10"
 
+    def test_git_tag_to_pep440_pre_release(self):
+        """Test pre-release git tag to PEP440 conversion."""
+        assert git_tag_to_pep440("v1.2.3-a1") == "1.2.3a1"
+        assert git_tag_to_pep440("v1.2.3-b2") == "1.2.3b2"
+        assert git_tag_to_pep440("v1.2.3-rc10") == "1.2.3rc10"
+        # alternative spellings normalize
+        assert git_tag_to_pep440("v1.2.3-alpha1") == "1.2.3a1"
+        assert git_tag_to_pep440("v1.2.3-beta2") == "1.2.3b2"
+        assert git_tag_to_pep440("v1.2.3-pre3") == "1.2.3rc3"
+
     def test_pep440_to_git_tag_basic(self):
         """Test basic PEP440 to git tag conversion."""
         assert pep440_to_git_tag("1.2.3") == "v1.2.3"
@@ -96,13 +148,43 @@ class TestGitTagConversion(unittest.TestCase):
         assert pep440_to_git_tag("1.2.3.post1") == "v1.2.3-post1"
         assert pep440_to_git_tag("1.2.3.post10") == "v1.2.3-post10"
 
+    def test_pep440_to_git_tag_pre_release(self):
+        """Test pre-release PEP440 to git tag conversion."""
+        assert pep440_to_git_tag("1.2.3a1") == "v1.2.3-a1"
+        assert pep440_to_git_tag("1.2.3b2") == "v1.2.3-b2"
+        assert pep440_to_git_tag("1.2.3rc10") == "v1.2.3-rc10"
+        # alternative spellings normalize
+        assert pep440_to_git_tag("1.2.3alpha1") == "v1.2.3-a1"
+        assert pep440_to_git_tag("1.2.3-beta2") == "v1.2.3-b2"
+        assert pep440_to_git_tag("1.2.3preview3") == "v1.2.3-rc3"
+
     def test_roundtrip_conversion(self):
         """Test that conversions are reversible."""
-        versions = ["1.2.3", "1.2.3.post1", "10.20.30.post5"]
+        versions = ["1.2.3", "1.2.3.post1", "10.20.30.post5", "1.2.3a1", "1.2.3b2", "1.2.3rc3"]
         for version in versions:
             git_tag = pep440_to_git_tag(version)
             converted_back = git_tag_to_pep440(git_tag)
             assert converted_back == version
+
+
+class TestDuckDBTagFromPep440(unittest.TestCase):
+    """Test the mapping of forced package versions to DuckDB version tags."""
+
+    def test_stable_version(self):
+        assert duckdb_tag_from_pep440("1.2.3") == "v1.2.3"
+
+    def test_post_version_strips_post(self):
+        """Post releases repackage the stable engine."""
+        assert duckdb_tag_from_pep440("1.2.3.post1") == "v1.2.3"
+
+    def test_pre_release_passes_through(self):
+        """Pre-releases pass through normalized, DuckDB's build validates them."""
+        assert duckdb_tag_from_pep440("1.2.3rc2") == "v1.2.3-rc2"
+        assert duckdb_tag_from_pep440("1.2.3a1") == "v1.2.3-a1"
+        assert duckdb_tag_from_pep440("1.2.3b2") == "v1.2.3-b2"
+        # alternative spellings normalize
+        assert duckdb_tag_from_pep440("1.2.3alpha1") == "v1.2.3-a1"
+        assert duckdb_tag_from_pep440("1.2.3pre1") == "v1.2.3-rc1"
 
 
 class TestSetupToolsScmIntegration(unittest.TestCase):
@@ -112,6 +194,11 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
         """Test bump_version with exact tag (distance=0, dirty=False)."""
         assert _tag_to_version("1.2.3") == "1.2.3"
         assert _tag_to_version("1.2.3.post1") == "1.2.3.post1"
+        assert _tag_to_version("1.2.3a1") == "1.2.3a1"
+        assert _tag_to_version("1.2.3b2") == "1.2.3b2"
+        assert _tag_to_version("1.2.3rc3") == "1.2.3rc3"
+        # alternative spellings normalize
+        assert _tag_to_version("1.2.3-alpha1") == "1.2.3a1"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
     def test_bump_version_with_distance(self):
@@ -120,6 +207,13 @@ class TestSetupToolsScmIntegration(unittest.TestCase):
 
         # Post-release development
         assert _bump_dev_version("1.2.3.post1", 3) == "1.2.3.post2.dev3"
+
+    @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "1"})
+    def test_bump_version_pre_release(self):
+        """Test bump_version on top of a pre-release tag bumps within the same phase."""
+        assert _bump_dev_version("1.2.3a1", 4) == "1.2.3a2.dev4"
+        assert _bump_dev_version("1.2.3b1", 4) == "1.2.3b2.dev4"
+        assert _bump_dev_version("1.2.3rc1", 4) == "1.2.3rc2.dev4"
 
     @patch.dict("os.environ", {"MAIN_BRANCH_VERSIONING": "0"})
     def test_bump_version_release_branch(self):
@@ -205,19 +299,37 @@ class TestGitOperations(unittest.TestCase):
 class TestEnvironmentVariableHandling(unittest.TestCase):
     """Test environment variable handling in setuptools_scm integration."""
 
-    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-5-g1234567"})
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-5-g1234567", "MAIN_BRANCH_VERSIONING": "0"})
     def test_override_git_describe_basic(self):
         """Test OVERRIDE_GIT_DESCRIBE with basic format."""
-        forced_version_from_env()
-        # Check that the environment variable was processed
-        assert "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB" in os.environ
+        assert forced_version_from_env() == "1.2.4.dev5+g1234567"
+        assert os.environ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"] == "1.2.4.dev5+g1234567"
 
-    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-post1-3-g1234567"})
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-post1-3-g1234567", "MAIN_BRANCH_VERSIONING": "0"})
     def test_override_git_describe_post_release(self):
         """Test OVERRIDE_GIT_DESCRIBE with post-release format."""
-        forced_version_from_env()
-        # Check that post-release was converted correctly
-        assert "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB" in os.environ
+        assert forced_version_from_env() == "1.2.3.post2.dev3+g1234567"
+        assert os.environ["SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"] == "1.2.3.post2.dev3+g1234567"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-rc1"})
+    def test_override_git_describe_rc_release(self):
+        """Test OVERRIDE_GIT_DESCRIBE with an rc tag."""
+        assert forced_version_from_env() == "1.2.3rc1"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-a1"})
+    def test_override_git_describe_alpha_release(self):
+        """Test OVERRIDE_GIT_DESCRIBE with an alpha tag."""
+        assert forced_version_from_env() == "1.2.3a1"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-alpha1"})
+    def test_override_git_describe_alpha_alternative_spelling(self):
+        """Test OVERRIDE_GIT_DESCRIBE with an alternatively spelled alpha tag."""
+        assert forced_version_from_env() == "1.2.3a1"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.2.3-b1-5-g1234567", "MAIN_BRANCH_VERSIONING": "0"})
+    def test_override_git_describe_beta_with_distance(self):
+        """Test OVERRIDE_GIT_DESCRIBE with a beta tag and distance."""
+        assert forced_version_from_env() == "1.2.3b2.dev5+g1234567"
 
     @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "invalid-format"})
     def test_override_git_describe_invalid(self):
