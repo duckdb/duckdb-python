@@ -9,7 +9,7 @@ import re
 from typing import Protocol
 
 # Import from our own versioning module to avoid duplication
-from ._versioning import format_version, parse_version
+from ._versioning import format_version, git_tag_to_pep440, parse_version
 
 # MAIN_BRANCH_VERSIONING should be 'True' on main branch only
 MAIN_BRANCH_VERSIONING = False
@@ -61,8 +61,8 @@ def version_scheme(version: _VersionObject) -> str:
 
 def _tag_to_version(tag: str) -> str:
     """Bump the version when we're on a tag."""
-    major, minor, patch, post, rc = parse_version(tag)
-    return format_version(major, minor, patch, post=post, rc=rc)
+    major, minor, patch, post, pre = parse_version(tag)
+    return format_version(major, minor, patch, post=post, pre=pre)
 
 
 def _bump_dev_version(base_version: str, distance: int) -> str:
@@ -70,20 +70,21 @@ def _bump_dev_version(base_version: str, distance: int) -> str:
     if distance == 0:
         msg = "Dev distance is 0, cannot bump version."
         raise ValueError(msg)
-    major, minor, patch, post, rc = parse_version(base_version)
+    major, minor, patch, post, pre = parse_version(base_version)
 
     if post != 0:
         # We're developing on top of a post-release
         return f"{format_version(major, minor, patch, post=post + 1)}.dev{distance}"
-    elif rc != 0:
-        # We're developing on top of an rc
-        return f"{format_version(major, minor, patch, rc=rc + 1)}.dev{distance}"
+    elif pre is not None:
+        # We're developing on top of a pre-release (alpha, beta or rc)
+        kind, num = pre
+        return f"{format_version(major, minor, patch, pre=(kind, num + 1))}.dev{distance}"
     elif _main_branch_versioning():
         return f"{format_version(major, minor + 1, 0)}.dev{distance}"
     return f"{format_version(major, minor, patch + 1)}.dev{distance}"
 
 
-def forced_version_from_env() -> str:
+def forced_version_from_env() -> str | None:
     """Handle getting versions from environment variables.
 
     Only supports a single way of manually overriding the version through
@@ -111,9 +112,10 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
     """Process the OVERRIDE_GIT_DESCRIBE value."""
     describe_pattern = re.compile(
         r"""
-        ^v(?P<tag>\d+\.\d+\.\d+(?:-post\d+|-rc\d+)?) # vX.Y.Z or vX.Y.Z-postN or vX.Y.Z-rcN
-        (?:-(?P<distance>\d+))?                      # optional -N
-        (?:-g(?P<hash>[0-9a-fA-F]+))?                # optional -g<sha>
+        ^v(?P<tag>\d+\.\d+\.\d+                                    # vX.Y.Z with an optional suffix:
+        (?:-post\d+|-(?:alpha|beta|preview|pre|rc|a|b|c)\d+)?)     # -postN or a PEP440 pre-release
+        (?:-(?P<distance>\d+))?                                    # optional -N
+        (?:-g(?P<hash>[0-9a-fA-F]+))?                              # optional -g<sha>
         $""",
         re.VERBOSE,
     )
@@ -125,11 +127,8 @@ def _git_describe_override_to_pep_440(override_value: str) -> str:
 
     version, distance, commit_hash = match.groups()
 
-    # Convert version format to PEP440 format (v1.3.1-post1 -> 1.3.1.post1)
-    if "-post" in version:
-        version = version.replace("-post", ".post")
-    elif "-rc" in version:
-        version = version.replace("-rc", "rc")
+    # Convert version format to PEP440 format (v1.3.1-post1 -> 1.3.1.post1, v1.3.1-a1 -> 1.3.1a1)
+    version = git_tag_to_pep440(version)
 
     # Bump version and format according to PEP440
     distance = int(distance or 0)

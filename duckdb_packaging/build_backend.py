@@ -32,7 +32,7 @@ from scikit_build_core.build import (
     build_wheel as skbuild_build_wheel,
 )
 
-from duckdb_packaging._versioning import get_git_describe, pep440_to_git_tag, strip_post_from_version
+from duckdb_packaging._versioning import duckdb_tag_from_pep440, get_git_describe
 from duckdb_packaging.setuptools_scm_version import MAIN_BRANCH_VERSIONING, forced_version_from_env
 
 _DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
@@ -181,9 +181,8 @@ def _skbuild_config_add(key: str, value: list | str, config_settings: dict[str, 
 def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str] | None = None) -> str:
     """Build a source distribution using the DuckDB submodule.
 
-    This function extracts the DuckDB version from either the git submodule and saves it
-    to a version file before building the sdist with scikit-build-core. If _FORCED_PEP440_VERSION
-    was set then we first create a tag on the submodule.
+    This function extracts the DuckDB version from the forced package version or the git
+    submodule and saves it to a version file before building the sdist with scikit-build-core.
 
     Args:
         sdist_directory: Directory where the sdist will be created.
@@ -200,7 +199,7 @@ def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str
         raise RuntimeError(msg)
     submodule_path = _duckdb_submodule_path()
     if _FORCED_PEP440_VERSION is not None:
-        duckdb_version = pep440_to_git_tag(strip_post_from_version(_FORCED_PEP440_VERSION))
+        duckdb_version = duckdb_tag_from_pep440(_FORCED_PEP440_VERSION)
     else:
         duckdb_version = get_git_describe(repo_path=submodule_path, since_minor=MAIN_BRANCH_VERSIONING)
     _write_duckdb_long_version(duckdb_version)
@@ -239,7 +238,7 @@ def build_wheel(
         config_settings = config_settings or {}
         duckdb_version = _read_duckdb_long_version()
     elif _FORCED_PEP440_VERSION is not None:
-        duckdb_version = pep440_to_git_tag(strip_post_from_version(_FORCED_PEP440_VERSION))
+        duckdb_version = duckdb_tag_from_pep440(_FORCED_PEP440_VERSION)
 
     # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
     if duckdb_version is not None:
