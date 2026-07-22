@@ -37,8 +37,36 @@ defaults:
     shell: bash
 
 jobs:
+  # A stable release must be built from a commit whose submodule pin equals the
+  # duckdb-sha input. Otherwise the build is dirty and the released artifacts
+  # correspond to no commit in this repository. Nightlies skip this gate.
+  verify_stable_pin:
+    name: Verify submodule pin for stable release
+    if: ${{ inputs.stable-version != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
+
+      - name: Compare the pin to duckdb-sha
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          pin=$(git ls-tree HEAD external/duckdb | awk '{print $3}')
+          resolved=$(gh api repos/duckdb/duckdb/commits/${{ inputs.duckdb-sha }} --jq .sha)
+          echo "submodule pin: ${pin}"
+          echo "duckdb-sha input resolves to: ${resolved}"
+          if [[ "${pin}" != "${resolved}" ]]; then
+            echo "::error::Submodule pin (${pin}) does not match duckdb-sha (${resolved}). Merge the submodule bump PR first, then rerun."
+            exit 1
+          fi
+
   build_sdist:
     name: Build an sdist and determine versions
+    needs: [verify_stable_pin]
+    if: ${{ !failure() && !cancelled() }}
     uses: ./.github/workflows/packaging_sdist.yml
     with:
       testsuite: all
@@ -147,6 +175,79 @@ jobs:
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.stable-version }}
+
+  # Renders the built artifact set as a matrix in the run summary, so the
+  # maintainer can check completeness at a glance and link one summary from the
+  # release task instead of pasting file listings.
+  artifact_summary:
+    name: Write the artifact matrix to the run summary
+    runs-on: ubuntu-latest
+    needs: [build_sdist, build_wheels]
+    steps:
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '{sdist,wheel}*'
+          path: artifacts/
+          merge-multiple: true
+
+      - name: Render the matrix
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import os
+          import re
+
+          wheels, sdists, other = [], [], []
+          for root, _, files in os.walk("artifacts"):
+              for f in files:
+                  if f.endswith(".whl"):
+                      wheels.append(f)
+                  elif f.endswith(".tar.gz"):
+                      sdists.append(f)
+                  else:
+                      other.append(f)
+
+          versions = set()
+          matrix = {}  # platform -> {py tag: cell}
+          pys = set()
+          for f in sorted(wheels):
+              name, version, py, abi, plat = f[: -len(".whl")].split("-", 4)
+              versions.add(version)
+              pys.add(py)
+              # macos rows collapse per arch, the cell shows the deployment target,
+              # so a blank cell always means a missing wheel
+              m = re.match(r"macosx_(\d+_\d+)_(.+)$", plat)
+              if m:
+                  matrix.setdefault(f"macosx_{m.group(2)}", {})[py] = m.group(1)
+              else:
+                  matrix.setdefault(plat, {})[py] = "x"
+          for f in sorted(sdists):
+              versions.add(f[len("duckdb-") : -len(".tar.gz")])
+
+          py_cols = sorted(pys, key=lambda p: int(p[2:]))
+          print("## Artifact matrix")
+          print()
+          print(f"{len(wheels) + len(sdists)} files, {len(wheels)} wheels and {len(sdists)} sdist.")
+          print()
+          for s in sorted(sdists):
+              print(f"sdist: `{s}`")
+          print()
+          print("| platform | " + " | ".join(py_cols) + " |")
+          print("|---|" + "---|" * len(py_cols))
+          for plat in sorted(matrix):
+              row = " | ".join(matrix[plat].get(py, " ") for py in py_cols)
+              print(f"| `{plat}` | {row} |")
+          print()
+          print("A blank cell is a wheel that was not built.")
+          if len(versions) == 1:
+              print(f"All files carry version {versions.pop()}.")
+          else:
+              print(f"WARNING, multiple versions found: {sorted(versions)}")
+          if other:
+              print(f"WARNING, unexpected files: {sorted(other)}")
+          if not sdists:
+              print("WARNING, no sdist found.")
+          EOF
 
   upload_s3:
     name: Upload Artifacts to S3
