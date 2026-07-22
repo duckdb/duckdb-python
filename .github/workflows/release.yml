@@ -236,3 +236,15 @@ jobs:
           echo "* Vendored DuckDB Version: ${{ needs.build_sdist.outputs.duckdb-version }} (${dsha:0:10})" >> $GITHUB_STEP_SUMMARY
           echo "* S3 upload status: ${{ needs.upload_s3.result == 'success' && needs.workflow_state.outputs.s3_url || needs.upload_s3.result }}" >> $GITHUB_STEP_SUMMARY
           echo "* CI Environment: ${{ needs.workflow_state.outputs.ci_env }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Record client status
+        if: ${{ github.repository_owner == 'duckdb' }}
+        uses: duckdb/duckdb-workflow-trigger/dispatch@main
+        with:
+          github_token: ${{ secrets.PAT_TOKEN }}
+          event: client_ready
+          client: python
+          duckdb_version: ${{ needs.build_sdist.outputs.duckdb-version }}
+          duckdb_commit: ${{ inputs.duckdb-sha }}
+          status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
+          message: DuckDB Python client ready
