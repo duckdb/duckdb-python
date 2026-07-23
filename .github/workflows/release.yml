@@ -330,7 +330,7 @@ jobs:
         if: ${{ github.repository_owner == 'duckdb' }}
         uses: duckdb/duckdb-workflow-trigger/dispatch@main
         with:
-          github_token: ${{ secrets.PAT_TOKEN }}
+          github_token: ${{ secrets.DUCKDB_RELEASE_DISPATCH_TOKEN }}
           event: client_ready
           client: python
           duckdb_version: ${{ needs.build_sdist.outputs.duckdb-version }}
