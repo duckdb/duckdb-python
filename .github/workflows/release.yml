@@ -11,6 +11,10 @@ on:
         type: string
         description: The DuckDB submodule commit or ref to build against
         required: true
+      duckdb-version:
+        type: string
+        description: The DuckDB version associated with duckdb-sha
+        required: false
       stable-version:
         type: string
         description: Release a tagged version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
@@ -323,17 +327,18 @@ jobs:
           fi
           echo "* Package index: ${pypi_host}" >> $GITHUB_STEP_SUMMARY
           echo "* Vendored DuckDB Version: ${{ needs.build_sdist.outputs.duckdb-version }} (${dsha:0:10})" >> $GITHUB_STEP_SUMMARY
+          echo "* Dispatch DuckDB Version: ${{ inputs.duckdb-version }} (${{ inputs.duckdb-sha }})" >> $GITHUB_STEP_SUMMARY
           echo "* S3 upload status: ${{ needs.upload_s3.result == 'success' && needs.workflow_state.outputs.s3_url || needs.upload_s3.result }}" >> $GITHUB_STEP_SUMMARY
           echo "* CI Environment: ${{ needs.workflow_state.outputs.ci_env }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Record client status
-        if: ${{ github.repository_owner == 'duckdb' }}
+        if: ${{ github.repository_owner == 'duckdb' && inputs.duckdb-version != '' }}
         uses: duckdb/duckdb-workflow-trigger/dispatch@main
         with:
           github_token: ${{ secrets.DUCKDB_RELEASE_DISPATCH_TOKEN }}
           event: client_ready
           client: python
-          duckdb_version: ${{ needs.build_sdist.outputs.duckdb-version }}
+          duckdb_version: ${{ inputs.duckdb-version }}
           duckdb_commit: ${{ inputs.duckdb-sha }}
           status: ${{ contains(needs.*.result, 'failure') && 'failure' || contains(needs.*.result, 'cancelled') && 'cancelled' || 'success' }}
           message: DuckDB Python client ready
