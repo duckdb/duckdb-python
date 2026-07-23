@@ -4,6 +4,10 @@ inputs:
     description: 'Cache key (defaults to github.job)'
     required: false
     default: ''
+  save:
+    description: 'Allow saving the cache at job end. Saving also requires a cache writing ref, see below.'
+    required: false
+    default: 'true'
 runs:
   using: "composite"
   steps:
@@ -11,7 +15,7 @@ runs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ inputs.key || github.job }}
-         save: ${{ github.repository != 'duckdb/duckdb-python' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref) }}
+         save: ${{ inputs.save == 'true' && (github.repository != 'duckdb/duckdb-python' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref)) }}
          # Dump verbose ccache statistics report at end of CI job.
          verbose: 1
          # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.
