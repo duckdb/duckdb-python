@@ -22,6 +22,7 @@ jobs:
           if [[ $remote_count -gt 1 ]]; then
             echo "::error::Multiple remotes found - only origin allowed"
             git remote -v
+            exit 1
           fi
           origin_url=$(git remote get-url origin)
           if [[ "$origin_url" != "https://github.com/duckdb/duckdb"* ]]; then
@@ -35,8 +36,51 @@ jobs:
         run: |
           set -eux
           before=${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
-          after=${{ github.event_name == 'push' && github.event.after || github.head_ref }}
+          # For PRs, HEAD is the merge commit. github.head_ref would not resolve for fork PRs.
+          after=${{ github.event_name == 'push' && github.event.after || 'HEAD' }}
           if git diff --name-only $before...$after | grep -q "^\.gitmodules$"; then
             echo "::error::.gitmodules may not be modified. If you see a reason to update, please discuss with the maintainers."
             exit 1
           fi
+
+      - name: Disallow submodule pin changes except from vendoring PRs
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -eu
+          # HEAD is the PR merge commit, so origin/base...HEAD is exactly what merging would change.
+          changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
+          if ! grep -qx "external/duckdb" <<< "$changed"; then
+            echo "Submodule pin unchanged"
+            exit 0
+          fi
+          # Only the vendoring workflow may move the pin: a branch in this repo
+          # (forks cannot create one), named vendoring-*, changing nothing else.
+          if [[ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]]; then
+            echo "::error::Submodule pin changes are not accepted from forks. Bumps come from the vendoring workflow."
+            exit 1
+          fi
+          if [[ "$HEAD_REF" != vendoring-* ]]; then
+            echo "::error::Submodule pin changes are only accepted from vendoring-* branches. Bumps come from the vendoring workflow."
+            exit 1
+          fi
+          if [[ "$changed" != "external/duckdb" ]]; then
+            echo "::error::A vendoring PR must change exactly one path, the submodule pin. This PR also changes:"
+            echo "$changed"
+            exit 1
+          fi
+          # The pin must be reachable from the official upstream branch this base
+          # tracks (same branch name in duckdb/duckdb). Existing in the repo is not
+          # enough: fork PR objects are fetchable from the parent repo by sha.
+          pin=$(git rev-parse HEAD:external/duckdb)
+          cd external/duckdb
+          git fetch origin "$BASE_REF"
+          if ! git merge-base --is-ancestor "$pin" "origin/${BASE_REF}"; then
+            echo "::error::Submodule pin $pin is not reachable from duckdb/duckdb branch ${BASE_REF}."
+            exit 1
+          fi
+          echo "Pin $pin accepted: vendoring branch, pin-only diff, reachable from upstream ${BASE_REF}"
