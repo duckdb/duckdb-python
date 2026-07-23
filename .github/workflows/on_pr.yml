@@ -17,6 +17,8 @@ on:
       - '!.github/workflows/packaging.yml'
       - '!.github/workflows/packaging_sdist.yml'
       - '!.github/workflows/packaging_wheels.yml'
+      - '!.github/workflows/submodule_sanity.yml'
+      - '!.github/workflows/code_quality.yml'
       - '!.github/actions/**'
 
 concurrency:
@@ -42,7 +44,6 @@ jobs:
     with:
       minimal: true
       testsuite: all
-      duckdb-sha: ${{ github.base_ref }}
 
   coverage_test:
     name: Run coverage tests
@@ -51,5 +52,4 @@ jobs:
     if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
     uses: ./.github/workflows/coverage.yml
     with:
-      duckdb_git_ref: ${{ github.base_ref }}
       testsuite: all
