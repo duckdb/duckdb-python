@@ -55,15 +55,19 @@ runs:
         if [[ "${{ inputs.cibw-system }}" == "win" ]]; then
           echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
         fi
-        cibw_env=""
-        if [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
-          cibw_env="CCACHE_DIR=/host${{ github.workspace }}/.ccache"
-        fi
+        # CIBW_ENVIRONMENT is set ONLY for manylinux, where env must cross into
+        # the container. The env var REPLACES any [tool.cibuildwheel.<os>]
+        # environment table from pyproject; setting it on macos silently dropped
+        # MACOSX_DEPLOYMENT_TARGET and shipped wheels tagged macosx_10_9. On
+        # macos and windows the build runs on the host, so plain job env works.
         if [[ -n "${{ inputs.set-version }}" ]]; then
-          cibw_env="${cibw_env:+$cibw_env }OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}"
-        fi
-        if [[ -n "$cibw_env" ]]; then
-          echo "CIBW_ENVIRONMENT=${cibw_env}" >> $GITHUB_ENV
+          if [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
+            echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
+          else
+            echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
+          fi
+        elif [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
+          echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache" >> $GITHUB_ENV
         fi
 
     # Ninja needs cl.exe on PATH. The Visual Studio generator activated the
