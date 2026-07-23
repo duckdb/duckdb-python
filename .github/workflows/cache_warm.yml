@@ -1,0 +1,37 @@
+name: Warm the build caches
+run-name: Warm the build caches on ${{ github.ref_name }}
+
+# Runs the seed builds after pushes that change what the wheels compile, so the
+# per platform ccaches track the branch instead of going stale between
+# releases. PR builds restore these caches. Without this workflow every PR pays
+# the accumulated submodule delta on every platform.
+#
+# The branch list matches the cache writing refs in the ccache-action. The
+# workflow only triggers on branches this file exists on. Keep this file
+# identical across branches.
+on:
+  push:
+    branches:
+      - main
+      - v1.4-andium
+      - v1.5-variegata
+    paths:
+      - 'external/duckdb'
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'pyproject.toml'
+      - '.github/workflows/cache_warm.yml'
+      - '.github/workflows/packaging_wheels.yml'
+      - '.github/actions/**'
+
+concurrency:
+  group: cache-warm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  warm_caches:
+    name: Build the seed wheels to warm the caches
+    uses: ./.github/workflows/packaging_wheels.yml
+    with:
+      minimal: true
+      testsuite: none
