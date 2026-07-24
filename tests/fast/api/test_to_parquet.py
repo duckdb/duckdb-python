@@ -117,6 +117,19 @@ class TestToParquet:
         result = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == result.execute().fetchall()
 
+    def test_to_parquet_pathlib(self, tmp_path):
+        file_name = tmp_path / "test.parquet"  # pathlib.Path
+        df = pd.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
+        rel = duckdb.from_df(df)
+        rel.to_parquet(file_name)
+        assert rel.execute().fetchall() == duckdb.read_parquet(file_name).execute().fetchall()
+
+    def test_to_parquet_rejects_non_path(self):
+        df = pd.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
+        rel = duckdb.from_df(df)
+        with pytest.raises(duckdb.InvalidInputException):
+            rel.to_parquet(123)
+
     def test_per_thread_output(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
