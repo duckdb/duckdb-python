@@ -43,17 +43,26 @@ defaults:
 jobs:
   # A stable release must be built from a commit whose submodule pin equals the
   # duckdb-sha input. Otherwise the build is dirty and the released artifacts
-  # correspond to no commit in this repository. Nightlies skip this gate.
+  # correspond to no commit in this repository.
+  #
+  # The gate is applied per step, not on the job, on purpose: a skipped job
+  # propagates the skip down the needs chain, and the downstream jobs
+  # (workflow_state, submodule_pr) have no !failure() && !cancelled() guard, so
+  # a job-level skip here silently skips the whole nightly (no wheels, no
+  # publish, no bump PR) while the run still reports success. With the gate on
+  # the steps, the job always completes success and the steps no-op on
+  # nightlies (empty stable-version).
   verify_stable_pin:
     name: Verify submodule pin for stable release
-    if: ${{ inputs.stable-version != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.stable-version != '' }}
         with:
           ref: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
 
       - name: Compare the pin to duckdb-sha
+        if: ${{ inputs.stable-version != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
