@@ -1,5 +1,5 @@
 name: Packaging
-run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.set-version != '' && inputs.set-version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.git-ref }}, duckdb ref=${{ inputs.duckdb-git-ref }})
+run-name: Build ${{ inputs.minimal && 'minimal set of' || 'all' }} packages (version=${{ inputs.set-version != '' && inputs.set-version || 'dev' }}, tests=${{ inputs.testsuite }}, ref=${{ inputs.duckdb-python-sha }}, duckdb ref=${{ inputs.duckdb-sha }})
 on:
   workflow_dispatch:
     inputs:
@@ -65,7 +65,7 @@ jobs:
     name: Build an sdist and determine versions
     uses: ./.github/workflows/packaging_sdist.yml
     with:
-      testsuite: all
+      testsuite: ${{ inputs.testsuite }}
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}
@@ -75,7 +75,7 @@ jobs:
     uses: ./.github/workflows/packaging_wheels.yml
     with:
       minimal: ${{ inputs.minimal }}
-      testsuite: all
+      testsuite: ${{ inputs.testsuite }}
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}

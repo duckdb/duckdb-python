@@ -1,4 +1,23 @@
 name: Wheels packaging
+# Three jobs share the build steps in .github/actions/build-wheel:
+#
+# - seed_wheels builds the newest python on every platform and is the only
+#   cache writer, so each platform has exactly one coherent ccache generation
+#   per run. The cross python hit rate is high because most translation units
+#   are DuckDB core, which is python independent.
+# - sanity_wheels builds the oldest python on Linux only, as a cheap boundary
+#   check in minimal mode (PRs). It runs parallel to the seeds: PR runs never
+#   save caches, so ordering buys nothing there.
+# - build_wheels fans out the remaining pythons on every platform against the
+#   cache the seeds wrote. Full runs only. Skipping it in minimal mode is a
+#   job condition on purpose: matrix excludes cannot express zero jobs, and a
+#   matrix that excludes every combination fails the whole run at strategy
+#   evaluation time.
+#
+# The python lists below differ per release branch (v1.5-variegata includes
+# cp310) and are kept line isolated so merges between branches resolve
+# mechanically. Everything else in this file must stay identical across
+# branches.
 on:
   workflow_call:
     inputs:
@@ -25,12 +44,12 @@ on:
         type: string
 
 jobs:
-  build_wheels:
-    name: 'Wheel: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
+  seed_wheels:
+    name: 'Seed: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
     strategy:
       fail-fast: false
       matrix:
-        python: [ cp310, cp311, cp312, cp313, cp314 ]
+        python: [ cp314 ]
         platform:
           - { os: windows-2022,     arch: amd64,      cibw_system: win }
           - { os: windows-11-arm,   arch: ARM64,      cibw_system: win } # cibw requires ARM64 to be uppercase
@@ -39,36 +58,13 @@ jobs:
           - { os: macos-15,         arch: arm64,      cibw_system: macosx }
           - { os: macos-15,         arch: universal2, cibw_system: macosx }
           - { os: macos-15-intel,   arch: x86_64,     cibw_system: macosx }
+        # Single value dimension, only here so the exclude below can key on it.
+        # Safe in this job: the exclude can never empty the matrix.
         minimal:
           - ${{ inputs.minimal }}
         exclude:
-          - { minimal: true, python: cp311 }
-          - { minimal: true, python: cp312 }
-          - { minimal: true, python: cp313 }
           - { minimal: true, platform: { arch: universal2 } }
-          - { python: cp310,  platform: { os: windows-11-arm, arch: ARM64 } }  # too many dependency problems for win arm64
     runs-on: ${{ matrix.platform.os }}
-    env:
-      ### cibuildwheel configuration
-      #
-      # This is somewhat brittle, so be careful with changes. Some notes for our future selves (and others):
-      # - cibw will change its cwd to a temp dir and create a separate venv for testing. It then installs the wheel it
-      #   built into that venv, and run the CIBW_TEST_COMMAND. We have to install all dependencies ourselves, and make
-      #   sure that the pytest config in pyproject.toml is available.
-      # - CIBW_BEFORE_TEST installs the test dependencies by exporting them into a pylock.toml. At the time of writing,
-      #   `uv sync --no-install-project` had problems correctly resolving dependencies using resolution environments
-      #   across all platforms we build for. This might be solved in newer uv versions.
-      # - CIBW_TEST_COMMAND specifies pytest conf from pyproject.toml. --confcutdir is needed to prevent pytest from
-      #   traversing the full filesystem, which produces an error on Windows.
-      # - CIBW_TEST_SKIP we always skip tests for *-macosx_universal2 builds, because we run tests for arm64 and x86_64.
-      CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
-      CIBW_TEST_SOURCES: tests
-      CIBW_BEFORE_TEST: >
-        uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
-        uv pip install -r pylock.toml
-      CIBW_TEST_COMMAND: >
-        uv run -v pytest --confcutdir=. --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
-
     steps:
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
@@ -77,36 +73,81 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Checkout DuckDB
-        shell: bash
-        if: ${{ inputs.duckdb-sha }}
-        run: |
-          cd external/duckdb
-          git fetch origin
-          git checkout ${{ inputs.duckdb-sha }}
-
-      # Make sure that OVERRIDE_GIT_DESCRIBE is propagated to cibuildwhel's env, also when it's running linux builds
-      - name: Set OVERRIDE_GIT_DESCRIBE
-        shell: bash
-        if: ${{ inputs.set-version != '' }}
-        run: echo "CIBW_ENVIRONMENT=OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
-
-      # Install Astral UV, which will be used as build-frontend for cibuildwheel
-      - uses: astral-sh/setup-uv@v7
+      - name: Build the wheel
+        uses: ./.github/actions/build-wheel
         with:
-          version: "0.9.0"
-          enable-cache: false
-          cache-suffix: -${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
+          python: ${{ matrix.python }}
+          arch: ${{ matrix.platform.arch }}
+          cibw-system: ${{ matrix.platform.cibw_system }}
+          testsuite: ${{ inputs.testsuite }}
+          duckdb-sha: ${{ inputs.duckdb-sha }}
+          set-version: ${{ inputs.set-version }}
+          ccache-save: 'true'
 
-      - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheels
-        uses: pypa/cibuildwheel@v3.2
-        env:
-          CIBW_ARCHS: ${{ matrix.platform.arch == 'amd64' && 'AMD64' || matrix.platform.arch }}
-          CIBW_BUILD: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-
-      - name: Upload wheel
-        uses: actions/upload-artifact@v4
+  sanity_wheels:
+    name: 'Sanity: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
+    if: ${{ inputs.minimal }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [ cp310 ]
+        platform:
+          - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
+          - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
         with:
-          name: wheel-${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}
-          path: wheelhouse/*.whl
-          compression-level: 0
+          ref: ${{ inputs.duckdb-python-sha }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Build the wheel
+        uses: ./.github/actions/build-wheel
+        with:
+          python: ${{ matrix.python }}
+          arch: ${{ matrix.platform.arch }}
+          cibw-system: ${{ matrix.platform.cibw_system }}
+          testsuite: ${{ inputs.testsuite }}
+          duckdb-sha: ${{ inputs.duckdb-sha }}
+          set-version: ${{ inputs.set-version }}
+          ccache-save: 'false'
+
+  build_wheels:
+    name: 'Wheel: ${{ matrix.python }}-${{ matrix.platform.cibw_system }}_${{ matrix.platform.arch }}'
+    if: ${{ !inputs.minimal }}
+    needs: seed_wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        python: [ cp310, cp311, cp312, cp313 ]
+        platform:
+          - { os: windows-2022,     arch: amd64,      cibw_system: win }
+          - { os: windows-11-arm,   arch: ARM64,      cibw_system: win } # cibw requires ARM64 to be uppercase
+          - { os: ubuntu-24.04,     arch: x86_64,     cibw_system: manylinux }
+          - { os: ubuntu-24.04-arm, arch: aarch64,    cibw_system: manylinux }
+          - { os: macos-15,         arch: arm64,      cibw_system: macosx }
+          - { os: macos-15,         arch: universal2, cibw_system: macosx }
+          - { os: macos-15-intel,   arch: x86_64,     cibw_system: macosx }
+        exclude:
+          - { python: cp310, platform: { os: windows-11-arm, arch: ARM64 } }  # too many dependency problems for win arm64
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.duckdb-python-sha }}
+          fetch-depth: 0
+          submodules: true
+
+      - name: Build the wheel
+        uses: ./.github/actions/build-wheel
+        with:
+          python: ${{ matrix.python }}
+          arch: ${{ matrix.platform.arch }}
+          cibw-system: ${{ matrix.platform.cibw_system }}
+          testsuite: ${{ inputs.testsuite }}
+          duckdb-sha: ${{ inputs.duckdb-sha }}
+          set-version: ${{ inputs.set-version }}
+          ccache-save: 'false'

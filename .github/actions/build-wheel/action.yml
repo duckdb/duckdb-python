@@ -1,0 +1,124 @@
+name: 'Build wheel'
+description: >
+  Build one wheel with cibuildwheel and upload it as an artifact. Shared by the
+  seed, sanity and fan out jobs in packaging_wheels.yml so the build steps live
+  in one place. The caller checks out the repository first: a local action can
+  only be resolved after checkout.
+inputs:
+  python:
+    description: 'CPython tag to build (e.g. cp314)'
+    required: true
+  arch:
+    description: 'Target architecture, cibw spelling (amd64, ARM64, x86_64, aarch64, arm64, universal2)'
+    required: true
+  cibw-system:
+    description: 'cibuildwheel platform tag (win, manylinux, macosx)'
+    required: true
+  testsuite:
+    description: 'Testsuite to run (none, fast, all)'
+    required: true
+  duckdb-sha:
+    description: 'Override the DuckDB submodule commit or ref to build against'
+    required: false
+    default: ''
+  set-version:
+    description: 'Force version, passed to the build as OVERRIDE_GIT_DESCRIBE'
+    required: false
+    default: ''
+  ccache-save:
+    description: >
+      Save the ccache at job end. Only the seed jobs save, so each platform has
+      a single cache writer. Saving also requires a cache writing ref, see the
+      ccache-action.
+    required: false
+    default: 'false'
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout DuckDB
+      shell: bash
+      run: |
+        if [[ -n "${{ inputs.duckdb-sha }}" ]]; then
+          cd external/duckdb
+          git fetch origin
+          git checkout ${{ inputs.duckdb-sha }}
+        fi
+
+    - name: Set build environment
+      shell: bash
+      run: |
+        echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
+        # The Visual Studio generator (the CMake default on windows) ignores
+        # CMAKE_<LANG>_COMPILER_LAUNCHER, so ccache never sees the build.
+        # Force Ninja, which respects it. scikit-build-core picks the env var
+        # up and adds the ninja wheel to the isolated build env when needed.
+        if [[ "${{ inputs.cibw-system }}" == "win" ]]; then
+          echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
+        fi
+        # CIBW_ENVIRONMENT is set ONLY for manylinux, where env must cross into
+        # the container. The env var REPLACES any [tool.cibuildwheel.<os>]
+        # environment table from pyproject; setting it on macos silently dropped
+        # MACOSX_DEPLOYMENT_TARGET and shipped wheels tagged macosx_10_9. On
+        # macos and windows the build runs on the host, so plain job env works.
+        if [[ -n "${{ inputs.set-version }}" ]]; then
+          if [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
+            echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
+          else
+            echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
+          fi
+        elif [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
+          echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache" >> $GITHUB_ENV
+        fi
+
+    # Ninja needs cl.exe on PATH. The Visual Studio generator activated the
+    # MSVC toolchain itself; with Ninja we activate it here. cibw builds run
+    # on the host on windows, so the activated env reaches the build.
+    - name: Activate MSVC
+      if: ${{ inputs.cibw-system == 'win' }}
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ inputs.arch == 'ARM64' && 'arm64' || 'x64' }}
+
+    - name: Setup Ccache
+      uses: ./.github/actions/ccache-action
+      with:
+        key: ${{ inputs.cibw-system }}_${{ inputs.arch }}
+        save: ${{ inputs.ccache-save }}
+
+    # Install Astral UV, which will be used as build-frontend for cibuildwheel
+    - uses: astral-sh/setup-uv@v7
+      with:
+        version: "0.9.0"
+        enable-cache: false
+
+    ### cibuildwheel configuration
+    #
+    # This is somewhat brittle, so be careful with changes. Some notes for our future selves (and others):
+    # - cibw will change its cwd to a temp dir and create a separate venv for testing. It then installs the wheel it
+    #   built into that venv, and run the CIBW_TEST_COMMAND. We have to install all dependencies ourselves, and make
+    #   sure that the pytest config in pyproject.toml is available.
+    # - CIBW_BEFORE_TEST installs the test dependencies by exporting them into a pylock.toml. At the time of writing,
+    #   `uv sync --no-install-project` had problems correctly resolving dependencies using resolution environments
+    #   across all platforms we build for. This might be solved in newer uv versions.
+    # - CIBW_TEST_COMMAND specifies pytest conf from pyproject.toml. --confcutdir is needed to prevent pytest from
+    #   traversing the full filesystem, which produces an error on Windows.
+    # - CIBW_TEST_SKIP we always skip tests for *-macosx_universal2 builds, because we run tests for arm64 and x86_64.
+    - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheel
+      uses: pypa/cibuildwheel@v3.2
+      env:
+        CIBW_ARCHS: ${{ inputs.arch == 'amd64' && 'AMD64' || inputs.arch }}
+        CIBW_BUILD: ${{ inputs.python }}-${{ inputs.cibw-system }}_${{ inputs.arch }}
+        CIBW_TEST_SKIP: ${{ inputs.testsuite == 'none' && '*' || '*-macosx_universal2' }}
+        CIBW_TEST_SOURCES: tests
+        CIBW_BEFORE_TEST: >
+          uv export --only-group test --no-emit-project  --quiet --output-file pylock.toml --directory {project} &&
+          uv pip install -r pylock.toml
+        CIBW_TEST_COMMAND: >
+          uv run -v pytest --confcutdir=. --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
+
+    - name: Upload wheel
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheel-${{ inputs.python }}-${{ inputs.cibw-system }}_${{ inputs.arch }}
+        path: wheelhouse/*.whl
+        compression-level: 0

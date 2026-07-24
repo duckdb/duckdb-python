@@ -73,6 +73,12 @@ cmake.version = ">=3.29.0"
 ninja.version = ">=1.10"
 ninja.make-fallback = false
 metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+# Stable build dir instead of the default randomized temp dir. A randomized dir
+# changes every include path and the compile cwd on every run, which makes
+# ccache direct mode miss 100% of the time in CI (only the slower preprocessed
+# mode hits). The editable and coverage overrides below set their own build-dir
+# and are unaffected. {cache_tag} is e.g. cpython-310.
+build-dir = "build/{cache_tag}"
 
 [tool.scikit-build.wheel]
 cmake = true
