@@ -734,12 +734,75 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 	return Execute(nb::str(query.c_str(), query.size()));
 }
 
+pair<string, nb::object> DuckDBPyConnection::ExtractCompiledSqlAndParams(const nb::object &query, nb::object params) {
+	nb::object compiled = query;
+	if (!nb::hasattr(compiled, "sql") || !nb::hasattr(compiled, "params")) {
+		if (!nb::hasattr(query, "compile")) {
+			return {string(), params};
+		}
+		compiled = query.attr("compile")();
+	}
+
+	if (!nb::hasattr(compiled, "sql") || !nb::hasattr(compiled, "params")) {
+		return {string(), params};
+	}
+
+	auto compiled_sql = nb::cast<std::string>(compiled.attr("sql"));
+	auto compiled_params_obj = compiled.attr("params");
+	if (!duckdb::PyUtil::IsDictLike(compiled_params_obj)) {
+		throw InvalidInputException("Compiled SQL parameters must be a dictionary");
+	}
+
+	auto compiled_params = nb::cast<nb::dict>(compiled_params_obj);
+	if (compiled_params.size() == 0) {
+		return {compiled_sql, params};
+	}
+
+	if (params.is_none()) {
+		return {compiled_sql, compiled_params};
+	}
+
+	if (duckdb::PyUtil::IsDictLike(params)) {
+		auto merged_params = nb::dict();
+		for (auto item : compiled_params) { // nanobind dict iteration yields std::pair<handle,handle> by value
+			merged_params[item.first] = item.second;
+		}
+		auto provided_params = nb::cast<nb::dict>(params);
+		for (auto item : provided_params) { // nanobind dict iteration yields std::pair<handle,handle> by value
+			if (merged_params.contains(item.first)) {
+				throw nb::value_error("Cannot merge compiled SQL parameters with duplicate parameter names");
+			}
+			merged_params[item.first] = item.second;
+		}
+		return {compiled_sql, merged_params};
+	}
+
+	if (duckdb::PyUtil::IsListLike(params)) {
+		if (nb::len(params) == 0) {
+			return {compiled_sql, compiled_params};
+		}
+		throw nb::value_error("Cannot merge compiled SQL named parameters with positional parameters");
+	}
+
+	throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
+}
+
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
 	nb::gil_scoped_acquire gil;
 	ConnectionLockGuard conn_lock(*this);
 	con.SetResult(nullptr);
 
-	auto statements = GetStatements(query);
+	auto normalized_query = ExtractCompiledSqlAndParams(query, params);
+	auto &compiled_sql = normalized_query.first;
+	auto &merged_params = normalized_query.second;
+	vector<unique_ptr<SQLStatement>> statements;
+	if (!compiled_sql.empty()) {
+		statements = GetStatements(nb::str(compiled_sql.c_str(), compiled_sql.size()));
+		params = merged_params;
+	} else {
+		statements = GetStatements(query);
+	}
+
 	if (statements.empty()) {
 		// TODO: should we throw?
 		return nullptr;
@@ -1644,7 +1707,17 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 
-	auto statements = GetStatements(query);
+	auto normalized_query = ExtractCompiledSqlAndParams(query, params);
+	auto &compiled_sql = normalized_query.first;
+	auto &merged_params = normalized_query.second;
+	vector<unique_ptr<SQLStatement>> statements;
+	if (!compiled_sql.empty()) {
+		statements = GetStatements(nb::str(compiled_sql.c_str(), compiled_sql.size()));
+		params = merged_params;
+	} else {
+		statements = GetStatements(query);
+	}
+
 	if (statements.empty()) {
 		// TODO: should we throw?
 		return nullptr;
@@ -1657,7 +1730,7 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 
 	// Attempt to create a Relation for lazy execution if possible
 	shared_ptr<Relation> relation;
-	bool has_params = !nb::none().is(params) && nb::len(params) > 0;
+	bool has_params = !params.is_none() && nb::len(params) > 0;
 	if (!has_params) {
 		// No params (or empty params) — use lazy QueryRelation path
 		{

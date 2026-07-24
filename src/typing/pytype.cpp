@@ -356,6 +356,7 @@ void DuckDBPyType::Initialize(nb::handle &m) {
 	auto type_module = nb::class_<DuckDBPyType>(m, "DuckDBPyType", nb::is_weak_referenceable());
 
 	type_module.def("__repr__", &DuckDBPyType::ToString, "Stringified representation of the type object");
+	type_module.def("__duckdb_template__", &DuckDBPyType::ToString);
 	type_module.def("__eq__", &DuckDBPyType::Equals, "Compare two types for equality", nb::arg("other"),
 	                nb::is_operator());
 	type_module.def("__eq__", &DuckDBPyType::EqualsString, "Compare two types for equality", nb::arg("other"),
