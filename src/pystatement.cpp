@@ -28,9 +28,7 @@ unique_ptr<SQLStatement> DuckDBPyStatement::GetStatement() {
 }
 
 string DuckDBPyStatement::Query() const {
-	auto &loc = statement->stmt_location;
-	auto &length = statement->stmt_length;
-	return statement->query.substr(loc, length);
+	return statement->query;
 }
 
 nb::set DuckDBPyStatement::NamedParameters() const {
