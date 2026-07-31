@@ -59,6 +59,10 @@ public:
 
 	ClientProperties GetClientProperties();
 
+	//! Number of rows changed by the last CHANGED_ROWS-returning statement (INSERT/UPDATE/DELETE/...).
+	//! Returns -1 when not applicable/unknown, as permitted by the DB-API 2.0 spec for 'rowcount'.
+	int64_t GetRowcount();
+
 private:
 	void FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 

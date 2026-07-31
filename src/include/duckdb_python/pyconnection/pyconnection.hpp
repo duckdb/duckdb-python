@@ -321,7 +321,7 @@ public:
 
 	Optional<nb::list> GetDescription();
 
-	int GetRowcount();
+	int64_t GetRowcount();
 
 	// these should be functions on the result but well
 	Optional<nb::tuple> FetchOne();

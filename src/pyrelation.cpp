@@ -271,6 +271,13 @@ nb::list DuckDBPyRelation::Description() {
 	return DuckDBPyResult::GetDescription(names, types);
 }
 
+int64_t DuckDBPyRelation::GetRowcount() {
+	if (!result) {
+		return -1;
+	}
+	return result->GetRowcount();
+}
+
 Relation &DuckDBPyRelation::GetRel() {
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation - calling GetRel, but no rel was present");

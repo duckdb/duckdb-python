@@ -1920,8 +1920,13 @@ Optional<nb::list> DuckDBPyConnection::GetDescription() {
 	return result.Description();
 }
 
-int DuckDBPyConnection::GetRowcount() {
-	return -1;
+int64_t DuckDBPyConnection::GetRowcount() {
+	ConnectionLockGuard conn_lock(*this);
+	if (!con.HasResult()) {
+		return -1;
+	}
+	auto &result = con.GetResult();
+	return result.GetRowcount();
 }
 
 void DuckDBPyConnection::Close() {

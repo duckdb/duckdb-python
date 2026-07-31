@@ -30,6 +30,8 @@ public:
 
 	nb::list Description();
 
+	int64_t GetRowcount();
+
 	void Close();
 
 	std::unique_ptr<DuckDBPyRelation> GetAttribute(const string &name);
