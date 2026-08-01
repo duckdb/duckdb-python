@@ -30,7 +30,11 @@ public:
 
 	nb::list Description();
 
-	int64_t GetRowcount();
+	//! Cached at execution time (see ExecuteOrThrow / the DuckDBPyResult constructor overload) so that
+	//! it survives the Fetch*() methods below, several of which null out `result` once fully consumed.
+	int64_t GetRowcount() const {
+		return row_changes;
+	}
 
 	void Close();
 
@@ -302,6 +306,8 @@ private:
 	vector<string> names;
 	std::shared_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
+	//! Cached row-changed count - see GetRowcount().
+	int64_t row_changes = -1;
 };
 
 } // namespace duckdb

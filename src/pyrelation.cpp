@@ -71,6 +71,7 @@ DuckDBPyRelation::DuckDBPyRelation(std::shared_ptr<DuckDBPyResult> result_p)
 	this->executed = true;
 	this->types = result->GetTypes();
 	this->names = result->GetNames();
+	this->row_changes = result->GetRowcount();
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
@@ -269,13 +270,6 @@ void DuckDBPyRelation::AssertResultOpen() const {
 
 nb::list DuckDBPyRelation::Description() {
 	return DuckDBPyResult::GetDescription(names, types);
-}
-
-int64_t DuckDBPyRelation::GetRowcount() {
-	if (!result) {
-		return -1;
-	}
-	return result->GetRowcount();
 }
 
 Relation &DuckDBPyRelation::GetRel() {
@@ -841,6 +835,7 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 		query_result->ThrowError();
 	}
 	result = std::make_unique<DuckDBPyResult>(std::move(query_result));
+	row_changes = result->GetRowcount();
 }
 
 PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {

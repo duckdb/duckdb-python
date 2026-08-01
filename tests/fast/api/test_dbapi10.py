@@ -108,3 +108,35 @@ class TestCursorRowcount:
     def test_rowcount_ddl_is_unknown(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
         assert duckdb_cursor.rowcount == -1
+
+    def test_rowcount_after_fetchall(self, duckdb_cursor):
+        # Regression test: rowcount must survive full consumption of the result via fetchall(),
+        # not just a bare execute() with no fetch at all.
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        assert duckdb_cursor.fetchall() == [(4,)]
+        assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_after_fetchone(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        assert duckdb_cursor.fetchone() == (4,)
+        assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_after_fetchmany(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        assert duckdb_cursor.fetchmany(1) == [(4,)]
+        assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_after_fetchdf(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        duckdb_cursor.fetchdf()
+        assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_after_fetchnumpy(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        duckdb_cursor.fetchnumpy()
+        assert duckdb_cursor.rowcount == 4

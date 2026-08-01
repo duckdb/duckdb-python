@@ -33,6 +33,9 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	if (!result) {
 		throw InternalException("PyResult created without a result object");
 	}
+	// Must happen before any Fetch call (from this object or a caller holding a reference to the
+	// same underlying QueryResult) has a chance to consume the single row we're reading here.
+	row_changes = ComputeRowChanges();
 }
 
 DuckDBPyResult::~DuckDBPyResult() {
@@ -68,7 +71,7 @@ const vector<LogicalType> &DuckDBPyResult::GetTypes() {
 	return result->types;
 }
 
-int64_t DuckDBPyResult::GetRowcount() {
+int64_t DuckDBPyResult::ComputeRowChanges() {
 	if (!result || result->HasError()) {
 		return -1;
 	}
@@ -80,8 +83,15 @@ int64_t DuckDBPyResult::GetRowcount() {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		// CHANGED_ROWS statements always produce a single already-computed row, so materializing here
 		// does not trigger any additional query execution - it just changes the in-memory representation.
-		auto &stream_result = result->Cast<StreamQueryResult>();
-		auto materialized = stream_result.Materialize();
+		// Still release the GIL around it though: Materialize() drives the same native Fetch() machinery
+		// as any other result consumption, and other fetch paths (e.g. Fetchone()) release the GIL around it.
+		unique_ptr<MaterializedQueryResult> materialized;
+		{
+			D_ASSERT(duckdb::PyUtil::GilCheck());
+			nb::gil_scoped_release release;
+			auto &stream_result = result->Cast<StreamQueryResult>();
+			materialized = stream_result.Materialize();
+		}
 		if (!materialized || materialized->HasError()) {
 			return -1;
 		}
