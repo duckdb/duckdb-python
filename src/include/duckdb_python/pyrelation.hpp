@@ -30,8 +30,11 @@ public:
 
 	nb::list Description();
 
-	//! Cached at execution time (see ExecuteOrThrow / the DuckDBPyResult constructor overload) so that
-	//! it survives the Fetch*() methods below, several of which null out `result` once fully consumed.
+	//! Cached at construction time (see the DuckDBPyResult constructor overload) so that it survives
+	//! the Fetch*() methods below, several of which null out `result` once fully consumed. Note this
+	//! is only ever non-default for relations built directly from a DuckDBPyResult (the connection's
+	//! execute()/executemany() path) - relations built from a lazy Relation (rel != nullptr, executed
+	//! via ExecuteOrThrow) are always SELECT-shaped and so never produce a CHANGED_ROWS value anyway.
 	int64_t GetRowcount() const {
 		return row_changes;
 	}

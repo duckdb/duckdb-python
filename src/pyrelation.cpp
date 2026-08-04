@@ -835,7 +835,6 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 		query_result->ThrowError();
 	}
 	result = std::make_unique<DuckDBPyResult>(std::move(query_result));
-	row_changes = result->GetRowcount();
 }
 
 PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {

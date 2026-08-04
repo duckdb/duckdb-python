@@ -140,3 +140,20 @@ class TestCursorRowcount:
         duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
         duckdb_cursor.fetchnumpy()
         assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_after_to_arrow_table(self, duckdb_cursor):
+        pytest.importorskip("pyarrow")
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (2), (3), (4)")
+        duckdb_cursor.to_arrow_table()
+        assert duckdb_cursor.rowcount == 4
+
+    def test_rowcount_executemany_reflects_last_statement_only(self, duckdb_cursor):
+        # Documents current (limited) behavior: executemany() only keeps the QueryResult of the last
+        # parameter set it executes, so rowcount reflects that one statement rather than the total
+        # number of rows affected across all parameter sets. Not the DB-API-idiomatic answer, but
+        # pinned here so a future change to this behavior is a deliberate, visible decision.
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.executemany("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])
+        assert duckdb_cursor.table("t").fetchall() == [(1,), (2,), (3,)]
+        assert duckdb_cursor.rowcount == 1
