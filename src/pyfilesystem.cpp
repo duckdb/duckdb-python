@@ -1,5 +1,6 @@
 #include "duckdb_python/pyfilesystem.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/nb/casters.hpp"
 
@@ -202,12 +203,38 @@ void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpene
 	auto remove = filesystem.attr("rm");
 	remove(nb::str(filename.c_str(), filename.size()));
 }
+
+static bool IsUnsupportedModificationTimeError(const nb::python_error &error) {
+	if (error.matches(PyExc_NotImplementedError)) {
+		return true;
+	}
+	if (!error.matches(PyExc_KeyError)) {
+		return false;
+	}
+	// gcsfs: GCSFileSystem.modified() indexes info(path)["mtime"] and raises KeyError('mtime') when
+	// object metadata (or synthesized directory entries) has no mtime.
+	try {
+		nb::tuple args = nb::cast<nb::tuple>(error.value().attr("args"));
+		return nb::len(args) == 1 && nb::cast<string>(nb::str(args[0])) == "mtime";
+	} catch (...) {
+		return false;
+	}
+}
+
 timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 	D_ASSERT(!duckdb::PyUtil::GilCheck());
 	// TODO: this value should be cached on the PythonFileHandle
 	nb::gil_scoped_acquire gil;
 
-	auto last_mod = filesystem.attr("modified")(handle.path);
+	nb::object last_mod;
+	try {
+		last_mod = filesystem.attr("modified")(handle.path);
+	} catch (nb::python_error &e) {
+		if (IsUnsupportedModificationTimeError(e)) {
+			throw NotImplementedException("%s: GetLastModifiedTime is not implemented", GetName());
+		}
+		throw;
+	}
 
 	// datetime.timestamp() returns a float; truncate to int64 seconds (nb::cast<int64_t> would reject a float)
 	return Timestamp::FromEpochSeconds((int64_t)nb::cast<double>(last_mod.attr("timestamp")()));
