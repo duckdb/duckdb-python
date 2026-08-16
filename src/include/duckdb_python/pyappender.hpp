@@ -24,6 +24,7 @@ public:
 	static void Initialize(nb::handle &m);
 
 	void AppendRow(const nb::args &args);
+	void AppendChunk(const nb::object &rows);
 	void Flush();
 	void Close();
 	std::shared_ptr<DuckDBPyAppender> Enter();

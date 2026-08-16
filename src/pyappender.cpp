@@ -22,6 +22,8 @@ DuckDBPyAppender::~DuckDBPyAppender() {
 void DuckDBPyAppender::Initialize(nb::handle &m) {
 	auto appender_module = nb::class_<DuckDBPyAppender>(m, "Appender", nb::is_weak_referenceable());
 	appender_module.def("append", &DuckDBPyAppender::AppendRow, "Append a row of values")
+	    .def("append_chunk", &DuckDBPyAppender::AppendChunk, "Append a sequence of rows as a data chunk",
+	         nb::arg("rows"))
 	    .def("flush", &DuckDBPyAppender::Flush, "Flush the appender to the table")
 	    .def("close", &DuckDBPyAppender::Close, "Flush the appender and close it")
 	    .def("__enter__", &DuckDBPyAppender::Enter)
@@ -59,6 +61,45 @@ void DuckDBPyAppender::AppendRow(const nb::args &args) {
 		appender->Append(std::move(value));
 	}
 	appender->EndRow();
+}
+
+void DuckDBPyAppender::AppendChunk(const nb::object &rows) {
+	DuckDBPyConnection::ConnectionLockGuard conn_lock(*connection);
+	CheckOpen();
+	if (!duckdb::PyUtil::IsListLike(rows)) {
+		throw InvalidInputException("append_chunk expects a sequence of rows");
+	}
+	nb::list list(rows);
+	auto &types = appender->GetActiveTypes();
+	auto &context = Context();
+	idx_t offset = 0;
+	const idx_t total = list.size();
+	while (offset < total) {
+		const idx_t n = MinValue<idx_t>(total - offset, STANDARD_VECTOR_SIZE);
+		DataChunk chunk;
+		chunk.Initialize(context, types);
+		chunk.SetChildCardinality(n);
+		for (idx_t r = 0; r < n; r++) {
+			auto row_obj = list[offset + r];
+			if (!duckdb::PyUtil::IsListLike(row_obj)) {
+				throw InvalidInputException("each append_chunk row must be a sequence");
+			}
+			nb::list row(row_obj);
+			if (row.size() != types.size()) {
+				throw InvalidInputException("append_chunk row expected %d values, got %d", types.size(), row.size());
+			}
+			idx_t c = 0;
+			for (auto value : row) {
+				TransformPythonObject(&context, value, chunk.data[c], r);
+				c++;
+			}
+		}
+		{
+			nb::gil_scoped_release release;
+			appender->AppendDataChunk(chunk);
+		}
+		offset += n;
+	}
 }
 
 void DuckDBPyAppender::Flush() {
