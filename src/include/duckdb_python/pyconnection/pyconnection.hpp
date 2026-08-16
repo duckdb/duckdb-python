@@ -274,6 +274,9 @@ public:
 
 	std::shared_ptr<DuckDBPyAppender> CreateAppender(const string &table, std::optional<string> schema = std::nullopt,
 	                                                 std::optional<string> catalog = std::nullopt);
+	std::shared_ptr<DuckDBPyAppender> CreateQueryAppender(const string &query, const nb::object &types,
+	                                                      const nb::object &names = nb::none(),
+	                                                      std::optional<string> table_name = std::nullopt);
 
 	std::shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const nb::object &python_object);
 

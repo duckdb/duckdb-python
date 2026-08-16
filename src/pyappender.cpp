@@ -1,5 +1,6 @@
 #include "duckdb_python/pyappender.hpp"
 #include "duckdb_python/python_conversion.hpp"
+#include "duckdb_python/pytype.hpp"
 
 namespace duckdb {
 
@@ -154,6 +155,50 @@ std::shared_ptr<DuckDBPyAppender> DuckDBPyConnection::CreateAppender(const strin
 		} else {
 			appender = make_uniq<Appender>(con, Identifier(table));
 		}
+	}
+	return std::make_shared<DuckDBPyAppender>(shared_from_this(), std::move(appender));
+}
+
+static vector<LogicalType> ConvertAppenderTypes(const nb::object &types) {
+	if (!duckdb::PyUtil::IsListLike(types)) {
+		throw InvalidInputException("types must be a sequence of DuckDB types");
+	}
+	vector<LogicalType> result;
+	for (auto item : nb::list(types)) {
+		std::unique_ptr<DuckDBPyType> pytype;
+		if (!DuckDBPyType::TryConvert(nb::borrow<nb::object>(item), pytype)) {
+			throw InvalidInputException("could not convert %s to a DuckDB type",
+			                            nb::cast<string>(nb::str((item).type())));
+		}
+		result.push_back(pytype->Type());
+	}
+	if (result.empty()) {
+		throw InvalidInputException("types must not be empty");
+	}
+	return result;
+}
+
+std::shared_ptr<DuckDBPyAppender> DuckDBPyConnection::CreateQueryAppender(const string &query, const nb::object &types,
+                                                                          const nb::object &names,
+                                                                          std::optional<string> table_name) {
+	auto logical_types = ConvertAppenderTypes(types);
+	vector<Identifier> column_names;
+	if (!names.is_none()) {
+		if (!duckdb::PyUtil::IsListLike(names)) {
+			throw InvalidInputException("names must be a sequence of strings");
+		}
+		for (auto item : nb::list(names)) {
+			column_names.emplace_back(duckdb::PyUtil::CastToString(item));
+		}
+	}
+	Identifier query_table = table_name.has_value() ? Identifier(*table_name) : Identifier();
+	DuckDBPyConnection::ConnectionLockGuard conn_lock(*this);
+	auto &con = this->con.GetConnection();
+	unique_ptr<BaseAppender> appender;
+	{
+		nb::gil_scoped_release release;
+		appender = make_uniq<QueryAppender>(con, query, std::move(logical_types), std::move(column_names),
+		                                    std::move(query_table));
 	}
 	return std::make_shared<DuckDBPyAppender>(shared_from_this(), std::move(appender));
 }
