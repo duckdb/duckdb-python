@@ -43,9 +43,13 @@ static Value CastToTarget(Value val, const LogicalType &target_type) {
 	// Second pass: if there's a type we can implicitly cast to, we do that
 	for (idx_t i = 0; i < member_count; i++) {
 		auto member_type = UnionType::GetMemberType(target_type, i);
-		Value candidate = val;
-		if (candidate.DefaultTryCastAs(member_type)) {
-			return Value::UNION(UnionType::CopyMemberTypes(target_type), NumericCast<uint8_t>(i), std::move(candidate));
+		// DefaultTryCastAs returns the converted value and leaves `val` alone. It used to cast in
+		// place and return bool, and because std::optional is contextually convertible to bool the
+		// old call still compiled while silently tagging the union with an unconverted value.
+		auto candidate = val.DefaultTryCastAs(member_type);
+		if (candidate) {
+			return Value::UNION(UnionType::CopyMemberTypes(target_type), NumericCast<uint8_t>(i),
+			                    std::move(*candidate));
 		}
 	}
 	throw ConversionException("Could not convert value of type %s to %s", source_type.ToString(),

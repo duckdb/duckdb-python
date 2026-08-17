@@ -129,7 +129,7 @@ static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p
 }
 
 void Pandas::Bind(ClientContext &context, nb::handle df_p, vector<PandasColumnBindData> &bind_columns,
-                  vector<LogicalType> &return_types, vector<string> &names) {
+                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 
 	PandasDataFrameBind df(df_p);
 	idx_t column_count = nb::len(df.names);

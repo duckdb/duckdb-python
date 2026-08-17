@@ -651,7 +651,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 
 		prep = connection.Prepare(std::move(statement));
 		if (prep->HasError()) {
-			prep->error.Throw();
+			prep->GetErrorObject().Throw();
 		}
 	}
 	return prep;
@@ -1685,19 +1685,16 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 		if (!res) {
 			return nullptr;
 		}
-		if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
+		if (res->GetStatementProperties().return_type != StatementReturnType::QUERY_RESULT) {
 			return nullptr;
 		}
-		if (res->type == QueryResultType::STREAM_RESULT) {
+		if (res->GetResultType() == QueryResultType::STREAM_RESULT) {
 			auto &stream_result = res->Cast<StreamQueryResult>();
 			res = stream_result.Materialize();
 		}
 		auto &materialized_result = res->Cast<MaterializedQueryResult>();
-		vector<Identifier> col_names(res->names.size());
-		std::transform(res->names.begin(), res->names.end(), col_names.begin(),
-		               [](string &name) { return Identifier(name); });
 		relation = make_shared_ptr<MaterializedRelation>(connection.context, materialized_result.TakeCollection(),
-		                                                 col_names, Identifier(alias));
+		                                                 res->GetNames(), Identifier(alias));
 	}
 	return CreateRelation(std::move(relation));
 }
@@ -2175,14 +2172,14 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	return result.FetchRecordBatchReader(rows_per_batch);
 }
 
-case_insensitive_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {
-	case_insensitive_map_t<Value> config_dict;
+identifier_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {
+	identifier_map_t<Value> config_dict;
 	for (auto kv : py_config_dict) {
 		// Config values may be int/bool/str; str-ify them rather than
 		// requiring an actual Python str (nb::cast<std::string> would throw on a non-str like 0 or False).
 		auto key = nb::cast<std::string>(nb::str(kv.first));
 		auto val = nb::cast<std::string>(nb::str(kv.second));
-		config_dict[key] = Value(val);
+		config_dict[Identifier(key)] = Value(val);
 	}
 	return config_dict;
 }
@@ -2258,7 +2255,7 @@ static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &d
 	return res;
 }
 
-bool IsDefaultConnectionString(const string &database, bool read_only, case_insensitive_map_t<Value> &config) {
+bool IsDefaultConnectionString(const string &database, bool read_only, identifier_map_t<Value> &config) {
 	bool is_default = StringUtil::CIEquals(database, ":default:");
 	if (!is_default) {
 		return false;

@@ -455,6 +455,10 @@ class TestDistinctFromNullOrPushdown:
         arrow_table = to_arrow_table(duckdb_cursor.table("_d"))
         duckdb_cursor.register("arrow_table", arrow_table)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="core no longer pushes IS_NOT_NULL into the arrow scan; results are unaffected",
+    )
     def test_distinct_from_null_or_eq_is_pushed(self, duckdb_cursor):
         assert _was_pushed(
             duckdb_cursor,

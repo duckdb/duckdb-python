@@ -21,7 +21,7 @@ public:
 	MapFunction();
 
 	static unique_ptr<FunctionData> MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                vector<LogicalType> &return_types, vector<string> &names);
+	                                                vector<LogicalType> &return_types, vector<Identifier> &names);
 
 	static OperatorResultType MapFunctionExec(ExecutionContext &context, TableFunctionInput &data, DataChunk &input,
 	                                          DataChunk &output);

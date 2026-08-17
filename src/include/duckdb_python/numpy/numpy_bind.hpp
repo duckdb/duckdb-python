@@ -10,7 +10,7 @@ class ClientContext;
 
 struct NumpyBind {
 	static void Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
-	                 vector<LogicalType> &return_types, vector<string> &names);
+	                 vector<LogicalType> &return_types, vector<Identifier> &names);
 };
 
 } // namespace duckdb
