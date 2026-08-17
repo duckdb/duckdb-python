@@ -299,3 +299,16 @@ class TestToCSV:
         rel.to_csv(temp_file_name, header=True, use_tmp_file=True)
         csv_rel = duckdb.read_csv(temp_file_name, header=True)
         assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+
+    def test_to_csv_pathlib(self, tmp_path):
+        file_path = tmp_path / "test.csv"  # pathlib.Path
+        df = pd.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
+        rel = duckdb.from_df(df)
+        rel.to_csv(file_path)
+        assert rel.execute().fetchall() == duckdb.read_csv(file_path).execute().fetchall()
+
+    def test_to_csv_rejects_non_path(self):
+        df = pd.DataFrame({"a": [5, 3, 23, 2], "b": [45, 234, 234, 2]})
+        rel = duckdb.from_df(df)
+        with pytest.raises(duckdb.InvalidInputException):
+            rel.to_csv(123)

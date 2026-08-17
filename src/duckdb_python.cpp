@@ -866,7 +866,7 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "write_csv",
-	    [](const PandasDataFrame &df, const string &filename, const nb::object &sep = nb::none(),
+	    [](const PandasDataFrame &df, const nb::object &filename, const nb::object &sep = nb::none(),
 	       const nb::object &na_rep = nb::none(), const nb::object &header = nb::none(),
 	       const nb::object &quotechar = nb::none(), const nb::object &escapechar = nb::none(),
 	       const nb::object &date_format = nb::none(), const nb::object &timestamp_format = nb::none(),

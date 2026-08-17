@@ -34,15 +34,33 @@ public:
 	vector<string> fs_files;
 };
 
-void PathLikeProcessor::AddFile(const nb::object &object) {
+bool TryEnsurePathString(const nb::object &object, string &result) {
 	if (nb::isinstance<nb::str>(object)) {
-		all_files.push_back(nb::cast<std::string>(nb::str(object)));
-		return;
+		result = nb::cast<string>(object);
+		return true;
 	}
 	if (nb::isinstance<nb::bytes>(object) || nb::hasattr(object, "__fspath__")) {
 		// A bytes path or an os.PathLike object (e.g. pathlib.Path) - decode it to a string
 		auto fsdecode = nb::module_::import_("os").attr("fsdecode");
-		all_files.push_back(nb::cast<std::string>(nb::str(fsdecode(object))));
+		result = nb::cast<string>(fsdecode(object));
+		return true;
+	}
+	return false;
+}
+
+string EnsurePathString(const nb::object &object) {
+	string result;
+	if (!TryEnsurePathString(object, result)) {
+		throw InvalidInputException("Expected a str, bytes, or os.PathLike object for the file path, not '%s'",
+		                            Py_TYPE(object.ptr())->tp_name);
+	}
+	return result;
+}
+
+void PathLikeProcessor::AddFile(const nb::object &object) {
+	string decoded;
+	if (TryEnsurePathString(object, decoded)) {
+		all_files.push_back(std::move(decoded));
 		return;
 	}
 	// This is (assumed to be) a file-like object

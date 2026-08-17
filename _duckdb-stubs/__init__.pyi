@@ -707,7 +707,7 @@ class DuckDBPyRelation:
     def tf(self) -> dict[str, typing.Any]: ...
     def to_csv(
         self,
-        file_name: str,
+        file_name: str | os.PathLike[str],
         *,
         sep: str | None = None,
         na_rep: str | None = None,
@@ -728,7 +728,7 @@ class DuckDBPyRelation:
     def to_df(self, *, date_as_object: bool = False) -> pandas.DataFrame: ...
     def to_parquet(
         self,
-        file_name: str,
+        file_name: str | os.PathLike[str],
         *,
         compression: ParquetCompression | None = None,
         field_ids: ParquetFieldsOptions | None = None,
@@ -764,7 +764,7 @@ class DuckDBPyRelation:
     ) -> DuckDBPyRelation: ...
     def write_csv(
         self,
-        file_name: str,
+        file_name: str | os.PathLike[str],
         *,
         sep: str | None = None,
         na_rep: str | None = None,
@@ -784,7 +784,7 @@ class DuckDBPyRelation:
     ) -> None: ...
     def write_parquet(
         self,
-        file_name: str,
+        file_name: str | os.PathLike[str],
         *,
         compression: ParquetCompression | None = None,
         field_ids: ParquetFieldsOptions | None = None,
@@ -1272,7 +1272,7 @@ def values(*args: IntoValues, connection: DuckDBPyConnection | None = None) -> D
 def view(view_name: str, *, connection: DuckDBPyConnection | None = None) -> DuckDBPyRelation: ...
 def write_csv(
     df: pandas.DataFrame,
-    filename: str,
+    filename: str | os.PathLike[str],
     *,
     sep: str | None = None,
     na_rep: str | None = None,
