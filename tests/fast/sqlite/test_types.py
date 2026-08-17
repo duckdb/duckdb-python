@@ -88,7 +88,7 @@ class DuckDBTypeTests(unittest.TestCase):
         self.cur.execute("insert into test(f) values (?)", (val,))
         self.cur.execute("select f from test")
         row = self.cur.fetchone()
-        assert row[0] == self.cur.execute("select 1.00000::DOUBLE").fetchone()[0]
+        assert row[0] == self.cur.execute("select 1e5::DOUBLE").fetchone()[0]
 
     def test_CheckNaN(self):
         import math
