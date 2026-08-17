@@ -1,10 +1,29 @@
-name: Check DuckDB submodule sanity
+name: Submodule sanity
+
+# Guards the vendored DuckDB engine at external/duckdb: .gitmodules is frozen,
+# the submodule origin must be duckdb/duckdb, and a moved pin must be reachable
+# from the same-named core branch and carry the submodule-bump label.
+# Standalone with no paths filter on purpose: a policy red must not cancel the
+# build and test jobs, and a required check that never reports blocks the merge.
+
 on:
-  workflow_call:
+  pull_request:
+    branches:
+      - main
+      - v*.*-*
+    types: [opened, reopened, synchronize, labeled, unlabeled]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   submodule_sanity:
-    name: Make sure submodule is in a sane state
+    name: Submodule sanity
     runs-on: ubuntu-latest
     steps:
       - name: Checkout DuckDB Python
@@ -15,12 +34,12 @@ jobs:
       - name: Verify submodule origin
         shell: bash
         run: |
-          set -eux
-          git submodule update --init
+          set -euo pipefail
+          git submodule update --init -- external/duckdb
           cd external/duckdb
           remote_count=$(git remote | wc -l)
           if [[ $remote_count -gt 1 ]]; then
-            echo "::error::Multiple remotes found - only origin allowed"
+            echo "::error::Multiple remotes found in external/duckdb, only origin is allowed."
             git remote -v
             exit 1
           fi
@@ -30,57 +49,59 @@ jobs:
             exit 1
           fi
 
-      - name: Disallow changes to .gitmodules in PRs and pushes
-        if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
-        shell: bash
-        run: |
-          set -eux
-          before=${{ github.event_name == 'push' && github.event.before || format('origin/{0}', github.base_ref) }}
-          # For PRs, HEAD is the merge commit. github.head_ref would not resolve for fork PRs.
-          after=${{ github.event_name == 'push' && github.event.after || 'HEAD' }}
-          if git diff --name-only $before...$after | grep -q "^\.gitmodules$"; then
-            echo "::error::.gitmodules may not be modified. If you see a reason to update, please discuss with the maintainers."
-            exit 1
-          fi
-
-      - name: Disallow submodule pin changes except from vendoring PRs
-        if: ${{ github.event_name == 'pull_request' }}
+      # Github context goes through env: branch names can carry shell metacharacters.
+      - name: Check the submodule pin
         shell: bash
         env:
           BASE_REF: ${{ github.base_ref }}
-          HEAD_REF: ${{ github.head_ref }}
-          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BUMP_LABEL: submodule-bump
+          HAS_BUMP_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'submodule-bump') }}
         run: |
-          set -eu
-          # HEAD is the PR merge commit, so origin/base...HEAD is exactly what merging would change.
+          set -euo pipefail
+
+          # HEAD is the merge commit, so this is exactly what merging would change.
           changed=$(git diff --name-only "origin/${BASE_REF}...HEAD")
-          if ! grep -qx "external/duckdb" <<< "$changed"; then
-            echo "Submodule pin unchanged"
+
+          if grep -qxF '.gitmodules' <<< "$changed"; then
+            echo "::error::.gitmodules may not be modified. If you see a reason to update it, discuss with the maintainers first."
+            exit 1
+          fi
+
+          if ! grep -qxF 'external/duckdb' <<< "$changed"; then
+            echo "Submodule pin unchanged."
+            echo "Submodule pin unchanged." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          # Only the vendoring workflow may move the pin: a branch in this repo
-          # (forks cannot create one), named vendoring-*, changing nothing else.
-          if [[ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]]; then
-            echo "::error::Submodule pin changes are not accepted from forks. Bumps come from the vendoring workflow."
-            exit 1
+
+          old_pin=$(git rev-parse "origin/${BASE_REF}:external/duckdb")
+          new_pin=$(git rev-parse "HEAD:external/duckdb")
+
+          {
+            echo "## DuckDB submodule pin moved"
+            echo ""
+            echo "| | commit |"
+            echo "| --- | --- |"
+            echo "| before | \`${old_pin}\` |"
+            echo "| after | \`${new_pin}\` |"
+            echo ""
+            echo "[Compare on duckdb/duckdb](https://github.com/duckdb/duckdb/compare/${old_pin}...${new_pin})"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=0
+
+          # Existence in duckdb/duckdb is no proof: GitHub serves fork PR objects by sha.
+          pushd external/duckdb > /dev/null
+          git fetch --quiet origin "$BASE_REF"
+          if ! git merge-base --is-ancestor "$new_pin" "origin/${BASE_REF}" 2>/dev/null; then
+            echo "::error::Submodule pin ${new_pin} is not reachable from duckdb/duckdb branch ${BASE_REF}. Land the commit upstream first, then bump."
+            failed=1
           fi
-          if [[ "$HEAD_REF" != vendoring-* ]]; then
-            echo "::error::Submodule pin changes are only accepted from vendoring-* branches. Bumps come from the vendoring workflow."
-            exit 1
+          popd > /dev/null
+
+          if [[ "$HAS_BUMP_LABEL" != "true" ]]; then
+            echo "::error::This pull request moves the DuckDB submodule pin (${old_pin} -> ${new_pin}). If that is intended, add the '${BUMP_LABEL}' label and re-run. If it is not, reset it with: git checkout origin/${BASE_REF} -- external/duckdb"
+            failed=1
           fi
-          if [[ "$changed" != "external/duckdb" ]]; then
-            echo "::error::A vendoring PR must change exactly one path, the submodule pin. This PR also changes:"
-            echo "$changed"
-            exit 1
-          fi
-          # The pin must be reachable from the official upstream branch this base
-          # tracks (same branch name in duckdb/duckdb). Existing in the repo is not
-          # enough: fork PR objects are fetchable from the parent repo by sha.
-          pin=$(git rev-parse HEAD:external/duckdb)
-          cd external/duckdb
-          git fetch origin "$BASE_REF"
-          if ! git merge-base --is-ancestor "$pin" "origin/${BASE_REF}"; then
-            echo "::error::Submodule pin $pin is not reachable from duckdb/duckdb branch ${BASE_REF}."
-            exit 1
-          fi
-          echo "Pin $pin accepted: vendoring branch, pin-only diff, reachable from upstream ${BASE_REF}"
+
+          [[ $failed -eq 0 ]] || exit 1
+          echo "Pin ${new_pin} accepted: labelled ${BUMP_LABEL} and reachable from duckdb/duckdb ${BASE_REF}."
