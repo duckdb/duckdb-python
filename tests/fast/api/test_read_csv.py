@@ -494,7 +494,7 @@ class TestReadCSV:
             con.read_csv(file, names=["a", "b", "c", "d", "e"])
 
         # Duplicates are not okay
-        with pytest.raises(duckdb.BinderException, match="names must have unique values"):
+        with pytest.raises(duckdb.BinderException, match="must have unique values"):
             con.read_csv(file, names=["a", "b", "a", "b"])
 
     def test_read_csv_names_mixed_with_dtypes(self, tmp_path):

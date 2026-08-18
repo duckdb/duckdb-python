@@ -54,7 +54,7 @@ public:
 
 	unique_ptr<DataChunk> FetchChunk();
 
-	const vector<string> &GetNames();
+	vector<string> GetNames();
 	const vector<LogicalType> &GetTypes();
 
 	ClientProperties GetClientProperties();
@@ -71,6 +71,8 @@ private:
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const nb::handle &o);
 
 	void ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_object) const;
+	//! The names the Python layer reports, see the definition for why this is not always the result's own.
+	const vector<Identifier> &ResultNames() const;
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
 	std::unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
@@ -98,6 +100,9 @@ private:
 	idx_t chunk_offset = 0;
 
 	unique_ptr<QueryResult> result;
+	//! Set only when the result was re-bound (promotion to Arrow de-duplicates column names
+	//! and core exposes no setter), so the original names survive. Empty means "use result's".
+	vector<Identifier> names_override;
 	unique_ptr<DataChunk> current_chunk;
 	// Holds the categories of Categorical/ENUM types
 	unordered_map<idx_t, nb::list> categories;

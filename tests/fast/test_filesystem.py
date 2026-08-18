@@ -10,6 +10,8 @@ import duckdb
 from duckdb import DuckDBPyConnection, InvalidInputException
 
 fsspec = pytest.importorskip("fsspec", "2022.11.0")
+# fsspec no longer pulls in its implementations submodules on package import
+pytest.importorskip("fsspec.implementations.memory")
 
 FILENAME = "integers.csv"
 

@@ -80,7 +80,8 @@ OperatorPartitionData PandasScanFunction::PandasScanGetPartitionData(ClientConte
 }
 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	nb::gil_scoped_acquire acquire;
 	nb::handle df(reinterpret_cast<PyObject *>(input.inputs[0].GetPointer()));
 

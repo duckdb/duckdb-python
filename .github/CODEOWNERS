@@ -1,0 +1,10 @@
+# A pull request builds its own workflow files from the merge ref, so a workflow
+# guard can be neutered by the pull request it guards. CODEOWNERS is evaluated
+# from the base branch, so it cannot. Binds only once "Require review from Code
+# Owners" is on the branch ruleset, and not against admins, who hold bypass.
+# Keep several owners per path: nobody can approve their own pull request.
+
+/external/duckdb                        @evertlammerts @hannes @Mytherin
+/.gitmodules                            @evertlammerts @hannes @Mytherin
+/.github/workflows/submodule_sanity.yml @evertlammerts @hannes @Mytherin
+/.github/CODEOWNERS                     @evertlammerts @hannes @Mytherin

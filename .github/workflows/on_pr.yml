@@ -10,29 +10,14 @@ on:
       - 'LICENSE'
       - '.editorconfig'
       - 'scripts/**'
-      - '.github//**'
-      - '!.github/workflows/on_push.yml'
-      - '!.github/workflows/coverage.yml'
-      - '!.github/workflows/on_pr.yml'
-      - '!.github/workflows/packaging.yml'
-      - '!.github/workflows/packaging_sdist.yml'
-      - '!.github/workflows/packaging_wheels.yml'
-      - '!.github/workflows/submodule_sanity.yml'
-      - '!.github/workflows/code_quality.yml'
-      - '!.github/actions/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  submodule_sanity_guard:
-    name: Make sure submodule is in a sane state
-    uses: ./.github/workflows/submodule_sanity.yml
-
   code_quality:
     name: Code-quality checks
-    needs: submodule_sanity_guard
     uses: ./.github/workflows/code_quality.yml
 
   packaging_test:

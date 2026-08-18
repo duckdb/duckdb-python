@@ -1267,7 +1267,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compr
                                  const nb::object &use_tmp_file, const nb::object &partition_by,
                                  const nb::object &write_partition_columns, const nb::object &append,
                                  const nb::object &filename_pattern, const nb::object &file_size_bytes) {
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 
 	if (!nb::none().is(compression)) {
 		if (!nb::isinstance<nb::str>(compression)) {
@@ -1386,7 +1386,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const nb::object &sep, cons
                              const nb::object &overwrite, const nb::object &per_thread_output,
                              const nb::object &use_tmp_file, const nb::object &partition_by,
                              const nb::object &write_partition_columns) {
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 
 	if (!nb::none().is(sep)) {
 		if (!nb::isinstance<nb::str>(sep)) {
@@ -1749,7 +1749,7 @@ string DuckDBPyRelation::Explain(ExplainType type, const string &format) {
 	const bool auto_format = format.empty();
 	auto explain_format = auto_format ? GetExplainFormat(type) : ProfilerPrintFormat(format);
 	auto res = rel->Explain(type, explain_format);
-	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(res->GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
 	// Only the implicit Jupyter path renders HTML inline; an explicitly requested format always returns a string.

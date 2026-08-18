@@ -90,6 +90,8 @@ jobs:
   submodule_pr:
     name: Create or update PR to bump submodule to given SHA
     needs: build_sdist
+    permissions:
+      contents: write
     uses: ./.github/workflows/submodule_auto_pr.yml
     with:
       duckdb-python-sha: ${{ inputs.duckdb-python-sha }}
