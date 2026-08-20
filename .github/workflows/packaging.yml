@@ -26,7 +26,11 @@ on:
         required: false
       set-version:
         type: string
-        description: Force version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        description: Force the package version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        required: false
+      set-duckdb-version:
+        type: string
+        description: Force the version DuckDB is built with. Handed to DuckDB's build verbatim, which validates it.
         required: false
   workflow_call:
     inputs:
@@ -48,7 +52,11 @@ on:
         description: Override the DuckDB submodule commit or ref to build against
         required: false
       set-version:
-        description: Force version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        description: Force the package version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        required: false
+        type: string
+      set-duckdb-version:
+        description: Force the version DuckDB is built with. Handed to DuckDB's build verbatim, which validates it.
         required: false
         type: string
 
@@ -69,6 +77,7 @@ jobs:
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}
+      set-duckdb-version: ${{ inputs.set-duckdb-version }}
 
   build_wheels:
     name: Build and test releases
@@ -79,3 +88,4 @@ jobs:
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}
+      set-duckdb-version: ${{ inputs.set-duckdb-version }}

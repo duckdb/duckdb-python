@@ -9,14 +9,21 @@ import re
 from typing import Protocol
 
 # Import from our own versioning module to avoid duplication
-from ._versioning import format_version, git_tag_to_pep440, parse_version
+from ._versioning import duckdb_describe_from_override, format_version, git_tag_to_pep440, parse_version
 
 # MAIN_BRANCH_VERSIONING should be 'True' on main branch only
 MAIN_BRANCH_VERSIONING = True
 
 SCM_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB"
 SCM_GLOBAL_PRETEND_ENV_VAR = "SETUPTOOLS_SCM_PRETEND_VERSION"
+
+# Two independent version overrides. OVERRIDE_GIT_DESCRIBE forces the version of
+# this package, and DuckDB inherits it, because a stable release uses one version
+# identifier for both. OVERRIDE_DUCKDB_GIT_DESCRIBE forces the version DuckDB is
+# built with and nothing else, which is what a nightly that vendors a specific
+# DuckDB version needs: it keeps deriving its own version from git.
 OVERRIDE_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_GIT_DESCRIBE"
+OVERRIDE_DUCKDB_GIT_DESCRIBE_ENV_VAR = "OVERRIDE_DUCKDB_GIT_DESCRIBE"
 
 
 class _VersionObject(Protocol):
@@ -106,6 +113,30 @@ def forced_version_from_env() -> str | None:
         _remove_unsupported_env_var(SCM_GLOBAL_PRETEND_ENV_VAR)
 
     return pep440_version
+
+
+def forced_duckdb_version_from_env() -> str | None:
+    """The version DuckDB was explicitly asked to build as, if any.
+
+    OVERRIDE_DUCKDB_GIT_DESCRIBE wins and is passed on verbatim. Otherwise a
+    forced package version carries over, minus its post suffix. Returns None when
+    neither is set, and the caller derives the version from git instead.
+
+    Returns:
+        The version string to build DuckDB with, or None to derive it.
+    """
+    forced_duckdb = os.getenv(OVERRIDE_DUCKDB_GIT_DESCRIBE_ENV_VAR)
+    if forced_duckdb:
+        print(f"[versioning] Found {OVERRIDE_DUCKDB_GIT_DESCRIBE_ENV_VAR}={forced_duckdb}")
+        return forced_duckdb
+
+    forced_package = os.getenv(OVERRIDE_GIT_DESCRIBE_ENV_VAR)
+    if forced_package:
+        duckdb_version = duckdb_describe_from_override(forced_package)
+        print(f"[versioning] Derived DuckDB version {duckdb_version} from {OVERRIDE_GIT_DESCRIBE_ENV_VAR}")
+        return duckdb_version
+
+    return None
 
 
 def _git_describe_override_to_pep_440(override_value: str) -> str:
