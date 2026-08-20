@@ -59,6 +59,12 @@ public:
 
 	ClientProperties GetClientProperties();
 
+	//! Number of rows changed by the last CHANGED_ROWS-returning statement (INSERT/UPDATE/DELETE/...).
+	//! Returns -1 when not applicable/unknown, as permitted by the DB-API 2.0 spec for 'rowcount'.
+	int64_t GetRowcount() const {
+		return row_changes;
+	}
+
 private:
 	void FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
@@ -84,6 +90,12 @@ private:
 	duckdb::pyarrow::Table MaterializedResultToArrowTable(const ArrowSchema &arrow_schema, idx_t rows_per_batch);
 	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch);
 
+	//! Computes the CHANGED_ROWS value (if any) up front, before any Fetch call has had a chance to
+	//! consume it, so that later fetch calls do not affect what GetRowcount() reports. Materializes a
+	//! streaming result if necessary; this is cheap since CHANGED_ROWS results are always exactly one
+	//! already-computed row.
+	int64_t ComputeRowChanges();
+
 private:
 	idx_t chunk_offset = 0;
 
@@ -97,6 +109,8 @@ private:
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, nb::object> categories_type;
 	bool result_closed = false;
+	//! Cached by ComputeRowChanges() at construction time - see GetRowcount().
+	int64_t row_changes = -1;
 };
 
 } // namespace duckdb

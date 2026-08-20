@@ -33,6 +33,9 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	if (!result) {
 		throw InternalException("PyResult created without a result object");
 	}
+	// Must happen before any Fetch call (from this object or a caller holding a reference to the
+	// same underlying QueryResult) has a chance to consume the single row we're reading here.
+	row_changes = ComputeRowChanges();
 }
 
 const vector<Identifier> &DuckDBPyResult::ResultNames() const {
@@ -70,6 +73,43 @@ const vector<LogicalType> &DuckDBPyResult::GetTypes() {
 		throw InternalException("Calling GetTypes without a result object");
 	}
 	return result->GetTypes();
+}
+
+int64_t DuckDBPyResult::ComputeRowChanges() {
+	if (!result || result->HasError()) {
+		return -1;
+	}
+	if (result->properties.return_type != StatementReturnType::CHANGED_ROWS) {
+		// The row count of a SELECT (or a statement that returns nothing) is not known without fully
+		// consuming the result - report -1, as permitted by the DB-API 2.0 spec for 'rowcount'.
+		return -1;
+	}
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		// CHANGED_ROWS statements always produce a single already-computed row, so materializing here
+		// does not trigger any additional query execution - it just changes the in-memory representation.
+		// Still release the GIL around it though: Materialize() drives the same native Fetch() machinery
+		// as any other result consumption, and other fetch paths (e.g. Fetchone()) release the GIL around it.
+		unique_ptr<MaterializedQueryResult> materialized;
+		{
+			D_ASSERT(duckdb::PyUtil::GilCheck());
+			nb::gil_scoped_release release;
+			auto &stream_result = result->Cast<StreamQueryResult>();
+			materialized = stream_result.Materialize();
+		}
+		if (!materialized || materialized->HasError()) {
+			return -1;
+		}
+		result = std::move(materialized);
+	}
+	if (result->type != QueryResultType::MATERIALIZED_RESULT) {
+		// e.g. an Arrow result - can't peek at the value without disturbing it.
+		return -1;
+	}
+	auto &materialized_result = result->Cast<MaterializedQueryResult>();
+	if (materialized_result.RowCount() != 1 || materialized_result.ColumnCount() != 1) {
+		return -1;
+	}
+	return materialized_result.GetValue(0, 0).GetValue<int64_t>();
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
