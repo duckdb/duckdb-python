@@ -10,6 +10,7 @@ Note:
 """
 
 from _duckdb import (
+    Appender,
     BinderException,
     CaseExpression,
     CatalogException,
@@ -207,6 +208,7 @@ from duckdb.value.constant import (
 )
 
 __all__: list[str] = [
+    "Appender",
     "BinaryValue",
     "BinderException",
     "BitValue",

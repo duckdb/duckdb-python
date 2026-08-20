@@ -7,6 +7,7 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pystatement.hpp"
+#include "duckdb_python/pyappender.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/exceptions.hpp"
@@ -1108,6 +1109,7 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	DuckDBPyExpression::Initialize(m);
 	DuckDBPyStatement::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
+	DuckDBPyAppender::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();
 

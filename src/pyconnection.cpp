@@ -1,4 +1,5 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pyappender.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
@@ -502,6 +503,12 @@ void DuckDBPyConnection::Initialize(nb::handle &m) {
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
+	connection_module.def("appender", &DuckDBPyConnection::CreateAppender,
+	                      "Create an appender for fast row-wise inserts into a table", nb::arg("table"),
+	                      nb::arg("schema") = nb::none(), nb::arg("catalog") = nb::none());
+	connection_module.def("appender_query", &DuckDBPyConnection::CreateQueryAppender,
+	                      "Create an appender that flushes rows through a query", nb::arg("query"), nb::arg("types"),
+	                      nb::arg("names") = nb::none(), nb::arg("table_name") = nb::none());
 	connection_module.def_prop_ro("description", &DuckDBPyConnection::GetDescription,
 	                              "Get result set attributes, mainly column names");
 	connection_module.def_prop_ro("rowcount", &DuckDBPyConnection::GetRowcount, "Get result set row count");
