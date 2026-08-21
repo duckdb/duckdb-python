@@ -404,7 +404,14 @@ class DuckDBPyConnection:
     ) -> DuckDBPyRelation: ...
     def read_json(
         self,
-        path_or_buffer: str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str],
+        # stubgen override: read_json accepts a list of paths at runtime, not just a single one (#576)
+        path_or_buffer: str
+        | bytes
+        | os.PathLike[str]
+        | os.PathLike[bytes]
+        | typing.IO[bytes]
+        | typing.IO[str]
+        | Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str]],
         *,
         columns: ColumnsTypes | None = None,
         sample_size: int | None = None,
@@ -1191,7 +1198,14 @@ def read_csv(
     strict_mode: bool | None = None,
 ) -> DuckDBPyRelation: ...
 def read_json(
-    path_or_buffer: str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str],
+    # stubgen override: read_json accepts a list of paths at runtime, not just a single one (#576)
+    path_or_buffer: str
+    | bytes
+    | os.PathLike[str]
+    | os.PathLike[bytes]
+    | typing.IO[bytes]
+    | typing.IO[str]
+    | Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str]],
     *,
     columns: ColumnsTypes | None = None,
     sample_size: int | None = None,
