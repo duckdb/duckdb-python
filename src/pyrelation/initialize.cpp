@@ -366,6 +366,7 @@ void DuckDBPyRelation::Initialize(nb::handle &m) {
 	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data", nb::kw_only(),
 	         nb::arg("max_width") = nb::none(), nb::arg("max_rows") = nb::none(), nb::arg("max_col_width") = nb::none(),
 	         nb::arg("null_value") = nb::none(), nb::arg("render_mode") = nb::none())
+	    .def("__duckdb_template__", &DuckDBPyRelation::ToSQL)
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);
 

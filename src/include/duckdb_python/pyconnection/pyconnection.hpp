@@ -376,6 +376,7 @@ private:
 	ScalarFunction CreateScalarUDF(const string &name, const nb::callable &udf, const nb::object &parameters,
 	                               const nb::object &return_type, bool vectorized, FunctionNullHandling null_handling,
 	                               PythonExceptionHandling exception_handling, bool side_effects);
+	pair<string, nb::object> ExtractCompiledSqlAndParams(const nb::object &query, nb::object params);
 	vector<unique_ptr<SQLStatement>> GetStatements(const nb::object &query);
 
 	static void DetectEnvironment();
