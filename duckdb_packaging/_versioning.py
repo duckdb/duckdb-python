@@ -21,6 +21,10 @@ VERSION_RE = re.compile(
 
 PRE_RELEASE_KINDS = ("a", "b", "rc")
 
+# The post component of a version in git tag form. The only part we strip
+# before handing a forced version to DuckDB, see duckdb_describe_from_override.
+POST_COMPONENT_RE = re.compile(r"-post[0-9]+", re.IGNORECASE)
+
 # PEP440 alternative pre-release spellings and their canonical form
 _PRE_KIND_ALIASES = {
     "a": "a",
@@ -171,21 +175,25 @@ def create_git_tag(version: str, message: str | None = None, repo_path: pathlib.
     subprocess.run(cmd, check=True, cwd=cwd)
 
 
-def duckdb_tag_from_pep440(version: str) -> str:
-    """Map a forced package version to a DuckDB version tag.
+def duckdb_describe_from_override(override: str) -> str:
+    """Map a forced package version to the version string DuckDB gets built with.
 
-    Post releases repackage the stable engine, so the post suffix is dropped.
-    Pre-release suffixes pass through: DuckDB's build validates what it
-    supports and fails on versions it does not (yet) accept.
+    The value passes through untouched apart from a post component. Post
+    releases repackage the same engine, so DuckDB never sees the post suffix.
+
+    Everything else reaches DuckDB byte for byte. Its CMake is the only
+    authority on which version strings are valid, and it fails loud on the ones
+    it does not support. Normalizing here would corrupt them: PEP440 spells an
+    alpha "a1", DuckDB only accepts "alpha1" and rejects "a1".
 
     Args:
-        version: PEP440 version string of the Python package
+        override: Forced version in git tag form (e.g. "v1.3.1", "v1.3.1-post1",
+            "v1.3.1-alpha1", "v1.3.1-rc2-5-g1234567")
 
     Returns:
-        DuckDB git tag (e.g. "v1.3.1", "v1.3.1-rc2" or "v1.3.1-a1")
+        The version string for DuckDB's build (e.g. "v1.3.1", "v1.3.1-alpha1")
     """
-    major, minor, patch, _post, pre = parse_version(version)
-    return pep440_to_git_tag(format_version(major, minor, patch, pre=pre))
+    return POST_COMPONENT_RE.sub("", override, count=1)
 
 
 def get_git_describe(

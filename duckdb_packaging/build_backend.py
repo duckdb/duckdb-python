@@ -32,14 +32,22 @@ from scikit_build_core.build import (
     build_wheel as skbuild_build_wheel,
 )
 
-from duckdb_packaging._versioning import duckdb_tag_from_pep440, get_git_describe
-from duckdb_packaging.setuptools_scm_version import MAIN_BRANCH_VERSIONING, forced_version_from_env
+from duckdb_packaging._versioning import get_git_describe
+from duckdb_packaging.setuptools_scm_version import (
+    MAIN_BRANCH_VERSIONING,
+    forced_duckdb_version_from_env,
+    forced_version_from_env,
+)
 
 _DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
 _LOGGING_FORMAT = "[duckdb_pytooling.build_backend] {}"
 _SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
-# The below will check whether we should set a specific version in our build, and if so, set the version
-_FORCED_PEP440_VERSION = forced_version_from_env()
+
+# Load bearing at import time: this turns OVERRIDE_GIT_DESCRIBE into the
+# SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB that setuptools_scm reads, and drops the
+# pretend variables we do not support. It has to run before scikit-build-core asks
+# setuptools_scm for a version.
+forced_version_from_env()
 
 
 def _log(msg: str) -> None:
@@ -198,9 +206,8 @@ def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str
         msg = "Not in a git repository, can't create an sdist"
         raise RuntimeError(msg)
     submodule_path = _duckdb_submodule_path()
-    if _FORCED_PEP440_VERSION is not None:
-        duckdb_version = duckdb_tag_from_pep440(_FORCED_PEP440_VERSION)
-    else:
+    duckdb_version = forced_duckdb_version_from_env()
+    if duckdb_version is None:
         duckdb_version = get_git_describe(repo_path=submodule_path, since_minor=MAIN_BRANCH_VERSIONING)
     _write_duckdb_long_version(duckdb_version)
     return skbuild_build_sdist(sdist_directory, config_settings=config_settings)
@@ -229,16 +236,15 @@ def build_wheel(
         RuntimeError: If not in a git repository or sdist environment.
     """
     # First figure out the duckdb version we should use
-    duckdb_version = None
+    config_settings = config_settings or {}
+    duckdb_version = forced_duckdb_version_from_env()
     if not _in_git_repository():
         if not _in_sdist():
             msg = "Not in a git repository nor in an sdist, can't build a wheel"
             raise RuntimeError(msg)
-        _log("Building duckdb wheel from sdist. Reading duckdb version from file.")
-        config_settings = config_settings or {}
-        duckdb_version = _read_duckdb_long_version()
-    elif _FORCED_PEP440_VERSION is not None:
-        duckdb_version = duckdb_tag_from_pep440(_FORCED_PEP440_VERSION)
+        if duckdb_version is None:
+            _log("Building duckdb wheel from sdist. Reading duckdb version from file.")
+            duckdb_version = _read_duckdb_long_version()
 
     # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
     if duckdb_version is not None:

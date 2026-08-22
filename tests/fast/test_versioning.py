@@ -10,7 +10,7 @@ import pytest
 duckdb_packaging = pytest.importorskip("duckdb_packaging")
 
 from duckdb_packaging._versioning import (  # noqa: E402
-    duckdb_tag_from_pep440,
+    duckdb_describe_from_override,
     format_version,
     get_current_version,
     get_git_describe,
@@ -21,6 +21,7 @@ from duckdb_packaging._versioning import (  # noqa: E402
 from duckdb_packaging.setuptools_scm_version import (  # noqa: E402
     _bump_dev_version,
     _tag_to_version,
+    forced_duckdb_version_from_env,
     forced_version_from_env,
     version_scheme,
 )
@@ -167,24 +168,34 @@ class TestGitTagConversion(unittest.TestCase):
             assert converted_back == version
 
 
-class TestDuckDBTagFromPep440(unittest.TestCase):
-    """Test the mapping of forced package versions to DuckDB version tags."""
+class TestDuckDBDescribeFromOverride(unittest.TestCase):
+    """Test the mapping of a forced package version to what DuckDB gets built with."""
 
     def test_stable_version(self):
-        assert duckdb_tag_from_pep440("1.2.3") == "v1.2.3"
+        assert duckdb_describe_from_override("v1.2.3") == "v1.2.3"
 
     def test_post_version_strips_post(self):
-        """Post releases repackage the stable engine."""
-        assert duckdb_tag_from_pep440("1.2.3.post1") == "v1.2.3"
+        """Post releases repackage the same engine, so DuckDB never sees the post."""
+        assert duckdb_describe_from_override("v1.2.3-post1") == "v1.2.3"
+        assert duckdb_describe_from_override("v1.2.3-post10") == "v1.2.3"
 
-    def test_pre_release_passes_through(self):
-        """Pre-releases pass through normalized, DuckDB's build validates them."""
-        assert duckdb_tag_from_pep440("1.2.3rc2") == "v1.2.3-rc2"
-        assert duckdb_tag_from_pep440("1.2.3a1") == "v1.2.3-a1"
-        assert duckdb_tag_from_pep440("1.2.3b2") == "v1.2.3-b2"
-        # alternative spellings normalize
-        assert duckdb_tag_from_pep440("1.2.3alpha1") == "v1.2.3-a1"
-        assert duckdb_tag_from_pep440("1.2.3pre1") == "v1.2.3-rc1"
+    def test_post_version_with_distance_keeps_the_distance(self):
+        assert duckdb_describe_from_override("v1.2.3-post1-3-g1234567") == "v1.2.3-3-g1234567"
+
+    def test_pre_release_spelling_is_preserved(self):
+        """The whole point: DuckDB accepts -alphaN and rejects the PEP440 -aN."""
+        assert duckdb_describe_from_override("v2.0.0-alpha38426") == "v2.0.0-alpha38426"
+        assert duckdb_describe_from_override("v1.2.3-rc2") == "v1.2.3-rc2"
+
+    def test_unsupported_spellings_pass_through_untouched(self):
+        """We never normalize. DuckDB's CMake is the only authority, and it fails loud."""
+        assert duckdb_describe_from_override("v1.2.3-a1") == "v1.2.3-a1"
+        assert duckdb_describe_from_override("v1.2.3-b2") == "v1.2.3-b2"
+        assert duckdb_describe_from_override("v1.2.3-beta2") == "v1.2.3-beta2"
+
+    def test_full_describe_passes_through(self):
+        assert duckdb_describe_from_override("v1.2.3-5-g1234567") == "v1.2.3-5-g1234567"
+        assert duckdb_describe_from_override("v2.0.0-alpha1-42-gabc123") == "v2.0.0-alpha1-42-gabc123"
 
 
 class TestSetupToolsScmIntegration(unittest.TestCase):
@@ -336,3 +347,54 @@ class TestEnvironmentVariableHandling(unittest.TestCase):
         """Test OVERRIDE_GIT_DESCRIBE with invalid format."""
         with pytest.raises(ValueError, match="Invalid git describe override"):
             forced_version_from_env()
+
+
+class TestForcedDuckDBVersionFromEnv(unittest.TestCase):
+    """Test which version DuckDB gets built with, per the two env overrides.
+
+    The two overrides are independent. A nightly that vendors a specific DuckDB
+    version sets only OVERRIDE_DUCKDB_GIT_DESCRIBE and keeps deriving its own
+    package version from git. A stable release sets OVERRIDE_GIT_DESCRIBE and
+    DuckDB inherits it.
+    """
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "", "OVERRIDE_DUCKDB_GIT_DESCRIBE": ""})
+    def test_neither_set_derives_from_git(self):
+        assert forced_duckdb_version_from_env() is None
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "", "OVERRIDE_DUCKDB_GIT_DESCRIBE": "v2.0.0-alpha38426"})
+    def test_duckdb_override_passes_through_verbatim(self):
+        """The nightly case. DuckDB accepts -alphaN, so it must survive untouched."""
+        assert forced_duckdb_version_from_env() == "v2.0.0-alpha38426"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.5.4", "OVERRIDE_DUCKDB_GIT_DESCRIBE": ""})
+    def test_package_override_carries_over(self):
+        """The stable release case, one version identifier for both."""
+        assert forced_duckdb_version_from_env() == "v1.5.4"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v1.5.4-post1", "OVERRIDE_DUCKDB_GIT_DESCRIBE": ""})
+    def test_package_override_drops_post(self):
+        """A post release repackages the same engine."""
+        assert forced_duckdb_version_from_env() == "v1.5.4"
+
+    @patch.dict("os.environ", {"OVERRIDE_GIT_DESCRIBE": "v2.0.0-alpha1", "OVERRIDE_DUCKDB_GIT_DESCRIBE": ""})
+    def test_package_override_keeps_the_alpha_spelling(self):
+        """Regression: normalizing this to v2.0.0-a1 makes DuckDB's CMake fail."""
+        assert forced_duckdb_version_from_env() == "v2.0.0-alpha1"
+
+    @patch.dict(
+        "os.environ",
+        {"OVERRIDE_GIT_DESCRIBE": "v1.5.4-post1", "OVERRIDE_DUCKDB_GIT_DESCRIBE": "v2.0.0-alpha38426"},
+    )
+    def test_duckdb_override_wins(self):
+        assert forced_duckdb_version_from_env() == "v2.0.0-alpha38426"
+
+    @patch.dict(
+        "os.environ",
+        {"OVERRIDE_GIT_DESCRIBE": "v1.5.4", "OVERRIDE_DUCKDB_GIT_DESCRIBE": "", "MAIN_BRANCH_VERSIONING": "0"},
+    )
+    def test_package_version_is_untouched_by_the_duckdb_override(self):
+        """The two channels do not interfere: forcing DuckDB leaves the package alone."""
+        with patch.dict("os.environ", {"OVERRIDE_DUCKDB_GIT_DESCRIBE": "v2.0.0-alpha38426"}):
+            assert forced_version_from_env() == "1.5.4"
+            assert forced_duckdb_version_from_env() == "v2.0.0-alpha38426"
