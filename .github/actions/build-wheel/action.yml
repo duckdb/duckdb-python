@@ -22,7 +22,11 @@ inputs:
     required: false
     default: ''
   set-version:
-    description: 'Force version, passed to the build as OVERRIDE_GIT_DESCRIBE'
+    description: 'Force the package version, passed to the build as OVERRIDE_GIT_DESCRIBE'
+    required: false
+    default: ''
+  set-duckdb-version:
+    description: 'Force the DuckDB version, passed to the build as OVERRIDE_DUCKDB_GIT_DESCRIBE'
     required: false
     default: ''
   ccache-save:
@@ -46,7 +50,11 @@ runs:
 
     - name: Set build environment
       shell: bash
+      env:
+        SET_VERSION: ${{ inputs.set-version }}
+        SET_DUCKDB_VERSION: ${{ inputs.set-duckdb-version }}
       run: |
+        set -eo pipefail
         echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> $GITHUB_ENV
         # The Visual Studio generator (the CMake default on windows) ignores
         # CMAKE_<LANG>_COMPILER_LAUNCHER, so ccache never sees the build.
@@ -55,19 +63,29 @@ runs:
         if [[ "${{ inputs.cibw-system }}" == "win" ]]; then
           echo "CMAKE_GENERATOR=Ninja" >> $GITHUB_ENV
         fi
+        # Version overrides the build has to see, collected as NAME=value words.
+        # OVERRIDE_GIT_DESCRIBE forces the package version, OVERRIDE_DUCKDB_GIT_DESCRIBE
+        # forces the version DuckDB is built with. They are independent.
+        overrides=""
+        if [[ -n "${SET_VERSION}" ]]; then
+          overrides="${overrides} OVERRIDE_GIT_DESCRIBE=${SET_VERSION}"
+        fi
+        if [[ -n "${SET_DUCKDB_VERSION}" ]]; then
+          overrides="${overrides} OVERRIDE_DUCKDB_GIT_DESCRIBE=${SET_DUCKDB_VERSION}"
+        fi
         # CIBW_ENVIRONMENT is set ONLY for manylinux, where env must cross into
         # the container. The env var REPLACES any [tool.cibuildwheel.<os>]
         # environment table from pyproject; setting it on macos silently dropped
         # MACOSX_DEPLOYMENT_TARGET and shipped wheels tagged macosx_10_9. On
         # macos and windows the build runs on the host, so plain job env works.
-        if [[ -n "${{ inputs.set-version }}" ]]; then
-          if [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
-            echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
-          else
-            echo "OVERRIDE_GIT_DESCRIBE=${{ inputs.set-version }}" >> $GITHUB_ENV
-          fi
-        elif [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
-          echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache" >> $GITHUB_ENV
+        # Every override has to ride along on that single CIBW_ENVIRONMENT line,
+        # or it never reaches the build inside the container.
+        if [[ "${{ inputs.cibw-system }}" == "manylinux" ]]; then
+          echo "CIBW_ENVIRONMENT=CCACHE_DIR=/host${{ github.workspace }}/.ccache${overrides}" >> $GITHUB_ENV
+        else
+          for override in ${overrides}; do
+            echo "${override}" >> $GITHUB_ENV
+          done
         fi
 
     # Ninja needs cl.exe on PATH. The Visual Studio generator activated the

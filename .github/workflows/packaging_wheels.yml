@@ -39,7 +39,11 @@ on:
         description: Override the DuckDB submodule commit or ref to build against
         required: false
       set-version:
-        description: Force version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        description: Force the package version (vX.Y.Z, optionally -postN or a PEP440 pre-release suffix like -a1/-alpha1/-b2/-rc3)
+        required: false
+        type: string
+      set-duckdb-version:
+        description: Force the version DuckDB is built with. Handed to DuckDB's build verbatim, which validates it.
         required: false
         type: string
 
@@ -82,6 +86,7 @@ jobs:
           testsuite: ${{ inputs.testsuite }}
           duckdb-sha: ${{ inputs.duckdb-sha }}
           set-version: ${{ inputs.set-version }}
+          set-duckdb-version: ${{ inputs.set-duckdb-version }}
           ccache-save: 'true'
 
   sanity_wheels:
@@ -112,6 +117,7 @@ jobs:
           testsuite: ${{ inputs.testsuite }}
           duckdb-sha: ${{ inputs.duckdb-sha }}
           set-version: ${{ inputs.set-version }}
+          set-duckdb-version: ${{ inputs.set-duckdb-version }}
           ccache-save: 'false'
 
   build_wheels:
@@ -148,4 +154,5 @@ jobs:
           testsuite: ${{ inputs.testsuite }}
           duckdb-sha: ${{ inputs.duckdb-sha }}
           set-version: ${{ inputs.set-version }}
+          set-duckdb-version: ${{ inputs.set-duckdb-version }}
           ccache-save: 'false'
