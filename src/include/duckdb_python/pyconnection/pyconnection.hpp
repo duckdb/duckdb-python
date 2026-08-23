@@ -204,11 +204,6 @@ public:
 	static void Initialize(nb::handle &m);
 	static void Cleanup();
 
-	std::shared_ptr<DuckDBPyConnection> Enter();
-
-	static void Exit(DuckDBPyConnection &self, const nb::object &exc_type, const nb::object &exc,
-	                 const nb::object &traceback);
-
 	static bool DetectAndGetEnvironment();
 	static bool IsJupyter();
 	static std::string FormattedPythonVersion();

@@ -389,3 +389,24 @@ __all__: list[str] = [
     "view",
     "write_csv",
 ]
+
+
+def _duckdb_pyconnection_enter(self: DuckDBPyConnection) -> DuckDBPyConnection:
+    """Enter the connection context manager."""
+    return self
+
+
+def _duckdb_pyconnection_exit(
+    self: DuckDBPyConnection,
+    exc_type: object,
+    exc_val: object,
+    exc_tb: object,
+) -> bool | None:
+    """Exit the connection context manager and close the connection."""
+    self.close()
+    return False
+
+
+DuckDBPyConnection.__enter__ = _duckdb_pyconnection_enter  # type: ignore[assignment]
+DuckDBPyConnection.__exit__ = _duckdb_pyconnection_exit  # type: ignore[assignment]
+

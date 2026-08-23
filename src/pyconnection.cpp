@@ -493,12 +493,6 @@ void DuckDBPyConnection::Initialize(nb::handle &m) {
 	// otherwise weakref.ref/proxy/finalize on a connection raises TypeError.
 	auto connection_module = nb::class_<DuckDBPyConnection>(m, "DuckDBPyConnection", nb::is_weak_referenceable());
 
-	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
-	    .def(
-	        "__exit__",
-	        [](DuckDBPyConnection *self, const nb::object &exc_type, const nb::object &exc,
-	           const nb::object &traceback) { DuckDBPyConnection::Exit(*self, exc_type, exc, traceback); },
-	        nb::arg("exc_type").none(), nb::arg("exc").none(), nb::arg("traceback").none());
 	connection_module.def("__del__", &DuckDBPyConnection::Close);
 
 	InitializeConnectionMethods(connection_module);
@@ -2366,20 +2360,6 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 
 bool DuckDBPyConnection::IsInteractive() {
 	return GetModuleState().environment != PythonEnvironmentType::NORMAL;
-}
-
-std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
-	return shared_from_this();
-}
-
-void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const nb::object &exc_type, const nb::object &exc,
-                              const nb::object &traceback) {
-	self.Close();
-	if (exc_type.ptr() != Py_None) {
-		// Propagate the exception if any occurred
-		PyErr_SetObject(exc_type.ptr(), exc.ptr());
-		throw nb::python_error();
-	}
 }
 
 void DuckDBPyConnection::Cleanup() {
