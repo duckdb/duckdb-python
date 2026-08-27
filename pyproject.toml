@@ -377,6 +377,8 @@ filterwarnings = [
     # Pyspark is throwing these warnings
     "ignore:distutils Version classes are deprecated:DeprecationWarning",
     "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
+    # pandas 3.1.0.dev0deprecates the inplace keyword with a warning
+    "ignore::pandas.errors.Pandas4Warning",
 ]
 
 [tool.mypy]
