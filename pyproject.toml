@@ -62,7 +62,7 @@ build-backend = "duckdb_packaging.build_backend"
 backend-path = ["./"]
 requires = [
     "scikit-build-core>=0.11.4",
-	"nanobind>=2.0",
+	"nanobind>=2.0,<3.0",
     "setuptools_scm>=8.0",
     # numpy C API headers (PyArray_Empty in the result path). Building against numpy 2.x yields a
     # binary compatible with numpy >=1.19 AND 2.x at runtime (numpy 2.0 backward-compat), so the
@@ -319,7 +319,7 @@ pypi = [ # dependencies used by the pypi cleanup script
 build = [
     "cmake>=3.29.0",
     "ninja>=1.10",
-    "nanobind>=2.0",
+	"nanobind>=2.0,<3.0",
     "scikit_build_core>=0.11.4",
     "setuptools_scm>=8.0",
 ]
