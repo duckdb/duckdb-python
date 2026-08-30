@@ -168,6 +168,8 @@ include = [
     "external/duckdb/CMakeLists.txt",
     "external/duckdb/DuckDBConfig.cmake.in",
     "external/duckdb/DuckDBConfigVersion.cmake.in",
+    "external/duckdb/scripts/*.cmake",
+    "external/duckdb/scripts/null.txt",
 
     # Third-party libraries and extensions
     "external/duckdb/third_party/**",
@@ -176,6 +178,7 @@ include = [
     # Can't avoid including a small subset of ./tools and ./.github
     "external/duckdb/tools/CMakeLists.txt",
     "external/duckdb/tools/utils/**",
+    "external/duckdb/tools/cpp/**",
     "external/duckdb/.github/config/out_of_tree_extensions.cmake",
     "external/duckdb/.github/config/in_tree_extensions.cmake",
 ]
