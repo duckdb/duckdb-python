@@ -64,7 +64,7 @@ build-backend = "duckdb_packaging.build_backend"
 backend-path = ["./"]
 requires = [
     "scikit-build-core>=0.11.4",
-	"nanobind>=2.0,<3.0",
+	"nanobind>=3.0",
     "setuptools_scm>=8.0",
     # numpy C API headers (PyArray_Empty in the result path). Building against numpy 2.x yields a
     # binary compatible with numpy >=1.19 AND 2.x at runtime (numpy 2.0 backward-compat), so the
@@ -104,6 +104,11 @@ fallback_version = "0.0.1.dev1"
 # Release branches must NOT have this, they correctly count from v*.*.* (the default).
 [tool.setuptools_scm.scm.git]
 describe_command = "git describe --dirty --tags --long --abbrev=40 --match v*.*.0"
+
+[[tool.scikit-build.overrides]]
+if.env.CIBUILDWHEEL_BUILD_IDENTIFIER = true
+build-dir = "build/shared"
+build.tool-args = ["-v"]
 
 # Override: if COVERAGE is set then:
 # - we create a RelWithDebInfo build
@@ -170,6 +175,8 @@ include = [
     "external/duckdb/CMakeLists.txt",
     "external/duckdb/DuckDBConfig.cmake.in",
     "external/duckdb/DuckDBConfigVersion.cmake.in",
+    "external/duckdb/scripts/*.cmake",
+    "external/duckdb/scripts/null.txt",
 
     # Third-party libraries and extensions
     "external/duckdb/third_party/**",
@@ -178,6 +185,7 @@ include = [
     # Can't avoid including a small subset of ./tools and ./.github
     "external/duckdb/tools/CMakeLists.txt",
     "external/duckdb/tools/utils/**",
+    "external/duckdb/tools/cpp/**",
     "external/duckdb/.github/config/out_of_tree_extensions.cmake",
     "external/duckdb/.github/config/in_tree_extensions.cmake",
 ]
@@ -339,7 +347,7 @@ pypi = [ # dependencies used by the pypi cleanup script
 build = [
     "cmake>=3.29.0",
     "ninja>=1.10",
-    "nanobind>=2.0,<3.0",
+    "nanobind>=3.0",
     "scikit_build_core>=0.11.4",
     "setuptools_scm>=8.0",
 ]
@@ -514,6 +522,8 @@ indent-style = "space"
 # (to some extent).
 ######################################################################################################
 [tool.cibuildwheel]
+# --env-dir needs build>=1.6.0; cibuildwheel pins build==1.5.0
+dependency-versions = "latest"
 build-frontend = "build[uv]"
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-pypy_x86_64-image = "manylinux_2_28"
@@ -521,15 +531,29 @@ manylinux-aarch64-image = "manylinux_2_28"
 manylinux-pypy_aarch64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.linux]
-before-build = ["yum install -y ccache"]
+build-frontend = { name = "build[uv]", args = ["--env-dir", "/tmp/duckdb-build-env"] }
+before-build = [
+  'pip install -U "build>=1.6.0"',
+  'rm -rf /tmp/duckdb-build-env',
+  'yum install -y ccache',
+]
 
 [tool.cibuildwheel.macos]
-before-build = ["brew install ccache"]
+build-frontend = { name = "build[uv]", args = ["--env-dir", "/tmp/duckdb-build-env"] }
+before-build = [
+  'rm -rf /tmp/duckdb-build-env',
+  'brew install ccache',
+]
 # nanobind uses C++17 aligned new/delete (std::align_val_t), which the runtime only provides on macOS 10.13+.
 # cp311's framework defaults to a 10.9 deployment target (used for the x86_64 slice of x86_64/universal2
-# wheels), so nanobind fails to compile there; cp312+ frameworks already target 10.13+. Pin 10.14 so every CPython
-# version builds (arm64 slices are 11.0 regardless).
-environment = { MACOSX_DEPLOYMENT_TARGET = "10.14" }
+# wheels), so nanobind fails to compile there; cp312+ frameworks already target 10.13+. 
+# cibuildwheel bumps automatically to the minimum per target, so use a minimum that'll work on all python versions
+# otherwise caching is defeated
+environment = { MACOSX_DEPLOYMENT_TARGET = "10.15" }
 
 [tool.cibuildwheel.windows]
-before-build = ["choco install ccache"]
+build-frontend = { name = "build", args = ["--env-dir", "C:/duckdb-build-env"] }
+before-build = [
+  'if exist C:\duckdb-build-env (rmdir /s /q C:\duckdb-build-env)',
+  'choco install ccache -y',
+]
