@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 import duckdb
@@ -254,3 +257,23 @@ class TestNativeUDF:
         (res,) = duckdb_cursor.sql("SELECT example()").fetchone()
         for key, val in res.items():
             assert key == val
+
+    def test_native_udf_without_numpy(self):
+        # Runs in a subprocess because the numpy import cache is a process-lifetime singleton -
+        # once something else in this interpreter has imported numpy, sys.modules trickery here
+        # can't make it forget that.
+        script = """
+import sys
+sys.modules["numpy"] = None
+import duckdb
+from duckdb.sqltypes import VARCHAR
+
+def generate_name():
+    return "hello-world"
+
+duckdb.create_function("native_no_numpy", generate_name, [], VARCHAR)
+res = duckdb.sql("select native_no_numpy()").fetchall()
+assert res == [("hello-world",)]
+"""
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
