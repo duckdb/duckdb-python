@@ -24,12 +24,15 @@
 #include "duckdb_python/nb/conversions/python_udf_type_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
+#include <optional>
+
 namespace duckdb {
 struct BoundParameterData;
 
 enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
 
 struct DuckDBPyRelation;
+struct DuckDBPyAppender;
 
 class RegisteredArrow : public RegisteredObject {
 
@@ -268,6 +271,9 @@ public:
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	std::shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);
+
+	std::shared_ptr<DuckDBPyAppender> CreateAppender(const string &table, std::optional<string> schema = std::nullopt,
+	                                                 std::optional<string> catalog = std::nullopt);
 
 	std::shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const nb::object &python_object);
 
