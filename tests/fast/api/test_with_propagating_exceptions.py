@@ -10,7 +10,7 @@ class TestWithPropagatingExceptions:
             pytest.raises(duckdb.CatalogException, match="Table with name invalid does not exist"),
             duckdb.connect() as con,
         ):
-            con.execute("invalid")
+            con.execute("select * from invalid")
 
         # Does not raise an exception
         with duckdb.connect() as con:
