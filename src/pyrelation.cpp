@@ -71,6 +71,7 @@ DuckDBPyRelation::DuckDBPyRelation(std::shared_ptr<DuckDBPyResult> result_p)
 	this->executed = true;
 	this->types = result->GetTypes();
 	this->names = result->GetNames();
+	this->row_changes = result->GetRowcount();
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const string &expression) {
