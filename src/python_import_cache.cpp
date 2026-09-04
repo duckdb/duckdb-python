@@ -79,6 +79,14 @@ nb::handle PythonImportCacheItem::Load(PythonImportCache &cache, nb::handle sour
 //===--------------------------------------------------------------------===//
 
 PythonImportCache::~PythonImportCache() {
+	if (!nb::is_alive()) {
+		// Process-global state, so this can run from static destruction: acquiring the GIL there
+		// is fatal and dropping the references without it is undefined behaviour, so leak them.
+		for (auto &object : owned_objects) {
+			object.release();
+		}
+		return;
+	}
 	try {
 		nb::gil_scoped_acquire acquire;
 		owned_objects.clear();
