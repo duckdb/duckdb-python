@@ -1,29 +1,21 @@
 """DuckDB PEP 517 and PEP 660 build backend.
 
-This module wraps the scikit-build-core build backend because:
-1. We need to be able to determine the version of the DuckDB submodule while building
-   a source distribution, so that we can pass it in when building a wheel. The backend
-   tries to figure out which duckdb version will be included in the sdist and saves
-   the output
-2. We want to use a custom version scheme with setuptools-scm, and PEP 621 provides no
-   way to specify local code as a build-backend plugin. However, PEP 517 allows us to
-   put our own build backend on the python path with the `build.backend-path` key. The
-   side effect is that our version scheme is also on the path during the build.
+This module wraps the scikit-build-core build backend because the identity of a
+build, the package version and commit and the DuckDB version and commit, has to
+be settled once and reach three places: the package metadata, the generated
+duckdb/_build_info.py module, and DuckDB's CMake. An sdist has no git history,
+so it carries that identity in duckdb_packaging/build_info.json for the wheel
+build to read. PEP 517 allows an in-tree backend through `build-system.backend-path`,
+which also makes duckdb_packaging importable as the metadata provider.
 
 Also see https://peps.python.org/pep-0517/#in-tree-build-backends.
 """
 
-import subprocess
 import sys
-from pathlib import Path
+from collections.abc import Callable
 
 from scikit_build_core.build import (
-    build_editable,
-    get_requires_for_build_editable,
-    get_requires_for_build_sdist,
-    get_requires_for_build_wheel,
-    prepare_metadata_for_build_editable,
-    prepare_metadata_for_build_wheel,
+    build_editable as skbuild_build_editable,
 )
 from scikit_build_core.build import (
     build_sdist as skbuild_build_sdist,
@@ -31,23 +23,28 @@ from scikit_build_core.build import (
 from scikit_build_core.build import (
     build_wheel as skbuild_build_wheel,
 )
-
-from duckdb_packaging._versioning import get_git_describe
-from duckdb_packaging.setuptools_scm_version import (
-    MAIN_BRANCH_VERSIONING,
-    forced_duckdb_version_from_env,
-    forced_version_from_env,
+from scikit_build_core.build import (
+    get_requires_for_build_editable,
+    get_requires_for_build_sdist,
+    get_requires_for_build_wheel,
+    prepare_metadata_for_build_editable,
+    prepare_metadata_for_build_wheel,
 )
 
-_DUCKDB_VERSION_FILENAME = "duckdb_version.txt"
-_LOGGING_FORMAT = "[duckdb_pytooling.build_backend] {}"
-_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
+from duckdb_packaging.build_info import (
+    BuildInfo,
+    is_git_checkout,
+    resolve_build_info,
+    write_build_info_json,
+    write_build_info_module,
+)
 
-# Load bearing at import time: this turns OVERRIDE_GIT_DESCRIBE into the
-# SETUPTOOLS_SCM_PRETEND_VERSION_FOR_DUCKDB that setuptools_scm reads, and drops the
-# pretend variables we do not support. It has to run before scikit-build-core asks
-# setuptools_scm for a version.
-forced_version_from_env()
+_LOGGING_FORMAT = "[duckdb_packaging.build_backend] {}"
+_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE = "cmake.define.OVERRIDE_GIT_DESCRIBE"
+_SKBUILD_CMAKE_GIT_COMMIT_HASH = "cmake.define.GIT_COMMIT_HASH"
+
+ConfigSettings = dict[str, list[str] | str]
+Builder = Callable[..., str]
 
 
 def _log(msg: str) -> None:
@@ -59,87 +56,7 @@ def _log(msg: str) -> None:
     print(_LOGGING_FORMAT.format(msg), flush=True, file=sys.stderr)
 
 
-def _in_git_repository() -> bool:
-    """Check if the current directory is inside a git repository.
-
-    Returns:
-        True if .git directory exists, False otherwise.
-    """
-    return Path(".git").exists()
-
-
-def _in_sdist() -> bool:
-    """Check if the current directory is inside a git repository.
-
-    Returns:
-        True if the duckdb version file exists and PKG-INFO exists, False otherwise.
-    """
-    return _version_file_path().exists() and Path("PKG-INFO").exists()
-
-
-def _duckdb_submodule_path() -> Path:
-    """Verify that the duckdb submodule is checked out and usable and return its path."""
-    if not _in_git_repository():
-        msg = "Not in a git repository, no duckdb submodule present"
-        raise RuntimeError(msg)
-    # search the duckdb submodule
-    gitmodules_path = Path(".gitmodules")
-    modules = {}
-    with gitmodules_path.open("r") as f:
-        cur_module_path = None
-        cur_module_reponame = None
-        for line in f:
-            if line.strip().startswith("[submodule"):
-                if cur_module_reponame is not None and cur_module_path is not None:
-                    modules[cur_module_reponame] = cur_module_path
-                    cur_module_reponame = None
-                    cur_module_path = None
-            elif line.strip().startswith("path"):
-                cur_module_path = line.split("=")[-1].strip()
-            elif line.strip().startswith("url"):
-                basename = Path(line.split("=")[-1].strip()).name
-                cur_module_reponame = basename[:-4] if basename.endswith(".git") else basename
-        if cur_module_reponame is not None and cur_module_path is not None:
-            modules[cur_module_reponame] = cur_module_path
-
-    if "duckdb" not in modules:
-        msg = "DuckDB submodule missing"
-        raise RuntimeError(msg)
-
-    duckdb_path = modules["duckdb"]
-    # now check that the submodule is usable
-    proc = subprocess.Popen(["git", "submodule", "status", duckdb_path], stdout=subprocess.PIPE)
-    status, _ = proc.communicate()
-    status = status.decode("ascii", "replace")
-    for line in status.splitlines():
-        if line.startswith("-"):
-            msg = f"Duckdb submodule not initialized: {line}"
-            raise RuntimeError(msg)
-        if line.startswith("U"):
-            msg = f"Duckdb submodule has merge conflicts: {line}"
-            raise RuntimeError(msg)
-        if line.startswith("+"):
-            _log(f"WARNING: Duckdb submodule not clean: {line}")
-    # all good
-    return Path(duckdb_path)
-
-
-def _version_file_path() -> Path:
-    package_dir = Path(__file__).parent
-    return package_dir / _DUCKDB_VERSION_FILENAME
-
-
-def _write_duckdb_long_version(long_version: str) -> None:
-    """Write the given version string to a file in the same directory as this module."""
-    _version_file_path().write_text(long_version, encoding="utf-8")
-
-
-def _read_duckdb_long_version() -> str:
-    """Read the given version string from a file in the same directory as this module."""
-    return _version_file_path().read_text(encoding="utf-8").strip()
-
-
-def _skbuild_config_add(key: str, value: list | str, config_settings: dict[str, list[str] | str]) -> None:
+def _skbuild_config_add(key: str, value: list | str, config_settings: ConfigSettings) -> None:
     """Add or modify a configuration setting for scikit-build-core.
 
     This function handles adding values to scikit-build-core configuration settings,
@@ -186,11 +103,32 @@ def _skbuild_config_add(key: str, value: list | str, config_settings: dict[str, 
         raise RuntimeError(msg)
 
 
-def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str] | None = None) -> str:
-    """Build a source distribution using the DuckDB submodule.
+def _describe(info: BuildInfo) -> str:
+    return (
+        f"package {info.package_version} at {info.package_commit}, DuckDB {info.duckdb_version} at {info.duckdb_commit}"
+    )
 
-    This function extracts the DuckDB version from the forced package version or the git
-    submodule and saves it to a version file before building the sdist with scikit-build-core.
+
+def _add_duckdb_defines(info: BuildInfo, config_settings: ConfigSettings) -> None:
+    # DuckDB's CMake takes the version string literally and does not read the commit
+    # out of it, so an sdist build without git needs the commit passed alongside.
+    _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, info.duckdb_version, config_settings)
+    _skbuild_config_add(_SKBUILD_CMAKE_GIT_COMMIT_HASH, info.duckdb_commit, config_settings)
+
+
+def _build(
+    builder: Builder, directory: str, config_settings: ConfigSettings | None, metadata_directory: str | None
+) -> str:
+    config_settings = config_settings or {}
+    info = resolve_build_info()
+    _log(f"Building {_describe(info)}")
+    write_build_info_module(info)
+    _add_duckdb_defines(info, config_settings)
+    return builder(directory, config_settings=config_settings, metadata_directory=metadata_directory)
+
+
+def build_sdist(sdist_directory: str, config_settings: ConfigSettings | None = None) -> str:
+    """Build a source distribution that carries the identity it was built from.
 
     Args:
         sdist_directory: Directory where the sdist will be created.
@@ -200,29 +138,24 @@ def build_sdist(sdist_directory: str, config_settings: dict[str, list[str] | str
         The filename of the created sdist.
 
     Raises:
-        RuntimeError: If not in a git repository or DuckDB submodule issues.
+        RuntimeError: If not in a git repository or the DuckDB submodule is unusable.
     """
-    if not _in_git_repository():
+    if not is_git_checkout():
         msg = "Not in a git repository, can't create an sdist"
         raise RuntimeError(msg)
-    submodule_path = _duckdb_submodule_path()
-    duckdb_version = forced_duckdb_version_from_env()
-    if duckdb_version is None:
-        duckdb_version = get_git_describe(repo_path=submodule_path, since_minor=MAIN_BRANCH_VERSIONING)
-    _write_duckdb_long_version(duckdb_version)
+    info = resolve_build_info()
+    _log(f"Packaging {_describe(info)}")
+    write_build_info_json(info)
+    write_build_info_module(info)
     return skbuild_build_sdist(sdist_directory, config_settings=config_settings)
 
 
 def build_wheel(
     wheel_directory: str,
-    config_settings: dict[str, list[str] | str] | None = None,
+    config_settings: ConfigSettings | None = None,
     metadata_directory: str | None = None,
 ) -> str:
-    """Build a wheel from either git submodule or extracted sdist sources.
-
-    This function builds a wheel using scikit-build-core, handling two scenarios:
-    1. In a git repository: builds directly from the DuckDB submodule
-    2. In an sdist: reads the saved DuckDB version and passes it to CMake
+    """Build a wheel from either a git checkout or an unpacked sdist.
 
     Args:
         wheel_directory: Directory where the wheel will be created.
@@ -233,27 +166,33 @@ def build_wheel(
         The filename of the created wheel.
 
     Raises:
-        RuntimeError: If not in a git repository or sdist environment.
+        RuntimeError: If not in a git repository nor in an sdist.
     """
-    # First figure out the duckdb version we should use
-    config_settings = config_settings or {}
-    duckdb_version = forced_duckdb_version_from_env()
-    if not _in_git_repository():
-        if not _in_sdist():
-            msg = "Not in a git repository nor in an sdist, can't build a wheel"
-            raise RuntimeError(msg)
-        if duckdb_version is None:
-            _log("Building duckdb wheel from sdist. Reading duckdb version from file.")
-            duckdb_version = _read_duckdb_long_version()
+    return _build(skbuild_build_wheel, wheel_directory, config_settings, metadata_directory)
 
-    # We add the found version to the OVERRIDE_GIT_DESCRIBE cmake var
-    if duckdb_version is not None:
-        _skbuild_config_add(_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE, duckdb_version, config_settings)
-        _log(f"{_SKBUILD_CMAKE_OVERRIDE_GIT_DESCRIBE} set to {duckdb_version}")
-    else:
-        _log("No explicit DuckDB submodule version provided. Letting CMake figure it out.")
 
-    return skbuild_build_wheel(wheel_directory, config_settings=config_settings, metadata_directory=metadata_directory)
+def build_editable(
+    wheel_directory: str,
+    config_settings: ConfigSettings | None = None,
+    metadata_directory: str | None = None,
+) -> str:
+    """Build an editable wheel from a git checkout.
+
+    Args:
+        wheel_directory: Directory where the wheel will be created.
+        config_settings: Optional build configuration settings.
+        metadata_directory: Optional directory for metadata preparation.
+
+    Returns:
+        The filename of the created wheel.
+
+    Raises:
+        RuntimeError: If not in a git repository.
+    """
+    if not is_git_checkout():
+        msg = "Not in a git repository, can't build an editable install"
+        raise RuntimeError(msg)
+    return _build(skbuild_build_editable, wheel_directory, config_settings, metadata_directory)
 
 
 __all__ = [

@@ -45,7 +45,8 @@ cmake_build
 cmake-build-debug
 cmake-build-release
 cmake-build-relwithdebinfo
-duckdb_packaging/duckdb_version.txt
+duckdb_packaging/build_info.json
+duckdb/_build_info.py
 test.db
 tmp/
 
