@@ -68,9 +68,9 @@ jobs:
           sudo apt-get -y install ccache
 
       - name: Install Astral UV and enable the cache
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          version: "0.9.0"
+          version: "0.12.10"
           python-version: 3.12
           enable-cache: true
           cache-suffix: -${{ github.workflow }}

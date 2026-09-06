@@ -70,9 +70,9 @@ jobs:
           exit 1
 
       - name: Install Astral UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          version: "0.9.0"
+          version: "0.12.10"
 
       - name: Install dependencies
         run: uv sync --only-group pypi --no-install-project
