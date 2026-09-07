@@ -235,3 +235,48 @@ class TestSparkFunctionsArray:
             ]
         else:
             assert res == [Row(zipped=[(1, 2, 3), (2, 4, 6), (3, 6, None)])]
+
+    def test_explode(self, spark):
+        df = spark.createDataFrame([(1, [10, 20, 30]), (2, [40, 50])], ["id", "data"])
+
+        res = df.select("id", sf.explode("data").alias("val")).collect()
+        assert res == [
+            Row(id=1, val=10),
+            Row(id=1, val=20),
+            Row(id=1, val=30),
+            Row(id=2, val=40),
+            Row(id=2, val=50),
+        ]
+
+    def test_explode_drops_null_and_empty(self, spark):
+        df = spark.createDataFrame([(1, [1, 2]), (2, None), (3, [])], ["id", "data"])
+
+        res = df.select("id", sf.explode("data").alias("val")).collect()
+        assert res == [Row(id=1, val=1), Row(id=1, val=2)]
+
+    def test_explode_with_column_object(self, spark):
+        df = spark.createDataFrame([([1, 2, 3],)], ["data"])
+
+        res = df.select(sf.explode(df.data).alias("val")).collect()
+        assert res == [Row(val=1), Row(val=2), Row(val=3)]
+
+    def test_explode_outer(self, spark):
+        df = spark.createDataFrame([(1, [1, 2]), (2, None), (3, [])], ["id", "data"])
+
+        res = df.select("id", sf.explode_outer("data").alias("val")).collect()
+        assert res == [
+            Row(id=1, val=1),
+            Row(id=1, val=2),
+            Row(id=2, val=None),
+            Row(id=3, val=None),
+        ]
+
+    def test_explode_outer_all_populated(self, spark):
+        df = spark.createDataFrame([(1, [10, 20]), (2, [30])], ["id", "data"])
+
+        res = df.select("id", sf.explode_outer("data").alias("val")).collect()
+        assert res == [
+            Row(id=1, val=10),
+            Row(id=1, val=20),
+            Row(id=2, val=30),
+        ]
