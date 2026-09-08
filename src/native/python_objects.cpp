@@ -79,11 +79,7 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 
 	switch (exponent_type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
-	case PyDecimalExponentType::EXPONENT_POWER: {
 		auto scale = exponent_value;
-		if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
-			width += scale;
-		}
 		if (scale > width) {
 			// The value starts with 1 or more zeros, which are optimized out of the 'digits' array
 			// 0.001; width=1, exponent=-3
@@ -94,6 +90,16 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 			return true;
 		}
 		type = LogicalType::DECIMAL(width, scale);
+		return true;
+	}
+	case PyDecimalExponentType::EXPONENT_POWER: {
+		// Positive exponent: integer with extra trailing zeros, scale 0.
+		if (exponent_value > Decimal::MAX_WIDTH_INT128 || width > Decimal::MAX_WIDTH_INT128 - exponent_value) {
+			type = LogicalType::DOUBLE;
+			return true;
+		}
+		width += exponent_value;
+		type = LogicalType::DECIMAL(width, 0);
 		return true;
 	}
 	case PyDecimalExponentType::EXPONENT_INFINITY: {
@@ -107,7 +113,6 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
 	} // LCOV_EXCL_STOP
-	}
 }
 // LCOV_EXCL_START
 static void ExponentNotRecognized() {
@@ -190,12 +195,15 @@ Value PyDecimal::ToDuckValue() {
 		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, width, scale);
 	}
 	case PyDecimalExponentType::EXPONENT_POWER: {
-		uint8_t scale = exponent_value;
-		width += scale;
-		if (!WidthFitsInDecimal(width)) {
+		// Fold 10^exponent into the mantissa and store scale 0. Using the exponent as a
+		// DECIMAL scale cancelled the 10^n multiply and stored only the mantissa (1E+2 -> 1).
+		if (exponent_value > Decimal::MAX_WIDTH_DECIMAL || width > Decimal::MAX_WIDTH_DECIMAL - exponent_value) {
 			return CastToDouble(obj);
 		}
-		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, width, scale);
+		digits.insert(digits.end(), static_cast<size_t>(exponent_value), static_cast<uint8_t>(0));
+		width += exponent_value;
+		D_ASSERT(WidthFitsInDecimal(width));
+		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, width, 0);
 	}
 	case PyDecimalExponentType::EXPONENT_NAN: {
 		return Value::FLOAT(NAN);
