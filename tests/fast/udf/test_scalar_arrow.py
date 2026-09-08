@@ -1,3 +1,6 @@
+import subprocess
+import sys
+
 import pytest
 
 import duckdb
@@ -214,3 +217,21 @@ class TestPyArrowUDF:
 
         res = duckdb_cursor.sql("select func(1).y").fetchone()
         assert res == ("this is not an inlined string",)
+
+    def test_arrow_udf_requires_numpy(self):
+        # Subprocess isolation, same reasoning as test_native_udf_without_numpy in
+        # test_scalar_native.py (numpy's import cache is a process-lifetime singleton).
+        script = """
+import sys
+sys.modules["numpy"] = None
+import duckdb
+from duckdb.sqltypes import VARCHAR
+
+try:
+    duckdb.create_function("arrow_no_numpy", lambda: "x", [], VARCHAR, type="arrow")
+    raise SystemExit("expected InvalidInputException, but create_function succeeded")
+except duckdb.InvalidInputException as e:
+    assert "numpy" in str(e), f"unexpected error message: {e}"
+"""
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
