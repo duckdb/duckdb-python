@@ -248,7 +248,7 @@ void PyThrowException(ErrorData &error, PyObject *http_exception) {
 		for (auto &entry : error.ExtraInfo()) {
 			if (entry.first == "status_code") {
 				e.attr("status_code") = std::stoi(entry.second);
-			} else if (entry.first == "response_body") {
+			} else if (entry.first == "response_body" || entry.first == "body") {
 				e.attr("body") = entry.second;
 			} else if (entry.first == "reason") {
 				e.attr("reason") = entry.second;
