@@ -213,11 +213,11 @@ public:
 
 	void ToParquet(const string &filename, const nb::object &compression = nb::none(),
 	               const nb::object &field_ids = nb::none(), const nb::object &row_group_size_bytes = nb::none(),
-	               const nb::object &row_group_size = nb::none(), const nb::object &overwrite = nb::none(),
-	               const nb::object &per_thread_output = nb::none(), const nb::object &use_tmp_file = nb::none(),
-	               const nb::object &partition_by = nb::none(), const nb::object &write_partition_columns = nb::none(),
-	               const nb::object &append = nb::none(), const nb::object &filename_pattern = nb::none(),
-	               const nb::object &file_size_bytes = nb::none());
+	               const nb::object &row_group_size = nb::none(), const nb::object &row_groups_per_file = nb::none(),
+	               const nb::object &overwrite = nb::none(), const nb::object &per_thread_output = nb::none(),
+	               const nb::object &use_tmp_file = nb::none(), const nb::object &partition_by = nb::none(),
+	               const nb::object &write_partition_columns = nb::none(), const nb::object &append = nb::none(),
+	               const nb::object &filename_pattern = nb::none(), const nb::object &file_size_bytes = nb::none());
 
 	void ToCSV(const string &filename, const nb::object &sep = nb::none(), const nb::object &na_rep = nb::none(),
 	           const nb::object &header = nb::none(), const nb::object &quotechar = nb::none(),

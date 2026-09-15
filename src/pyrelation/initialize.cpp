@@ -39,10 +39,11 @@ static void InitializeConsumers(nb::class_<DuckDBPyRelation> &m) {
 	             "Write the relation object to a Parquet file in 'file_name'", nb::arg("file_name"), nb::kw_only(),
 	             nb::arg("compression") = nb::none(), nb::arg("field_ids") = nb::none(),
 	             nb::arg("row_group_size_bytes") = nb::none(), nb::arg("row_group_size") = nb::none(),
-	             nb::arg("overwrite") = nb::none(), nb::arg("per_thread_output") = nb::none(),
-	             nb::arg("use_tmp_file") = nb::none(), nb::arg("partition_by") = nb::none(),
-	             nb::arg("write_partition_columns") = nb::none(), nb::arg("append") = nb::none(),
-	             nb::arg("filename_pattern") = nb::none(), nb::arg("file_size_bytes") = nb::none());
+	             nb::arg("row_groups_per_file") = nb::none(), nb::arg("overwrite") = nb::none(),
+	             nb::arg("per_thread_output") = nb::none(), nb::arg("use_tmp_file") = nb::none(),
+	             nb::arg("partition_by") = nb::none(), nb::arg("write_partition_columns") = nb::none(),
+	             nb::arg("append") = nb::none(), nb::arg("filename_pattern") = nb::none(),
+	             nb::arg("file_size_bytes") = nb::none());
 
 	DefineMethod(
 	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
