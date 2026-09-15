@@ -1262,10 +1262,11 @@ static Value NestedDictToStruct(const nb::object &dictionary) {
 
 void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compression, const nb::object &field_ids,
                                  const nb::object &row_group_size_bytes, const nb::object &row_group_size,
-                                 const nb::object &overwrite, const nb::object &per_thread_output,
-                                 const nb::object &use_tmp_file, const nb::object &partition_by,
-                                 const nb::object &write_partition_columns, const nb::object &append,
-                                 const nb::object &filename_pattern, const nb::object &file_size_bytes) {
+                                 const nb::object &row_groups_per_file, const nb::object &overwrite,
+                                 const nb::object &per_thread_output, const nb::object &use_tmp_file,
+                                 const nb::object &partition_by, const nb::object &write_partition_columns,
+                                 const nb::object &append, const nb::object &filename_pattern,
+                                 const nb::object &file_size_bytes) {
 	identifier_map_t<vector<Value>> options;
 
 	if (!nb::none().is(compression)) {
@@ -1304,6 +1305,14 @@ void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compr
 		}
 		int64_t row_group_size_int = (int64_t)nb::int_(row_group_size);
 		options["row_group_size"] = {Value(row_group_size_int)};
+	}
+
+	if (!nb::none().is(row_groups_per_file)) {
+		if (!nb::isinstance<nb::int_>(row_groups_per_file)) {
+			throw InvalidInputException("to_parquet only accepts 'row_groups_per_file' as an integer");
+		}
+		int64_t row_groups_per_file_int = (int64_t)nb::int_(row_groups_per_file);
+		options["row_groups_per_file"] = {Value(row_groups_per_file_int)};
 	}
 
 	if (!nb::none().is(partition_by)) {

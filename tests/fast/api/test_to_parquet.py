@@ -68,6 +68,31 @@ class TestToParquet:
         parquet_rel = duckdb.read_parquet(temp_file_name)
         assert rel.execute().fetchall() == parquet_rel.execute().fetchall()
 
+    def test_row_groups_per_file(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+
+        # use same test data as external/duckdb/test/sql/copy/row_groups_per_file.test, which also
+        # pins threads to 1: file rotation is best-effort and only exact on a single thread
+        con = duckdb.connect(config={"threads": 1})
+        rel = con.from_query("SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);")
+        rel.to_parquet(temp_file_name, row_group_size=2000, row_groups_per_file=1)
+
+        # 5 row groups of 2000 rows, one row group per file
+        files = list(pathlib.Path(temp_file_name).iterdir())
+        assert len(files) == 5, f"Expected 5 files, got {len(files)}"
+
+        # Verify data integrity
+        result = con.read_parquet(f"{temp_file_name}/*.parquet")
+        assert len(result.execute().fetchall()) == 10000
+
+    def test_row_groups_per_file_invalid_type(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        rel = duckdb.sql("SELECT 1 AS i")
+        with pytest.raises(
+            duckdb.InvalidInputException, match="to_parquet only accepts 'row_groups_per_file' as an integer"
+        ):
+            rel.to_parquet(temp_file_name, row_groups_per_file="x")
+
     @pytest.mark.parametrize("write_columns", [None, True, False])
     def test_partition(self, write_columns):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
