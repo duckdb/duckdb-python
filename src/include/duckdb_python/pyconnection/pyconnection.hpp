@@ -44,6 +44,11 @@ public:
 	DefaultConnectionHolder() {
 	}
 	~DefaultConnectionHolder() {
+		if (connection && (!nb::is_alive() || !PyGILState_Check())) {
+			// Can't free Python objects here; static destruction outlives the interpreter, and
+			// nb::is_alive() reports true when Py_Finalize is skipped (hence the GIL check).
+			new std::shared_ptr<DuckDBPyConnection>(std::move(connection)); // NOLINT: deliberate leak
+		}
 	}
 
 public:
