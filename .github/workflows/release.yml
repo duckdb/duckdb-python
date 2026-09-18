@@ -3,6 +3,11 @@
 # On release branches it is still InvokeCI -> NotifyExternalRepositories, which
 # sends only duckdb-sha. We also dispatch it by hand for stable releases.
 name: Release
+# One run per branch at a time, queued rather than cancelled. Two dispatches of
+# the same branch would otherwise race each other to PyPI.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 on:
   workflow_dispatch:
     inputs:
@@ -115,9 +120,39 @@ jobs:
           echo "::notice::Stable release ${DUCKDB_PYTHON_VERSION}, shipping DuckDB ${DUCKDB_VERSION}"
 
       - uses: actions/checkout@v4
-        if: ${{ inputs.duckdb-python-version != '' }}
         with:
           ref: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
+
+      # pyproject.toml declares the version this branch releases next. The engine
+      # must be of that line, nightly or stable, and a stable release must be exactly
+      # that version. The build backend enforces the latter as well, this fails
+      # before any build starts.
+      - name: Compare the inputs to release_version in pyproject.toml
+        env:
+          DUCKDB_VERSION: ${{ inputs.duckdb-version }}
+          DUCKDB_PYTHON_VERSION: ${{ inputs.duckdb-python-version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          declared=$(PYTHONPATH=${{ github.workspace }} python3 -c \
+            'from duckdb_packaging._versioning import release_version; print(release_version())')
+          declared_line=$(cut -d. -f1,2 <<<"${declared}")
+          echo "release_version: ${declared} (line ${declared_line})"
+          if [[ -n "${DUCKDB_VERSION}" ]]; then
+            engine_line=$(sed -E 's/^v([0-9]+\.[0-9]+)\..*/\1/' <<<"${DUCKDB_VERSION}")
+            if [[ "${engine_line}" != "${declared_line}" ]]; then
+              echo "::error::duckdb-version (${DUCKDB_VERSION}) is not of line ${declared_line}, which ${BRANCH} declares in pyproject.toml. Wrong branch?"
+              exit 1
+            fi
+          fi
+          if [[ -n "${DUCKDB_PYTHON_VERSION}" ]]; then
+            expected=$(PYTHONPATH=${{ github.workspace }} python3 -c \
+              'import os; from duckdb_packaging._versioning import git_tag_to_pep440; print(git_tag_to_pep440(os.environ["DUCKDB_PYTHON_VERSION"]))')
+            if [[ "${expected}" != "${declared}" ]]; then
+              echo "::error::duckdb-python-version (${DUCKDB_PYTHON_VERSION}) is ${expected}, but pyproject.toml declares release_version = ${declared}. Bump release_version first."
+              exit 1
+            fi
+          fi
 
       - name: Compare the pin to duckdb-sha
         if: ${{ inputs.duckdb-python-version != '' }}
@@ -174,7 +209,7 @@ jobs:
           set -ex
           pypi_hostname=${{ inputs.pypi-index == 'test' && 'test.' || '' }}pypi.org
           # install duckdb
-          curl https://install.duckdb.org | sh
+          curl https://install.duckdb.org | bash
           # query pypi
           result=$(cat <<EOF | ${HOME}/.duckdb/cli/latest/duckdb | xargs
           ---- Output lines
@@ -374,6 +409,22 @@ jobs:
           repository-url: 'https://${{ vars.PYPI_HOST }}/legacy/'
           packages-dir: packages
           verbose: 'true'
+
+  # A stable release moves the branch past the version it just shipped, so the
+  # next dev build sorts after it. A PR rather than a push: the bump is reviewed
+  # like any change, and nothing is bumped for a release that did not publish.
+  release_version_pr:
+    name: Create PR to bump release_version past the released version
+    needs: [build_sdist, publish_pypi]
+    if: ${{ inputs.duckdb-python-version != '' && inputs.pypi-index == 'prod' && needs.publish_pypi.result == 'success' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release_version_pr.yml
+    with:
+      duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
+      released-version: ${{ needs.build_sdist.outputs.package-version }}
+    secrets:
+      DUCKDBLABS_BOT_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
 
   summary:
     name: Release summary

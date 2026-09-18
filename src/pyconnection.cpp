@@ -174,12 +174,11 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      nb::arg("type_str"));
 	m.def("type", &DuckDBPyConnection::Type, "Create a type object by parsing the 'type_str' string",
 	      nb::arg("type_str"));
-	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'",
-	      nb::arg("type").none(false), nb::arg("size"));
-	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'",
-	      nb::arg("type").none(false));
+	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'", nb::arg("type"),
+	      nb::arg("size"));
+	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'", nb::arg("type"));
 	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
-	      nb::arg("members").none(false));
+	      nb::arg("members"));
 	m.def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
 	      nb::arg("collation") = "");
 	m.def("enum_type", &DuckDBPyConnection::EnumType,
@@ -191,7 +190,7 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      nb::arg("fields"));
 	m.def("row_type", &DuckDBPyConnection::StructType, "Create a struct type object from 'fields'", nb::arg("fields"));
 	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
-	      nb::arg("key").none(false), nb::arg("value").none(false));
+	      nb::arg("key"), nb::arg("value"));
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
 	m.def("execute", &DuckDBPyConnection::Execute,
 	      "Execute the given SQL query, optionally using prepared statements with parameters set", nb::arg("query"),

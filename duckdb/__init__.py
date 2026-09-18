@@ -168,6 +168,7 @@ from duckdb._dbapi_type_object import (
 from duckdb._version import (
     __duckdb_version__,
     __version__,
+    build_info,
     version,
 )
 from duckdb.value.constant import (
@@ -305,6 +306,7 @@ __all__: list[str] = [
     "array_type",
     "arrow",
     "begin",
+    "build_info",
     "checkpoint",
     "close",
     "commit",
@@ -351,7 +353,6 @@ __all__: list[str] = [
     "map_type",
     "order",
     "paramstyle",
-    "paramstyle",
     "pl",
     "project",
     "query",
@@ -374,7 +375,6 @@ __all__: list[str] = [
     "table",
     "table_function",
     "tf",
-    "threadsafety",
     "threadsafety",
     "to_arrow_reader",
     "to_arrow_table",

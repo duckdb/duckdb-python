@@ -122,7 +122,7 @@ runs:
     #   traversing the full filesystem, which produces an error on Windows.
     # - CIBW_TEST_SKIP we always skip tests for *-macosx_universal2 builds, because we run tests for arm64 and x86_64.
     - name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}wheel
-      uses: pypa/cibuildwheel@v3.2
+      uses: pypa/cibuildwheel@v4.2.0
       env:
         CIBW_ARCHS: ${{ inputs.arch == 'amd64' && 'AMD64' || inputs.arch }}
         CIBW_BUILD: ${{ inputs.python }}-${{ inputs.cibw-system }}_${{ inputs.arch }}
