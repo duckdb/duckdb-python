@@ -116,7 +116,8 @@ class DataFrameReader:  # noqa: D101
             else:
                 raise ContributionsAcceptedError
         else:
-            rel = self.session.conn.sql(f"select * from {path}")
+            escaped_path = path.replace("'", "''")
+            rel = self.session.conn.sql(f"select * from '{escaped_path}'")
         df = DataFrame(rel, self.session)
         if schema:
             if not isinstance(schema, StructType):
