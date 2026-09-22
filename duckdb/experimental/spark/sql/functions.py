@@ -1,6 +1,6 @@
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional, Union, overload
+from typing import TYPE_CHECKING, Any, LiteralString, Optional, Union, overload
 
 from duckdb import (
     CaseExpression,
@@ -6176,7 +6176,7 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
 
 
-def expr(str: str) -> Column:
+def expr(str: LiteralString) -> Column:
     """Parses the expression string into the column that it represents.
 
     .. versionadded:: 1.5.0
@@ -6186,7 +6186,7 @@ def expr(str: str) -> Column:
 
     Parameters
     ----------
-    str : str
+    str : LiteralString
         expression defined in string.
 
     Returns:
