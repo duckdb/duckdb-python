@@ -1,5 +1,7 @@
+import operator
 import warnings
 from collections.abc import Callable
+from functools import reduce
 from typing import TYPE_CHECKING, Any, Optional, Union, overload
 
 from duckdb import (
@@ -6206,6 +6208,164 @@ def expr(str: str) -> Column:
     +-----+------------+
     """
     return Column(SQLExpression(str))
+
+
+def count_distinct(col: "ColumnOrName", *cols: "ColumnOrName") -> Column:
+    """Aggregate function: returns the number of distinct rows considering the given columns.
+
+    Rows where any of the supplied columns is NULL are excluded from the count,
+    matching Spark / standard SQL `COUNT(DISTINCT col1, col2, ...)` semantics.
+
+    .. versionadded:: 1.3.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(1,), (1,), (2,), (None,)], ["v"])
+    >>> df.select(count_distinct(df.v).alias("d")).collect()
+    [Row(d=2)]
+
+    >>> df = spark.createDataFrame(
+    ...     [(1, "a"), (1, "a"), (1, "b"), (None, "c"), (2, None)], ["a", "b"]
+    ... )
+    >>> df.select(count_distinct("a", "b").alias("d")).collect()
+    [Row(d=2)]
+    """
+    exprs = [_to_column_expr(c) for c in (col, *cols)]
+    if len(exprs) == 1:
+        arg = exprs[0]
+    else:
+        any_null = reduce(operator.or_, (e.isnull() for e in exprs))
+        arg = CaseExpression(any_null, ConstantExpression(None)).otherwise(FunctionExpression("struct_pack", *exprs))
+    return _invoke_function(
+        "array_length",
+        FunctionExpression(
+            "array_distinct",
+            FunctionExpression("list", arg),
+        ),
+    )
+
+
+def countDistinct(col: "ColumnOrName", *cols: "ColumnOrName") -> Column:
+    """Alias of :func:`count_distinct`."""
+    return count_distinct(col, *cols)
+
+
+def collect_set(col: "ColumnOrName") -> Column:
+    """Aggregate function: returns a set of objects with duplicate elements eliminated.
+
+    NULL values are excluded. The order of elements is non-deterministic.
+
+    .. versionadded:: 1.6.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(1,), (1,), (2,)], ["v"])
+    >>> sorted(df.select(collect_set("v")).first()[0])
+    [1, 2]
+    """
+    return _invoke_function(
+        "array_distinct",
+        FunctionExpression("list", _to_column_expr(col)),
+    )
+
+
+def count_if(col: "ColumnOrName") -> Column:
+    """Aggregate function: returns the number of `TRUE` values for the expression.
+
+    .. versionadded:: 3.5.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(1,), (2,), (3,)], ["v"])
+    >>> df.select(count_if(df.v > 1).alias("c")).collect()
+    [Row(c=2)]
+    """
+    return _invoke_function_over_columns("count_if", col)
+
+
+def max_by(col: "ColumnOrName", ord: "ColumnOrName") -> Column:
+    """Returns the value associated with the maximum value of `ord`.
+
+    .. versionadded:: 3.3.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([("a", 1), ("b", 3), ("c", 2)], ["k", "v"])
+    >>> df.select(max_by("k", "v")).first()[0]
+    'b'
+    """
+    return _invoke_function("arg_max", _to_column_expr(col), _to_column_expr(ord))
+
+
+def min_by(col: "ColumnOrName", ord: "ColumnOrName") -> Column:
+    """Returns the value associated with the minimum value of `ord`.
+
+    .. versionadded:: 3.3.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([("a", 1), ("b", 3), ("c", 2)], ["k", "v"])
+    >>> df.select(min_by("k", "v")).first()[0]
+    'a'
+    """
+    return _invoke_function("arg_min", _to_column_expr(col), _to_column_expr(ord))
+
+
+def bool_and(col: "ColumnOrName") -> Column:
+    """Aggregate function: returns true if all values of `col` are true.
+
+    .. versionadded:: 3.5.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(True,), (True,), (False,)], ["b"])
+    >>> df.select(bool_and("b")).first()[0]
+    False
+    """
+    return _invoke_function_over_columns("bool_and", col)
+
+
+def every(col: "ColumnOrName") -> Column:
+    """Alias of :func:`bool_and`."""
+    return bool_and(col)
+
+
+def bool_or(col: "ColumnOrName") -> Column:
+    """Aggregate function: returns true if at least one value of `col` is true.
+
+    .. versionadded:: 3.5.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(True,), (True,), (False,)], ["b"])
+    >>> df.select(bool_or("b")).first()[0]
+    True
+    """
+    return _invoke_function_over_columns("bool_or", col)
+
+
+def some(col: "ColumnOrName") -> Column:
+    """Alias of :func:`bool_or`."""
+    return bool_or(col)
+
+
+def any(col: "ColumnOrName") -> Column:
+    """Alias of :func:`bool_or`."""
+    return bool_or(col)
+
+
+def kurtosis(col: "ColumnOrName") -> Column:
+    """Aggregate function: returns the kurtosis of the values in a group.
+
+    .. versionadded:: 1.6.0
+
+    Examples:
+    --------
+    >>> df = spark.createDataFrame([(1.0,), (2.0,), (3.0,), (4.0,)], ["v"])
+    >>> df.select(kurtosis("v")).first()[0] is not None
+    True
+    """
+    return _invoke_function_over_columns("kurtosis", col)
 
 
 def broadcast(df: "DataFrame") -> "DataFrame":
