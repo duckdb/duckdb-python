@@ -94,6 +94,10 @@ packages._duckdb-stubs = "_duckdb-stubs"
 
 [tool.scikit-build.cmake.define]
 BUILD_EXTENSIONS = "core_functions;json;parquet;icu"
+# Extensions to statically link into the module, picked from BUILD_EXTENSIONS.
+# Empty means all of BUILD_EXTENSIONS. Always passed so a stale CMake cache
+# value never survives an override being dropped.
+LINK_EXTENSIONS = ""
 
 [tool.duckdb_packaging]
 # The version this branch releases next. A release forces exactly this version, a
