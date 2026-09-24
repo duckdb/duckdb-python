@@ -24,6 +24,10 @@
 #define DUCKDB_PYTHON_LIB_NAME _duckdb
 #endif
 
+// Defined by the static extension loader generated at configure time from LINK_EXTENSIONS
+// (see duckdb_python_link_extensions in cmake/duckdb_loader.cmake)
+extern "C" int32_t duckdb_register_static_extensions(void);
+
 namespace duckdb {
 
 enum PySQLTokenType : uint8_t {
@@ -1079,6 +1083,11 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	volatile auto *keep_alive = _force_symbol_inclusion();
 	(void)keep_alive;
 	// END
+
+	// Register the statically linked extensions before any database can be opened
+	if (duckdb_register_static_extensions() != 0) {
+		throw std::runtime_error("Failed to register the statically linked DuckDB extensions");
+	}
 
 	nb::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)

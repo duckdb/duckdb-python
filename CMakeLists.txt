@@ -123,7 +123,7 @@ nanobind_add_module(
   $<TARGET_OBJECTS:python_type>)
 # add _duckdb_dependencies
 target_link_libraries(_duckdb PRIVATE _duckdb_dependencies)
-duckdb_link_extensions(_duckdb)
+duckdb_python_link_extensions(_duckdb)
 
 # ────────────────────────────────────────────
 # Put the object file in the correct place
