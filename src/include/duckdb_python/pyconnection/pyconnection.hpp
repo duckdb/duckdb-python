@@ -250,7 +250,7 @@ public:
 
 	std::shared_ptr<DuckDBPyConnection> ExecuteMany(const nb::object &query, nb::object params = nb::list());
 
-	void ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements);
+	void ExecuteImmediately(unique_ptr<SQLStatement> statement);
 	unique_ptr<PreparedStatement> PrepareQuery(unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> ExecuteInternal(PreparedStatement &prep, nb::object params = nb::list());
 	//! Binds the parameters and submits the statement. The handle is returned undriven.
@@ -371,7 +371,7 @@ private:
 	ScalarFunction CreateScalarUDF(const string &name, const nb::callable &udf, const nb::object &parameters,
 	                               const nb::object &return_type, bool vectorized, FunctionNullHandling null_handling,
 	                               PythonExceptionHandling exception_handling, bool side_effects);
-	vector<unique_ptr<SQLStatement>> GetStatements(const nb::object &query);
+	unique_ptr<SQLStatement> GetLastStatement(const nb::object &query);
 
 	static void DetectEnvironment();
 };
