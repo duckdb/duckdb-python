@@ -264,6 +264,23 @@ class TestPolars:
         valid_filter((pl.col("a") == 100) & (pl.col("b") == 10) & (pl.col("c") == 100))
         valid_filter((pl.col("a") == 100) | (pl.col("b") == 1))
 
+    @pytest.mark.parametrize("data_type", ["FLOAT", "DOUBLE"])
+    def test_polars_lazy_pushdown_non_finite_float(self, data_type, duckdb_cursor):
+        duckdb_cursor.execute(f"CREATE TABLE test_non_finite (a {data_type})")
+        duckdb_cursor.execute("INSERT INTO test_non_finite VALUES (1), ('inf'), ('-inf'), ('nan'), (NULL)")
+        lazy_df = duckdb_cursor.table("test_non_finite").pl(lazy=True)
+        eager_df = lazy_df.collect()
+
+        # polars serializes inf/nan literals as JSON null, so they cannot be pushed down
+        for predicate in (
+            pl.col("a") < float("inf"),
+            pl.col("a") > float("-inf"),
+            pl.col("a") == float("inf"),
+            pl.col("a") >= float("nan"),
+        ):
+            invalid_filter(predicate)
+            pl_testing.assert_frame_equal(lazy_df.filter(predicate).collect(), eager_df.filter(predicate))
+
     def test_polars_lazy_pushdown_bool(self, duckdb_cursor):
         duckdb_cursor.execute(
             """

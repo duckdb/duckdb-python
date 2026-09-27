@@ -313,6 +313,10 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             "Float64",
             "Boolean",
         ):
+            if value[dtype] is None:
+                # JSON has no inf/nan, polars serializes them as null
+                msg = f"Non-finite {dtype} literals cannot be pushed down"
+                raise NotImplementedError(msg)
             return str(value[dtype])
 
         # Time type
