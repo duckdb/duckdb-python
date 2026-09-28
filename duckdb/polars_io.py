@@ -290,12 +290,27 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             )
             return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[-1]))
 
-        # Datetime with microseconds since epoch
+        # Datetime: [value since epoch, time unit, time zone]
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
-            micros = value["Datetime"]
-            assert isinstance(micros, list), f"A {dtype} should be a one member list but got {type(micros)}"
-            dt_timestamp = datetime.datetime.fromtimestamp(micros[0] / 1_000_000, tz=datetime.timezone.utc)
-            return f"'{dt_timestamp!s}'::TIMESTAMP"
+            datetime_value = value["Datetime"]
+            assert isinstance(datetime_value, list), f"A {dtype} should be a list but got {type(datetime_value)}"
+            epoch_value = datetime_value[0]
+            time_unit = datetime_value[1] if len(datetime_value) > 1 else "Microseconds"
+            time_zone = datetime_value[2] if len(datetime_value) > 2 else None
+            assert isinstance(epoch_value, int), f"A {dtype} value should be an int but got {type(epoch_value)}"
+            if time_unit == "Milliseconds":
+                micros = epoch_value * 1_000
+            elif time_unit == "Microseconds":
+                micros = epoch_value
+            else:
+                # A TIMESTAMP literal cannot hold nanoseconds, let polars apply the filter
+                msg = f"Unsupported datetime time unit {time_unit!r}"
+                raise NotImplementedError(msg)
+            dt_timestamp = datetime.datetime(1970, 1, 1) + datetime.timedelta(microseconds=micros)
+            if time_zone is None:
+                return f"'{dt_timestamp!s}'::TIMESTAMP"
+            # The value is UTC; compare as an instant so the session TimeZone does not shift it
+            return f"'{dt_timestamp!s}+00'::TIMESTAMPTZ"
 
         # Match simple numeric/boolean types
         if dtype in (
