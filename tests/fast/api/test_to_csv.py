@@ -264,6 +264,19 @@ class TestToCSV:
         with pytest.raises(duckdb.IOException, match="OVERWRITE"):
             rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
 
+    def test_to_csv_overwrite_false_errors_on_existing_file(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        duckdb.sql("SELECT 1 AS test").to_csv(temp_file_name, overwrite=False)
+        with pytest.raises(duckdb.IOException, match="OVERWRITE"):
+            duckdb.sql("SELECT 2 AS test").to_csv(temp_file_name, overwrite=False)
+        assert duckdb.read_csv(temp_file_name).fetchall() == [(1,)]
+
+    def test_to_csv_overwrite_true_replaces_existing_file(self):
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
+        duckdb.sql("SELECT 1 AS test").to_csv(temp_file_name)
+        duckdb.sql("SELECT 2 AS test").to_csv(temp_file_name, overwrite=True)
+        assert duckdb.read_csv(temp_file_name).fetchall() == [(2,)]
+
     def test_to_csv_per_thread_output(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
