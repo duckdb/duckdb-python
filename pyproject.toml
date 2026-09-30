@@ -250,9 +250,6 @@ explicit = true
 [tool.uv.sources]
 torch = [ { index = "pytorch-cpu" } ]
 torchvision = [ { index = "pytorch-cpu" } ]
-pandas = [
-    { index = "scientific-python-nightly", marker = "python_version >= '3.15'" },
-]
 pyarrow = [
     # win/ARM64 has no pyarrow wheels & nightly doesn't have sdist
     { index = "scientific-python-nightly", marker = "python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')" },
@@ -293,8 +290,7 @@ test = [ # dependencies used for running tests
     "requests",
     "urllib3",
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "pandas>=3.0.0; python_version >= '3.11' and python_version < '3.15'",
-    "pandas>=3.0.0.dev0; python_version >= '3.15'",
+    "pandas>=3.0.0; python_version >= '3.11'",
     "pandas<3.0.0; python_version < '3.11'",
     "pyarrow>=23.0.0; python_version >= '3.10' and python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=23.0.0.dev0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
@@ -321,8 +317,7 @@ bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Mini
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
     "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
     "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
-    "pandas>=3.0.0; python_version >= '3.11' and python_version < '3.15'",
-    "pandas>=3.0.0.dev0; python_version >= '3.15'",
+    "pandas>=3.0.0; python_version >= '3.11'",
     "pandas<3.0.0; python_version < '3.11'",
     "pyarrow>=23.0.0; python_version >= '3.10' and python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=23.0.0.dev0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
@@ -348,6 +343,11 @@ build = [
     "ninja>=1.10",
     "nanobind>=3.0",
     "scikit_build_core>=0.11.4",
+    # numpy C API headers; mirrors [build-system].requires, needed because the dev flow uses
+    # --no-build-isolation. Markers match the test/bench groups so the lock resolves.
+    "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
+    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
     "pre-commit",
