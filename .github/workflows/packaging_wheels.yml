@@ -127,7 +127,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: [ cp311, cp312, cp313 ]
+        python: [ cp311, cp312, cp313, cp315 ]
         platform:
           - { os: windows-2022,     arch: amd64,      cibw_system: win }
           - { os: windows-11-arm,   arch: ARM64,      cibw_system: win } # cibw requires ARM64 to be uppercase
