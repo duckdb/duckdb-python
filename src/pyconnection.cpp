@@ -11,6 +11,7 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/prepared_statement.hpp"
+#include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/main/relation/read_csv_relation.hpp"
 #include "duckdb/main/relation/read_json_relation.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
@@ -514,17 +515,12 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::ob
 		params_p = nb::list();
 	}
 
-	auto statements = GetStatements(query);
-	if (statements.empty()) {
+	auto last_statement = GetLastStatement(query);
+	if (!last_statement) {
 		// TODO: should we throw?
 		return nullptr;
 	}
-
-	auto last_statement = std::move(statements.back());
-	statements.pop_back();
-	// First immediately execute any preceding statements (if any)
 	// FIXME: DBAPI says to not accept an 'executemany' call with multiple statements
-	ExecuteImmediately(std::move(statements));
 
 	auto prep = PrepareQuery(std::move(last_statement));
 
@@ -704,18 +700,26 @@ unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndSubmitInternal(unique_ptr<
 	return res;
 }
 
-vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const nb::object &query) {
+unique_ptr<SQLStatement> DuckDBPyConnection::GetLastStatement(const nb::object &query) {
 	if (nb::isinstance<DuckDBPyStatement>(query)) {
 		auto &statement_obj = nb::cast<DuckDBPyStatement &>(query);
-		vector<unique_ptr<SQLStatement>> result;
-		result.push_back(statement_obj.GetStatement());
-		return result;
+		return statement_obj.GetStatement();
 	}
 	if (nb::isinstance<nb::str>(query)) {
 		auto &connection = con.GetConnection();
 		auto sql_query = nb::cast<std::string>(nb::str(query));
-		auto statements = connection.ExtractStatements(sql_query);
-		return std::move(statements);
+		auto iterator = connection.context->IterateStatements(sql_query);
+		while (iterator.Peek()) {
+			auto statement = iterator.GetStatement();
+			if (!statement) {
+				continue;
+			}
+			if (!iterator.HasMore()) {
+				return statement;
+			}
+			ExecuteImmediately(std::move(statement));
+		}
+		return nullptr;
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }
@@ -729,17 +733,12 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 	ConnectionLockGuard conn_lock(*this);
 	con.SetResult(nullptr);
 
-	auto statements = GetStatements(query);
-	if (statements.empty()) {
+	auto last_statement = GetLastStatement(query);
+	if (!last_statement) {
 		// TODO: should we throw?
 		return nullptr;
 	}
-
-	auto last_statement = std::move(statements.back());
-	statements.pop_back();
-	// First immediately execute any preceding statements (if any)
 	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
-	ExecuteImmediately(std::move(statements));
 
 	auto res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params));
 
@@ -1608,22 +1607,17 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const nb::object &
 	return CreateRelation(read_csv_p->Alias(read_csv.alias));
 }
 
-void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
+void DuckDBPyConnection::ExecuteImmediately(unique_ptr<SQLStatement> statement) {
 	auto &connection = con.GetConnection();
 	D_ASSERT(duckdb::PyUtil::GilCheck());
 	nb::gil_scoped_release release;
-	if (statements.empty()) {
-		return;
+	if (!statement->named_param_map.empty()) {
+		throw NotImplementedException(
+		    "Prepared parameters are only supported for the last statement, please split your query up into "
+		    "separate 'execute' calls if you want to use prepared parameters");
 	}
-	for (auto &stmt : statements) {
-		if (!stmt->named_param_map.empty()) {
-			throw NotImplementedException(
-			    "Prepared parameters are only supported for the last statement, please split your query up into "
-			    "separate 'execute' calls if you want to use prepared parameters");
-		}
-		auto res = connection.Submit(std::move(stmt));
-		CompleteQuery(*res);
-	}
+	auto res = connection.Submit(std::move(statement));
+	CompleteQuery(*res);
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object &query, string alias,
@@ -1633,16 +1627,11 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 
-	auto statements = GetStatements(query);
-	if (statements.empty()) {
+	auto last_statement = GetLastStatement(query);
+	if (!last_statement) {
 		// TODO: should we throw?
 		return nullptr;
 	}
-
-	auto last_statement = std::move(statements.back());
-	statements.pop_back();
-	// First immediately execute any preceding statements (if any)
-	ExecuteImmediately(std::move(statements));
 
 	// Attempt to create a Relation for lazy execution if possible
 	shared_ptr<Relation> relation;

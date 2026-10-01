@@ -6,6 +6,17 @@ import duckdb
 
 
 class TestMultiStatement:
+    def test_pragma_expansion_follows_previous_statements(self, tmp_path):
+        con = duckdb.connect(":memory:")
+        export_location = tmp_path / "export"
+        con.execute("CREATE TABLE integers AS SELECT 42 AS i")
+
+        con.execute(
+            f"EXPORT DATABASE '{export_location}'; DROP TABLE integers; PRAGMA import_database('{export_location}')"
+        )
+
+        assert con.execute("SELECT i FROM integers").fetchall() == [(42,)]
+
     def test_multi_statement(self, duckdb_cursor):
         con = duckdb.connect(":memory:")
 
