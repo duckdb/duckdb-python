@@ -19,6 +19,7 @@
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb/common/arrow/physical_arrow_collector.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
@@ -1252,6 +1253,32 @@ static Value NestedDictToStruct(const nb::object &dictionary) {
 	return Value::STRUCT(std::move(children));
 }
 
+static void ApplyOverwriteOption(identifier_map_t<vector<Value>> &options, const string &function_name,
+                                 const string &filename, Relation &relation, const nb::object &overwrite) {
+	if (nb::none().is(overwrite)) {
+		return;
+	}
+	if (!nb::isinstance<nb::bool_>(overwrite)) {
+		throw InvalidInputException(function_name + " only accepts 'overwrite' as a boolean");
+	}
+	const bool overwrite_val = static_cast<bool>(nb::bool_(overwrite));
+	options["overwrite_or_ignore"] = {Value::BOOLEAN(overwrite_val)};
+	if (overwrite_val) {
+		return;
+	}
+	// Single-file COPY replaces via a tmp rename, so overwrite_or_ignore=false is a no-op.
+	auto context = relation.context->TryGetContext();
+	if (!context) {
+		throw InvalidInputException(function_name + " cannot run after the connection has been closed");
+	}
+	auto &fs = FileSystem::GetFileSystem(*context);
+	if (fs.FileExists(filename)) {
+		throw IOException("Cannot write to \"%s\" - it exists and is a file, not a directory! Enable OVERWRITE option "
+		                  "to overwrite the file",
+		                  filename);
+	}
+}
+
 void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compression, const nb::object &field_ids,
                                  const nb::object &row_group_size_bytes, const nb::object &row_group_size,
                                  const nb::object &overwrite, const nb::object &per_thread_output,
@@ -1327,12 +1354,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compr
 		options["append"] = {Value::BOOLEAN((bool)nb::bool_(append))};
 	}
 
-	if (!nb::none().is(overwrite)) {
-		if (!nb::isinstance<nb::bool_>(overwrite)) {
-			throw InvalidInputException("to_parquet only accepts 'overwrite' as a boolean");
-		}
-		options["overwrite_or_ignore"] = {Value::BOOLEAN((bool)nb::bool_(overwrite))};
-	}
+	ApplyOverwriteOption(options, "to_parquet", filename, *rel, overwrite);
 
 	if (!nb::none().is(per_thread_output)) {
 		if (!nb::isinstance<nb::bool_>(per_thread_output)) {
@@ -1467,12 +1489,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const nb::object &sep, cons
 		options["compression"] = {Value(nb::cast<std::string>(compression))};
 	}
 
-	if (!nb::none().is(overwrite)) {
-		if (!nb::isinstance<nb::bool_>(overwrite)) {
-			throw InvalidInputException("to_csv only accepts 'overwrite' as a boolean");
-		}
-		options["overwrite_or_ignore"] = {Value::BOOLEAN((bool)nb::bool_(overwrite))};
-	}
+	ApplyOverwriteOption(options, "to_csv", filename, *rel, overwrite);
 
 	if (!nb::none().is(per_thread_output)) {
 		if (!nb::isinstance<nb::bool_>(per_thread_output)) {
