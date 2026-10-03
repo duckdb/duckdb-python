@@ -333,6 +333,10 @@ void DuckDBPyRelation::Initialize(nb::handle &m) {
 	         nb::arg("other_rel").none(), nb::arg("condition"), nb::arg("how") = "inner")
 	    .def("cross", &DuckDBPyRelation::Cross, "Create cross/cartesian product of two relational objects",
 	         nb::arg("other_rel"))
+	    .def("positional_join", &DuckDBPyRelation::PositionalJoin,
+	         "Join the relation object with another relation object in other_rel by row position: the n-th row of "
+	         "each side is paired, and the shorter side is padded with NULL. Takes no join condition",
+	         nb::arg("other_rel"))
 
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit,

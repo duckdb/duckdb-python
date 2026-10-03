@@ -211,6 +211,8 @@ public:
 	std::unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const nb::object &condition, const string &type);
 	std::unique_ptr<DuckDBPyRelation> Cross(DuckDBPyRelation *other);
 
+	std::unique_ptr<DuckDBPyRelation> PositionalJoin(DuckDBPyRelation *other);
+
 	void ToParquet(const string &filename, const nb::object &compression = nb::none(),
 	               const nb::object &field_ids = nb::none(), const nb::object &row_group_size_bytes = nb::none(),
 	               const nb::object &row_group_size = nb::none(), const nb::object &overwrite = nb::none(),
