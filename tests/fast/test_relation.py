@@ -463,6 +463,38 @@ class TestRelation:
 
         assert rel1.join(rel2, "i=j", "left").aggregate("count()").fetchone()[0] == 4
 
+    def test_positional_join(self):
+        con = duckdb.connect()
+        rel1 = con.sql("select unnest([1, 2, 3, 4]) as i").set_alias("lhs")
+        rel2 = con.sql("select unnest(['a', 'b', 'c', 'd']) as j").set_alias("rhs")
+
+        res = rel1.positional_join(rel2)
+        assert res.fetchall() == [(1, "a"), (2, "b"), (3, "c"), (4, "d")]
+        assert "POSITIONAL JOIN" in res.sql_query()
+
+    def test_positional_join_pads_shorter_side_with_null(self):
+        con = duckdb.connect()
+        rel1 = con.sql("select unnest([1, 2, 3]) as i").set_alias("lhs")
+        rel2 = con.sql("select unnest(['a']) as j").set_alias("rhs")
+
+        assert rel1.positional_join(rel2).fetchall() == [(1, "a"), (2, None), (3, None)]
+
+    def test_positional_join_rejects_same_alias(self):
+        con = duckdb.connect()
+        rel1 = con.sql("select 1 as i").set_alias("same")
+        rel2 = con.sql("select 2 as j").set_alias("same")
+
+        with pytest.raises(duckdb.InvalidInputException, match="same alias"):
+            rel1.positional_join(rel2)
+
+    def test_join_how_positional_points_at_positional_join(self):
+        con = duckdb.connect()
+        rel1 = con.sql("select 1 as i").set_alias("lhs")
+        rel2 = con.sql("select 1 as j").set_alias("rhs")
+
+        with pytest.raises(duckdb.InvalidInputException, match="positional_join"):
+            rel1.join(rel2, "i = j", how="positional")
+
     def test_fetchnumpy(self):
         start, stop = -1000, 2000
         count = stop - start

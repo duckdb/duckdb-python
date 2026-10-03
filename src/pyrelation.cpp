@@ -1177,6 +1177,11 @@ static JoinType ParseJoinType(const string &type) {
 		supported_options.push_back(StringUtil::Format("'%s'", supported_types[i].name));
 	}
 	auto options = StringUtil::Join(supported_options, ", ");
+	if (StringUtil::Lower(provided) == "positional") {
+		throw InvalidInputException("Unsupported join type %s, try one of: %s. For a positional join, which takes no "
+		                            "condition, use rel.positional_join(other_rel)",
+		                            provided, options);
+	}
 	throw InvalidInputException("Unsupported join type %s, try one of: %s", provided, options);
 }
 
@@ -1228,6 +1233,19 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Cross(DuckDBPyRelation *other) {
 	return DeriveRelation(rel->CrossProduct(other->rel));
+}
+
+std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PositionalJoin(DuckDBPyRelation *other) {
+	if (!other) {
+		throw InvalidInputException("No relation provided for positional join");
+	}
+	auto alias = nb::cast<std::string>(GetAlias());
+	auto other_alias = nb::cast<std::string>(other->GetAlias());
+	if (StringUtil::CIEquals(alias, other_alias)) {
+		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
+		                            "relations using 'rel = rel.set_alias(<new alias>)'");
+	}
+	return DeriveRelation(rel->CrossProduct(other->rel, JoinRefType::POSITIONAL));
 }
 
 static Value NestedDictToStruct(const nb::object &dictionary) {
