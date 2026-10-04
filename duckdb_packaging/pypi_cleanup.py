@@ -2,7 +2,7 @@
 
 PyPI package cleanup tool. This script will:
 * Never remove a stable version (including a post release version)
-* Remove all release candidates for versions that have stable releases
+* Remove all pre-releases (alpha, beta, rc) for versions that have stable releases
 * Remove all dev releases for versions that have stable releases
 * Keep the configured amount of dev releases per version, and remove older dev releases
 """
@@ -53,7 +53,7 @@ PyPI cleanup script for removing development versions.
 
 This script will:
 * Never remove a stable version (including a post release version)
-* Remove all release candidates for versions that have stable releases
+* Remove all pre-releases (alpha, beta, rc) for versions that have stable releases
 * Remove all dev releases for versions that have stable releases
 * Keep the configured amount of dev releases per version, and remove older dev releases
         """,
@@ -244,8 +244,9 @@ class PyPICleanup:
         self._password = password
         self._otp = otp
         self._package = "duckdb"
+        # PyPI serves normalized version strings (PEP440), so pre-releases have no separator
         self._dev_version_pattern = re.compile(r"^(?P<version>\d+\.\d+\.\d+)\.dev(?P<dev_id>\d+)$")
-        self._rc_version_pattern = re.compile(r"^(?P<version>\d+\.\d+\.\d+)\.rc\d+$")
+        self._pre_version_pattern = re.compile(r"^(?P<version>\d+\.\d+\.\d+)(?:a|b|rc)\d+$")
         self._stable_version_pattern = re.compile(r"^\d+\.\d+\.\d+(\.post\d+)?$")
 
     def run(self) -> int:
@@ -325,21 +326,21 @@ class PyPICleanup:
         """Determine whether a version string denotes a stable release."""
         return self._stable_version_pattern.match(version) is not None
 
-    def _is_rc_version(self, version: str) -> bool:
-        """Determine whether a version string denotes a stable release."""
-        return self._rc_version_pattern.match(version) is not None
+    def _is_pre_version(self, version: str) -> bool:
+        """Determine whether a version string denotes a pre-release (alpha, beta, rc)."""
+        return self._pre_version_pattern.match(version) is not None
 
     def _is_dev_version(self, version: str) -> bool:
         """Determine whether a version string denotes a dev release."""
         return self._dev_version_pattern.match(version) is not None
 
-    def _parse_rc_version(self, version: str) -> str:
-        """Parse a rc version string to determine the base version."""
-        match = self._rc_version_pattern.match(version)
+    def _parse_pre_version(self, version: str) -> str:
+        """Parse a pre-release version string to determine the base version."""
+        match = self._pre_version_pattern.match(version)
         if not match:
-            msg = f"Invalid rc version '{version}'"
+            msg = f"Invalid pre-release version '{version}'"
             raise PyPICleanupError(msg)
-        return match.group("version") if match else None
+        return match.group("version")
 
     def _parse_dev_version(self, version: str) -> tuple[str, int]:
         """Parse a dev version string to determine the base version and dev version id."""
@@ -353,19 +354,19 @@ class PyPICleanup:
         """Determine which package versions should be deleted."""
         logging.debug("Analyzing versions to determine cleanup candidates")
 
-        # Get all stable, rc and dev versions
+        # Get all stable, pre-release and dev versions
         stable_versions = {v for v in versions if self._is_stable_release_version(v)}
-        rc_versions = {v for v in versions if self._is_rc_version(v)}
-        rc_base_versions = {self._parse_rc_version(v) for v in versions if self._is_rc_version(v)}
+        pre_versions = {v for v in versions if self._is_pre_version(v)}
+        pre_base_versions = {self._parse_pre_version(v) for v in pre_versions}
         dev_versions = {v for v in versions if self._is_dev_version(v)}
 
-        # Set of all rc releases of versions that have a stable release
-        rcs_of_stable = {v for v in rc_versions if self._parse_rc_version(v) in stable_versions}
-        # Set of all dev releases of versions that have a stable or rc release
+        # Set of all pre-releases of versions that have a stable release
+        pres_of_stable = {v for v in pre_versions if self._parse_pre_version(v) in stable_versions}
+        # Set of all dev releases of versions that have a stable or pre-release
         devs_of_stable = {v for v in dev_versions if self._parse_dev_version(v)[0] in stable_versions}
-        devs_of_rc = {v for v in dev_versions if self._parse_dev_version(v)[0] in rc_base_versions}
+        devs_of_pre = {v for v in dev_versions if self._parse_dev_version(v)[0] in pre_base_versions}
         # Set of orphan dev versions
-        orphan_devs = dev_versions.difference(devs_of_stable).difference(devs_of_rc)
+        orphan_devs = dev_versions.difference(devs_of_stable).difference(devs_of_pre)
 
         # Construct list of orphan dev
         orphan_devs_per_version = defaultdict(list)
@@ -382,15 +383,15 @@ class PyPICleanup:
 
         # Construct final deletion set
         versions_to_delete = set()
-        if rcs_of_stable:
-            versions_to_delete.update(rcs_of_stable)
-            logging.info(f"Found {len(rcs_of_stable)} release candidates that have stable releases")
+        if pres_of_stable:
+            versions_to_delete.update(pres_of_stable)
+            logging.info(f"Found {len(pres_of_stable)} pre-releases that have stable releases")
         if devs_of_stable:
             versions_to_delete.update(devs_of_stable)
             logging.info(f"Found {len(devs_of_stable)} dev releases that have stable releases")
-        if devs_of_rc:
-            versions_to_delete.update(devs_of_rc)
-            logging.info(f"Found {len(devs_of_rc)} dev releases that have release candidates")
+        if devs_of_pre:
+            versions_to_delete.update(devs_of_pre)
+            logging.info(f"Found {len(devs_of_pre)} dev releases that have pre-releases")
         if devs_outdated:
             versions_to_delete.update(devs_outdated)
             logging.info(f"Found {len(devs_outdated)} dev releases that are outdated")
@@ -408,7 +409,7 @@ class PyPICleanup:
                 f"A regexp might be broken? (would delete {versions_to_delete.intersection(stable_versions)})"
             )
             raise PyPICleanupError(msg)
-        unknown_versions = versions.difference(stable_versions).difference(rc_versions).difference(dev_versions)
+        unknown_versions = versions.difference(stable_versions).difference(pre_versions).difference(dev_versions)
         if unknown_versions:
             logging.warning(f"Found version string(s) in an unsupported format: {unknown_versions}")
 
@@ -532,8 +533,8 @@ class PyPICleanup:
     def _delete_single_version(self, http_session: Session, version: str) -> None:
         """Delete a single package version."""
         # Safety check
-        if not self._is_dev_version(version) or self._is_rc_version(version):
-            msg = f"Refusing to delete non-[dev|rc] version: {version}"
+        if not (self._is_dev_version(version) or self._is_pre_version(version)):
+            msg = f"Refusing to delete non-dev, non-pre-release version: {version}"
             raise PyPICleanupError(msg)
 
         logging.debug(f"Deleting {self._package} version {version}")

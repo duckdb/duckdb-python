@@ -8,6 +8,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+if(MSVC)
+  # MSVC caps object files at 65,279 sections, we instantiate enough templates
+  # to exceed it, so need to set /bigobj
+  add_compile_options(/bigobj)
+endif()
+
 # Set the library name
 set(DUCKDB_PYTHON_LIB_NAME "_duckdb")
 

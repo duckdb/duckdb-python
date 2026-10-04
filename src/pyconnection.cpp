@@ -1,5 +1,6 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -173,12 +174,11 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      nb::arg("type_str"));
 	m.def("type", &DuckDBPyConnection::Type, "Create a type object by parsing the 'type_str' string",
 	      nb::arg("type_str"));
-	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'",
-	      nb::arg("type").none(false), nb::arg("size"));
-	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'",
-	      nb::arg("type").none(false));
+	m.def("array_type", &DuckDBPyConnection::ArrayType, "Create an array type object of 'type'", nb::arg("type"),
+	      nb::arg("size"));
+	m.def("list_type", &DuckDBPyConnection::ListType, "Create a list type object of 'type'", nb::arg("type"));
 	m.def("union_type", &DuckDBPyConnection::UnionType, "Create a union type object from 'members'",
-	      nb::arg("members").none(false));
+	      nb::arg("members"));
 	m.def("string_type", &DuckDBPyConnection::StringType, "Create a string type with an optional collation",
 	      nb::arg("collation") = "");
 	m.def("enum_type", &DuckDBPyConnection::EnumType,
@@ -190,7 +190,7 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      nb::arg("fields"));
 	m.def("row_type", &DuckDBPyConnection::StructType, "Create a struct type object from 'fields'", nb::arg("fields"));
 	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
-	      nb::arg("key").none(false), nb::arg("value").none(false));
+	      nb::arg("key"), nb::arg("value"));
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
 	m.def("execute", &DuckDBPyConnection::Execute,
 	      "Execute the given SQL query, optionally using prepared statements with parameters set", nb::arg("query"),
@@ -617,13 +617,13 @@ identifier_map_t<BoundParameterData> TransformPreparedParameters(ClientContext &
                                                                  optional_ptr<PreparedStatement> prep = {}) {
 	identifier_map_t<BoundParameterData> named_values;
 	if (duckdb::PyUtil::IsListLike(params)) {
-		if (prep && prep->named_param_map.size() != nb::len(params)) {
+		if (prep && prep->GetParameterCount() != nb::len(params)) {
 			if (nb::len(params) == 0) {
 				throw InvalidInputException("Expected %d parameters, but none were supplied",
-				                            prep->named_param_map.size());
+				                            prep->GetParameterCount());
 			}
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given",
-			                            prep->named_param_map.size(), nb::len(params));
+			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->GetParameterCount(),
+			                            nb::len(params));
 		}
 		auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(context, params);
 		for (idx_t i = 0; i < unnamed_values.size(); i++) {
@@ -650,7 +650,7 @@ unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLSta
 
 		prep = connection.Prepare(std::move(statement));
 		if (prep->HasError()) {
-			prep->error.Throw();
+			prep->GetErrorObject().Throw();
 		}
 	}
 	return prep;
@@ -1684,19 +1684,16 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 		if (!res) {
 			return nullptr;
 		}
-		if (res->properties.return_type != StatementReturnType::QUERY_RESULT) {
+		if (res->GetStatementProperties().return_type != StatementReturnType::QUERY_RESULT) {
 			return nullptr;
 		}
-		if (res->type == QueryResultType::STREAM_RESULT) {
+		if (res->GetResultType() == QueryResultType::STREAM_RESULT) {
 			auto &stream_result = res->Cast<StreamQueryResult>();
 			res = stream_result.Materialize();
 		}
 		auto &materialized_result = res->Cast<MaterializedQueryResult>();
-		vector<Identifier> col_names(res->names.size());
-		std::transform(res->names.begin(), res->names.end(), col_names.begin(),
-		               [](string &name) { return Identifier(name); });
 		relation = make_shared_ptr<MaterializedRelation>(connection.context, materialized_result.TakeCollection(),
-		                                                 col_names, Identifier(alias));
+		                                                 res->GetNames(), Identifier(alias));
 	}
 	return CreateRelation(std::move(relation));
 }
@@ -2174,14 +2171,14 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 	return result.FetchRecordBatchReader(rows_per_batch);
 }
 
-case_insensitive_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {
-	case_insensitive_map_t<Value> config_dict;
+identifier_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {
+	identifier_map_t<Value> config_dict;
 	for (auto kv : py_config_dict) {
 		// Config values may be int/bool/str; str-ify them rather than
 		// requiring an actual Python str (nb::cast<std::string> would throw on a non-str like 0 or False).
 		auto key = nb::cast<std::string>(nb::str(kv.first));
 		auto val = nb::cast<std::string>(nb::str(kv.second));
-		config_dict[key] = Value(val);
+		config_dict[Identifier(key)] = Value(val);
 	}
 	return config_dict;
 }
@@ -2257,7 +2254,7 @@ static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &d
 	return res;
 }
 
-bool IsDefaultConnectionString(const string &database, bool read_only, case_insensitive_map_t<Value> &config) {
+bool IsDefaultConnectionString(const string &database, bool read_only, identifier_map_t<Value> &config) {
 	bool is_default = StringUtil::CIEquals(database, ":default:");
 	if (!is_default) {
 		return false;

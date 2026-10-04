@@ -35,6 +35,10 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	}
 }
 
+const vector<Identifier> &DuckDBPyResult::ResultNames() const {
+	return names_override.empty() ? result->GetNames() : names_override;
+}
+
 DuckDBPyResult::~DuckDBPyResult() {
 	// The destructor must run with the GIL held: `result` and `current_chunk`
 	// can transitively own Python references (registered
@@ -54,18 +58,18 @@ ClientProperties DuckDBPyResult::GetClientProperties() {
 	return result->client_properties;
 }
 
-const vector<string> &DuckDBPyResult::GetNames() {
+vector<string> DuckDBPyResult::GetNames() {
 	if (!result) {
 		throw InternalException("Calling GetNames without a result object");
 	}
-	return result->names;
+	return IdentifiersToStrings(ResultNames());
 }
 
 const vector<LogicalType> &DuckDBPyResult::GetTypes() {
 	if (!result) {
 		throw InternalException("Calling GetTypes without a result object");
 	}
-	return result->types;
+	return result->GetTypes();
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
@@ -76,12 +80,12 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
-	if (!result_closed && query_result.type == QueryResultType::STREAM_RESULT &&
+	if (!result_closed && query_result.GetResultType() == QueryResultType::STREAM_RESULT &&
 	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
 	}
-	if (query_result.type == QueryResultType::STREAM_RESULT) {
+	if (query_result.GetResultType() == QueryResultType::STREAM_RESULT) {
 		auto &stream_result = query_result.Cast<StreamQueryResult>();
 		StreamExecutionResult execution_result;
 		while (!StreamQueryResult::IsChunkReady(execution_result = stream_result.ExecuteTask())) {
@@ -111,7 +115,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
-	if (!result_closed && query_result.type == QueryResultType::STREAM_RESULT &&
+	if (!result_closed && query_result.GetResultType() == QueryResultType::STREAM_RESULT &&
 	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
@@ -136,14 +140,15 @@ Optional<nb::tuple> DuckDBPyResult::Fetchone() {
 	if (!current_chunk || current_chunk->size() == 0) {
 		return nb::none();
 	}
-	duckdb::PyUtil::TupleBuilder row(result->types.size());
-	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
+	auto &types = result->GetTypes();
+	duckdb::PyUtil::TupleBuilder row(types.size());
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &mask = FlatVector::Validity(current_chunk->data[col_idx]);
 		if (!mask.RowIsValid(chunk_offset)) {
 			row.append(nb::none());
 		} else {
 			auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-			row.append(PythonObject::FromValue(val, result->types[col_idx], result->client_properties));
+			row.append(PythonObject::FromValue(val, types[col_idx], result->client_properties));
 		}
 	}
 	chunk_offset++;
@@ -179,7 +184,7 @@ nb::dict DuckDBPyResult::FetchNumpy() {
 }
 
 void DuckDBPyResult::FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name) {
-	if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
+	if (result->GetTypes()[col_idx].id() == LogicalTypeId::ENUM) {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		auto pandas_categorical = import_cache.pandas.Categorical();
 		auto categorical_dtype = import_cache.pandas.CategoricalDtype();
@@ -204,8 +209,9 @@ void DuckDBPyResult::FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversi
 }
 
 void InsertCategory(QueryResult &result, unordered_map<idx_t, nb::list> &categories) {
-	for (idx_t col_idx = 0; col_idx < result.types.size(); col_idx++) {
-		auto &type = result.types[col_idx];
+	auto &types = result.GetTypes();
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
+		auto &type = types[col_idx];
 		if (type.id() == LogicalTypeId::ENUM) {
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories.find(col_idx) == categories.end()) {
@@ -225,14 +231,14 @@ std::unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion
 	}
 
 	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
-	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+	if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
 		auto &materialized = result->Cast<MaterializedQueryResult>();
 		initial_capacity = materialized.RowCount();
 	}
 
-	auto conversion =
-	    std::make_unique<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
+	auto conversion = std::make_unique<NumpyResultConversion>(result->GetTypes(), initial_capacity,
+	                                                          result->client_properties, pandas);
 	return conversion;
 }
 
@@ -246,7 +252,7 @@ nb::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	}
 	auto &conversion = *conversion_p;
 
-	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+	if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = result->Cast<MaterializedQueryResult>();
 		for (auto &chunk : materialized.Collection().Chunks()) {
 			conversion.Append(chunk);
@@ -254,7 +260,7 @@ nb::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		InsertCategory(materialized, categories);
 		materialized.Collection().Reset();
 	} else {
-		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
+		D_ASSERT(result->GetResultType() == QueryResultType::STREAM_RESULT);
 		if (!stream) {
 			vectors_per_chunk = NumericLimits<idx_t>::Maximum();
 		}
@@ -281,9 +287,9 @@ nb::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or categorical
 	// types
 	nb::dict res;
-	auto names = result->names;
+	auto names = ResultNames();
 	QueryResult::DeduplicateColumns(names);
-	for (idx_t col_idx = 0; col_idx < result->names.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		auto &name = names[col_idx];
 		FillNumpy(res, col_idx, conversion, name.c_str());
 	}
@@ -300,13 +306,13 @@ void DuckDBPyResult::ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_obje
 	auto names = nb::cast<vector<string>>(df.attr("columns"));
 
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
-		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
+		if (result->GetTypes()[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
 			auto utc_local = df[names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
 			auto new_value = utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone);
 			// We need to create the column anew because the exact dt changed to a new timezone
 			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
-		} else if (date_as_object && result->types[i] == LogicalType::DATE) {
+		} else if (date_as_object && result->GetTypes()[i] == LogicalType::DATE) {
 			nb::object new_value = df[names[i].c_str()].attr("dt").attr("date");
 			ReplaceDFColumn(df, names[i].c_str(), i, new_value);
 		}
@@ -425,17 +431,11 @@ nb::dict DuckDBPyResult::FetchTF() {
 // collection (O(rows)). The ColumnDataRef owns the collection, so it outlives the result
 // (needed by the lazy stream path).
 static unique_ptr<SelectStatement> MakeColumnDataScanStatement(unique_ptr<ColumnDataCollection> collection,
-                                                               const vector<string> &names) {
+                                                               const vector<Identifier> &names) {
 	// The binder rejects duplicate column names; callers restore the originals afterwards.
 	auto deduplicated_names = names;
 	QueryResult::DeduplicateColumns(deduplicated_names);
-	// Core's ColumnDataRef now takes case-insensitive Identifiers; promote the runtime names explicitly.
-	vector<Identifier> expected_names;
-	expected_names.reserve(deduplicated_names.size());
-	for (auto &name : deduplicated_names) {
-		expected_names.emplace_back(std::move(name));
-	}
-	auto table_ref = make_uniq<ColumnDataRef>(std::move(collection), std::move(expected_names));
+	auto table_ref = make_uniq<ColumnDataRef>(std::move(collection), std::move(deduplicated_names));
 	table_ref->alias = "materialized"; // binding asserts on an unset alias
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
@@ -448,14 +448,14 @@ static unique_ptr<SelectStatement> MakeColumnDataScanStatement(unique_ptr<Column
 // Re-feed a materialized result through a PhysicalArrowCollector on the user's own context
 // (parallel conversion, correct Arrow settings) -> ArrowQueryResult.
 void DuckDBPyResult::PromoteMaterializedToArrow(idx_t batch_size) {
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	auto client_context = result->client_properties.client_context;
 	if (!client_context) {
 		throw InternalException("Cannot promote result to Arrow: the originating client context is gone");
 	}
 	auto context = client_context->shared_from_this();
 	auto &materialized = result->Cast<MaterializedQueryResult>();
-	auto names = result->names;
+	auto names = ResultNames();
 	auto select = MakeColumnDataScanStatement(materialized.TakeCollection(), names);
 
 	auto &config = ClientConfig::GetConfig(*context);
@@ -478,7 +478,7 @@ void DuckDBPyResult::PromoteMaterializedToArrow(idx_t batch_size) {
 	if (new_result->HasError()) {
 		new_result->ThrowError();
 	}
-	new_result->names = std::move(names); // restore names de-duplicated by re-binding
+	names_override = std::move(names); // restore names de-duplicated by re-binding
 	result = std::move(new_result);
 }
 
@@ -490,14 +490,15 @@ T DuckDBPyResult::RunWithArrowSchema(const std::function<T(const ArrowSchema &)>
 	}
 	auto ctx = result->client_properties.client_context->shared_from_this();
 
-	auto names = result->names;
+	auto identifiers = ResultNames();
 	if (dedup_col_names) {
-		QueryResult::DeduplicateColumns(names);
+		QueryResult::DeduplicateColumns(identifiers);
 	}
+	auto names = IdentifiersToStrings(identifiers);
 
 	ArrowSchema arrow_schema;
 	ctx->RunFunctionInTransaction(
-	    [&] { ArrowConverter::ToArrowSchema(&arrow_schema, result->types, names, result->client_properties); });
+	    [&] { ArrowConverter::ToArrowSchema(&arrow_schema, result->GetTypes(), names, result->client_properties); });
 
 	return fun(arrow_schema);
 }
@@ -505,10 +506,11 @@ T DuckDBPyResult::RunWithArrowSchema(const std::function<T(const ArrowSchema &)>
 duckdb::pyarrow::Table DuckDBPyResult::MaterializedResultToArrowTable(const ArrowSchema &arrow_schema,
                                                                       const idx_t rows_per_batch) {
 	D_ASSERT(result);
-	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT || result->type == QueryResultType::ARROW_RESULT);
+	D_ASSERT(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT ||
+	         result->GetResultType() == QueryResultType::ARROW_RESULT);
 
 	auto pyarrow_schema = pyarrow::ToPyArrowSchema(arrow_schema);
-	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+	if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT) {
 		PromoteMaterializedToArrow(rows_per_batch);
 	}
 	nb::list batches;
@@ -529,11 +531,13 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(const idx_t rows_per_batc
 
 	return RunWithArrowSchema<duckdb::pyarrow::Table>(
 	    [&](const ArrowSchema &schema) -> duckdb::pyarrow::Table {
-		    if (result->type == QueryResultType::MATERIALIZED_RESULT || result->type == QueryResultType::ARROW_RESULT) {
+		    if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT ||
+		        result->GetResultType() == QueryResultType::ARROW_RESULT) {
 			    return MaterializedResultToArrowTable(schema, rows_per_batch);
 		    }
-		    if (result->type != QueryResultType::STREAM_RESULT) {
-			    throw InternalException("FetchArrowTable called with unsupported query result: %d", result->type);
+		    if (result->GetResultType() != QueryResultType::STREAM_RESULT) {
+			    throw InternalException("FetchArrowTable called with unsupported query result: %d",
+			                            result->GetResultType());
 		    }
 		    auto pyarrow_schema = pyarrow::ToPyArrowSchema(schema);
 		    nb::list batches;
@@ -546,7 +550,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(const idx_t rows_per_batc
 				    nb::gil_scoped_release release;
 				    count = ArrowUtil::FetchChunk(scan_state, result->client_properties, rows_per_batch, &data,
 				                                  ArrowTypeExtensionData::GetExtensionTypes(
-				                                      *result->client_properties.client_context, result->types));
+				                                      *result->client_properties.client_context, result->GetTypes()));
 			    }
 			    if (count == 0) {
 				    break;
@@ -562,8 +566,9 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	if (result->type != QueryResultType::STREAM_RESULT) {
-		throw InternalException("FetchArrowArrayStream called with unsupported query result: %d", result->type);
+	if (result->GetResultType() != QueryResultType::STREAM_RESULT) {
+		throw InternalException("FetchArrowArrayStream called with unsupported query result: %d",
+		                        result->GetResultType());
 	}
 	// The wrapper is owned by the ArrowArrayStream's private_data (released with the stream).
 	const auto result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
@@ -575,7 +580,8 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 		throw InvalidInputException("There is no query result");
 	}
 
-	if (result->type == QueryResultType::MATERIALIZED_RESULT || result->type == QueryResultType::ARROW_RESULT) {
+	if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT ||
+	    result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		constexpr bool dedup_column_names = false;
 		return RunWithArrowSchema<duckdb::pyarrow::RecordBatchReader>(
 		    [&](const ArrowSchema &schema) -> duckdb::pyarrow::RecordBatchReader {
@@ -585,8 +591,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 		    },
 		    dedup_column_names);
 	}
-	if (result->type != QueryResultType::STREAM_RESULT) {
-		throw InternalException("FetchRecordBatchReader called with unsupported query result: %d", result->type);
+	if (result->GetResultType() != QueryResultType::STREAM_RESULT) {
+		throw InternalException("FetchRecordBatchReader called with unsupported query result: %d",
+		                        result->GetResultType());
 	}
 	nb::gil_scoped_acquire acquire;
 	auto pyarrow_lib_module = nb::module_::import_("pyarrow").attr("lib");
@@ -614,7 +621,8 @@ nb::object DuckDBPyResult::FetchArrowCapsule(const idx_t rows_per_batch) {
 	}
 
 	constexpr bool dedup_column_names = false;
-	if (result->type == QueryResultType::MATERIALIZED_RESULT || result->type == QueryResultType::ARROW_RESULT) {
+	if (result->GetResultType() == QueryResultType::MATERIALIZED_RESULT ||
+	    result->GetResultType() == QueryResultType::ARROW_RESULT) {
 		return RunWithArrowSchema<nb::object>(
 		    [&](const ArrowSchema &schema) -> nb::object {
 			    const auto table = MaterializedResultToArrowTable(schema, rows_per_batch);
@@ -622,8 +630,8 @@ nb::object DuckDBPyResult::FetchArrowCapsule(const idx_t rows_per_batch) {
 		    },
 		    dedup_column_names);
 	}
-	if (result->type != QueryResultType::STREAM_RESULT) {
-		throw InternalException("FetchArrowCapsule called with unsupported query result: %d", result->type);
+	if (result->GetResultType() != QueryResultType::STREAM_RESULT) {
+		throw InternalException("FetchArrowCapsule called with unsupported query result: %d", result->GetResultType());
 	}
 	auto inner_stream = FetchArrowArrayStream(rows_per_batch);
 	auto stream = new ArrowArrayStream();

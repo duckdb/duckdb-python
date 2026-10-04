@@ -24,7 +24,7 @@ public:
 	PandasScanFunction();
 
 	static unique_ptr<FunctionData> PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
-	                                               vector<LogicalType> &return_types, vector<string> &names);
+	                                               vector<LogicalType> &return_types, vector<Identifier> &names);
 
 	static unique_ptr<GlobalTableFunctionState> PandasScanInitGlobal(ClientContext &context,
 	                                                                 TableFunctionInitInput &input);

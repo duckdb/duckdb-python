@@ -27,6 +27,8 @@ jobs:
   create_pr:
     name: Create PR to bump duckdb submodule to given SHA
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout DuckDB Python
         uses: actions/checkout@v4
@@ -96,6 +98,11 @@ jobs:
             --title "[duckdb-labs bot] Bump DuckDB submodule" \
             --body-file body.txt > output.txt 2>&1
           success=$?
+          # The pin guard needs an explicit intent label. Kept non-fatal and
+          # separate from PR creation: if labelling fails the bump PR still
+          # exists, it just stays red until someone labels it by hand.
+          gh pr edit vendoring-${{ github.ref_name }} --add-label submodule-bump \
+            || echo "::warning::Could not apply the submodule-bump label. Add it by hand or the pin guard stays red."
           # Show summary
           url=$( [[ $success ]] && gh pr view vendoring-${{ github.ref_name }} --json url --jq .url || true )
           echo "## Submodule PR Summary" >> $GITHUB_STEP_SUMMARY

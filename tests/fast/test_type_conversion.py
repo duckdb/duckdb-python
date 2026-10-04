@@ -51,6 +51,12 @@ class TestIssue115FloatToUnion:
         assert len(result) == 2
         assert result[0]["b"] == pytest.approx(1.2)
         assert result[1]["b"] == pytest.approx(2.4)
+        # The ints have no exact member, so the implicit-cast pass picks the first compatible one,
+        # VARCHAR (matches 1.5.5). Asserted because a union tagged VARCHAR while still holding an
+        # unconverted INTEGER shows up here as a wrong value, which a release build would otherwise
+        # miss (the type mismatch is only a D_ASSERT in core).
+        assert result[0]["a"] == "1"
+        assert result[1]["a"] == "3"
 
     def test_udf_int_to_ambiguous_union_type(self):
         """HandleBigint default branch: int into UNION with duplicate BIGINT members."""
