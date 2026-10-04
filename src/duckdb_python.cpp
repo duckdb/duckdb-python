@@ -1163,6 +1163,16 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	static char clean_default_connection_sentinel;
 	m.attr("_clean_default_connection") =
 	    nb::capsule(&clean_default_connection_sentinel, [](void *) noexcept { DuckDBPyConnection::Cleanup(); });
+
+	// The capsule above only fires when this module's dict is cleared at shutdown. If the module was removed
+	// from sys.modules (duckdb/duckdb-python#638), its dict is never cleared, so Cleanup() never runs while the
+	// interpreter is alive and the process-global module state (holding live Python references) is torn down
+	// after finalization -> segfault. A Python atexit handler runs while the interpreter is still alive
+	// regardless of sys.modules membership, so it covers that path. Cleanup() is idempotent, which makes the
+	// double call on the normal path (atexit, then capsule) safe.
+	m.def("_cleanup_at_exit", &DuckDBPyConnection::Cleanup,
+	      "Release process-global module state at interpreter shutdown (duckdb/duckdb-python#638)");
+	nb::module_::import_("atexit").attr("register")(m.attr("_cleanup_at_exit"));
 }
 
 } // namespace duckdb

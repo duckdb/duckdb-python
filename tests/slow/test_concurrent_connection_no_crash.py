@@ -276,6 +276,57 @@ def test_456_destructor_with_python_refs_in_result_graph():
     _assert_no_crash_and_min_successes(result, min_successes=800)
 
 
+# ---------------------------------------------------------------------------
+# #638 — segfault at interpreter exit when duckdb left sys.modules
+# ---------------------------------------------------------------------------
+#
+# Removing the module from sys.modules means its dict is never cleared, so
+# the _clean_default_connection capsule never fires, Cleanup() never runs
+# while the interpreter is alive, and the process-global module state
+# (holding live Python references) is torn down after finalization.
+# Pre-fix on Linux: SIGSEGV (returncode 139). Post-fix: clean exit 0.
+#
+
+_REPRO_638_MODULE_REMOVED_FROM_SYS_MODULES = textwrap.dedent(
+    """
+    import gc
+    import sys
+    from unittest import mock
+
+    with mock.patch.dict(sys.modules):
+        import duckdb
+
+
+    def holder():
+        pass
+
+
+    holder.module = duckdb
+    gc.freeze()
+    print("exiting", duckdb.__version__, flush=True)
+    print("success_count=1")
+    """
+).lstrip()
+
+
+def test_638_no_segfault_when_module_removed_from_sys_modules():
+    """Interpreter must exit 0 when duckdb outlives shutdown outside sys.modules.
+
+    Runs the issue's repro in a subprocess: the module is imported under a
+    patched sys.modules (so it is absent afterwards) but kept alive by a
+    stray reference, then the interpreter exits. Pre-fix: returncode 139
+    (SIGSEGV). Post-fix: 0 with success_count reported.
+    """
+    result = _run(_REPRO_638_MODULE_REMOVED_FROM_SYS_MODULES, timeout=60.0)
+    assert result.returncode == 0, (
+        f"interpreter crashed at exit with returncode={result.returncode} "
+        f"(139/-11 = SIGSEGV, see duckdb-python#638)\n"
+        f"--- stdout (tail) ---\n{result.stdout.decode(errors='replace')[-2000:]}\n"
+        f"--- stderr (tail) ---\n{result.stderr.decode(errors='replace')[-2000:]}"
+    )
+    _assert_no_crash_and_min_successes(result, min_successes=1)
+
+
 @_skip_456_off_windows
 def test_456_close_clears_registered_functions_with_gil():
     """``close()`` must hold the GIL while clearing ``registered_functions``.
