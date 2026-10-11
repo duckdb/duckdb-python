@@ -241,19 +241,9 @@ name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
-[[tool.uv.index]]
-# TODO: Remove after 3.15.0 release
-name = "scientific-python-nightly"
-url = "https://pypi.anaconda.org/scientific-python-nightly-wheels/simple"
-explicit = true
-
 [tool.uv.sources]
 torch = [ { index = "pytorch-cpu" } ]
 torchvision = [ { index = "pytorch-cpu" } ]
-pyarrow = [
-    # win/ARM64 has no pyarrow wheels & nightly doesn't have sdist
-    { index = "scientific-python-nightly", marker = "python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')" },
-]
 
 # todo: adjust for windows arm64 while test dependencies become available
 [dependency-groups] # used for development only, requires pip >=25.1.0
@@ -277,11 +267,9 @@ test = [ # dependencies used for running tests
     "pytest_codspeed",
     "coverage",
     "gcovr; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "gcsfs; python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "gcsfs; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "packaging",
-
-    # polars tests fail on 3.15 due to: https://github.com/pola-rs/polars/issues/28347
-    "polars>=1.33.0; python_version < '3.15'", 
+    "polars>=1.33.0",
     "psutil",
     "py4j",
     "pyotp",
@@ -290,10 +278,11 @@ test = [ # dependencies used for running tests
     "requests",
     "urllib3",
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "pandas>=3.0.0; python_version >= '3.11'",
+    "pandas>=3.0.0; python_version >= '3.11' and python_version < '3.15'",
+    "pandas>=3.0.6; python_version >= '3.15'",
     "pandas<3.0.0; python_version < '3.11'",
     "pyarrow>=23.0.0; python_version >= '3.10' and python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
-    "pyarrow>=23.0.0.dev0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=26.0.0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "torch>=2.2.2; python_version < '3.13' and ( sys_platform != 'win32' or platform_machine != 'ARM64' )",
     "torch>=2.2.2,<2.12.1; python_version > '3.11' and python_version < '3.13' and sys_platform == 'win32' and platform_machine == 'ARM64'",
@@ -305,8 +294,9 @@ test = [ # dependencies used for running tests
     "tensorflow-cpu-aws==2.15.1; sys_platform == 'linux' and platform_machine == 'aarch64' and python_version < '3.12'",
     "typing-extensions",
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
-    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
-    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
+    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12' and python_version < '3.15'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11' and python_version < '3.15'",
+    "numpy>=2.5.2; python_version >= '3.15'",
 ]
 bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Minimal, not the heavy `test` group.
           # Constraints mirror `test` so the lockfile resolves identically; torch/tf are local-only (importorskip).
@@ -315,12 +305,14 @@ bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Mini
     "polars>=1.33.0",
     "pytz",
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
-    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
-    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
-    "pandas>=3.0.0; python_version >= '3.11'",
+    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12' and python_version < '3.15'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11' and python_version < '3.15'",
+    "numpy>=2.5.2; python_version >= '3.15'",
+    "pandas>=3.0.0; python_version >= '3.11' and python_version < '3.15'",
+    "pandas>=3.0.6; python_version >= '3.15'",
     "pandas<3.0.0; python_version < '3.11'",
     "pyarrow>=23.0.0; python_version >= '3.10' and python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
-    "pyarrow>=23.0.0.dev0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=26.0.0; python_version >= '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
 ]
 scripts = [ # dependencies used for running scripts
@@ -346,8 +338,9 @@ build = [
     # numpy C API headers; mirrors [build-system].requires, needed because the dev flow uses
     # --no-build-isolation. Markers match the test/bench groups so the lock resolves.
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
-    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
-    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
+    "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12' and python_version < '3.15'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11' and python_version < '3.15'",
+    "numpy>=2.5.2; python_version >= '3.15'",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
     "pre-commit",
