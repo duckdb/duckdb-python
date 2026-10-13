@@ -257,7 +257,7 @@
 	{
 		"name": "execute",
 		"function": "Execute",
-		"docs": "Execute the given SQL query, optionally using prepared statements with parameters set",
+		"docs": "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until its first rows are ready, so an error there raises here; every other statement runs to its end",
 		"args": [
 			{
 				"name": "query",
@@ -298,6 +298,18 @@
 		"name": "interrupt",
 		"function": "Interrupt",
 		"docs": "Interrupt pending operations",
+		"return": "None"
+	},
+	{
+		"name": "complete",
+		"function": "Complete",
+		"docs": "Run the result of execute() to its end without reading its rows",
+		"return": "None"
+	},
+	{
+		"name": "abort",
+		"function": "Abort",
+		"docs": "Cancel the rest of the result of execute(); a statement that may write fails an open transaction",
 		"return": "None"
 	},
 	{
@@ -373,56 +385,6 @@
 			}
 		],
 		"return": "pandas.DataFrame"
-	},
-	{
-		"name": "pl",
-		"function": "FetchPolars",
-		"docs": "Fetch a result as Polars DataFrame following execute()",
-		"args": [
-			{
-				"name": "rows_per_batch",
-				"default": "1000000",
-				"type": "int"
-			}
-		],
-		"kwargs": [
-			{
-				"name": "lazy",
-				"default": "False",
-				"type": "bool"
-			}
-		],
-		"return": "polars.DataFrame"
-	},
-	{
-		"name": "arrow_table",
-		"function": "FetchArrow",
-		"docs": "Fetch a result as Arrow table following execute()",
-		"args": [
-			{
-				"name": "rows_per_batch",
-				"default": "1000000",
-				"type": "int"
-			}
-		],
-		"return": "pyarrow.lib.Table"
-	},
-	{
-		"name": [
-			"fetch_record_batch",
-			"arrow"
-		],
-
-		"function": "FetchRecordBatchReader",
-		"docs": "Fetch an Arrow RecordBatchReader following execute()",
-		"args": [
-			{
-				"name": "rows_per_batch",
-				"default": "1000000",
-				"type": "int"
-			}
-		],
-		"return": "pyarrow.lib.RecordBatchReader"
 	},
 	{
 		"name": "torch",

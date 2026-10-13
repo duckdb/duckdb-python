@@ -1362,7 +1362,7 @@ class DataFrame:  # noqa: D101
         3
         """
         count_rel = self.relation.count("*")
-        return int(count_rel.fetchone()[0])
+        return int(count_rel.fetchall()[0][0])
 
     def _cast_types(self, *types) -> "DataFrame":
         existing_columns = self.relation.columns
@@ -1427,7 +1427,7 @@ class DataFrame:  # noqa: D101
         == Physical Plan ==
         InMemoryTableScan ...
         """
-        cached_relation = self.relation.execute()
+        cached_relation = self.relation.materialize()
         return DataFrame(cached_relation, self.session)
 
 

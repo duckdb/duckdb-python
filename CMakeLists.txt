@@ -111,6 +111,7 @@ nanobind_add_module(
   NB_STATIC
   $<TARGET_OBJECTS:python_src>
   $<TARGET_OBJECTS:python_arrow>
+  $<TARGET_OBJECTS:python_engine>
   $<TARGET_OBJECTS:python_common>
   $<TARGET_OBJECTS:python_functional>
   $<TARGET_OBJECTS:python_jupyter>

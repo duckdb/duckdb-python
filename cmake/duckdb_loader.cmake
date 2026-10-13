@@ -276,15 +276,38 @@ function(duckdb_python_link_extensions target_name)
   # An extension archive is only pulled in through its describe function, so we
   # also generate a static extension loader listing them, which defines
   # duckdb_register_static_extensions(). The module calls it at import time. The
-  # loader is always generated (empty when no extensions are linked) so that
-  # call never needs special-casing.
+  # loader is always generated so that call never needs special-casing.
   if(LINK_EXTENSIONS)
     set(link_extensions ${LINK_EXTENSIONS})
   else()
     set(link_extensions ${BUILD_EXTENSIONS})
   endif()
 
+  # DuckDB's HTTP client and its external extension install/load support are
+  # archives of their own, registered through the same describe contract as an
+  # extension. Without them the module gets the refusing "none" providers: no
+  # INSTALL, no LOAD, no autoload, no HTTP. The third capability,
+  # local_extension_repository, is left out because it would point automatic
+  # installs at the extension repository of the machine that built the wheel.
+  #
+  # ENABLE_EXTENSION_LOAD=OFF also forces ENABLE_BUILTIN_HTTPLIB off, so
+  # loadable_extensions is checked first to report the knob at fault.
+  foreach(capability loadable_extensions httplib)
+    if(NOT TARGET duckdb_${capability})
+      message(
+        FATAL_ERROR
+          "DuckDB did not configure the '${capability}' capability, so the module could neither install nor load extensions. Check ENABLE_EXTENSION_LOAD and ENABLE_BUILTIN_HTTPLIB."
+      )
+    endif()
+  endforeach()
+
   set(loader_extensions "")
+  foreach(capability httplib loadable_extensions)
+    message(STATUS "Linking DuckDB capability: ${capability}")
+    target_link_libraries(${target_name} PRIVATE duckdb_${capability})
+    list(APPEND loader_extensions ${capability})
+  endforeach()
+
   if(link_extensions)
     message(STATUS "Linking DuckDB extensions:")
     foreach(ext IN LISTS link_extensions)

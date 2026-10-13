@@ -1,4 +1,5 @@
 #include "duckdb_python/map.hpp"
+#include "duckdb_python/engine/connection.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
@@ -151,6 +152,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	DynamicCastCheck<MapFunctionInfo>(input.ref.bind_info.get());
 	auto info = shared_ptr_cast<TableFunctionInfo, MapFunctionInfo>(input.ref.bind_info);
 	nb::gil_scoped_acquire acquire;
+	engine::CallbackScope callback(context);
 
 	auto data_uptr = make_uniq<MapFunctionData>(std::move(info));
 	auto &data = *data_uptr;
@@ -183,6 +185,7 @@ static string TypeVectorToString(const vector<LogicalType> &types) {
 OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                                 DataChunk &output) {
 	nb::gil_scoped_acquire acquire;
+	engine::CallbackScope callback(context.client);
 
 	if (input.size() == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;

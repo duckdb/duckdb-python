@@ -19,7 +19,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name)
 
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_sep(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -29,7 +29,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, sep=",")
 
         csv_rel = duckdb.read_csv(temp_file_name, sep=",")
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_na_rep(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -39,7 +39,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, na_rep="test")
 
         csv_rel = duckdb.read_csv(temp_file_name, na_values="test")
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_header(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -49,7 +49,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name)
 
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_quotechar(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -59,7 +59,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, quotechar="'", sep=",")
 
         csv_rel = duckdb.read_csv(temp_file_name, sep=",", quotechar="'")
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_escapechar(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -74,7 +74,7 @@ class TestToCSV:
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, quotechar='"', escapechar="!")
         csv_rel = duckdb.read_csv(temp_file_name, quotechar='"', escapechar="!")
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_date_format(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -86,7 +86,7 @@ class TestToCSV:
 
         csv_rel = duckdb.read_csv(temp_file_name, date_format="%Y%m%d")
 
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_timestamp_format(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -97,7 +97,7 @@ class TestToCSV:
 
         csv_rel = duckdb.read_csv(temp_file_name, timestamp_format="%m/%d/%Y")
 
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_quoting_off(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -106,7 +106,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, quoting=None)
 
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_quoting_on(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -115,7 +115,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, quoting="force")
 
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_quoting_quote_all(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -124,7 +124,7 @@ class TestToCSV:
         rel.to_csv(temp_file_name, quoting=csv.QUOTE_ALL)
 
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_encoding_incorrect(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -141,7 +141,7 @@ class TestToCSV:
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, encoding="UTF-8")
         csv_rel = duckdb.read_csv(temp_file_name)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_compression_gzip(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -149,7 +149,7 @@ class TestToCSV:
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, compression="gzip")
         csv_rel = duckdb.read_csv(temp_file_name, compression="gzip")
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_partition(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -174,7 +174,7 @@ class TestToCSV:
             (True, 4.0, 321.0, "f", "b"),
         ]
 
-        assert csv_rel.execute().fetchall() == expected
+        assert csv_rel.fetchall() == expected
 
     def test_to_csv_partition_with_columns_written(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -193,7 +193,7 @@ class TestToCSV:
         csv_rel = duckdb.sql(
             f"""FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE) order by all;"""
         )
-        assert res.execute().fetchall() == csv_rel.execute().fetchall()
+        assert res.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_overwrite(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -220,7 +220,7 @@ class TestToCSV:
             ("d", True, 3.0, 123.0, "e", "b"),
             ("d", True, 4.0, 321.0, "f", "b"),
         ]
-        assert csv_rel.execute().fetchall() == expected
+        assert csv_rel.fetchall() == expected
 
     def test_to_csv_overwrite_with_columns_written(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -245,7 +245,7 @@ class TestToCSV:
             f"""FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE) order by all;"""
         )
         res = duckdb.sql("FROM rel order by all")
-        assert res.execute().fetchall() == csv_rel.execute().fetchall()
+        assert res.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_overwrite_not_enabled(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -279,7 +279,7 @@ class TestToCSV:
 
     def test_to_csv_per_thread_output(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
-        num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]
+        num_threads = duckdb.sql("select current_setting('threads')").fetchall()[0][0]
         print("num_threads:", num_threads)
         df = pd.DataFrame(
             {
@@ -293,7 +293,7 @@ class TestToCSV:
         rel = duckdb.from_df(df)
         rel.to_csv(temp_file_name, header=True, per_thread_output=True)
         csv_rel = duckdb.read_csv(f"{temp_file_name}/*.csv", header=True)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()
 
     def test_to_csv_use_tmp_file(self):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
@@ -311,4 +311,4 @@ class TestToCSV:
         rel.to_csv(temp_file_name, header=True)  # csv to be overwritten
         rel.to_csv(temp_file_name, header=True, use_tmp_file=True)
         csv_rel = duckdb.read_csv(temp_file_name, header=True)
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert rel.fetchall() == csv_rel.fetchall()

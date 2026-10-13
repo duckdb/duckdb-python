@@ -18,6 +18,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb_python/map.hpp"
@@ -87,11 +88,109 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::CreateRelation(shared_ptr<
 	return py_rel;
 }
 
-std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::CreateRelation(std::shared_ptr<DuckDBPyResult> result) {
-	auto py_rel = std::make_unique<DuckDBPyRelation>(std::move(result));
-	nb::gil_scoped_acquire gil;
-	py_rel->SetConnectionOwner(nb::cast(shared_from_this()));
-	return py_rel;
+DbapiResult::DbapiResult(std::shared_ptr<DuckDBPyResult> result_p) : result(std::move(result_p)) {
+	if (!result) {
+		throw InternalException("DbapiResult created without a result");
+	}
+	types = result->GetTypes();
+	names = result->GetNames();
+	changed_rows = result->Rowcount();
+}
+
+nb::list DbapiResult::Description() const {
+	return DuckDBPyResult::GetDescription(names, types);
+}
+
+Optional<nb::tuple> DbapiResult::FetchOne() {
+	if (!result) {
+		return nb::none();
+	}
+	return result->Fetchone();
+}
+
+nb::list DbapiResult::FetchMany(idx_t size) {
+	if (!result) {
+		return nb::list();
+	}
+	return result->Fetchmany(size);
+}
+
+nb::list DbapiResult::FetchAll() {
+	if (!result) {
+		return nb::list();
+	}
+	auto rows = result->Fetchall();
+	result = nullptr;
+	return rows;
+}
+
+nb::dict DbapiResult::FetchNumpy() {
+	if (!result) {
+		return nb::borrow<nb::dict>(nb::none());
+	}
+	auto arrays = result->FetchNumpyInternal();
+	result = nullptr;
+	return arrays;
+}
+
+PandasDataFrame DbapiResult::FetchDF(bool date_as_object) {
+	if (!result) {
+		return nb::none();
+	}
+	auto df = result->FetchDF(date_as_object);
+	result = nullptr;
+	return df;
+}
+
+PandasDataFrame DbapiResult::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
+	if (!result) {
+		return nb::none();
+	}
+	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
+}
+
+nb::dict DbapiResult::FetchPyTorch() {
+	if (!result) {
+		return nb::borrow<nb::dict>(nb::none());
+	}
+	auto tensors = result->FetchPyTorch();
+	result = nullptr;
+	return tensors;
+}
+
+nb::dict DbapiResult::FetchTF() {
+	if (!result) {
+		return nb::borrow<nb::dict>(nb::none());
+	}
+	auto tensors = result->FetchTF();
+	result = nullptr;
+	return tensors;
+}
+
+void DbapiResult::Complete() {
+	if (result) {
+		result->Complete();
+		result = nullptr;
+	}
+}
+
+void DbapiResult::Supersede() {
+	if (!result) {
+		return;
+	}
+	auto superseded = std::move(result);
+	if (superseded->HasWritesToRun()) {
+		superseded->Complete();
+	} else {
+		superseded->Close();
+	}
+}
+
+void DbapiResult::Abort() {
+	if (result) {
+		result->Close();
+		result = nullptr;
+	}
 }
 
 void DuckDBPyConnection::DetectEnvironment() {
@@ -191,13 +290,17 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      nb::arg("key"), nb::arg("value"));
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
 	m.def("execute", &DuckDBPyConnection::Execute,
-	      "Execute the given SQL query, optionally using prepared statements with parameters set", nb::arg("query"),
-	      nb::arg("parameters") = nb::none());
+	      "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
+	      "its first rows are ready, so an error there raises here; every other statement runs to its end",
+	      nb::arg("query"), nb::arg("parameters") = nb::none());
 	m.def("executemany", &DuckDBPyConnection::ExecuteMany,
 	      "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	      nb::arg("query"), nb::arg("parameters") = nb::none());
 	m.def("close", &DuckDBPyConnection::Close, "Close the connection");
 	m.def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations");
+	m.def("complete", &DuckDBPyConnection::Complete, "Run the result of execute() to its end without reading its rows");
+	m.def("abort", &DuckDBPyConnection::Abort,
+	      "Cancel the rest of the result of execute(); a statement that may write fails an open transaction");
 	m.def("query_progress", &DuckDBPyConnection::QueryProgress, "Query progress of pending operation");
 	m.def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute");
 	m.def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -213,31 +316,6 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	m.def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
 	      "Fetch a chunk of the result as DataFrame following execute()", nb::arg("vectors_per_chunk") = 1,
 	      nb::kw_only(), nb::arg("date_as_object") = false);
-	m.def("pl", &DuckDBPyConnection::FetchPolars, "Fetch a result as Polars DataFrame following execute()",
-	      nb::arg("rows_per_batch") = 1000000, nb::kw_only(), nb::arg("lazy") = false);
-	m.def("to_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()",
-	      nb::arg("batch_size") = 1000000);
-	m.def("to_arrow_reader", &DuckDBPyConnection::FetchRecordBatchReader,
-	      "Fetch an Arrow RecordBatchReader following execute()", nb::arg("batch_size") = 1000000);
-	m.def(
-	    "fetch_arrow_table",
-	    [](DuckDBPyConnection &self, idx_t rows_per_batch) {
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_arrow_table() is deprecated, use to_arrow_table() instead.",
-		                 0);
-		    return self.FetchArrow(rows_per_batch);
-	    },
-	    "Fetch a result as Arrow table following execute()", nb::arg("rows_per_batch") = 1000000);
-	m.def(
-	    "fetch_record_batch",
-	    [](DuckDBPyConnection &self, idx_t rows_per_batch) {
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_record_batch() is deprecated, use to_arrow_reader() instead.",
-		                 0);
-		    return self.FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", nb::arg("rows_per_batch") = 1000000);
-	m.def("arrow", &DuckDBPyConnection::FetchRecordBatchReader,
-	      "Alias of to_arrow_reader(). We recommend using to_arrow_reader() instead.",
-	      nb::arg("rows_per_batch") = 1000000);
 	m.def("torch", &DuckDBPyConnection::FetchPyTorch, "Fetch a result as dict of PyTorch Tensors following execute()");
 	m.def("tf", &DuckDBPyConnection::FetchTF, "Fetch a result as dict of TensorFlow Tensors following execute()");
 	m.def("begin", &DuckDBPyConnection::Begin, "Start a new transaction");
@@ -270,16 +348,22 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	m.def("extract_statements", &DuckDBPyConnection::ExtractStatements,
 	      "Parse the query string and extract the Statement object(s) produced", nb::arg("query"));
 	m.def("sql", &DuckDBPyConnection::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
+	      "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	      "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	      "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	      "one that does not returns None. Statements before the last one run immediately.",
 	      nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none());
 	m.def("query", &DuckDBPyConnection::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
+	      "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	      "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	      "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	      "one that does not returns None. Statements before the last one run immediately.",
 	      nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none());
 	m.def("from_query", &DuckDBPyConnection::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
+	      "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	      "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	      "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	      "one that does not returns None. Statements before the last one run immediately.",
 	      nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none());
 	// read_csv takes a positional source plus **kwargs of options. Bind via a nb::args lambda so None is accepted as
 	// the source: a typed nb::object param would be rejected by nanobind before ReadCSV's body runs (and .none()
@@ -415,8 +499,7 @@ void DuckDBPyConnection::DisableProfiling() {
 
 nb::list DuckDBPyConnection::ExtractStatements(const string &query) {
 	nb::list result;
-	auto &connection = con.GetConnection();
-	auto statements = connection.ExtractStatements(query);
+	auto statements = EngineSession().Parse(query);
 	for (auto &statement : statements) {
 		result.append(std::make_unique<DuckDBPyStatement>(std::move(statement)));
 	}
@@ -439,6 +522,9 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const stri
 
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
+	// Held from the check to the change, so no result can open in between and be ended by it
+	engine::ConnectionClaim claim(context);
+	engine::VerifyNoOpenResult(context);
 
 	context.RunFunctionInTransaction([&]() {
 		// create function
@@ -463,6 +549,9 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
                                       bool side_effects) {
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
+	// Held from the check to the change, so no result can open in between and be ended by it
+	engine::ConnectionClaim claim(context);
+	engine::VerifyNoOpenResult(context);
 
 	if (context.transaction.HasActiveTransaction()) {
 		context.CancelTransaction();
@@ -506,15 +595,42 @@ void DuckDBPyConnection::Initialize(nb::handle &m) {
 	DuckDBPyConnection::ImportCache();
 }
 
+static bool StartsWithRollback(const vector<unique_ptr<SQLStatement>> &statements) {
+	if (statements.empty() || statements[0]->type != StatementType::TRANSACTION_STATEMENT) {
+		return false;
+	}
+	return statements[0]->Cast<TransactionStatement>().info->type == TransactionType::ROLLBACK;
+}
+
+void DuckDBPyConnection::SupersedeResult(bool cancel) {
+	if (!con.HasResult()) {
+		return;
+	}
+	// The result is dropped even when draining it raises, so the error is reported once
+	auto &result = con.GetResult();
+	try {
+		if (cancel) {
+			result.Abort();
+		} else {
+			result.Supersede();
+		}
+	} catch (...) {
+		con.SetResult(nullptr);
+		throw;
+	}
+	con.SetResult(nullptr);
+}
+
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::object &query, nb::object params_p) {
 	nb::gil_scoped_acquire gil;
 	ConnectionLockGuard conn_lock(*this);
-	con.SetResult(nullptr);
 	if (params_p.is_none()) {
 		params_p = nb::list();
 	}
 
 	auto statements = GetStatements(query);
+	// A rollback discards what the open result would still write, so draining it first only risks failing the rollback
+	SupersedeResult(StartsWithRollback(statements));
 	if (statements.empty()) {
 		// TODO: should we throw?
 		return nullptr;
@@ -536,49 +652,36 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::ob
 		throw InvalidInputException("executemany requires a non-empty list of parameter sets to be provided");
 	}
 
-	unique_ptr<QueryResult> query_result;
+	shared_ptr<engine::Result> query_result;
 	// Execute once for every set of parameters that are provided
+	int64_t total_changed_rows = -1;
 	for (auto parameters : outer_list) {
 		auto params = nb::borrow<nb::object>(parameters);
-		query_result = ExecuteInternal(*prep, std::move(params));
+		query_result = ExecuteInternal(prep, std::move(params));
+		auto changed_rows = query_result->ChangedRows();
+		if (changed_rows >= 0) {
+			total_changed_rows = (total_changed_rows < 0 ? 0 : total_changed_rows) + changed_rows;
+		}
 	}
 	// Set the internal 'result' object
 	if (query_result) {
-		// Don't use CreateRelation here — the result is stored inside the connection,
-		// so setting connection_owner would create a ref cycle (connection → result → connection).
-		con.SetResult(std::make_unique<DuckDBPyRelation>(std::make_shared<DuckDBPyResult>(std::move(query_result))));
+		auto py_result = std::make_shared<DuckDBPyResult>(std::move(query_result));
+		py_result->OverrideRowcount(total_changed_rows);
+		con.SetResult(std::make_unique<DbapiResult>(std::move(py_result)));
 	}
 
 	return shared_from_this();
 }
 
-void DuckDBPyConnection::CompleteQuery(QueryResult &result) {
-	if (result.HasError()) {
-		result.ThrowError();
+void DuckDBPyConnection::CheckSignals() {
+	nb::gil_scoped_acquire gil;
+	if (PyErr_CheckSignals() != 0) {
+		throw std::runtime_error("Query interrupted");
 	}
-	result.Materialize();
-	// A result built by a delegating collector arrives finished and without a context; Poll reports
-	// that without touching the context, where ExecuteTask would throw.
-	auto state = result.Poll();
-	while (!IsTerminal(state)) {
-		{
-			nb::gil_scoped_acquire gil;
-			if (PyErr_CheckSignals() != 0) {
-				throw std::runtime_error("Query interrupted");
-			}
-		}
-		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY ||
-		    state == QueryResultState::NO_TASKS_AVAILABLE) {
-			result.WaitForTask();
-		}
-		state = result.ExecuteTask();
-	}
-	// FINISHED only means the executor is done: the collection is taken and the query ended, with
-	// its transaction step, by Complete. Left open, the next statement would roll it back.
-	result.Complete();
-	if (result.HasError()) {
-		result.ThrowError();
-	}
+}
+
+engine::Session DuckDBPyConnection::EngineSession() {
+	return engine::Session(con.GetConnection().context);
 }
 
 nb::list TransformNamedParameters(const case_insensitive_map_t<idx_t> &named_param_map, const nb::dict &params) {
@@ -645,61 +748,53 @@ identifier_map_t<BoundParameterData> TransformPreparedParameters(ClientContext &
 	return named_values;
 }
 
-unique_ptr<PreparedStatement> DuckDBPyConnection::PrepareQuery(unique_ptr<SQLStatement> statement) {
-	auto &connection = con.GetConnection();
-	unique_ptr<PreparedStatement> prep;
+engine::Prepared DuckDBPyConnection::PrepareQuery(unique_ptr<SQLStatement> statement) {
+	auto session = EngineSession();
+	engine::Prepared prep;
 	{
 		D_ASSERT(duckdb::PyUtil::GilCheck());
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-
-		prep = connection.Prepare(std::move(statement));
-		if (prep->HasError()) {
-			prep->GetErrorObject().Throw();
-		}
+		prep = session.Prepare(std::move(statement));
 	}
 	return prep;
 }
 
-unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(PreparedStatement &prep, nb::object params) {
+shared_ptr<engine::Result> DuckDBPyConnection::ExecuteInternal(engine::Prepared &prep, nb::object params) {
 	if (params.is_none()) {
 		params = nb::list();
 	}
-	auto &context = *con.GetConnection().context;
+	auto session = EngineSession();
 
 	// Execute the prepared statement with the prepared parameters
-	auto named_values = TransformPreparedParameters(context, params, prep);
-	unique_ptr<QueryResult> res;
+	auto named_values = TransformPreparedParameters(session.Context(), params, *prep.statement);
+	shared_ptr<engine::Result> res;
 	{
 		D_ASSERT(duckdb::PyUtil::GilCheck());
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
 
-		res = prep.Submit(named_values);
-		CompleteQuery(*res);
+		res = session.Submit(prep, named_values, engine::Format::Chunks());
+		res->Retain(CheckSignals);
 	}
 	return res;
 }
 
-unique_ptr<QueryResult> DuckDBPyConnection::PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-                                                                     nb::object params) {
+shared_ptr<engine::Result> DuckDBPyConnection::PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
+                                                                        nb::object params) {
 	if (params.is_none()) {
 		params = nb::list();
 	}
-	auto &context = *con.GetConnection().context;
+	auto session = EngineSession();
 
-	auto named_values = TransformPreparedParameters(context, params);
+	auto named_values = TransformPreparedParameters(session.Context(), params);
 
-	unique_ptr<QueryResult> res;
+	shared_ptr<engine::Result> res;
 	{
 		D_ASSERT(duckdb::PyUtil::GilCheck());
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-
-		res = con.GetConnection().Submit(std::move(statement), named_values);
-		if (res->HasError()) {
-			res->ThrowError();
-		}
+		res = session.Submit(std::move(statement), named_values, engine::Format::Chunks());
 	}
 	return res;
 }
@@ -712,10 +807,8 @@ vector<unique_ptr<SQLStatement>> DuckDBPyConnection::GetStatements(const nb::obj
 		return result;
 	}
 	if (nb::isinstance<nb::str>(query)) {
-		auto &connection = con.GetConnection();
 		auto sql_query = nb::cast<std::string>(nb::str(query));
-		auto statements = connection.ExtractStatements(sql_query);
-		return std::move(statements);
+		return EngineSession().Parse(sql_query);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");
 }
@@ -727,9 +820,10 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
 	nb::gil_scoped_acquire gil;
 	ConnectionLockGuard conn_lock(*this);
-	con.SetResult(nullptr);
 
 	auto statements = GetStatements(query);
+	// A rollback discards what the open result would still write, so draining it first only risks failing the rollback
+	SupersedeResult(StartsWithRollback(statements));
 	if (statements.empty()) {
 		// TODO: should we throw?
 		return nullptr;
@@ -742,19 +836,20 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 	ExecuteImmediately(std::move(statements));
 
 	auto res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params));
-
-	if (res) {
-		std::shared_ptr<DuckDBPyResult> py_result;
-		{
-			D_ASSERT(duckdb::PyUtil::GilCheck());
-			nb::gil_scoped_release release;
-			unique_lock<std::recursive_mutex> lock(py_connection_lock);
-			py_result = std::make_shared<DuckDBPyResult>(std::move(res), true);
+	{
+		D_ASSERT(duckdb::PyUtil::GilCheck());
+		nb::gil_scoped_release release;
+		unique_lock<std::recursive_mutex> lock(py_connection_lock);
+		try {
+			res->Settle(CheckSignals);
+		} catch (...) {
+			// Ending the query waits for its tasks, which a Python UDF holds until the GIL is free
+			res->Close();
+			throw;
 		}
-		// Don't use CreateRelation here: the result is stored inside the connection,
-		// so setting connection_owner would create a ref cycle (connection, result, connection).
-		con.SetResult(std::make_unique<DuckDBPyRelation>(std::move(py_result)));
 	}
+	auto py_result = std::make_shared<DuckDBPyResult>(std::move(res));
+	con.SetResult(std::make_unique<DbapiResult>(std::move(py_result)));
 	return shared_from_this();
 }
 
@@ -787,6 +882,9 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(con
                                                                              const nb::object &python_object) {
 	auto &connection = con.GetConnection();
 	auto &client = *connection.context;
+	// Held from the check to the change, so no result can open in between and be ended by it
+	engine::ConnectionClaim claim(client);
+	engine::VerifyNoOpenResult(client);
 	auto object = PythonReplacementScan::ReplacementObject(python_object, name, client);
 	auto view_rel = make_shared_ptr<ViewRelation>(connection.context, std::move(object), name);
 	bool replace = registered_objects.count(name);
@@ -1609,7 +1707,7 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const nb::object &
 }
 
 void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements) {
-	auto &connection = con.GetConnection();
+	auto session = EngineSession();
 	D_ASSERT(duckdb::PyUtil::GilCheck());
 	nb::gil_scoped_release release;
 	if (statements.empty()) {
@@ -1621,8 +1719,7 @@ void DuckDBPyConnection::ExecuteImmediately(vector<unique_ptr<SQLStatement>> sta
 			    "Prepared parameters are only supported for the last statement, please split your query up into "
 			    "separate 'execute' calls if you want to use prepared parameters");
 		}
-		auto res = connection.Submit(std::move(stmt));
-		CompleteQuery(*res);
+		session.Run(std::move(stmt), CheckSignals);
 	}
 }
 
@@ -1667,22 +1764,25 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const nb::object 
 
 	if (!relation) {
 		// Could not create a relation, resort to direct execution
-		// One critical section from submit to completion, so no other statement on the
-		// connection can end the query in between
 		ConnectionLockGuard conn_lock(*this);
 		auto res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params));
-		if (!res) {
-			return nullptr;
-		}
+		unique_ptr<ColumnDataCollection> collection;
 		{
 			D_ASSERT(duckdb::PyUtil::GilCheck());
 			nb::gil_scoped_release release;
-			CompleteQuery(*res);
+			try {
+				res->Retain(CheckSignals);
+				if (res->Properties().return_type != StatementReturnType::QUERY_RESULT) {
+					return nullptr;
+				}
+				collection = res->TakeChunks(CheckSignals);
+			} catch (...) {
+				// Ending the query waits for its tasks, which a Python UDF holds until the GIL is free
+				res->Close();
+				throw;
+			}
 		}
-		if (res->GetStatementProperties().return_type != StatementReturnType::QUERY_RESULT) {
-			return nullptr;
-		}
-		relation = make_shared_ptr<MaterializedRelation>(connection.context, res->TakeCollection(), res->GetNames(),
+		relation = make_shared_ptr<MaterializedRelation>(connection.context, std::move(collection), res->Names(),
 		                                                 Identifier(alias));
 	}
 	return CreateRelation(std::move(relation));
@@ -1864,6 +1964,9 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(c
 	if (!registered_objects.count(name)) {
 		return shared_from_this();
 	}
+	// Held from the check to the change, so no result can open in between and be ended by it
+	engine::ConnectionClaim claim(*connection.context);
+	engine::VerifyNoOpenResult(*connection.context);
 	D_ASSERT(duckdb::PyUtil::GilCheck());
 	nb::gil_scoped_release release;
 	// FIXME: DROP TEMPORARY VIEW? doesn't exist?
@@ -1906,8 +2009,26 @@ Optional<nb::list> DuckDBPyConnection::GetDescription() {
 	return result.Description();
 }
 
-int DuckDBPyConnection::GetRowcount() {
-	return -1;
+int64_t DuckDBPyConnection::GetRowcount() {
+	ConnectionLockGuard conn_lock(*this);
+	if (!con.HasResult()) {
+		return -1;
+	}
+	return con.GetResult().Rowcount();
+}
+
+void DuckDBPyConnection::Complete() {
+	ConnectionLockGuard conn_lock(*this);
+	if (con.HasResult()) {
+		con.GetResult().Complete();
+	}
+}
+
+void DuckDBPyConnection::Abort() {
+	ConnectionLockGuard conn_lock(*this);
+	if (con.HasResult()) {
+		con.GetResult().Abort();
+	}
 }
 
 void DuckDBPyConnection::Close() {
@@ -1933,12 +2054,12 @@ void DuckDBPyConnection::Close() {
 }
 
 void DuckDBPyConnection::Interrupt() {
-	auto &connection = con.GetConnection();
+	auto &connection = con.GetConnectionWhileBusy();
 	connection.Interrupt();
 }
 
 double DuckDBPyConnection::QueryProgress() {
-	auto &connection = con.GetConnection();
+	auto &connection = con.GetConnectionWhileBusy();
 	return connection.GetQueryProgress();
 }
 
@@ -1989,6 +2110,9 @@ void DuckDBPyConnection::InstallExtension(const string &extension, bool force_in
 
 void DuckDBPyConnection::LoadExtension(const string &extension) {
 	auto &connection = con.GetConnection();
+	// Held from the check to the change, so no result can open in between and be ended by it
+	engine::ConnectionClaim claim(*connection.context);
+	engine::VerifyNoOpenResult(*connection.context);
 	const ExtensionLoadOptions extension_opts = {extension};
 	ExtensionHelper::LoadExternalExtension(*connection.context, extension_opts);
 }
@@ -2095,7 +2219,7 @@ nb::dict DuckDBPyConnection::FetchNumpy() {
 		throw InvalidInputException("No open result set");
 	}
 	auto &result = con.GetResult();
-	return result.FetchNumpyInternal();
+	return result.FetchNumpy();
 }
 
 PandasDataFrame DuckDBPyConnection::FetchDF(bool date_as_object) {
@@ -2116,15 +2240,6 @@ PandasDataFrame DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk, 
 	return result.FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
-duckdb::pyarrow::Table DuckDBPyConnection::FetchArrow(idx_t rows_per_batch) {
-	ConnectionLockGuard conn_lock(*this);
-	if (!con.HasResult()) {
-		throw InvalidInputException("No open result set");
-	}
-	auto &result = con.GetResult();
-	return result.ToArrowTable(rows_per_batch);
-}
-
 nb::dict DuckDBPyConnection::FetchPyTorch() {
 	ConnectionLockGuard conn_lock(*this);
 	if (!con.HasResult()) {
@@ -2141,24 +2256,6 @@ nb::dict DuckDBPyConnection::FetchTF() {
 	}
 	auto &result = con.GetResult();
 	return result.FetchTF();
-}
-
-PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch, bool lazy) {
-	ConnectionLockGuard conn_lock(*this);
-	if (!con.HasResult()) {
-		throw InvalidInputException("No open result set");
-	}
-	auto &result = con.GetResult();
-	return result.ToPolars(rows_per_batch, lazy);
-}
-
-duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {
-	ConnectionLockGuard conn_lock(*this);
-	if (!con.HasResult()) {
-		throw InvalidInputException("No open result set");
-	}
-	auto &result = con.GetResult();
-	return result.FetchRecordBatchReader(rows_per_batch);
 }
 
 identifier_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {

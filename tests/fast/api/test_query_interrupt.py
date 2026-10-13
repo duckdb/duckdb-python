@@ -48,15 +48,15 @@ class TestQueryInterruption:
     def test_streaming_fetch_interruption(self):
         con = duckdb.connect()
         con.execute("SET max_streaming_buffer_size='1MB'")
-        res = con.sql("select i from range(8000000000) t(i)")
-        assert res.fetchone() == (0,)
+        con.execute("select i from range(8000000000) t(i)")
+        assert con.fetchone() == (0,)
 
         interrupter = threading.Thread(target=send_keyboard_interrupt)
         interrupter.start()
         # The interrupt lands either in the fetch loop's own signal check or between two fetches in
         # the interpreter, so either exception proves the drain stopped.
         with pytest.raises((RuntimeError, KeyboardInterrupt)):
-            drain(res)
+            drain(con)
         interrupter.join()
 
     @pytest.mark.xfail(

@@ -99,16 +99,16 @@ def test_fetchnumpy_numeric_with_nulls(benchmark: BenchmarkFixture, con: duckdb.
 @pytest.mark.informational  # per-chunk streaming drain (GIL-per-chunk), not gated
 def test_fetch_df_chunk_loop(benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection) -> None:
     def run() -> int:
-        rel = con.sql(Q_NUM)
+        con.execute(Q_NUM)
         rows = 0
         while True:
-            chunk = rel.fetch_df_chunk()
+            chunk = con.fetch_df_chunk()
             if len(chunk) == 0:
                 break
             rows += len(chunk)
         return rows
 
-    con.sql(Q_NUM).fetch_df_chunk()  # warm
+    con.execute(Q_NUM).fetch_df_chunk()  # warm
     benchmark(run)
 
 

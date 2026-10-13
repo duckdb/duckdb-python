@@ -403,14 +403,32 @@ Value TransformDictionary(optional_ptr<ClientContext> context, const PyDictionar
 	return TransformDictionaryToStruct(context, dict);
 }
 
+// Importing pandas here instead would run the import on whichever thread of the query converts the value, and a None
+// entry in sys.modules is how a program blocks the import
+bool PandasIsImported(PythonImportCache &import_cache) {
+	if (import_cache.pandas.LoadSucceeded()) {
+		return true;
+	}
+	// Interned once: building the key on every call, or asking the import cache about a module it has not loaded,
+	// costs an allocation for every converted value
+	static PyObject *const name = PyUnicode_InternFromString("pandas");
+	if (!name) {
+		PyErr_Clear();
+		return false;
+	}
+	auto module = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
+	if (!module && PyErr_Occurred()) {
+		PyErr_Clear();
+	}
+	return module && module != Py_None;
+}
+
 PythonObjectType GetPythonObjectType(nb::handle &ele) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
+	// pandas.NaT and pandas.NA are neither bool, int, float nor str, but NaT is a datetime, so they are matched in
+	// between; no str can also be a Decimal, UUID, date, time or timedelta, which the str test now precedes
 	if (ele.is_none()) {
-		return PythonObjectType::None;
-	} else if (ele.is(import_cache.pandas.NaT())) {
-		return PythonObjectType::None;
-	} else if (ele.is(import_cache.pandas.NA())) {
 		return PythonObjectType::None;
 	} else if (nb::isinstance<nb::bool_>(ele)) {
 		return PythonObjectType::Bool;
@@ -418,6 +436,11 @@ PythonObjectType GetPythonObjectType(nb::handle &ele) {
 		return PythonObjectType::Integer;
 	} else if (nb::isinstance<nb::float_>(ele)) {
 		return PythonObjectType::Float;
+	} else if (nb::isinstance<nb::str>(ele)) {
+		return PythonObjectType::String;
+	} else if (PandasIsImported(import_cache) &&
+	           (ele.is(import_cache.pandas.NaT()) || ele.is(import_cache.pandas.NA()))) {
+		return PythonObjectType::None;
 	} else if (duckdb::PyUtil::IsInstance(ele, import_cache.decimal.Decimal())) {
 		return PythonObjectType::Decimal;
 	} else if (duckdb::PyUtil::IsInstance(ele, import_cache.uuid.UUID())) {
@@ -430,8 +453,6 @@ PythonObjectType GetPythonObjectType(nb::handle &ele) {
 		return PythonObjectType::Date;
 	} else if (duckdb::PyUtil::IsInstance(ele, import_cache.datetime.timedelta())) {
 		return PythonObjectType::Timedelta;
-	} else if (nb::isinstance<nb::str>(ele)) {
-		return PythonObjectType::String;
 	} else if (nb::isinstance<nb::bytearray>(ele)) {
 		return PythonObjectType::ByteArray;
 	} else if (nb::isinstance<nb::memoryview>(ele)) {

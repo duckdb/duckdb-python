@@ -5,14 +5,13 @@ import duckdb
 
 class TestUDFTransactionality:
     def test_type_coverage(self, duckdb_cursor):
-        rel = duckdb_cursor.sql("select * from range(4096)")
-        res = rel.fetchone()
-        assert res == (0,)
+        duckdb_cursor.execute("select * from range(4096)")
+        assert duckdb_cursor.fetchone() == (0,)
 
         def my_func(x: str) -> int:
             return int(x)
 
-        duckdb_cursor.create_function("test", my_func)
+        with pytest.raises(duckdb.ResourceInUseException, match="unfinished result from execute"):
+            duckdb_cursor.create_function("test", my_func)
 
-        with pytest.raises(duckdb.InterruptException, match="cancelled"):
-            rel.fetchone()
+        assert duckdb_cursor.fetchone() == (1,)

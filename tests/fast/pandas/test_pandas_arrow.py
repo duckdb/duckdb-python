@@ -125,7 +125,7 @@ class TestPandasArrow:
         )
         pyarrow_df = df.convert_dtypes(dtype_backend="pyarrow")  # noqa: F841
         con = duckdb.connect()
-        res = con.sql("select * from pyarrow_df").fetchone()
+        res = con.sql("select * from pyarrow_df").fetchall()[0]
         assert res == (
             4.123123,
             -234234124,

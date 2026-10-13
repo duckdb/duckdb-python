@@ -166,7 +166,7 @@ class TestNumpyNullableTypes:
         data = [data.encode("utf8")]
         expected_result = data[0]
         df_in = pd.DataFrame({"object": pd.Series(data, dtype="object")})
-        result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
+        result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall()[0][0]
         assert result == expected_result
 
     @pytest.mark.parametrize(

@@ -31,11 +31,9 @@ class TestArrowRecordBatchReader:
 
         rel = duckdb_conn.from_arrow(reader)
 
-        assert (
-            rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 12
-        )
+        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").fetchall()[0][0] == 12
         # The reader is already consumed so this should be 0
-        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 0
+        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").fetchall()[0][0] == 0
 
     def test_parallel_reader_replacement_scans(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
@@ -114,8 +112,6 @@ class TestArrowRecordBatchReader:
 
         rel = duckdb.from_arrow(reader)
 
-        assert (
-            rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 12
-        )
+        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").fetchall()[0][0] == 12
         # The reader is already consumed so this should be 0
-        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").execute().fetchone()[0] == 0
+        assert rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)").fetchall()[0][0] == 0

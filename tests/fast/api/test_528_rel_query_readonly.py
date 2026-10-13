@@ -35,7 +35,7 @@ def test_rel_query_on_readonly_database(tmp_path):
         result = rel.query(
             "duckdb_settings()",
             "SELECT value FROM duckdb_settings() WHERE name = 'TimeZone'",
-        ).fetchone()
+        ).fetchall()[0]
         assert result is not None
         assert isinstance(result[0], str)  # value column is a string
     finally:
@@ -53,7 +53,7 @@ def test_rel_select_on_readonly_database_still_works(tmp_path):
         rel = conn.sql("SELECT * FROM t")
         result = rel.select(
             duckdb.FunctionExpression("current_setting", duckdb.ConstantExpression("TimeZone"))
-        ).fetchone()
+        ).fetchall()[0]
         assert result is not None
         assert isinstance(result[0], str)
     finally:
@@ -68,7 +68,7 @@ def test_conn_sql_on_readonly_database_still_works(tmp_path):
 
     conn = duckdb.connect(str(db_path), read_only=True)
     try:
-        result = conn.sql("SELECT value FROM duckdb_settings() WHERE name = 'TimeZone'").fetchone()
+        result = conn.sql("SELECT value FROM duckdb_settings() WHERE name = 'TimeZone'").fetchall()[0]
         assert result is not None
         assert isinstance(result[0], str)
     finally:

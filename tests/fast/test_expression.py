@@ -109,10 +109,10 @@ class TestExpression:
             rel.select(CoalesceOperator())
 
         rel4 = rel.select(CoalesceOperator(ConstantExpression(None)))
-        assert rel4.fetchone() == (None,)
+        assert rel4.fetchall()[0] == (None,)
 
         rel5 = rel.select(CoalesceOperator(ConstantExpression(42)))
-        assert rel5.fetchone() == (42,)
+        assert rel5.fetchall()[0] == (42,)
 
         exprtest = con.table("exprtest")
         rel6 = exprtest.select(CoalesceOperator(ColumnExpression("a")))
@@ -969,18 +969,18 @@ class TestExpression:
         con = duckdb.connect()
         rel = con.sql("select * from range(1000000) t(a)")
         count = FunctionExpression("count", "a").cast("int")
-        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
-        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).fetchall()[0][0] == 1000000
+        assert rel.aggregate([count]).fetchall()[0][0] == 1000000
 
     def test_aggregate_error(self):
         con = duckdb.connect()
 
         # Not necessarily an error, but even non-aggregates are accepted
         rel = con.sql("select * from values (5) t(a)")
-        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        res = rel.aggregate(["a"]).fetchall()[0][0]
         assert res == 5
 
-        res = rel.aggregate([5]).execute().fetchone()[0]
+        res = rel.aggregate([5]).fetchall()[0][0]
         assert res == 5
 
         class MyClass:
@@ -997,4 +997,4 @@ class TestExpression:
             duckdb.InvalidInputException,
             match="Please provide either a string or list of Expression objects, not <class 'int'>",
         ):
-            rel.aggregate(5).execute().fetchone()
+            rel.aggregate(5).fetchall()[0]

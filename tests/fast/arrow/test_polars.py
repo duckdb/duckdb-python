@@ -46,11 +46,11 @@ class TestPolars:
         pl_testing.assert_frame_equal(df, lazy_result)
 
         con = duckdb.connect()
-        con_result = con.execute("SELECT * FROM df").pl()
+        con_result = con.sql("SELECT * FROM df").pl()
         pl_testing.assert_frame_equal(df, con_result)
 
     def test_execute_polars(self, duckdb_cursor):
-        res1 = duckdb_cursor.execute("SELECT 1 AS a, 2 AS a").pl()
+        res1 = duckdb_cursor.sql("SELECT 1 AS a, 2 AS a").pl()
         assert res1.columns == ["a", "a_1"]
 
     def test_register_polars(self, duckdb_cursor):
@@ -65,14 +65,14 @@ class TestPolars:
         )
         # scan plus return a polars dataframe
         con.register("polars_df", df)
-        polars_result = con.execute("select * from polars_df").pl()
+        polars_result = con.sql("select * from polars_df").pl()
         pl_testing.assert_frame_equal(df, polars_result)
         con.unregister("polars_df")
         with pytest.raises(duckdb.CatalogException, match="Table with name polars_df does not exist"):
-            con.execute("SELECT * FROM polars_df;").pl()
+            con.sql("SELECT * FROM polars_df;").pl()
 
         con.register("polars_df", df.lazy())
-        polars_result = con.execute("select * from polars_df").pl()
+        polars_result = con.sql("select * from polars_df").pl()
         pl_testing.assert_frame_equal(df, polars_result)
 
     def test_empty_polars_dataframe(self, duckdb_cursor):
@@ -118,7 +118,7 @@ class TestPolars:
     def test_polars_lazy_from_conn(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()
 
-        result = duckdb_conn.execute("SELECT 42 as bla")
+        result = duckdb_conn.sql("SELECT 42 as bla")
 
         lazy_df = result.pl(lazy=True)
         assert lazy_df.collect().to_dicts() == [{"bla": 42}]

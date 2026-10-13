@@ -37,17 +37,6 @@ class TestDBApiFetch:
         assert c.df() is None
         assert c.df() is None
 
-    def test_multiple_fetch_arrow(self, duckdb_cursor):
-        pd = pytest.importorskip("pandas")
-        pytest.importorskip("pyarrow")
-        con = duckdb.connect()
-        c = con.execute("SELECT 42::BIGINT AS a")
-        table = c.to_arrow_table()
-        df = table.to_pandas()
-        pd.testing.assert_frame_equal(df, pd.DataFrame.from_dict({"a": [42]}))
-        assert c.to_arrow_table() is None
-        assert c.to_arrow_table() is None
-
     def test_multiple_close(self, duckdb_cursor):
         con = duckdb.connect()
         c = con.execute("SELECT 42")
@@ -64,28 +53,27 @@ class TestDBApiFetch:
         assert res.fetchall() == [(42,)]
 
     def test_multiple_fetch_many_relation(self, duckdb_cursor):
-        res = duckdb_cursor.query("SELECT 42")
-        assert res.fetchmany(10000) == [(42,)]
-        assert res.fetchmany(10000) == []
-        assert res.fetchmany(10000) == []
+        duckdb_cursor.execute("SELECT 42")
+        assert duckdb_cursor.fetchmany(10000) == [(42,)]
+        assert duckdb_cursor.fetchmany(10000) == []
+        assert duckdb_cursor.fetchmany(10000) == []
 
     def test_fetch_one_relation(self, duckdb_cursor):
-        res = duckdb_cursor.query("SELECT * FROM range(3)")
-        assert res.fetchone() == (0,)
-        assert res.fetchone() == (1,)
-        assert res.fetchone() == (2,)
-        assert res.fetchone() is None
-        assert res.fetchone() is None
-        assert res.fetchone() is None
-        assert res.fetchall() == []
-        # we can execute explicitly to reset the result
-        res.execute()
-        assert res.fetchone() == (0,)
-        res.execute()
-        assert res.fetchone() == (0,)
-        assert res.fetchone() == (1,)
-        assert res.fetchone() == (2,)
-        assert res.fetchone() is None
+        duckdb_cursor.execute("SELECT * FROM range(3)")
+        assert duckdb_cursor.fetchone() == (0,)
+        assert duckdb_cursor.fetchone() == (1,)
+        assert duckdb_cursor.fetchone() == (2,)
+        assert duckdb_cursor.fetchone() is None
+        assert duckdb_cursor.fetchone() is None
+        assert duckdb_cursor.fetchone() is None
+        assert duckdb_cursor.fetchall() == []
+        duckdb_cursor.execute("SELECT * FROM range(3)")
+        assert duckdb_cursor.fetchone() == (0,)
+        duckdb_cursor.execute("SELECT * FROM range(3)")
+        assert duckdb_cursor.fetchone() == (0,)
+        assert duckdb_cursor.fetchone() == (1,)
+        assert duckdb_cursor.fetchone() == (2,)
+        assert duckdb_cursor.fetchone() is None
 
     @pytest.mark.parametrize(
         "test_case",
@@ -135,7 +123,7 @@ class TestDBApiFetch:
         )
         select a from map_cte;
         """
-        res = duckdb_cursor.sql(query).fetchone()
+        res = duckdb_cursor.sql(query).fetchall()[0]
         print(res)
         print(res[0].keys())
         assert res[0][python_key] == -2147483648
@@ -154,5 +142,5 @@ class TestDBApiFetch:
         )
         select a from map_cte;
         """
-        res = duckdb_cursor.sql(query).fetchone()
+        res = duckdb_cursor.sql(query).fetchall()[0]
         assert "key" in res[0]

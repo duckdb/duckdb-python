@@ -37,13 +37,6 @@ def arrow_table_from_rel(rel):
     return rel.to_arrow_table()
 
 
-def arrow_reader_from_rel(rel: duckdb.DuckDBPyRelation):
-    # Note: this has to executed first, otherwise we'll create a deadlock
-    # Because it will try to execute the input at the same time as executing the relation
-    # On the same connection (that's the core of the issue)
-    return rel.execute().to_arrow_reader()
-
-
 def rel_from_rel(rel):
     return rel
 
@@ -90,7 +83,7 @@ class TestReplacementScan:
     @pytest.mark.parametrize("get_relation", [using_table, using_sql])
     @pytest.mark.parametrize(
         "fetch_method",
-        [polars_from_rel, df_from_rel, arrow_table_from_rel, arrow_reader_from_rel, rel_from_rel],
+        [polars_from_rel, df_from_rel, arrow_table_from_rel, rel_from_rel],
     )
     @pytest.mark.parametrize("object_name", ["tbl", "table", "select", "update"])
     def test_table_replacement_scans(self, duckdb_cursor, get_relation, fetch_method, object_name):
@@ -102,6 +95,15 @@ class TestReplacementScan:
         res = rel.fetchall()
         assert res == [(1, 2, 3)]
 
+    @pytest.mark.parametrize("get_relation", [using_table, using_sql])
+    def test_a_reader_of_the_same_connection_cannot_be_scanned(self, duckdb_cursor, get_relation):
+        # The reader's stream holds the connection, so the query that would read it is refused
+        reader = duckdb_cursor.values([1, 2, 3]).to_arrow_reader()
+        rel = get_relation(duckdb_cursor, reader, "tbl")
+        with pytest.raises(duckdb.ResourceInUseException, match="open result"):
+            rel.fetchall()
+        reader.close()
+
     def test_scan_global(self, duckdb_cursor):
         duckdb_cursor.execute("set python_enable_replacements=false")
         with pytest.raises(duckdb.CatalogException, match="Table with name global_polars_df does not exist"):
@@ -110,7 +112,7 @@ class TestReplacementScan:
         duckdb_cursor.execute("set python_enable_replacements=true")
         # Now the depth is 1, which is enough to locate the variable
         rel = duckdb_cursor.sql("select * from global_polars_df")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         assert res == (1, "banana", 5, "beetle")
 
     def test_scan_local(self, duckdb_cursor):

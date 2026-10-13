@@ -18,5 +18,5 @@ class TestArrowLargeString:
         arrow_table = pa.Table.from_arrays(inputs, schema=schema)
 
         rel = duckdb.from_arrow(arrow_table)
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res == [("foo",), ("baaaar",), ("b",)]

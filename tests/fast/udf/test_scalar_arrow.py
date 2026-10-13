@@ -212,5 +212,5 @@ class TestPyArrowUDF:
             name="func", function=func, return_type="STRUCT(x integer, y varchar)", type="arrow", side_effects=False
         )
 
-        res = duckdb_cursor.sql("select func(1).y").fetchone()
+        res = duckdb_cursor.sql("select func(1).y").fetchall()[0]
         assert res == ("this is not an inlined string",)

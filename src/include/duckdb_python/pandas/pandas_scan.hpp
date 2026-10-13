@@ -63,9 +63,9 @@ public:
 	                                    idx_t offset, Vector &out);
 
 	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                            const TableFunction &function);
+	                            const BoundTableFunction &function);
 
-	static unique_ptr<FunctionData> PandasDeserialize(Deserializer &deserializer, TableFunction &function);
+	static unique_ptr<FunctionData> PandasDeserialize(Deserializer &deserializer, BoundTableFunction &function);
 };
 
 } // namespace duckdb

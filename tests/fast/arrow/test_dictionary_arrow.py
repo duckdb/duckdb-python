@@ -19,7 +19,7 @@ class TestArrowDictionary:
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
 
-        assert rel.execute().fetchall() == [(10,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
+        assert rel.fetchall() == [(10,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
 
         # Bigger than Vector Size
         indices_list = [0, 1, 0, 1, 2, 1, 0, 2, 3] * 10000
@@ -29,14 +29,14 @@ class TestArrowDictionary:
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(10,), (100,), (10,), (100,), (None,), (100,), (10,), (None,), (999999,)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
         # Table with dictionary and normal array
 
         arrow_table = pa.Table.from_arrays([dict_array, pa.array(indices_list)], ["a", "b"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(10, 0), (100, 1), (10, 0), (100, 1), (None, 2), (100, 1), (10, 0), (None, 2), (999999, 3)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
     def test_dictionary_null_index(self, duckdb_cursor):
         indices = pa.array([None, 1, 0, 1, 2, 1, 0, 2])
@@ -45,15 +45,15 @@ class TestArrowDictionary:
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
 
-        assert rel.execute().fetchall() == [(None,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
+        assert rel.fetchall() == [(None,), (100,), (10,), (100,), (None,), (100,), (10,), (None,)]
 
         indices = pa.array([None, 1, None, 1, 2, 1, 0])
         dictionary = pa.array([10, 100, 100])
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        print(rel.execute().fetchall())
-        assert rel.execute().fetchall() == [(None,), (100,), (None,), (100,), (100,), (100,), (10,)]
+        print(rel.fetchall())
+        assert rel.fetchall() == [(None,), (100,), (None,), (100,), (100,), (100,), (10,)]
 
         # Test Big Vector
         indices_list = [None, 1, None, 1, 2, 1, 0]
@@ -63,13 +63,13 @@ class TestArrowDictionary:
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 1000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
         # Table with dictionary and normal array
         arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         rel = duckdb_cursor.from_arrow(arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 1000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
     @pytest.mark.parametrize(
         "element",
@@ -145,14 +145,14 @@ class TestArrowDictionary:
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
         # Table with dictionary and normal array
         arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
     def test_dictionary_lifetime(self, duckdb_cursor):
         tables = []
@@ -189,14 +189,14 @@ class TestArrowDictionary:
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
         # Table with dictionary and normal array
         arrow_table = pa.Table.from_arrays([dict_array, indices], ["a", "b"])
         batch_arrow_table = pa.Table.from_batches(arrow_table.to_batches(10))
         rel = duckdb_cursor.from_arrow(batch_arrow_table)
         result = [(None, None), (100, 1), (None, None), (100, 1), (100, 2), (100, 1), (10, 0)] * 10000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
     def test_dictionary_index_types(self, duckdb_cursor):
         indices_list = [None, 1, None, 1, 2, 1, 0]
@@ -216,7 +216,7 @@ class TestArrowDictionary:
             arrow_table = pa.Table.from_arrays([dict_array], ["a"])
             rel = duckdb_cursor.from_arrow(arrow_table)
             result = [(None,), (100,), (None,), (100,), (100,), (100,), (10,)] * 10000
-            assert rel.execute().fetchall() == result
+            assert rel.fetchall() == result
 
     def test_dictionary_strings(self, duckdb_cursor):
         indices_list = [None, 0, 1, 2, 3, 4, None]
@@ -234,7 +234,7 @@ class TestArrowDictionary:
             ("Samuel L. Jackson",),
             (None,),
         ] * 1000
-        assert rel.execute().fetchall() == result
+        assert rel.fetchall() == result
 
     def test_dictionary_timestamps(self, duckdb_cursor):
         indices_list = [None, 0, 1, 2, None]
@@ -250,7 +250,7 @@ class TestArrowDictionary:
         dict_array = pa.DictionaryArray.from_arrays(indices, dictionary)
         arrow_table = pa.Table.from_arrays([dict_array], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        print(rel.execute().fetchall())
+        print(rel.fetchall())
         expected = [
             (None,),
             (datetime.datetime(2001, 9, 25, 0, 0),),
@@ -258,5 +258,5 @@ class TestArrowDictionary:
             (datetime.datetime(2012, 5, 15, 0, 0),),
             (None,),
         ] * 1000
-        result = rel.execute().fetchall()
+        result = rel.fetchall()
         assert result == expected

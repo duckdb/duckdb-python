@@ -61,15 +61,11 @@ class TestRAPICloseConnRel:
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.distinct()
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
-            rel.execute()
-        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.favg("")
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.fetchall()
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.fetchnumpy()
-        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
-            rel.fetchone()
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             rel.filter("")
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):

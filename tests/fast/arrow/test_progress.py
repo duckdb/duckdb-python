@@ -22,23 +22,21 @@ class TestProgressBarArrow:
         tbl = pyarrow.Table.from_arrays([data], ["a"])
         rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate("sum(a)")
-        assert result.execute().fetchone()[0] == 49999995000000
+        assert result.fetchall()[0][0] == 49999995000000
         # Multiple Threads
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
-        assert result.execute().fetchone()[0] == 49999995000000
+        assert result.fetchall()[0][0] == 49999995000000
 
         # More than one batch
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data], ["a"]).to_batches(100))
         rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate("sum(a)")
-        assert result.execute().fetchone()[0] == 49999995000000
+        assert result.fetchall()[0][0] == 49999995000000
 
         # Single Thread
         duckdb_conn.execute("PRAGMA threads=1")
-        duck_res = result.execute()
-        py_res = duck_res.fetchone()[0]
-        assert py_res == 49999995000000
+        assert result.fetchall()[0][0] == 49999995000000
 
     def test_progress_arrow_empty(self):
         if os.name == "nt":
@@ -54,4 +52,4 @@ class TestProgressBarArrow:
         tbl = pyarrow.Table.from_arrays([data], ["a"])
         rel = duckdb_conn.from_arrow(tbl)
         result = rel.aggregate("sum(a)")
-        assert result.execute().fetchone()[0] is None
+        assert result.fetchall()[0][0] is None

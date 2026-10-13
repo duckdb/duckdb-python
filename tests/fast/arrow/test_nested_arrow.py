@@ -56,14 +56,14 @@ class TestArrowNested:
         data = pa.array([[1], None, [2]], type=pa.large_list(pa.int64()))
         arrow_table = pa.Table.from_arrays([data], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res == [([1],), (None,), ([2],)]
 
         # Fixed Size Lists
         data = pa.array([[1], None, [2]], type=pa.list_(pa.int64(), 1))
         arrow_table = pa.Table.from_arrays([data], ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res == [((1,),), (None,), ((2,),)]
 
         # Complex nested structures with different list types
@@ -74,18 +74,18 @@ class TestArrowNested:
         ]
         arrow_table = pa.Table.from_arrays([data[0], data[1], data[2]], ["a", "b", "c"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        res = rel.project("a").execute().fetchall()
+        res = rel.project("a").fetchall()
         assert res == [((1,),), (None,), ((2,),)]
-        res = rel.project("b").execute().fetchall()
+        res = rel.project("b").fetchall()
         assert res == [([1],), (None,), ([2],)]
-        res = rel.project("c").execute().fetchall()
+        res = rel.project("c").fetchall()
         assert res == [([1, 2, 3],), (None,), ([2, 1],)]
 
         # Struct Holding different List Types
         struct = [pa.StructArray.from_arrays(data, ["fixed", "large", "normal"])]
         arrow_table = pa.Table.from_arrays(struct, ["a"])
         rel = duckdb_cursor.from_arrow(arrow_table)
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res == [
             ({"fixed": (1,), "large": [1], "normal": [1, 2, 3]},),
             ({"fixed": None, "large": None, "normal": None},),

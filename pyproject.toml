@@ -189,6 +189,7 @@ include = [
     "external/duckdb/tools/cpp/**",
     "external/duckdb/.github/config/out_of_tree_extensions.cmake",
     "external/duckdb/.github/config/in_tree_extensions.cmake",
+    "external/duckdb/.github/config/extensions/**",
 ]
 exclude = [
     "/*",
@@ -212,6 +213,7 @@ exclude = [
 #          cp313 this results in a segfault / access violation. To get around this, we install numpy>=2 on all >=cp312
 #          platforms. Then for windows arm64, for which there is no tensorflow, we only allow numpy>=2.3 because that
 #          ships arm64 win32 wheels.
+# - pyarrow: pyarrow>=26 refuses to import with numpy<2, so wherever numpy<2 is installed pyarrow stays below 26.
 ######################################################################################################
 
 [tool.uv]
@@ -283,7 +285,8 @@ test = [ # dependencies used for running tests
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pandas>=3.0.0; python_version > '3.10'",
     "pandas<3.0.0; python_version < '3.11'",
-    "pyarrow>=23.0.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0,<26; python_version >= '3.10' and python_version < '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0; python_version >= '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "torch>=2.2.2; python_version < '3.13' and ( sys_platform != 'win32' or platform_machine != 'ARM64' )",
     "torch>=2.2.2,<2.12.1; python_version > '3.11' and python_version < '3.13' and sys_platform == 'win32' and platform_machine == 'ARM64'",
@@ -309,7 +312,8 @@ bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Mini
     "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
     "pandas>=3.0.0; python_version > '3.10'",
     "pandas<3.0.0; python_version < '3.11'",
-    "pyarrow>=23.0.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0,<26; python_version >= '3.10' and python_version < '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0; python_version >= '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
 ]
 scripts = [ # dependencies used for running scripts

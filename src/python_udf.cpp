@@ -1,4 +1,5 @@
 #include "duckdb/main/query_result.hpp"
+#include <optional>
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb_python/pytype.hpp"
@@ -8,7 +9,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
-#include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/function.hpp"
@@ -94,14 +94,15 @@ static void ConvertArrowTableToVector(const nb::object &table, Vector &out, Clie
 
 	// Prepare the inputs for the bind
 	vector<Value> children;
-	named_parameter_map_t named_params;
+	named_argument_map_t named_params;
 	vector<LogicalType> input_types;
 	vector<Identifier> input_names;
 
 	TableFunction dummy_table_function;
 	dummy_table_function.name = "ConvertArrowTableToVector";
+	BoundTableFunction bound_function(dummy_table_function);
 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
-	                                  dummy_table_function, empty);
+	                                  bound_function, empty);
 	vector<LogicalType> return_types;
 	vector<Identifier> return_names;
 
@@ -173,6 +174,10 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 		nb::gil_scoped_acquire gil;
+		std::optional<engine::CallbackScope> callback;
+		if (state.HasContext()) {
+			callback.emplace(state.GetContext());
+		}
 
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
@@ -316,6 +321,10 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		nb::gil_scoped_acquire gil;
+		std::optional<engine::CallbackScope> callback;
+		if (state.HasContext()) {
+			callback.emplace(state.GetContext());
+		}
 
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
@@ -564,7 +573,8 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const nb:
                                                    bool vectorized, FunctionNullHandling null_handling,
                                                    PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);
-	auto &connection = con.GetConnection();
+	// Only the client properties are read, which runs no engine work, so it may happen under the caller's claim
+	auto &connection = con.GetConnectionWhileBusy();
 
 	data.AnalyzeSignature(udf);
 	data.OverrideParameters(parameters);

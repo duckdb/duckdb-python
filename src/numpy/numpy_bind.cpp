@@ -6,11 +6,18 @@
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
 void NumpyBind::Bind(ClientContext &context, nb::handle df, vector<PandasColumnBindData> &bind_columns,
                      vector<LogicalType> &return_types, vector<Identifier> &names) {
+	// The scan, which runs without the GIL, only recognizes pandas.NaT and pandas.NA once the import cache holds them
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (PandasIsImported(import_cache)) {
+		(void)import_cache.pandas.NaT();
+		(void)import_cache.pandas.NA();
+	}
 
 	auto df_columns = nb::list(df.attr("keys")());
 	auto df_types = nb::list();

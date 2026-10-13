@@ -664,7 +664,7 @@ class TestArrowOffsets:
                 col1
             FROM arrow_table offset {MAGIC_ARRAY_SIZE - 1}
         """
-        ).fetchone()
+        ).fetchall()[0]
         if col1_null:
             assert res[0] is None
         else:

@@ -61,15 +61,15 @@ class TestArrowTimestamps:
 
         duck_rel = duckdb.from_arrow(arrow_table)
         res = duck_rel.project("a::TIMESTAMP_US")
-        result = res.fetchone()
+        result = res.fetchall()[0]
         assert result == expected
 
         duck_rel = duckdb.from_arrow(arrow_table)
         res = duck_rel.project("b::TIMESTAMP_US")
-        result = res.fetchone()
+        result = res.fetchall()[0]
         assert result == expected
 
         duck_rel = duckdb.from_arrow(arrow_table)
         res = duck_rel.project("c::TIMESTAMP_NS")
-        result = res.fetchone()
+        result = res.fetchall()[0]
         assert result == expected

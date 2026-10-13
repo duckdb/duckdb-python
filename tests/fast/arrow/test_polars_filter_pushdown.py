@@ -503,7 +503,7 @@ class TestOptionalFilter:
         cardinality_table = factory(con.table("_t"))
         con.register("cardinality_table", cardinality_table)
         result = con.execute(
-            "SELECT * FROM cardinality_table WHERE cardinality > 1 ORDER BY cardinality ASC"
+            "SELECT * FROM cardinality_table WHERE cardinality > 1 ORDER BY cardinality ASC, column_name ASC"
         ).fetchall()
         assert result == [
             ("is_available", 3),
@@ -513,8 +513,8 @@ class TestOptionalFilter:
             ("discount", 39),
             ("quantity", 45),
             ("id", 100),
-            ("product_code", 100),
             ("price", 100),
+            ("product_code", 100),
         ]
 
     def test_top_n_nulls_first_includes_min(self, factory):

@@ -68,4 +68,4 @@ class TestRelationDependencyMemoryLeak:
         rel = from_df(duckdb_cursor)
         rel.create_view("bla")
         duckdb_cursor.unregister("bla")
-        assert rel.query("bla", "select count(*) from bla").fetchone()[0] == 1_000_000
+        assert rel.query("bla", "select count(*) from bla").fetchall()[0][0] == 1_000_000

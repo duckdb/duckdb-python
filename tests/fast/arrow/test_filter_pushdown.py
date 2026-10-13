@@ -207,7 +207,7 @@ class TestInPushdown:
         """Regression: https://github.com/duckdb/duckdb-python/issues/52."""
         duckdb.register("arrow_table", pa.table({"a": pa.array(range(5000))}))
         in_list = ", ".join(str(i) for i in range(0, 5000, 2))
-        result = duckdb.sql(f"SELECT count(*) FROM arrow_table WHERE a IN ({in_list})").fetchone()
+        result = duckdb.sql(f"SELECT count(*) FROM arrow_table WHERE a IN ({in_list})").fetchall()[0]
         assert result == (2500,)
 
     def test_in_with_no_nulls_in_list(self):
@@ -713,9 +713,7 @@ class TestRegressions:
         df.to_parquet(str(file_path))
 
         my_arrow_dataset = pa_ds.dataset(str(file_path))
-        res = duckdb_cursor.execute(
-            "SELECT * FROM my_arrow_dataset WHERE ts = ?", parameters=[timestamp]
-        ).to_arrow_table()
+        res = duckdb_cursor.sql("SELECT * FROM my_arrow_dataset WHERE ts = ?", params=[timestamp]).to_arrow_table()
         assert duckdb_cursor.sql("SELECT * FROM res").fetchall() == [(1, timestamp), (2, timestamp), (3, timestamp)]
 
     def test_2145_parquet_glob_through_arrow(self, duckdb_cursor, tmp_path):

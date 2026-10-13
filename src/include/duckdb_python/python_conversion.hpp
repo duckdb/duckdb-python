@@ -43,7 +43,11 @@ enum class PythonObjectType {
 	Value
 };
 
+class PythonImportCache;
+
 PythonObjectType GetPythonObjectType(nb::handle &ele);
+//! Whether a value can be pandas.NaT or pandas.NA: only an imported pandas can have produced one
+bool PandasIsImported(PythonImportCache &import_cache);
 
 LogicalType SniffPythonIntegerType(nb::handle ele);
 bool DictionaryHasMapFormat(const PyDictionary &dict);

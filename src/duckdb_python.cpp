@@ -320,8 +320,9 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->Execute(query, params);
 	    },
-	    "Execute the given SQL query, optionally using prepared statements with parameters set", nb::arg("query"),
-	    nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
+	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
+	    "its first rows are ready, so an error there raises here; every other statement runs to its end",
+	    nb::arg("query"), nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "executemany",
 	    [](const nb::object &query, nb::object params = nb::list(),
@@ -351,6 +352,26 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    conn->Interrupt();
 	    },
 	    "Interrupt pending operations", nb::kw_only(), nb::arg("connection").none() = nb::none());
+	m.def(
+	    "complete",
+	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    conn->Complete();
+	    },
+	    "Run the result of execute() to its end without reading its rows", nb::kw_only(),
+	    nb::arg("connection").none() = nb::none());
+	m.def(
+	    "abort",
+	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    conn->Abort();
+	    },
+	    "Cancel the rest of the result of execute(); a statement that may write fails an open transaction",
+	    nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "query_progress",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -439,60 +460,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    },
 	    "Fetch a chunk of the result as DataFrame following execute()", nb::arg("vectors_per_chunk") = 1, nb::kw_only(),
 	    nb::arg("date_as_object") = false, nb::arg("connection").none() = nb::none());
-	m.def(
-	    "pl",
-	    [](idx_t rows_per_batch, bool lazy, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchPolars(rows_per_batch, lazy);
-	    },
-	    "Fetch a result as Polars DataFrame following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("lazy") = false, nb::arg("connection").none() = nb::none());
-	m.def(
-	    "to_arrow_table",
-	    [](idx_t batch_size, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchArrow(batch_size);
-	    },
-	    "Fetch a result as Arrow table following execute()", nb::arg("batch_size") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "to_arrow_reader",
-	    [](idx_t batch_size, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchRecordBatchReader(batch_size);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", nb::arg("batch_size") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "fetch_arrow_table",
-	    [](idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_arrow_table() is deprecated, use to_arrow_table() instead.",
-		                 0);
-		    return conn->FetchArrow(rows_per_batch);
-	    },
-	    "Fetch a result as Arrow table following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "fetch_record_batch",
-	    [](const idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_record_batch() is deprecated, use to_arrow_reader() instead.",
-		                 0);
-		    return conn->FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "torch",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -682,8 +649,10 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->RunQuery(query, alias, params);
 	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
+	    "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	    "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	    "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	    "one that does not returns None. Statements before the last one run immediately.",
 	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
@@ -695,8 +664,10 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->RunQuery(query, alias, params);
 	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
+	    "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	    "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	    "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	    "one that does not returns None. Statements before the last one run immediately.",
 	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
@@ -708,8 +679,10 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->RunQuery(query, alias, params);
 	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
+	    "Run a SQL query. A SELECT with no parameter values (params None or empty) returns a relation that runs the "
+	    "query each time it is read. Any other statement, and a SELECT with parameter values, runs once, now: one "
+	    "that returns rows gives a relation over those rows, which reads them back without running again, and "
+	    "one that does not returns None. Statements before the last one run immediately.",
 	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
 	    nb::arg("connection").none() = nb::none());
 	// nanobind's all-or-nothing nb::arg rule forbids naming just the source parameter alongside **kwargs, so the
@@ -979,16 +952,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	// END_OF_CONNECTION_METHODS
 
 	// We define these "wrapper" methods manually because they are overloaded
-	m.def(
-	    "arrow",
-	    [](idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::RecordBatchReader {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Alias of to_arrow_reader(). We recommend using to_arrow_reader() instead.",
-	    nb::arg("rows_per_batch") = 1000000, nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "arrow",
 	    [](nb::object &arrow_object, std::shared_ptr<DuckDBPyConnection> conn) -> std::unique_ptr<DuckDBPyRelation> {

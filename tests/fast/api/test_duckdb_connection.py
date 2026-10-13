@@ -51,11 +51,6 @@ class TestDuckDBConnection:
         ):
             con = duckdb.connect(":default:", read_only=True)
 
-    def test_arrow(self):
-        pytest.importorskip("pyarrow")
-        duckdb.execute("select [1,2,3]")
-        duckdb.to_arrow_table()
-
     def test_begin_commit(self):
         duckdb.begin()
         duckdb.execute("create table tbl as select 1")
@@ -195,7 +190,7 @@ class TestDuckDBConnection:
 
         result_df = duckdb.execute(sql).df()
 
-        arrow_table = duckdb.execute(sql).to_arrow_table()
+        arrow_table = duckdb.sql(sql).to_arrow_table()
 
         arrow_df = arrow_table.to_pandas()
         assert result_df["repetitions"].sum() == arrow_df["repetitions"].sum()
@@ -218,16 +213,6 @@ class TestDuckDBConnection:
         assert cur_chunk["a"][0] == 2048
         assert len(cur_chunk) == 952
         duckdb.execute("DROP TABLE t")
-
-    def test_fetch_record_batch(self):
-        # Needed for 'arrow_table'
-        pytest.importorskip("pyarrow")
-
-        duckdb.execute("CREATE table t as select range a from range(3000);")
-        duckdb.execute("SELECT a FROM t")
-        record_batch_reader = duckdb.to_arrow_reader(1024)
-        chunk = record_batch_reader.read_all()
-        assert len(chunk) == 3000
 
     def test_fetchall(self):
         assert duckdb.execute("select [1,2,3]").fetchall() == [([1, 2, 3],)]
@@ -296,10 +281,10 @@ class TestDuckDBConnection:
     def test_unregister_problematic_behavior(self, duckdb_cursor):
         # We have a VIEW called 'vw' in the Catalog
         duckdb_cursor.execute("create temporary view vw as from range(100)")
-        assert duckdb_cursor.execute("select * from vw").fetchone() == (0,)
+        assert duckdb_cursor.execute("select * from vw").fetchall()[0] == (0,)
 
         # Create a registered object called 'vw'
-        arrow_result = duckdb_cursor.execute("select 42").to_arrow_table()
+        arrow_result = duckdb_cursor.sql("select 42").to_arrow_table()
         with pytest.raises(duckdb.CatalogException, match='View with name "vw" already exists'):
             duckdb_cursor.register("vw", arrow_result)
 
@@ -419,7 +404,7 @@ class TestDuckDBConnection:
 
     def test_set_pandas_analyze_sample_size(self):
         con = duckdb.connect(":memory:named", config={"pandas_analyze_sample": 0})
-        res = con.sql("select current_setting('pandas_analyze_sample')").fetchone()
+        res = con.sql("select current_setting('pandas_analyze_sample')").fetchall()[0]
         assert res == (0,)
 
         # Find the cached config
@@ -427,5 +412,5 @@ class TestDuckDBConnection:
         con2.execute("SET GLOBAL pandas_analyze_sample=2")
 
         # This change is reflected in 'con' because the instance was cached
-        res = con.sql("select current_setting('pandas_analyze_sample')").fetchone()
+        res = con.sql("select current_setting('pandas_analyze_sample')").fetchall()[0]
         assert res == (2,)

@@ -26,7 +26,7 @@ class TestArrowTimestampsTimezone:
         con.execute("SET TimeZone = 'UTC'")
         for precision in precisions:
             arrow_table = generate_table(current_time, precision, "UTC")
-            res_utc = con.from_arrow(arrow_table).execute().fetchall()
+            res_utc = con.from_arrow(arrow_table).fetchall()
             assert res_utc[0][0] == current_time
 
     def test_timestamp_timezone_overflow(self, duckdb_cursor):
@@ -35,7 +35,7 @@ class TestArrowTimestampsTimezone:
         for precision in precisions:
             arrow_table = generate_table(current_time, precision, "UTC")
             with pytest.raises(duckdb.ConversionException, match="Could not convert"):
-                duckdb.from_arrow(arrow_table).execute().fetchall()
+                duckdb.from_arrow(arrow_table).fetchall()
 
     @pytest.mark.parametrize("precision", ["us", "s", "ns", "ms"])
     def test_timestamp_tz_to_arrow(self, duckdb_cursor, precision):

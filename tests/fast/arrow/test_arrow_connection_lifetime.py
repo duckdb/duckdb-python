@@ -33,11 +33,10 @@ class TestArrowConnectionLifetime:
         result = duckdb.connect().sql("SELECT * FROM capsule").fetchall()
         assert result == EXPECTED
 
-    def test_capsule_slow_path_survives_connection_gc(self):
-        """__arrow_c_stream__ slow path (MaterializedQueryResult): connection destroyed before capsule is consumed."""
+    def test_materialized_capsule_survives_connection_gc(self):
+        """A capsule over a materialized relation: connection destroyed before the capsule is consumed."""
         conn = duckdb.connect()
-        rel = conn.sql(SQL)
-        rel.execute()  # forces MaterializedQueryResult, not ArrowQueryResult
+        rel = conn.sql(SQL).materialize()
         capsule = rel.__arrow_c_stream__()  # noqa: F841
         del rel, conn
         gc.collect()

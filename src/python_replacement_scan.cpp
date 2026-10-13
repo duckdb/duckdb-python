@@ -1,4 +1,5 @@
 #include "duckdb_python/python_replacement_scan.hpp"
+#include "duckdb_python/engine/connection.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -100,6 +101,20 @@ unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const nb::object &
 	return replacement;
 }
 
+namespace {
+
+struct RelationDependencyItem : DependencyItem {
+	explicit RelationDependencyItem(shared_ptr<Relation> rel_p) : rel(std::move(rel_p)) {
+	}
+	static shared_ptr<DependencyItem> Create(shared_ptr<Relation> rel) {
+		return make_shared_ptr<RelationDependencyItem>(std::move(rel));
+	}
+
+	shared_ptr<Relation> rel;
+};
+
+} // namespace
+
 unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const nb::object &entry, const string &name,
                                                                  ClientContext &context, bool relation) {
 	auto client_properties = context.GetClientProperties();
@@ -134,7 +149,10 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const nb::objec
 		select->node = pyrel->GetRel().GetQueryNode();
 		auto subquery = make_uniq<SubqueryRef>(std::move(select));
 		auto dependency = make_uniq<ExternalDependency>();
-		dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
+		// The native relation carries the Python data the scan reads. Owning the wrapper instead would
+		// own its connection, and an open result holding that closes a cycle the garbage
+		// collector cannot see: connection to result to wrapper to connection.
+		dependency->AddDependency("replacement_cache", RelationDependencyItem::Create(pyrel->GetSharedRelation()));
 		subquery->external_dependency = std::move(dependency);
 		return std::move(subquery);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
@@ -311,8 +329,14 @@ unique_ptr<TableRef> PythonReplacementScan::Replace(ClientContext &context, Repl
 		return nullptr;
 	}
 
-	unique_ptr<TableRef> result;
-	result = ReplaceInternal(context, table_name);
+	auto state = engine::ConnectionState::Get(context);
+	if (auto resolved = state->RecallResolved(table_name)) {
+		return resolved;
+	}
+	auto result = ReplaceInternal(context, table_name);
+	if (result) {
+		state->RecordResolved(table_name, *result);
+	}
 	return result;
 }
 

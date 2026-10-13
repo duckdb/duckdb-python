@@ -73,7 +73,8 @@ def _assert_no_crash_and_min_successes(
 # ---------------------------------------------------------------------------
 #
 # Both variants reliably segfault pre-fix (returncode -11 on macOS, 139 on
-# Linux). After the fix, every iteration should succeed.
+# Linux). After the fix, every iteration either succeeds or is refused because
+# another call is running on the same connection.
 #
 
 _REPRO_435_SINGLE_CONN = textwrap.dedent(
@@ -85,7 +86,7 @@ _REPRO_435_SINGLE_CONN = textwrap.dedent(
     # 8 worker threads concurrently hit the same DuckDBPyConnection's result
     # slot via execute() + fetchall().
     conn = duckdb.connect()
-    successes = 0
+    completed = refused = 0
 
     def run(_):
         conn.execute('SELECT 1').fetchall()
@@ -94,15 +95,20 @@ _REPRO_435_SINGLE_CONN = textwrap.dedent(
         for f in [ex.submit(run, i) for i in range(200)]:
             try:
                 f.result()
-                successes += 1
+                completed += 1
+            except duckdb.ResourceInUseException as error:
+                # A connection refuses a call while another one runs on it
+                if "busy with another call" in str(error):
+                    refused += 1
             except Exception:
-                # A clean Python-level exception is acceptable — the bug we
-                # test for is an interpreter crash. Per-iteration failures
-                # still count against `success_count` so the test asserts
-                # that the workload actually ran.
+                # Any other clean Python-level exception is acceptable, since the
+                # bug we test for is an interpreter crash. It still counts
+                # against `success_count`, so the test asserts that the workload
+                # actually ran.
                 pass
 
-    print(f"success_count={successes}")
+    # Refusals count only next to calls that ran, or a connection that refuses everything would pass
+    print(f"success_count={completed + refused if completed else 0}")
     """
 ).lstrip()
 
@@ -114,7 +120,7 @@ _REPRO_435_MULTI_CONN = textwrap.dedent(
     import duckdb
 
     conns = [duckdb.connect() for _ in range(8)]
-    successes = 0
+    completed = refused = 0
 
     def run(i):
         conns[i % 8].execute('SELECT 1').fetchall()
@@ -123,11 +129,14 @@ _REPRO_435_MULTI_CONN = textwrap.dedent(
         for f in [ex.submit(run, i) for i in range(200)]:
             try:
                 f.result()
-                successes += 1
+                completed += 1
+            except duckdb.ResourceInUseException as error:
+                if "busy with another call" in str(error):
+                    refused += 1
             except Exception:
                 pass
 
-    print(f"success_count={successes}")
+    print(f"success_count={completed + refused if completed else 0}")
     """
 ).lstrip()
 
@@ -135,8 +144,8 @@ _REPRO_435_MULTI_CONN = textwrap.dedent(
 def test_435_concurrent_execute_fetchall_single_connection():
     """Eight threads sharing one connection must not crash the interpreter.
 
-    Pre-fix: SIGSEGV. Post-fix: all 200 iterations should succeed because
-    the connection lock serialises them.
+    Pre-fix: SIGSEGV. Post-fix: each of the 200 iterations either succeeds
+    or is refused cleanly because the connection is busy with another call.
     """
     result = _run(_REPRO_435_SINGLE_CONN, timeout=30.0)
     _assert_no_crash_and_min_successes(result, min_successes=200)

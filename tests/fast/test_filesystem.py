@@ -52,8 +52,11 @@ def memory():
     return fs
 
 
-def add_file(fs, filename=FILENAME):
-    with (Path(__file__).parent / "data" / filename).open("rb") as source, fs.open(filename, "wb") as dest:
+def add_file(fs, filename=FILENAME, destination=None):
+    with (
+        (Path(__file__).parent / "data" / filename).open("rb") as source,
+        fs.open(destination or filename, "wb") as dest,
+    ):
         copyfileobj(source, dest)
 
 
@@ -89,10 +92,11 @@ class TestPythonFilesystem:
             _strip_protocol = classmethod(fsspec.AbstractFileSystem._strip_protocol.__func__)
 
         memory = ExtendedMemoryFileSystem(skip_instance_cache=True)
-        add_file(memory)
+        # A file URI names a host before its path, and the engine only accepts an empty or localhost one
+        add_file(memory, destination=f"/{FILENAME}")
         duckdb_cursor.register_filesystem(memory)
         for protocol in memory.protocol:
-            duckdb_cursor.execute(f"select * from '{protocol}://{FILENAME}'")
+            duckdb_cursor.execute(f"select * from '{protocol}:///{FILENAME}'")
 
             assert duckdb_cursor.fetchall() == [(1, 10, 0), (2, 50, 30)]
 
@@ -192,6 +196,31 @@ class TestPythonFilesystem:
 
         assert memory.open("/root/a=1/data_0.csv").read() == b"2\n"
 
+    def test_copy_into_a_directory_that_has_files(self, duckdb_cursor, memory):
+        duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.execute("CREATE TABLE t AS SELECT range AS i, range % 3 AS p FROM range(30)")
+        duckdb_cursor.execute("COPY t TO 'memory://root' (FORMAT parquet, PARTITION_BY (p))")
+
+        with pytest.raises(duckdb.IOException, match="is not empty"):
+            duckdb_cursor.execute("COPY t TO 'memory://root' (FORMAT parquet, PARTITION_BY (p))")
+
+        duckdb_cursor.execute(
+            "COPY (FROM t WHERE p = 0) TO 'memory://root' (FORMAT parquet, PARTITION_BY (p), OVERWRITE)"
+        )
+        assert sorted(memory.find("/root")) == ["/root/p=0/data_0.parquet"]
+        assert duckdb_cursor.sql("SELECT count(*) FROM 'memory://root/*/*.parquet'").fetchall() == [(10,)]
+
+    def test_copy_into_a_flat_directory_that_has_files(self, duckdb_cursor, memory):
+        duckdb_cursor.register_filesystem(memory)
+        copy = "COPY (SELECT range AS i FROM range(10)) TO 'memory://flat' (FORMAT parquet, FILE_SIZE_BYTES 1000{})"
+        duckdb_cursor.execute(copy.format(""))
+
+        with pytest.raises(duckdb.IOException, match="is not empty"):
+            duckdb_cursor.execute(copy.format(""))
+
+        duckdb_cursor.execute(copy.format(", OVERWRITE"))
+        assert duckdb_cursor.sql("SELECT count(*) FROM 'memory://flat/*.parquet'").fetchall() == [(10,)]
+
     def test_copy_partition_with_columns_written(
         self, duckdb_cursor: DuckDBPyConnection, memory: fsspec.AbstractFileSystem
     ):
@@ -281,10 +310,29 @@ class TestPythonFilesystem:
         c = duckdb.connect()
         c.register_filesystem(fsspec.implementations.local.LocalFileSystem())
 
-        q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"  # noqa: E501
+        q = f"SELECT * FROM read_parquet('file:///{tmp_path.as_posix().lstrip('/')}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"  # noqa: E501
 
         res = c.sql(q).fetchall()
         assert res == [(1719568210134107692, 1)]
+
+    def test_a_globbed_windows_drive_path_becomes_a_standard_file_uri(self):
+        from fsspec.implementations.local import LocalFileSystem
+
+        class WindowsLocalFileSystem(LocalFileSystem):
+            # What fsspec's local filesystem returns for a drive-letter path on Windows
+            def glob(self, path, maxdepth=None, **kwargs):
+                return ["C:/data/table1.parquet", "D:/data/table2.parquet", "/data/table3.parquet"]
+
+            def unstrip_protocol(self, name):
+                return f"file://{name}"
+
+        con = duckdb.connect()
+        con.register_filesystem(WindowsLocalFileSystem())
+        assert sorted(con.sql("SELECT file FROM glob('file:///C:/data/table*.parquet')").fetchall()) == [
+            ("file:///C:/data/table1.parquet",),
+            ("file:///D:/data/table2.parquet",),
+            ("file:///data/table3.parquet",),
+        ]
 
 
 class TestNanobindFilesystemHardening:
@@ -319,7 +367,7 @@ class TestNanobindFilesystemHardening:
         con.register_filesystem(memory)
         # Must not overflow (ASan) and must count correctly despite the injected trailing bytes.
         query = "SELECT count(*), sum(column0) FROM read_csv('memory://big.csv', sep=';', header=false)"
-        res = con.sql(query).fetchone()
+        res = con.sql(query).fetchall()[0]
         assert res == (200000, sum(range(200000)))
 
     def test_filesystem_object_destructor_swallows_delete_error(self, monkeypatch):

@@ -199,7 +199,7 @@ class TestEnumCasterAcceptsStrIntEnum:
         con = duckdb.connect()
         con.create_function("f_str", lambda x: x, [int], int, type="native")
         con.create_function("f_enum", lambda x: x, [int], int, type=PythonUDFType.NATIVE)
-        assert con.sql("select f_str(21) + f_enum(21)").fetchone() == (42,)
+        assert con.sql("select f_str(21) + f_enum(21)").fetchall()[0] == (42,)
 
 
 # ===========================================================================

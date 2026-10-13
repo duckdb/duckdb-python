@@ -305,15 +305,13 @@ class TestScalarUDF:
             return x
 
         con = duckdb.connect()
-        rel = con.sql("select 42")
-        # Using fetchone keeps the result open, with a transaction
-        rel.fetchone()
+        con.execute("select * from range(4096)")
+        assert con.fetchone() == (0,)
+        # The open result holds the connection's transaction, so registering a function is refused until it is read
+        with pytest.raises(duckdb.ResourceInUseException, match="unfinished result from execute"):
+            con.create_function("func", func)
+        assert len(con.fetchall()) == 4095
 
         con.create_function("func", func)
-
-        # Registering the function ended the open query, and the connection is usable afterwards
-        with pytest.raises(duckdb.InterruptException, match="cancelled"):
-            rel.fetchall()
-
         res = con.sql("select func(5)").fetchall()
         assert res == [(5,)]

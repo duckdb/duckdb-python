@@ -233,11 +233,12 @@ nb::object PandasScanFunction::PandasReplaceCopiedNames(const nb::object &origin
 }
 
 void PandasScanFunction::PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                         const TableFunction &function) {
+                                         const BoundTableFunction &function) {
 	throw NotImplementedException("PandasScan function cannot be serialized");
 }
 
-unique_ptr<FunctionData> PandasScanFunction::PandasDeserialize(Deserializer &deserializer, TableFunction &function) {
+unique_ptr<FunctionData> PandasScanFunction::PandasDeserialize(Deserializer &deserializer,
+                                                               BoundTableFunction &function) {
 	throw NotImplementedException("PandasScan function cannot be deserialized");
 }
 

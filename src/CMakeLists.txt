@@ -10,6 +10,7 @@ add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
 add_subdirectory(arrow)
+add_subdirectory(engine)
 
 add_library(
   python_src OBJECT

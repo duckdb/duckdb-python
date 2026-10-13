@@ -8,39 +8,39 @@ class TestVariantFetchall:
     """Tests for fetchall/fetchone with VARIANT columns (should all pass)."""
 
     def test_integer(self):
-        result = duckdb.sql("SELECT 42::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT 42::VARIANT AS v").fetchall()[0]
         assert result[0] == 42
 
     def test_string(self):
-        result = duckdb.sql("SELECT 'hello'::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT 'hello'::VARIANT AS v").fetchall()[0]
         assert result[0] == "hello"
 
     def test_boolean(self):
-        result = duckdb.sql("SELECT true::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT true::VARIANT AS v").fetchall()[0]
         assert result[0] is True
 
     def test_double(self):
-        result = duckdb.sql("SELECT 3.14::DOUBLE::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT 3.14::DOUBLE::VARIANT AS v").fetchall()[0]
         assert abs(result[0] - 3.14) < 1e-10
 
     def test_null(self):
-        result = duckdb.sql("SELECT NULL::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT NULL::VARIANT AS v").fetchall()[0]
         assert result[0] is None
 
     def test_list(self):
-        result = duckdb.sql("SELECT [1, 2, 3]::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT [1, 2, 3]::VARIANT AS v").fetchall()[0]
         assert result[0] == [1, 2, 3]
 
     def test_struct(self):
-        result = duckdb.sql("SELECT {'a': 1, 'b': 2}::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT {'a': 1, 'b': 2}::VARIANT AS v").fetchall()[0]
         assert result[0] == {"a": 1, "b": 2}
 
     def test_nested_struct(self):
-        result = duckdb.sql("SELECT {'x': {'y': 42}}::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT {'x': {'y': 42}}::VARIANT AS v").fetchall()[0]
         assert result[0] == {"x": {"y": 42}}
 
     def test_map(self):
-        result = duckdb.sql("SELECT MAP {'key1': 'val1', 'key2': 'val2'}::VARIANT AS v").fetchone()
+        result = duckdb.sql("SELECT MAP {'key1': 'val1', 'key2': 'val2'}::VARIANT AS v").fetchall()[0]
         val = result[0]
         # VARIANT converts maps to a list of key/value structs
         assert val == [{"key": "key1", "value": "val1"}, {"key": "key2", "value": "val2"}]
@@ -68,7 +68,7 @@ class TestVariantFetchall:
         """The original repro that motivated VARIANT support."""
         result = duckdb.sql("""
             SELECT MAP {42::VARIANT: 'answer'} AS m
-        """).fetchone()
+        """).fetchall()[0]
         # MAP with VARIANT keys is returned as a struct with key/value arrays
         assert result[0] == {"key": [42], "value": ["answer"]}
 

@@ -35,8 +35,7 @@ class TestRAPIQuery:
             rel = con.query(f"select i from range({amount}::BIGINT) tbl(i)")
             amount = amount / 10
             rel = rel.query("rel", f"select * from rel limit {amount}")
-        result = rel.execute()
-        assert len(result.fetchall()) == amount
+        assert len(rel.fetchall()) == amount
 
     def test_query_chain_using_alias(self):
         # Test query chaining using DuckDBPyRelation.alias
@@ -59,16 +58,14 @@ class TestRAPIQuery:
             rel.insert([row])
         # Querying a table relation
         rel = rel.query("x", "select * from x")
-        result = rel.execute()
-        assert result.fetchall() == [(x,) for x in input]
+        assert rel.fetchall() == [(x,) for x in input]
 
     def test_query_table_basic(self, tbl_table):
         con = duckdb.default_connection()
         rel = con.table("tbl")
         # Querying a table relation
         rel = rel.query("x", "select 5")
-        result = rel.execute()
-        assert result.fetchall() == [(5,)]
+        assert rel.fetchall() == [(5,)]
 
     def test_query_table_qualified(self, duckdb_cursor):
         con = duckdb.default_connection()
@@ -108,8 +105,7 @@ class TestRAPIQuery:
         rel = con.table("tbl")
         # Querying a table relation
         rel = rel.query("x", "select 5")
-        result = rel.execute()
-        assert result.fetchall() == [(5,)]
+        assert rel.fetchall() == [(5,)]
 
     def test_query_non_select_result(self, duckdb_cursor):
         with pytest.raises(duckdb.ParserException, match="syntax error"):

@@ -31,7 +31,7 @@ class TestParquet:
         rel = duckdb.from_parquet(filename)
         assert rel.types == ["BLOB"]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == (b"foo",)
 
     def test_scan_binary_as_string(self, duckdb_cursor):
@@ -48,14 +48,14 @@ class TestParquet:
         rel = duckdb.from_parquet(filename, True)
         assert rel.types == [VARCHAR]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == ("foo",)
 
     def test_from_parquet_file_row_number(self, duckdb_cursor):
         rel = duckdb.from_parquet(filename, binary_as_string=True, file_row_number=True)
         assert rel.types == [VARCHAR, BIGINT]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == (
             "foo",
             0,
@@ -65,7 +65,7 @@ class TestParquet:
         rel = duckdb.from_parquet(filename, binary_as_string=True, filename=True)
         assert rel.types == [VARCHAR, VARCHAR]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == (
             "foo",
             filename,
@@ -75,14 +75,14 @@ class TestParquet:
         rel = duckdb.from_parquet([filename], binary_as_string=True)
         assert rel.types == [VARCHAR]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == ("foo",)
 
     def test_from_parquet_list_file_row_number(self, duckdb_cursor):
         rel = duckdb.from_parquet([filename], binary_as_string=True, file_row_number=True)
         assert rel.types == [VARCHAR, BIGINT]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == (
             "foo",
             0,
@@ -92,7 +92,7 @@ class TestParquet:
         rel = duckdb.from_parquet([filename], binary_as_string=True, filename=True)
         assert rel.types == [VARCHAR, VARCHAR]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == (
             "foo",
             filename,
@@ -136,7 +136,7 @@ class TestParquet:
         rel = duckdb.from_parquet(filename, True)
         assert rel.types == [VARCHAR]
 
-        res = rel.execute().fetchall()
+        res = rel.fetchall()
         assert res[0] == ("foo",)
 
     def test_from_parquet_union_by_name(self, tmp_parquets):
@@ -161,7 +161,7 @@ class TestParquet:
         )
 
         rel = duckdb.from_parquet(tmp_parquets, union_by_name=True).order("a")
-        assert rel.execute().fetchall() == [
+        assert rel.fetchall() == [
             (
                 1,
                 None,

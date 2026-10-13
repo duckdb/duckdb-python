@@ -13,6 +13,7 @@
 #include "duckdb_python/import_cache/python_import_cache.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/engine/connection.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/path_like.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
@@ -53,6 +54,41 @@ private:
 	mutex l;
 };
 
+//! The result of the last execute(), read by the connection's fetch methods
+class DbapiResult {
+public:
+	explicit DbapiResult(std::shared_ptr<DuckDBPyResult> result);
+
+public:
+	nb::list Description() const;
+	int64_t Rowcount() const {
+		return changed_rows;
+	}
+	Optional<nb::tuple> FetchOne();
+	nb::list FetchMany(idx_t size);
+	nb::list FetchAll();
+	nb::dict FetchNumpy();
+	PandasDataFrame FetchDF(bool date_as_object);
+	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+	nb::dict FetchPyTorch();
+	nb::dict FetchTF();
+	void Complete();
+	void Abort();
+	//! Makes way for the next statement: one that may write runs to its end, so its effects are not lost; one
+	//! that reads is cancelled
+	void Supersede();
+	shared_ptr<engine::Result> EngineResult() const {
+		return result ? result->EngineResult() : nullptr;
+	}
+
+private:
+	//! Null once a consuming fetch, complete() or abort() has used the rows up
+	std::shared_ptr<DuckDBPyResult> result;
+	vector<string> names;
+	vector<LogicalType> types;
+	int64_t changed_rows;
+};
+
 struct ConnectionGuard {
 public:
 	ConnectionGuard() {
@@ -73,11 +109,22 @@ public:
 		}
 		return *database;
 	}
+	//! Refuses while engine work runs on the connection, so a call from inside that work errors instead of waiting
 	Connection &GetConnection() {
+		ThrowIfBusy();
+		return GetConnectionWhileBusy();
+	}
+	//! For the calls that must reach a connection whose query is running: interrupting it, reading its progress
+	Connection &GetConnectionWhileBusy() {
 		if (!connection) {
 			ThrowConnectionException();
 		}
 		return *connection;
+	}
+	void ThrowIfBusy() const {
+		if (state && connection) {
+			state->ThrowIfBusy(*connection->context);
+		}
 	}
 
 	bool ConnectionIsClosed() const {
@@ -85,18 +132,19 @@ public:
 	}
 
 	const Connection &GetConnection() const {
+		ThrowIfBusy();
 		if (!connection) {
 			ThrowConnectionException();
 		}
 		return *connection;
 	}
-	DuckDBPyRelation &GetResult() {
+	DbapiResult &GetResult() {
 		if (!result) {
 			ThrowConnectionException();
 		}
 		return *result;
 	}
-	const DuckDBPyRelation &GetResult() const {
+	const DbapiResult &GetResult() const {
 		if (!result) {
 			ThrowConnectionException();
 		}
@@ -119,10 +167,14 @@ public:
 		database = con.database;
 	}
 	void SetConnection(unique_ptr<Connection> con) {
+		state = con ? engine::ConnectionState::Get(*con->context) : nullptr;
 		connection = std::move(con);
 	}
-	void SetResult(std::unique_ptr<DuckDBPyRelation> res) {
+	void SetResult(std::unique_ptr<DbapiResult> res) {
 		result = std::move(res);
+		if (state) {
+			state->SetDbapiResult(result ? result->EngineResult() : nullptr);
+		}
 	}
 
 private:
@@ -133,7 +185,8 @@ private:
 private:
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> connection;
-	std::unique_ptr<DuckDBPyRelation> result;
+	shared_ptr<engine::ConnectionState> state;
+	std::unique_ptr<DbapiResult> result;
 };
 
 struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
@@ -164,6 +217,8 @@ public:
 	public:
 		explicit ConnectionLockGuard(DuckDBPyConnection &conn) : lock_(conn.py_connection_lock, std::defer_lock) {
 			D_ASSERT(duckdb::PyUtil::GilCheck());
+			// The holder of the mutex may be running a query that is waiting for this very call
+			conn.con.ThrowIfBusy();
 			nb::gil_scoped_release release;
 			lock_.lock();
 		}
@@ -251,11 +306,12 @@ public:
 	std::shared_ptr<DuckDBPyConnection> ExecuteMany(const nb::object &query, nb::object params = nb::list());
 
 	void ExecuteImmediately(vector<unique_ptr<SQLStatement>> statements);
-	unique_ptr<PreparedStatement> PrepareQuery(unique_ptr<SQLStatement> statement);
-	unique_ptr<QueryResult> ExecuteInternal(PreparedStatement &prep, nb::object params = nb::list());
-	//! Binds the parameters and submits the statement. The handle is returned undriven.
-	unique_ptr<QueryResult> PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-	                                                 nb::object params = nb::list());
+	engine::Prepared PrepareQuery(unique_ptr<SQLStatement> statement);
+	shared_ptr<engine::Result> ExecuteInternal(engine::Prepared &prep, nb::object params = nb::list());
+	//! Binds the parameters and submits the statement. The result is returned undriven.
+	shared_ptr<engine::Result> PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
+	                                                    nb::object params = nb::list());
+	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
@@ -314,7 +370,11 @@ public:
 
 	Optional<nb::list> GetDescription();
 
-	int GetRowcount();
+	int64_t GetRowcount();
+	//! Runs the result of execute() to its end without reading its rows
+	void Complete();
+	//! Cancels the rest of the result of execute()
+	void Abort();
 
 	// these should be functions on the result but well
 	Optional<nb::tuple> FetchOne();
@@ -327,14 +387,12 @@ public:
 	PandasDataFrame FetchDF(bool date_as_object);
 	PandasDataFrame FetchDFChunk(const idx_t vectors_per_chunk = 1, bool date_as_object = false);
 
-	duckdb::pyarrow::Table FetchArrow(idx_t rows_per_batch);
-	PolarsDataFrame FetchPolars(idx_t rows_per_batch, bool lazy);
-
 	nb::dict FetchPyTorch();
 
 	nb::dict FetchTF();
 
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(const idx_t rows_per_batch);
+	//! Drops the last execute() result the way the next statement requires; cancel skips the drain
+	void SupersedeResult(bool cancel);
 
 	static std::shared_ptr<DuckDBPyConnection> Connect(const nb::object &database, bool read_only,
 	                                                   const nb::dict &config);
@@ -360,13 +418,11 @@ public:
 	static bool IsAcceptedArrowObject(const nb::object &object);
 	static NumpyObjectType IsAcceptedNumpyObject(const nb::object &object);
 
-	//! Runs a submitted query to a retained, ended result on the calling thread, checking for Python
-	//! signals between tasks. Throws the query's error, and leaves the handle holding its collection.
-	static void CompleteQuery(QueryResult &result);
+	//! Abandons a blocking engine call when Python has a pending signal. Takes the GIL.
+	static void CheckSignals();
 
 private:
 	std::unique_ptr<DuckDBPyRelation> CreateRelation(shared_ptr<Relation> rel);
-	std::unique_ptr<DuckDBPyRelation> CreateRelation(std::shared_ptr<DuckDBPyResult> result);
 	PathLike GetPathLike(const nb::object &object);
 	ScalarFunction CreateScalarUDF(const string &name, const nb::callable &udf, const nb::object &parameters,
 	                               const nb::object &return_type, bool vectorized, FunctionNullHandling null_handling,
