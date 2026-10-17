@@ -24,6 +24,9 @@
 #include "duckdb/main/relation/table_relation.hpp"
 #include "duckdb/main/relation/explain_relation.hpp"
 #include "duckdb/main/relation/update_relation.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
@@ -231,6 +234,100 @@ Relation &DuckDBPyRelation::GetRel() {
 	}
 	return *rel;
 }
+
+static shared_ptr<ExternalDependency> OwningDependency(shared_ptr<Relation> rel) {
+	auto dependency = make_shared_ptr<ExternalDependency>();
+	// The native relation carries the Python data the scan reads. Owning the wrapper instead would
+	// own its connection, and an open result holding that closes a cycle the garbage
+	// collector cannot see: connection to result to wrapper to connection.
+	dependency->AddDependency("source", RelationDependencyItem::Create(std::move(rel)));
+	return dependency;
+}
+
+unique_ptr<TableRef> DuckDBPyRelation::OwningSubquery() const {
+	auto select = make_uniq<SelectStatement>();
+	select->node = rel->GetQueryNode();
+	auto subquery = make_uniq<SubqueryRef>(std::move(select));
+	subquery->external_dependency = OwningDependency(rel);
+	return std::move(subquery);
+}
+
+static bool CopyKeepsDependency(const TableRef &ref) {
+	switch (ref.type) {
+	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::SUBQUERY:
+	case TableReferenceType::TABLE_FUNCTION:
+	case TableReferenceType::EXPRESSION_LIST:
+	case TableReferenceType::COLUMN_DATA:
+	case TableReferenceType::SHOW_REF:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void FindCarrier(QueryNode &node, optional_ptr<TableRef> &carrier);
+
+static void FindCarrier(ParsedExpression &expr, optional_ptr<TableRef> &carrier) {
+	if (carrier) {
+		return;
+	}
+	if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+		FindCarrier(*expr.Cast<SubqueryExpression>().SubqueryMutable()->node, carrier);
+	}
+	ParsedExpressionIterator::EnumerateChildren(expr, [&](ParsedExpression &child) { FindCarrier(child, carrier); });
+}
+
+//! The first TableRef, anywhere in the node and its expressions' subqueries, whose copy keeps a dependency
+static void FindCarrier(QueryNode &node, optional_ptr<TableRef> &carrier) {
+	if (carrier) {
+		return;
+	}
+	ParsedExpressionIterator::EnumerateQueryNodeChildren(
+	    node,
+	    [&](unique_ptr<ParsedExpression> &expr) {
+		    if (expr) {
+			    FindCarrier(*expr, carrier);
+		    }
+	    },
+	    [&](TableRef &ref) {
+		    if (!carrier && CopyKeepsDependency(ref)) {
+			    carrier = &ref;
+		    }
+	    });
+}
+
+//! The relation a view is made from: a view keeps only the query node, and the engine carries a dependency into a
+//! view only on a TableRef, so one TableRef of the relation's own query node owns the native relation.
+class OwningViewSource : public Relation {
+public:
+	explicit OwningViewSource(shared_ptr<Relation> source_p)
+	    : Relation(source_p->context, source_p->type), source(std::move(source_p)) {
+	}
+
+	const vector<ColumnDefinition> &Columns() override {
+		return source->Columns();
+	}
+
+	unique_ptr<QueryNode> GetQueryNode() override {
+		auto node = source->GetQueryNode();
+		optional_ptr<TableRef> carrier;
+		FindCarrier(*node, carrier);
+		// One is enough, as the native relation also owns whatever that TableRef carried; a query that reads no
+		// table has nothing to own.
+		if (carrier) {
+			carrier->external_dependency = OwningDependency(source);
+		}
+		return node;
+	}
+
+	string ToString(idx_t depth) override {
+		return source->ToString(depth);
+	}
+
+private:
+	shared_ptr<Relation> source;
+};
 
 struct DescribeAggregateInfo {
 	explicit DescribeAggregateInfo(string name_p, bool numeric_only = false)
@@ -1366,14 +1463,18 @@ void DuckDBPyRelation::ToCSV(const string &filename, const nb::object &sep, cons
 	PyExecuteRelation(write_csv);
 }
 
-// should this return a rel with the new view?
-std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
+void DuckDBPyRelation::CreateOwningView(const string &view_name, bool replace, bool temporary) {
 	try {
-		rel->CreateView(Identifier(view_name), replace);
+		make_shared_ptr<OwningViewSource>(rel)->CreateView(Identifier(view_name), replace, temporary);
 	} catch (std::exception &error) {
 		engine::NameRefusal(*rel->context->GetContext(), error);
 		throw;
 	}
+}
+
+// should this return a rel with the new view?
+std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_name, bool replace) {
+	CreateOwningView(view_name, replace, /*temporary=*/false);
 	return DeriveRelation(rel);
 }
 
@@ -1425,12 +1526,7 @@ static void BindNameToRelation(QueryNode &node, const Identifier &name, Relation
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
-	try {
-		rel->CreateView(Identifier(view_name), /*replace=*/true, /*temporary=*/true);
-	} catch (std::exception &error) {
-		engine::NameRefusal(*rel->context->GetContext(), error);
-		throw;
-	}
+	CreateOwningView(view_name, /*replace=*/true, /*temporary=*/true);
 	auto &context = *rel->context->GetContext();
 	Parser parser(context);
 	parser.ParseQuery(sql_query);
@@ -1450,9 +1546,7 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_nam
 		    make_shared_ptr<QueryRelation>(rel->context->GetContext(), std::move(select_statement),
 		                                   "query_relation_" + StringUtil::GenerateRandomName(16), query_text);
 		// File-like objects named in the source's node stay registered only while the source lives.
-		auto source_dependency = make_shared_ptr<ExternalDependency>();
-		source_dependency->AddDependency("source", RelationDependencyItem::Create(rel));
-		query_relation->AddExternalDependency(std::move(source_dependency));
+		query_relation->AddExternalDependency(OwningDependency(rel));
 		return DeriveRelation(std::move(query_relation));
 	}
 	{

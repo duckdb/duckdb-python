@@ -12,7 +12,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/python_dependency.hpp"
 #include <duckdb/main/settings.hpp>
@@ -131,17 +130,7 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const nb::objec
 			    "created by another Connection and can therefore not be used by this Connection.",
 			    name);
 		}
-		// create a subquery from the underlying relation object
-		auto select = make_uniq<SelectStatement>();
-		select->node = pyrel->GetRel().GetQueryNode();
-		auto subquery = make_uniq<SubqueryRef>(std::move(select));
-		auto dependency = make_uniq<ExternalDependency>();
-		// The native relation carries the Python data the scan reads. Owning the wrapper instead would
-		// own its connection, and an open result holding that closes a cycle the garbage
-		// collector cannot see: connection to result to wrapper to connection.
-		dependency->AddDependency("replacement_cache", RelationDependencyItem::Create(pyrel->GetSharedRelation()));
-		subquery->external_dependency = std::move(dependency);
-		return std::move(subquery);
+		return pyrel->OwningSubquery();
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		// Polars DataFrames always go through one-time .to_arrow() materialization.
 		// Polars's __arrow_c_stream__() serializes from its internal layout on every call,

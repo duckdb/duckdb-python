@@ -252,6 +252,7 @@ public:
 	shared_ptr<Relation> GetSharedRelation() const {
 		return rel;
 	}
+	unique_ptr<TableRef> OwningSubquery() const;
 
 	bool ContainsColumnByName(const string &name) const;
 
@@ -259,6 +260,7 @@ public:
 	std::unique_ptr<DuckDBPyRelation> DeriveRelation(shared_ptr<Relation> new_rel);
 
 private:
+	void CreateOwningView(const string &view_name, bool replace, bool temporary);
 	string ToStringInternal(const BoxRendererConfig &config);
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
