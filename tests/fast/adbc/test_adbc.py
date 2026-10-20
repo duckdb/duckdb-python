@@ -163,9 +163,11 @@ def test_connection_get_table_schema(duck_conn):
         duck_conn.commit()
 
         # Test invalid catalog name
+        # Cores with nested schema support (duckdb/duckdb#24076) resolve bla.test as a
+        # schema path; older cores resolve bla as a catalog. Accept both messages.
         with pytest.raises(
             adbc_driver_manager.InternalError,
-            match=r'Catalog "bla" does not exist',
+            match=r'Catalog "bla" does not exist|schema "bla\.test" does not exist',
         ):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
         # The failed lookup aborts the (autocommit-off) transaction; roll it back before continuing.

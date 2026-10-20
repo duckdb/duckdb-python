@@ -287,10 +287,12 @@ struct DescribeAggregateInfo {
 	bool numeric_only;
 };
 
-vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
-                                    const vector<DescribeAggregateInfo> &aggregates) {
-	vector<string> expressions;
-	expressions.reserve(columns.size());
+// Build the Describe query as two levels. The inner single-group aggregate computes one
+// scalar per (column, aggregate); the outer projection pivots them into rows via parallel
+// UNNESTs. This avoids GROUP BY ALL, which core rejects for UNNEST/UNLIST expressions.
+void CreateDescribeExpressions(const vector<ColumnDefinition> &columns, const vector<DescribeAggregateInfo> &aggregates,
+                               vector<string> &inner_aggregates, vector<string> &outer_projection) {
+	outer_projection.reserve(columns.size() + 1);
 
 	string aggr_names = "UNNEST([";
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -303,33 +305,35 @@ vector<string> CreateExpressionList(const vector<ColumnDefinition> &columns,
 	}
 	aggr_names += "])";
 	aggr_names += " AS aggr";
-	expressions.push_back(aggr_names);
+	outer_projection.push_back(aggr_names);
+
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
-		string expr = "UNNEST([";
+		bool numeric = col.GetType().IsNumeric();
+		string unnest = "UNNEST([";
 		for (idx_t i = 0; i < aggregates.size(); i++) {
+			auto alias = "__describe_" + std::to_string(c) + "_" + std::to_string(i);
 			if (i > 0) {
-				expr += ", ";
+				unnest += ", ";
 			}
-			if (aggregates[i].numeric_only && !col.GetType().IsNumeric()) {
-				expr += "NULL";
-				continue;
-			}
-			expr += aggregates[i].name;
-			expr += "(";
-			expr += SQLIdentifier(col.GetName());
-			expr += ")";
-			if (col.GetType().IsNumeric()) {
-				expr += "::DOUBLE";
+			unnest += SQLIdentifier(alias);
+			string stat;
+			if (aggregates[i].numeric_only && !numeric) {
+				stat = "NULL";
 			} else {
-				expr += "::VARCHAR";
+				stat = aggregates[i].name;
+				stat += "(";
+				stat += SQLIdentifier(col.GetName());
+				stat += ")";
+				stat += numeric ? "::DOUBLE" : "::VARCHAR";
 			}
+			stat += " AS " + SQLIdentifier(alias);
+			inner_aggregates.push_back(stat);
 		}
-		expr += "])";
-		expr += " AS " + SQLIdentifier(col.GetName());
-		expressions.push_back(expr);
+		unnest += "])";
+		unnest += " AS " + SQLIdentifier(col.GetName());
+		outer_projection.push_back(unnest);
 	}
-	return expressions;
 }
 
 std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
@@ -338,8 +342,11 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Describe() {
 	aggregates = {DescribeAggregateInfo("count"),        DescribeAggregateInfo("mean", true),
 	              DescribeAggregateInfo("stddev", true), DescribeAggregateInfo("min"),
 	              DescribeAggregateInfo("max"),          DescribeAggregateInfo("median", true)};
-	auto expressions = CreateExpressionList(columns, aggregates);
-	return DeriveRelation(rel->Aggregate(expressions));
+	vector<string> inner_aggregates;
+	vector<string> outer_projection;
+	CreateDescribeExpressions(columns, aggregates, inner_aggregates, outer_projection);
+	auto stats = rel->Aggregate(inner_aggregates);
+	return DeriveRelation(stats->Project(outer_projection));
 }
 
 string DuckDBPyRelation::ToSQL() {
@@ -1259,7 +1266,7 @@ void DuckDBPyRelation::ToParquet(const string &filename, const nb::object &compr
                                  const nb::object &use_tmp_file, const nb::object &partition_by,
                                  const nb::object &write_partition_columns, const nb::object &append,
                                  const nb::object &filename_pattern, const nb::object &file_size_bytes) {
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 
 	if (!nb::none().is(compression)) {
 		if (!nb::isinstance<nb::str>(compression)) {
@@ -1378,7 +1385,7 @@ void DuckDBPyRelation::ToCSV(const string &filename, const nb::object &sep, cons
                              const nb::object &overwrite, const nb::object &per_thread_output,
                              const nb::object &use_tmp_file, const nb::object &partition_by,
                              const nb::object &write_partition_columns) {
-	case_insensitive_map_t<vector<Value>> options;
+	identifier_map_t<vector<Value>> options;
 
 	if (!nb::none().is(sep)) {
 		if (!nb::isinstance<nb::str>(sep)) {
@@ -1544,8 +1551,9 @@ std::unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Query(const string &view_nam
 	auto &statement = *parser.statements[0];
 	if (statement.type == StatementType::SELECT_STATEMENT) {
 		auto select_statement = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0]));
-		auto query_relation = make_shared_ptr<QueryRelation>(rel->context->GetContext(), std::move(select_statement),
-		                                                     sql_query, "query_relation");
+		auto query_relation =
+		    make_shared_ptr<QueryRelation>(rel->context->GetContext(), std::move(select_statement),
+		                                   "query_relation_" + StringUtil::GenerateRandomName(16), sql_query);
 		return DeriveRelation(std::move(query_relation));
 	} else if (IsDescribeStatement(statement)) {
 		auto query = PragmaShow(view_name);
@@ -1740,7 +1748,7 @@ string DuckDBPyRelation::Explain(ExplainType type, const string &format) {
 	const bool auto_format = format.empty();
 	auto explain_format = auto_format ? GetExplainFormat(type) : ProfilerPrintFormat(format);
 	auto res = rel->Explain(type, explain_format);
-	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
+	D_ASSERT(res->GetResultType() == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
 	// Only the implicit Jupyter path renders HTML inline; an explicitly requested format always returns a string.

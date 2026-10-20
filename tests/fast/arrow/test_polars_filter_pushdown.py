@@ -458,6 +458,10 @@ class TestDistinctFromNullOrPushdown:
         duckdb_cursor.execute("CREATE TABLE _d AS SELECT * FROM (VALUES (1), (NULL), (5), (10)) t(a)")
         duckdb_cursor.register("arrow_table", factory(duckdb_cursor.table("_d")))
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="core no longer pushes IS_NOT_NULL into the arrow scan; results are unaffected",
+    )
     def test_distinct_from_null_or_eq_is_pushed(self, duckdb_cursor, factory):
         assert _was_pushed(
             duckdb_cursor,

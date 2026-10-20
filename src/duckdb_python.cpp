@@ -214,7 +214,7 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->ArrayType(type, size);
 	    },
-	    "Create an array type object of 'type'", nb::arg("type").none(false), nb::arg("size"), nb::kw_only(),
+	    "Create an array type object of 'type'", nb::arg("type"), nb::arg("size"), nb::kw_only(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "list_type",
@@ -224,7 +224,7 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->ListType(type);
 	    },
-	    "Create a list type object of 'type'", nb::arg("type").none(false), nb::kw_only(),
+	    "Create a list type object of 'type'", nb::arg("type"), nb::kw_only(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "union_type",
@@ -234,7 +234,7 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->UnionType(members);
 	    },
-	    "Create a union type object from 'members'", nb::arg("members").none(false), nb::kw_only(),
+	    "Create a union type object from 'members'", nb::arg("members"), nb::kw_only(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "string_type",
@@ -296,8 +296,8 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->MapType(key_type, value_type);
 	    },
-	    "Create a map type object from 'key_type' and 'value_type'", nb::arg("key").none(false),
-	    nb::arg("value").none(false), nb::kw_only(), nb::arg("connection").none() = nb::none());
+	    "Create a map type object from 'key_type' and 'value_type'", nb::arg("key"), nb::arg("value"), nb::kw_only(),
+	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "duplicate",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -1122,8 +1122,7 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
 	      "Retrieve the connection currently registered as the default to be used by the module");
 	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
-	      "Register the provided connection as the default to be used by the module",
-	      nb::arg("connection").none(false));
+	      "Register the provided connection as the default to be used by the module", nb::arg("connection"));
 	m.attr("apilevel") = "2.0";
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";

@@ -111,7 +111,7 @@ static void ConvertArrowTableToVector(const nb::object &table, Vector &out, Clie
 	TableFunctionBindInput bind_input(children, named_params, input_types, input_names, nullptr, nullptr,
 	                                  dummy_table_function, empty);
 	vector<LogicalType> return_types;
-	vector<string> return_names;
+	vector<Identifier> return_names;
 
 	auto bind_data = bind(context, bind_input, return_types, return_names);
 
@@ -558,6 +558,9 @@ public:
 		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
 		ScalarFunction scalar_function(Identifier(name), std::move(parameters), return_type, func, nullptr, nullptr,
 		                               nullptr, varargs, function_side_effects, null_handling);
+		// A Python callable can raise, and casting its return value can fail, so a UDF is always
+		// fallible. Without this core rethrows any execution error as an InternalException.
+		scalar_function.SetFallible();
 		return scalar_function;
 	}
 };

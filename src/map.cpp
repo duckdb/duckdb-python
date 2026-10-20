@@ -108,7 +108,7 @@ static void OverrideNullType(vector<LogicalType> &return_types, const vector<Ide
 }
 
 unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function_data, PyObject *schema_p,
-                                            vector<LogicalType> &types, vector<string> &names) {
+                                            vector<LogicalType> &types, vector<Identifier> &names) {
 	D_ASSERT(schema_p != Py_None);
 
 	auto schema_object = nb::borrow<nb::dict>(schema_p);
@@ -124,7 +124,7 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 	for (auto item : schema) { // nanobind dict iteration yields std::pair<handle,handle> by value
 		auto name = item.first;
 		auto type_p = item.second;
-		names.push_back(nb::cast<std::string>(nb::str(name)));
+		names.emplace_back(nb::cast<std::string>(nb::str(name)));
 		// TryConvert applies the same implicit conversions a DuckDBPyType parameter would (DuckDBPyType instance,
 		// a type string, or a Python type object), and reports a clear error instead of a raw cast failure.
 		std::unique_ptr<DuckDBPyType> type;
@@ -136,9 +136,7 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 		types.push_back(type->Type());
 	}
 
-	for (auto &name : names) {
-		function_data->out_names.push_back(Identifier(name));
-	}
+	function_data->out_names = names;
 	function_data->out_types = types;
 
 	return std::move(function_data);
@@ -147,7 +145,7 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
 unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	nb::gil_scoped_acquire acquire;
 
 	auto data_uptr = make_uniq<MapFunctionData>();
@@ -166,15 +164,10 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
 
-	// Build the Identifier names only after Pandas::Bind has populated 'names'.
-	vector<Identifier> name_identifiers(names.size());
-	std::transform(names.begin(), names.end(), name_identifiers.begin(),
-	               [](const string &name) { return Identifier(name); });
-
 	// output types are potentially NULL, this happens for types that map to 'object' dtype
-	OverrideNullType(return_types, name_identifiers, data.in_types, data.in_names);
+	OverrideNullType(return_types, names, data.in_types, data.in_names);
 
-	data.out_names = name_identifiers;
+	data.out_names = names;
 	data.out_types = return_types;
 	return std::move(data_uptr);
 }
@@ -201,7 +194,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> pandas_return_types;
-	vector<string> pandas_names;
+	vector<Identifier> pandas_names;
 
 	Pandas::Bind(context.client, df, pandas_bind_data, pandas_return_types, pandas_names);
 	if (pandas_return_types.size() != output.ColumnCount()) {
@@ -213,10 +206,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 		throw InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
 		                            TypeVectorToString(data.out_types), TypeVectorToString(pandas_return_types));
 	}
-	vector<Identifier> pandas_name_identifiers(pandas_names.size());
-	std::transform(pandas_names.begin(), pandas_names.end(), pandas_name_identifiers.begin(),
-	               [](const string &name) { return Identifier(name); });
-	if (pandas_name_identifiers != data.out_names) {
+	if (pandas_names != data.out_names) {
 		throw InvalidInputException("UDF column name mismatch, expected [%s], got [%s]",
 		                            StringUtil::Join(data.out_names, ", "), StringUtil::Join(pandas_names, ", "));
 	}

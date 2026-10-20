@@ -1,0 +1,109 @@
+# Opens a PR against the calling branch that moves release_version in
+# pyproject.toml past the version that was just released. See
+# duckdb_packaging/bump_release_version.py for the rule.
+name: Release Version PR
+on:
+  workflow_call:
+    inputs:
+      duckdb-python-sha:
+        type: string
+        description: The commit the release was built from (defaults to the latest commit of the current ref)
+        required: false
+      released-version:
+        type: string
+        description: The package version that was just released, for the PR text
+        required: true
+    secrets:
+      DUCKDBLABS_BOT_TOKEN:
+        description: Github token of the DuckDBLabs bot
+        required: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  create_pr:
+    name: Create PR to bump release_version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.duckdb-python-sha }}
+          fetch-depth: 0
+
+      - name: Checkout or Create Needed Branch
+        run: |
+          git fetch --all
+          head_sha=${{ inputs.duckdb-python-sha }}
+          branch_name="release-version-${{ github.ref_name }}"
+          if [[ `git rev-parse --verify ${branch_name} 2>/dev/null` ]]; then
+            git checkout ${branch_name}
+          else
+            git checkout -b ${branch_name}
+          fi
+          [[ ${head_sha} ]] && git reset --hard ${head_sha} || true
+
+      - name: Bump release_version
+        id: bump
+        run: |
+          set -euo pipefail
+          result=$(python3 -m duckdb_packaging.bump_release_version)
+          echo "${result}"
+          echo "new_version=${result##* -> }" >> $GITHUB_OUTPUT
+
+      - name: Determine GH PR Command
+        id: gh_pr_command
+        env:
+          GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+        run: |
+          pr_url=$( gh pr list --head release-version-${{ github.ref_name }} --state open --json url --jq '.[].url' )
+          if [[ $pr_url ]]; then
+            echo "::notice::Found existing pr, will edit (${pr_url})"
+            gh_command="edit ${pr_url}"
+          else
+            echo "::notice::No existing PR, will create new"
+            gh_command="create --head release-version-${{ github.ref_name }} --base ${{ github.ref_name }}"
+          fi
+          echo "subcommand=${gh_command}" >> $GITHUB_OUTPUT
+
+      - name: Set Git User
+        run: |
+          git config --global user.email "github_bot@duckdblabs.com"
+          git config --global user.name "DuckDB Labs GitHub Bot"
+
+      - name: Create PR to Bump release_version
+        env:
+          GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          RELEASED_VERSION: ${{ inputs.released-version }}
+        run: |
+          git add pyproject.toml
+          git commit -m "Bump release_version to ${NEW_VERSION} after releasing ${RELEASED_VERSION}"
+          git push --force origin release-version-${{ github.ref_name }}
+          echo "Move release_version past the version just released:" > body.txt
+          echo "- Target branch: ${{ github.ref_name }}" >> body.txt
+          echo "- Released: ${RELEASED_VERSION}" >> body.txt
+          echo "- Next: ${NEW_VERSION}" >> body.txt
+          echo "- Date: $( date +"%Y-%m-%d %H:%M:%S" )" >> body.txt
+          echo "- Trigger: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> body.txt
+          subcommand="${{ steps.gh_pr_command.outputs.subcommand }}"
+          gh pr ${subcommand} \
+            --title "[duckdb-labs bot] Bump release_version to ${NEW_VERSION}" \
+            --body-file body.txt > output.txt 2>&1
+          success=$?
+          url=$( [[ $success ]] && gh pr view release-version-${{ github.ref_name }} --json url --jq .url || true )
+          echo "## Release Version PR Summary" >> $GITHUB_STEP_SUMMARY
+          if [[ $success ]]; then
+            prefix=$( [[ $subcommand == edit* ]] && echo "Updated" || echo "Created" )
+            echo "### ${prefix} PR: [${url}](${url})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### Failed to create PR" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          [[ $success ]] || exit 1

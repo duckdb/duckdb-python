@@ -113,7 +113,7 @@ jobs:
             --gcov-ignore-errors all \
             --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
             --root "$PWD" \
-            --filter "${PWD}/src/duckdb_py" \
+            --filter "${PWD}/src" \
             --exclude '.*/\.cache/.*' \
             --gcov-exclude '.*/\.cache/.*' \
             --gcov-exclude '.*/external/.*' \
@@ -121,7 +121,7 @@ jobs:
             --exclude-unreachable-branches \
             --exclude-throw-branches \
             --html --html-details -o coverage-cpp/index.html \
-            build/coverage/src/duckdb_py \
+            build/coverage/src \
             --print-summary > cpp_summary.txt
           # save the summary in the output
           echo "summary<<EOF" >> $GITHUB_OUTPUT
