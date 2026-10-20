@@ -1194,6 +1194,7 @@ def read_json(
     union_by_name: bool | None = None,
     hive_types: HiveTypes | None = None,
     hive_types_autocast: bool | None = None,
+    connection: DuckDBPyConnection | None = None,
 ) -> DuckDBPyRelation: ...
 def read_parquet(
     path_or_buffer: str
@@ -1279,6 +1280,7 @@ def write_csv(
     use_tmp_file: bool | None = None,
     partition_by: lst[str] | None = None,
     write_partition_columns: bool | None = None,
+    connection: DuckDBPyConnection | None = None,
 ) -> None: ...
 
 __formatted_python_version__: str
