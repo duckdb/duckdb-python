@@ -11,7 +11,6 @@ OPTIONAL_PACKAGES = (
     "pyarrow",
     "polars",
     "fsspec",
-    "pytz",
     "typing_extensions",
     "pyspark",
     "IPython",
@@ -162,7 +161,7 @@ def test_spark_timestamps(tmp_path):
 
 
 def test_spark_timestamps_to_pandas(tmp_path):
-    # pandas before 3.0 cannot be imported without pytz.
+    # pandas before 3.0 cannot be imported when pytz is blocked.
     pytest.importorskip("pandas", minversion="3.0.0")
     run_blocked(
         tmp_path,
@@ -201,8 +200,8 @@ def test_spark_udf_needs_numpy(tmp_path, blocked):
     )
 
 
-def test_spark_udf_with_a_timestamp_needs_pytz(tmp_path):
-    """The binding's Python UDF path needs pytz to pass a timestamp to a function."""
+def test_spark_udf_with_a_timestamp_works_without_pytz(tmp_path):
+    """The binding's Python UDF path uses zoneinfo, not pytz, to pass a timestamp to a function."""
     if importlib.util.find_spec("numpy") is None:
         pytest.skip("a UDF needs numpy")
     run_blocked(
@@ -218,12 +217,7 @@ def test_spark_udf_with_a_timestamp_needs_pytz(tmp_path):
         assert spark.createDataFrame([(1,)], "n int").select(plus_one("n")).collect()[0][0] == 2
         year = spark.udf.register("year_of", lambda t: t.year, "int")
         df = spark.createDataFrame([(datetime.datetime(2024, 1, 2),)], "t timestamp")
-        try:
-            df.select(year("t")).collect()
-        except duckdb.InvalidInputException as error:
-            assert "'pytz' failed to import" in str(error), repr(error)
-        else:
-            raise AssertionError("a UDF of a timestamp without pytz did not raise")
+        assert df.select(year("t")).collect()[0][0] == 2024
         """,
         ("pytz",),
     )

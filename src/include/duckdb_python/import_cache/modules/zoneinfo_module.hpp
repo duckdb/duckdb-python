@@ -2,7 +2,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/pytz_module.hpp
+// duckdb_python/import_cache/modules/zoneinfo_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,18 +20,18 @@
 
 namespace duckdb {
 
-struct PytzCacheItem : public PythonImportCacheItem {
+struct ZoneinfoCacheItem : public PythonImportCacheItem {
 
 public:
-	static constexpr const char *Name = "pytz";
+	static constexpr const char *Name = "zoneinfo";
 
 public:
-	PytzCacheItem() : PythonImportCacheItem("pytz"), timezone("timezone", this) {
+	ZoneinfoCacheItem() : PythonImportCacheItem("zoneinfo"), ZoneInfo("ZoneInfo", this) {
 	}
-	~PytzCacheItem() override {
+	~ZoneinfoCacheItem() override {
 	}
 
-	PythonImportCacheItem timezone;
+	PythonImportCacheItem ZoneInfo;
 };
 
 } // namespace duckdb

@@ -1,9 +1,9 @@
 # ruff: noqa: F841
 import datetime
 import decimal
+from zoneinfo import ZoneInfo
 
 import pytest
-import pytz
 
 pa = pytest.importorskip("pyarrow")
 
@@ -324,10 +324,10 @@ class TestArrowOffsets:
     @pytest.mark.parametrize(
         ("constructor", "unit", "expected"),
         [
-            (pa_timestamp(), "ms", datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=pytz.utc)),
-            (pa_timestamp(), "s", datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=pytz.utc)),
-            (pa_timestamp(), "ns", datetime.datetime(1970, 1, 1, 0, 0, 0, 131, tzinfo=pytz.utc)),
-            (pa_timestamp(), "us", datetime.datetime(1970, 1, 1, 0, 0, 0, 131072, tzinfo=pytz.utc)),
+            (pa_timestamp(), "ms", datetime.datetime(1970, 1, 1, 0, 2, 11, 72000, tzinfo=ZoneInfo("UTC"))),
+            (pa_timestamp(), "s", datetime.datetime(1970, 1, 2, 12, 24, 32, 0, tzinfo=ZoneInfo("UTC"))),
+            (pa_timestamp(), "ns", datetime.datetime(1970, 1, 1, 0, 0, 0, 131, tzinfo=ZoneInfo("UTC"))),
+            (pa_timestamp(), "us", datetime.datetime(1970, 1, 1, 0, 0, 0, 131072, tzinfo=ZoneInfo("UTC"))),
         ],
     )
     def test_struct_of_timestamp_tz(self, duckdb_cursor, constructor, unit, expected, col1_null, col2_null):

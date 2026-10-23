@@ -67,7 +67,7 @@ def test_fetchone_iter(benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnecti
 
 
 # small-N *_gate variants: at range(2048) the measured region is ~60% SQL compile + engine, ~40% fetch, so these
-# catch a fixed-cost regression (not a pure per-row one). Plus expensive scalar types (timestamptz pytz-per-row,
+# catch a fixed-cost regression (not a pure per-row one). Plus expensive scalar types (timestamptz per-row,
 # blob, null-heavy), a heterogeneous per-cell-dispatch row, and the batched fetchmany loop.
 
 
