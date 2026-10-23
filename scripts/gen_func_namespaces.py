@@ -252,6 +252,9 @@ def build(
 
 def render(resolved: dict[str, Any]) -> str:
     """The module text."""
+    from duckdb._expression_aggregates import AggregateMethods
+
+    aggregates = set(AggregateMethods._CALLABLES)
     out = [HEADER]
     for family, cls in CLASSES.items():
         section = resolved[family]
@@ -264,16 +267,19 @@ def render(resolved: dict[str, Any]) -> str:
             out.append(f'        "{method}": ("{m["function"]}", {m["subject"]}, {types}),\n')
         out.append("    }\n")
         for method, m in section["methods"].items():
-            out.append(_method(method, m))
+            out.append(_method(method, m, aggregates))
     return "".join(out)
 
 
-def _method(method: str, m: dict[str, Any]) -> str:
-    """One generated method."""
+def _method(method: str, m: dict[str, Any], aggregates: set[str]) -> str:
+    """One generated method; `aggregates` names the aggregate methods a family method may take over."""
     wrap = m["returns"]
     tail = f" SQL: `{m['function']}`."
+    # A family method that takes over an aggregate's name, as `.list().sum()` is `list_sum`, is a scalar call with
+    # no rows to order, so it has no `order_by=`; mypy reads that as a narrower override.
+    override = "  # type: ignore[override]" if method in aggregates else ""
     if m["lambda"]:
-        head = f"\n    def {method}(self, function: ValueOrExpr, *args: ValueOrExpr) -> {wrap}:\n"
+        head = f"\n    def {method}(self, function: ValueOrExpr, *args: ValueOrExpr) -> {wrap}:{override}\n"
         call = f'self._call("{m["function"]}", function, *args)'
     else:
         if m["params"]:
@@ -281,11 +287,11 @@ def _method(method: str, m: dict[str, Any]) -> str:
         subject = m["subject"]
         if subject > 0:
             leading = ", ".join(f"{p}: ValueOrExpr" for p in m["params"][:subject])
-            head = f"\n    def {method}(self, {leading}, *args: ValueOrExpr) -> {wrap}:\n"
+            head = f"\n    def {method}(self, {leading}, *args: ValueOrExpr) -> {wrap}:{override}\n"
             names = ", ".join(m["params"][:subject])
             call = f'self._call_at("{m["function"]}", {subject}, {names}, *args)'
         else:
-            head = f"\n    def {method}(self, *args: ValueOrExpr) -> {wrap}:\n"
+            head = f"\n    def {method}(self, *args: ValueOrExpr) -> {wrap}:{override}\n"
             call = f'self._call("{m["function"]}", *args)'
     room = LINE_LIMIT - len('        """') - len(tail) - len('"""')
     doc = f'        """{_fit(_sentence(m["doc"]), room)}{tail}"""\n'

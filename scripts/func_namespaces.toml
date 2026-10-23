@@ -293,9 +293,9 @@ count = { sql = "count", doc = "How many values are not NULL. For rows, use `cou
 median = { sql = "median", doc = "The middle value." }
 std = { sql = "stddev_samp", doc = "The sample standard deviation." }
 var = { sql = "var_samp", doc = "The sample variance." }
-first = { sql = "first", doc = "The first value seen. Order it with `.over()` or `sort` to make that mean something." }
-last = { sql = "last", doc = "The last value seen." }
-any_value = { sql = "any_value", doc = "Any one of the values, whichever is cheapest." }
+first = { sql = "first", doc = "The first value; give `order_by=` to say which, else whichever the engine met first." }
+last = { sql = "last", doc = "The last value; give `order_by=` to say which, else whichever the engine met last." }
+any_value = { sql = "any_value", doc = "Any one of the values, whichever is cheapest; with `order_by=`, the first non-NULL one." }
 bit_and = { sql = "bit_and", doc = "The bitwise AND of the values." }
 bit_or = { sql = "bit_or", doc = "The bitwise OR of the values." }
 bool_and = { sql = "bool_and", doc = "Whether every value is true." }

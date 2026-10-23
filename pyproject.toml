@@ -403,6 +403,7 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = [
     "fsspec.*",
+    "IPython.*",
     "pandas",
     "polars",
     "pyarrow.*",

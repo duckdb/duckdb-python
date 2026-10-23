@@ -37,7 +37,11 @@ repos:
     hooks:
       - id: mypy
         entry: mypy
-        files: ^(duckdb/|_duckdb-stubs/)
+        # Check the package and its stubs together rather than the staged files: a list without a stub file hides
+        # _duckdb from mypy, and the hook's default --ignore-missing-imports then turns it into Any.
+        pass_filenames: false
+        args: [ duckdb, _duckdb-stubs ]
+        files: ^(duckdb/|_duckdb-stubs/|pyproject\.toml$)
         exclude: ^duckdb/(experimental|query_graph)/
         additional_dependencies: [ numpy, polars ]
 

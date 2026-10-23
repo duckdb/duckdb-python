@@ -1151,6 +1151,26 @@ class Expression(AggregateMethods, FuncNamespaces, metaclass=_ExpressionClass):
             raise TypeError(message)
         return self._with(_filter=_as_condition(predicate, "where"))
 
+    def order_by(self, *keys: Expression) -> Expression:
+        """Feed the rows to the aggregate in this order, as `first("x" ORDER BY "t")`; goes before `.over()`.
+
+        Give a key a direction and a null order with `.desc()`, `.nulls_last()` and their siblings. A later
+        `.order_by()` replaces the keys. As with `where()`, a scalar call fails at run time, not here.
+        """
+        if not isinstance(self, (Func, Distinct)):
+            message = "order_by() applies to an aggregate call, as col('x').first() or fn('first', ...)"
+            raise TypeError(message)
+        if not keys:
+            message = "order_by() takes at least one key"
+            raise TypeError(message)
+        return self._with(_order=_as_expressions(keys, "order_by"))
+
+    def _ordered(self, keys: Exprs | None) -> Expression:
+        """`.order_by()` from the `order_by=` keyword of an aggregate method, where it was given."""
+        if keys is None:
+            return self
+        return self.order_by(*(keys if isinstance(keys, (list, tuple)) else (keys,)))
+
     def over(
         self,
         partition_by: Exprs | None = None,
@@ -1278,6 +1298,10 @@ class FamilyExpr(Expression):
     def ignore_nulls(self) -> Expression:
         """`Expression.ignore_nulls`, applied to the wrapped function call."""
         return self._rewrapped(self.inner.ignore_nulls())
+
+    def order_by(self, *keys: Expression) -> Expression:
+        """`Expression.order_by`, applied to the wrapped aggregate call."""
+        return self._rewrapped(self.inner.order_by(*keys))
 
     def _rewrapped(self, inner: Expression) -> Expression:
         wrapped = type(self)(inner)
@@ -1522,6 +1546,7 @@ class Func(Expression):
         self.args = args
         self.named = named or []
         self._ignore_nulls = False
+        self._order: list[Expression] = []
         self._filter: Expression | None = None
 
     def fragment(self) -> str:
@@ -1529,8 +1554,9 @@ class Func(Expression):
             [_argument(a, fold_name(self.name[-1])) for a in self.args]
             + [f"{quote(k)} := {v.fragment()}" for k, v in self.named]
         )
-        # IGNORE NULLS goes inside the call, where DuckDB reads it; after the closing parenthesis it is a syntax error.
-        tail = " IGNORE NULLS" if self._ignore_nulls else ""
+        # ORDER BY and then IGNORE NULLS go inside the call, where DuckDB reads them; the other order, or either
+        # after the closing parenthesis, is a syntax error.
+        tail = _order_clause(self._order) + (" IGNORE NULLS" if self._ignore_nulls else "")
         return f"{function_name(self.name)}({rendered}{tail})" + _filter_clause(self._filter)
 
 
@@ -1552,10 +1578,12 @@ class Distinct(Expression):
         super().__init__()
         self.name = name_parts(name, "function name")
         self.operand = operand
+        self._order: list[Expression] = []
         self._filter: Expression | None = None
 
     def fragment(self) -> str:
-        return f"{function_name(self.name)}(DISTINCT {self.operand.fragment()})" + _filter_clause(self._filter)
+        inner = f"DISTINCT {self.operand.fragment()}{_order_clause(self._order)}"
+        return f"{function_name(self.name)}({inner})" + _filter_clause(self._filter)
 
 
 #: The functions that read an argument's name, so an alias on one of their arguments is written as `name := expr`.
@@ -1574,6 +1602,11 @@ def _argument(argument: Expression, function: str) -> str:
 def _filter_clause(predicate: Expression | None) -> str:
     """The FILTER clause of an aggregate, if it has one."""
     return f" FILTER (WHERE {predicate.fragment()})" if predicate is not None else ""
+
+
+def _order_clause(keys: list[Expression]) -> str:
+    """The ORDER BY inside an aggregate call, if it has one."""
+    return " ORDER BY " + ", ".join(k.as_order() for k in keys) if keys else ""
 
 
 class Concat(Expression):

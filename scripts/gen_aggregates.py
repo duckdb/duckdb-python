@@ -27,11 +27,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from duckdb._expression import Expression, ValueOrExpr
+    from duckdb._expression import Expression, Exprs, ValueOrExpr
 
 
 class AggregateMethods:
-    """The aggregate functions as methods; `.over()` makes each a window function, and `fn()` reaches the rest."""
+    """The aggregate functions as methods, with `order_by=` for `.order_by()`; `.over()` makes each a window."""
 
     #: Method name to SQL function, the table these methods were written from.
     _CALLABLES: ClassVar[dict[str, str]] = {
@@ -47,9 +47,9 @@ def render() -> str:
     out.append("    def _call(self, function: str, *args: object) -> Expression:  # pragma: no cover (defined there)\n")
     out.append("        raise NotImplementedError\n")
     for method, (function, doc) in AGGREGATES.items():
-        out.append(f"\n    def {method}(self, *args: ValueOrExpr) -> Expression:\n")
+        out.append(f"\n    def {method}(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:\n")
         out.append(f'        """{doc} SQL: `{function}`."""\n')
-        out.append(f'        return self._call("{function}", *args)\n')
+        out.append(f'        return self._call("{function}", *args)._ordered(order_by)\n')
     return "".join(out)
 
 

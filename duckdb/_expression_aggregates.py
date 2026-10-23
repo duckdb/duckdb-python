@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 if TYPE_CHECKING:
-    from duckdb._expression import Expression, ValueOrExpr
+    from duckdb._expression import Expression, Exprs, ValueOrExpr
 
 
 class AggregateMethods:
-    """The aggregate functions as methods; `.over()` makes each a window function, and `fn()` reaches the rest."""
+    """The aggregate functions as methods, with `order_by=` for `.order_by()`; `.over()` makes each a window."""
 
     #: Method name to SQL function, the table these methods were written from.
     _CALLABLES: ClassVar[dict[str, str]] = {
@@ -45,110 +45,110 @@ class AggregateMethods:
     def _call(self, function: str, *args: object) -> Expression:  # pragma: no cover (defined there)
         raise NotImplementedError
 
-    def sum(self, *args: ValueOrExpr) -> Expression:
+    def sum(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The sum of the values. SQL: `sum`."""
-        return self._call("sum", *args)
+        return self._call("sum", *args)._ordered(order_by)
 
-    def mean(self, *args: ValueOrExpr) -> Expression:
+    def mean(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The average of the values. SQL: `avg`."""
-        return self._call("avg", *args)
+        return self._call("avg", *args)._ordered(order_by)
 
-    def avg(self, *args: ValueOrExpr) -> Expression:
+    def avg(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The average of the values. The same as `mean`. SQL: `avg`."""
-        return self._call("avg", *args)
+        return self._call("avg", *args)._ordered(order_by)
 
-    def min(self, *args: ValueOrExpr) -> Expression:
+    def min(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The smallest value. SQL: `min`."""
-        return self._call("min", *args)
+        return self._call("min", *args)._ordered(order_by)
 
-    def max(self, *args: ValueOrExpr) -> Expression:
+    def max(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The largest value. SQL: `max`."""
-        return self._call("max", *args)
+        return self._call("max", *args)._ordered(order_by)
 
-    def count(self, *args: ValueOrExpr) -> Expression:
+    def count(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """How many values are not NULL. For rows, use `count_all()`. SQL: `count`."""
-        return self._call("count", *args)
+        return self._call("count", *args)._ordered(order_by)
 
-    def median(self, *args: ValueOrExpr) -> Expression:
+    def median(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The middle value. SQL: `median`."""
-        return self._call("median", *args)
+        return self._call("median", *args)._ordered(order_by)
 
-    def std(self, *args: ValueOrExpr) -> Expression:
+    def std(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The sample standard deviation. SQL: `stddev_samp`."""
-        return self._call("stddev_samp", *args)
+        return self._call("stddev_samp", *args)._ordered(order_by)
 
-    def var(self, *args: ValueOrExpr) -> Expression:
+    def var(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The sample variance. SQL: `var_samp`."""
-        return self._call("var_samp", *args)
+        return self._call("var_samp", *args)._ordered(order_by)
 
-    def first(self, *args: ValueOrExpr) -> Expression:
-        """The first value seen. Order it with `.over()` or `sort` to make that mean something. SQL: `first`."""
-        return self._call("first", *args)
+    def first(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
+        """The first value; give `order_by=` to say which, else whichever the engine met first. SQL: `first`."""
+        return self._call("first", *args)._ordered(order_by)
 
-    def last(self, *args: ValueOrExpr) -> Expression:
-        """The last value seen. SQL: `last`."""
-        return self._call("last", *args)
+    def last(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
+        """The last value; give `order_by=` to say which, else whichever the engine met last. SQL: `last`."""
+        return self._call("last", *args)._ordered(order_by)
 
-    def any_value(self, *args: ValueOrExpr) -> Expression:
-        """Any one of the values, whichever is cheapest. SQL: `any_value`."""
-        return self._call("any_value", *args)
+    def any_value(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
+        """Any one of the values, whichever is cheapest; with `order_by=`, the first non-NULL one. SQL: `any_value`."""
+        return self._call("any_value", *args)._ordered(order_by)
 
-    def bit_and(self, *args: ValueOrExpr) -> Expression:
+    def bit_and(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The bitwise AND of the values. SQL: `bit_and`."""
-        return self._call("bit_and", *args)
+        return self._call("bit_and", *args)._ordered(order_by)
 
-    def bit_or(self, *args: ValueOrExpr) -> Expression:
+    def bit_or(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The bitwise OR of the values. SQL: `bit_or`."""
-        return self._call("bit_or", *args)
+        return self._call("bit_or", *args)._ordered(order_by)
 
-    def bool_and(self, *args: ValueOrExpr) -> Expression:
+    def bool_and(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """Whether every value is true. SQL: `bool_and`."""
-        return self._call("bool_and", *args)
+        return self._call("bool_and", *args)._ordered(order_by)
 
-    def bool_or(self, *args: ValueOrExpr) -> Expression:
+    def bool_or(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """Whether any value is true. SQL: `bool_or`."""
-        return self._call("bool_or", *args)
+        return self._call("bool_or", *args)._ordered(order_by)
 
-    def product(self, *args: ValueOrExpr) -> Expression:
+    def product(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The product of the values. SQL: `product`."""
-        return self._call("product", *args)
+        return self._call("product", *args)._ordered(order_by)
 
-    def string_agg(self, *args: ValueOrExpr) -> Expression:
+    def string_agg(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The values joined as text. Pass the separator as an argument. SQL: `string_agg`."""
-        return self._call("string_agg", *args)
+        return self._call("string_agg", *args)._ordered(order_by)
 
-    def skewness(self, *args: ValueOrExpr) -> Expression:
+    def skewness(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The skewness of the distribution. SQL: `skewness`."""
-        return self._call("skewness", *args)
+        return self._call("skewness", *args)._ordered(order_by)
 
-    def kurtosis(self, *args: ValueOrExpr) -> Expression:
+    def kurtosis(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The kurtosis of the distribution. SQL: `kurtosis`."""
-        return self._call("kurtosis", *args)
+        return self._call("kurtosis", *args)._ordered(order_by)
 
-    def entropy(self, *args: ValueOrExpr) -> Expression:
+    def entropy(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The entropy of the distribution. SQL: `entropy`."""
-        return self._call("entropy", *args)
+        return self._call("entropy", *args)._ordered(order_by)
 
-    def array_agg(self, *args: ValueOrExpr) -> Expression:
+    def array_agg(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The values gathered into a list. SQL: `array_agg`."""
-        return self._call("array_agg", *args)
+        return self._call("array_agg", *args)._ordered(order_by)
 
-    def mode(self, *args: ValueOrExpr) -> Expression:
+    def mode(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The most frequent value. SQL: `mode`."""
-        return self._call("mode", *args)
+        return self._call("mode", *args)._ordered(order_by)
 
-    def quantile(self, *args: ValueOrExpr) -> Expression:
+    def quantile(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The value at a quantile, one of the values themselves. Pass the quantile, 0 to 1. SQL: `quantile_disc`."""
-        return self._call("quantile_disc", *args)
+        return self._call("quantile_disc", *args)._ordered(order_by)
 
-    def quantile_cont(self, *args: ValueOrExpr) -> Expression:
+    def quantile_cont(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The value at a quantile, interpolated. Pass the quantile, 0 to 1. SQL: `quantile_cont`."""
-        return self._call("quantile_cont", *args)
+        return self._call("quantile_cont", *args)._ordered(order_by)
 
-    def arg_min(self, *args: ValueOrExpr) -> Expression:
+    def arg_min(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The value of the argument where this is smallest. SQL: `arg_min`."""
-        return self._call("arg_min", *args)
+        return self._call("arg_min", *args)._ordered(order_by)
 
-    def arg_max(self, *args: ValueOrExpr) -> Expression:
+    def arg_max(self, *args: ValueOrExpr, order_by: Exprs | None = None) -> Expression:
         """The value of the argument where this is largest. SQL: `arg_max`."""
-        return self._call("arg_max", *args)
+        return self._call("arg_max", *args)._ordered(order_by)

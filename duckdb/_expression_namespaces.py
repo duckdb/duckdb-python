@@ -638,7 +638,7 @@ class ListExpr(FamilyExpr):
         """The named aggregate applied to the elements. Arguments: function_name. SQL: `list_aggregate`."""
         return self._call("list_aggregate", *args)
 
-    def any_value(self, *args: ValueOrExpr) -> Expression:
+    def any_value(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """Any one element, whichever is cheapest. SQL: `list_any_value`."""
         return self._call("list_any_value", *args)
 
@@ -650,15 +650,15 @@ class ListExpr(FamilyExpr):
         """An approximate count of the distinct elements. SQL: `list_approx_count_distinct`."""
         return self._call("list_approx_count_distinct", *args)
 
-    def avg(self, *args: ValueOrExpr) -> Expression:
+    def avg(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The average of the elements. SQL: `list_avg`."""
         return self._call("list_avg", *args)
 
-    def bit_and(self, *args: ValueOrExpr) -> Expression:
+    def bit_and(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The bitwise AND of the elements. SQL: `list_bit_and`."""
         return self._call("list_bit_and", *args)
 
-    def bit_or(self, *args: ValueOrExpr) -> Expression:
+    def bit_or(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The bitwise OR of the elements. SQL: `list_bit_or`."""
         return self._call("list_bit_or", *args)
 
@@ -666,11 +666,11 @@ class ListExpr(FamilyExpr):
         """The bitwise XOR of the elements. SQL: `list_bit_xor`."""
         return self._call("list_bit_xor", *args)
 
-    def bool_and(self, *args: ValueOrExpr) -> Expression:
+    def bool_and(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """Whether every element is true. SQL: `list_bool_and`."""
         return self._call("list_bool_and", *args)
 
-    def bool_or(self, *args: ValueOrExpr) -> Expression:
+    def bool_or(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """Whether any element is true. SQL: `list_bool_or`."""
         return self._call("list_bool_or", *args)
 
@@ -686,7 +686,7 @@ class ListExpr(FamilyExpr):
         """The cosine similarity of two lists of numbers. Arguments: list2. SQL: `list_cosine_similarity`."""
         return self._call("list_cosine_similarity", *args)
 
-    def count(self, *args: ValueOrExpr) -> Expression:
+    def count(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """How many elements are not NULL. SQL: `list_count`."""
         return self._call("list_count", *args)
 
@@ -698,7 +698,7 @@ class ListExpr(FamilyExpr):
         """Removes all duplicates and `NULL` values from a list. SQL: `list_distinct`."""
         return ListExpr(self._call("list_distinct", *args))
 
-    def entropy(self, *args: ValueOrExpr) -> Expression:
+    def entropy(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The entropy of the elements. SQL: `list_entropy`."""
         return self._call("list_entropy", *args)
 
@@ -710,7 +710,7 @@ class ListExpr(FamilyExpr):
         """The elements the function holds for: `lambda x: x > 0`. SQL: `list_filter`."""
         return ListExpr(self._call("list_filter", function, *args))
 
-    def first(self, *args: ValueOrExpr) -> Expression:
+    def first(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The first element. SQL: `list_first`."""
         return self._call("list_first", *args)
 
@@ -742,7 +742,7 @@ class ListExpr(FamilyExpr):
         """The distinct elements present in both lists. Arguments: list2. SQL: `list_intersect`."""
         return ListExpr(self._call("list_intersect", *args))
 
-    def kurtosis(self, *args: ValueOrExpr) -> Expression:
+    def kurtosis(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The kurtosis of the elements. SQL: `list_kurtosis`."""
         return self._call("list_kurtosis", *args)
 
@@ -750,7 +750,7 @@ class ListExpr(FamilyExpr):
         """The population kurtosis of the elements. SQL: `list_kurtosis_pop`."""
         return self._call("list_kurtosis_pop", *args)
 
-    def last(self, *args: ValueOrExpr) -> Expression:
+    def last(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The last element. SQL: `list_last`."""
         return self._call("list_last", *args)
 
@@ -762,19 +762,19 @@ class ListExpr(FamilyExpr):
         """The elements where the matching boolean is true. Arguments: mask_list. SQL: `list_where`."""
         return ListExpr(self._call("list_where", *args))
 
-    def max(self, *args: ValueOrExpr) -> Expression:
+    def max(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The largest element. SQL: `list_max`."""
         return self._call("list_max", *args)
 
-    def median(self, *args: ValueOrExpr) -> Expression:
+    def median(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The middle element. SQL: `list_median`."""
         return self._call("list_median", *args)
 
-    def min(self, *args: ValueOrExpr) -> Expression:
+    def min(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The smallest element. SQL: `list_min`."""
         return self._call("list_min", *args)
 
-    def mode(self, *args: ValueOrExpr) -> Expression:
+    def mode(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The most frequent element. SQL: `list_mode`."""
         return self._call("list_mode", *args)
 
@@ -790,7 +790,7 @@ class ListExpr(FamilyExpr):
         """The `list_prepend` function. Arguments: e. SQL: `list_prepend`."""
         return ListExpr(self._call_at("list_prepend", 1, e, *args))
 
-    def product(self, *args: ValueOrExpr) -> Expression:
+    def product(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The product of the elements. SQL: `list_product`."""
         return self._call("list_product", *args)
 
@@ -818,7 +818,7 @@ class ListExpr(FamilyExpr):
         """The standard error of the mean of the elements. SQL: `list_sem`."""
         return self._call("list_sem", *args)
 
-    def skewness(self, *args: ValueOrExpr) -> Expression:
+    def skewness(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The skewness of the elements. SQL: `list_skewness`."""
         return self._call("list_skewness", *args)
 
@@ -834,11 +834,11 @@ class ListExpr(FamilyExpr):
         """The sample standard deviation of the elements. SQL: `list_stddev_samp`."""
         return self._call("list_stddev_samp", *args)
 
-    def string_agg(self, *args: ValueOrExpr) -> StrExpr:
+    def string_agg(self, *args: ValueOrExpr) -> StrExpr:  # type: ignore[override]
         """The elements joined as text, separated by commas. SQL: `list_string_agg`."""
         return StrExpr(self._call("list_string_agg", *args))
 
-    def sum(self, *args: ValueOrExpr) -> Expression:
+    def sum(self, *args: ValueOrExpr) -> Expression:  # type: ignore[override]
         """The sum of the elements. SQL: `list_sum`."""
         return self._call("list_sum", *args)
 
