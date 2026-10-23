@@ -6,7 +6,6 @@ from decimal import Decimal
 from uuid import UUID
 
 import pytest
-import pytz
 
 import duckdb
 import numpy as np
@@ -133,9 +132,9 @@ class TestAllTypes:
             "time_tz": """CASE WHEN time_tz = '24:00:00-1559'::TIMETZ THEN '23:59:59.999999-1559'::TIMETZ ELSE time_tz END AS "time_tz" """,  # noqa: E501
         }
         min_datetime = datetime.datetime.min
-        min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
+        min_datetime_with_utc = min_datetime.replace(tzinfo=datetime.timezone.utc)
         max_datetime = datetime.datetime.max
-        max_datetime_with_utc = max_datetime.replace(tzinfo=pytz.UTC)
+        max_datetime_with_utc = max_datetime.replace(tzinfo=datetime.timezone.utc)
         correct_answer_map = {
             "bool": [(False,), (True,), (None,)],
             "tinyint": [(-128,), (127,), (None,)],
@@ -196,7 +195,7 @@ class TestAllTypes:
                 (
                     [],
                     [
-                        datetime.datetime(1970, 1, 1, tzinfo=pytz.UTC),
+                        datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc),
                         None,
                         min_datetime_with_utc,
                         max_datetime_with_utc,
@@ -237,7 +236,7 @@ class TestAllTypes:
             "timestamp_s": [(datetime.datetime(1990, 1, 1, 0, 0),)],
             "timestamp_ns": [(datetime.datetime(1990, 1, 1, 0, 0),)],
             "timestamp_ms": [(datetime.datetime(1990, 1, 1, 0, 0),)],
-            "timestamp_tz": [(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=pytz.UTC),)],
+            "timestamp_tz": [(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=datetime.timezone.utc),)],
             "union": [("Frank",), (5,), (None,)],
             "fixed_int_array": [((None, 2, 3),), ((4, 5, 6),), (None,)],
             "fixed_varchar_array": [(("a", None, "c"),), (("d", "e", "f"),), (None,)],

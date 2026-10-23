@@ -2,10 +2,10 @@ import datetime
 import enum
 import math
 import pathlib
+import zoneinfo
 from decimal import Decimal
 
 import pytest
-import pytz
 
 import duckdb
 import numpy as np
@@ -416,7 +416,7 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMPTZ)")
         duckdb_cursor.append("t", pd.DataFrame({"a": _outside_the_sample(AWARE, naive)}))
         values = _column(duckdb_cursor)
-        assert (values[0], values[-1]) == (AWARE, pytz.timezone(zone).localize(NAIVE))
+        assert (values[0], values[-1]) == (AWARE, NAIVE.replace(tzinfo=zoneinfo.ZoneInfo(zone)))
 
     @pytest.mark.parametrize(
         "zone",
@@ -439,7 +439,7 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMPTZ)")
         duckdb_cursor.append("t", pd.DataFrame({"a": _outside_the_sample(AWARE, datetime.date(2024, 5, 6))}))
         values = _column(duckdb_cursor)
-        assert (values[0], values[-1]) == (AWARE, pytz.timezone(zone).localize(datetime.datetime(2024, 5, 6)))
+        assert (values[0], values[-1]) == (AWARE, datetime.datetime(2024, 5, 6, tzinfo=zoneinfo.ZoneInfo(zone)))
 
     @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_by_name_declares_each_column_from_its_name(self, duckdb_cursor):

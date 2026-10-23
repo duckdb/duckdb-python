@@ -258,7 +258,9 @@
         "type": "attribute",
         "full_path": "datetime.timezone",
         "name": "timezone",
-        "children": []
+        "children": [
+            "datetime.timezone.utc"
+        ]
     },
     "decimal": {
         "type": "module",
@@ -582,20 +584,6 @@
         "name": "Value",
         "children": []
     },
-    "pytz": {
-        "type": "module",
-        "full_path": "pytz",
-        "name": "pytz",
-        "children": [
-            "pytz.timezone"
-        ]
-    },
-    "pytz.timezone": {
-        "type": "attribute",
-        "full_path": "pytz.timezone",
-        "name": "timezone",
-        "children": []
-    },
     "types": {
         "type": "module",
         "full_path": "types",
@@ -857,6 +845,26 @@
         "type": "attribute",
         "full_path": "pandas.arrays.StringArray",
         "name": "StringArray",
+        "children": []
+    },
+    "datetime.timezone.utc": {
+        "type": "attribute",
+        "full_path": "datetime.timezone.utc",
+        "name": "utc",
+        "children": []
+    },
+    "zoneinfo": {
+        "type": "module",
+        "full_path": "zoneinfo",
+        "name": "zoneinfo",
+        "children": [
+            "zoneinfo.ZoneInfo"
+        ]
+    },
+    "zoneinfo.ZoneInfo": {
+        "type": "attribute",
+        "full_path": "zoneinfo.ZoneInfo",
+        "name": "ZoneInfo",
         "children": []
     }
 }

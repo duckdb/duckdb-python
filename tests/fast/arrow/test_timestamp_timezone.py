@@ -1,7 +1,6 @@
 import datetime
 
 import pytest
-import pytz
 
 import duckdb
 
@@ -21,7 +20,7 @@ timezones = ["UTC", "BET", "CET", "Asia/Kathmandu"]
 class TestArrowTimestampsTimezone:
     def test_timestamp_timezone(self, duckdb_cursor):
         precisions = ["us", "s", "ns", "ms"]
-        current_time = datetime.datetime(2017, 11, 28, 23, 55, 59, tzinfo=pytz.UTC)
+        current_time = datetime.datetime(2017, 11, 28, 23, 55, 59, tzinfo=datetime.timezone.utc)
         con = duckdb.connect()
         con.execute("SET TimeZone = 'UTC'")
         for precision in precisions:

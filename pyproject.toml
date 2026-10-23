@@ -291,7 +291,6 @@ test = [ # dependencies used for running tests
     "py4j",
     "pyotp",
     "pyspark",
-    "pytz",
     "requests",
     "urllib3",
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
@@ -316,7 +315,6 @@ bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Mini
     "pytest",
     "pytest_codspeed",
     "polars>=1.33.0",
-    "pytz",
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
     "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
     "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64'",
@@ -331,7 +329,6 @@ scripts = [ # dependencies used for running scripts
     "pandas",
     "polars>=1.33.0",
     "pyarrow; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "pytz"
 ]
 pypi = [ # dependencies used by the pypi cleanup script
     "pyotp>=2.9.0",

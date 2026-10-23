@@ -60,6 +60,7 @@ datetime.datetime.min
 datetime.datetime.max
 datetime.datetime.combine
 datetime.timezone
+datetime.timezone.utc
 
 import decimal
 
@@ -122,9 +123,9 @@ import duckdb.filesystem
 duckdb.filesystem.ModifiedMemoryFileSystem
 duckdb.Value
 
-import pytz
+import zoneinfo
 
-pytz.timezone
+zoneinfo.ZoneInfo
 
 import types
 

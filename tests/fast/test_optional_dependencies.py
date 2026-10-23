@@ -1,4 +1,5 @@
 import importlib.util
+import pathlib
 import subprocess
 import sys
 import textwrap
@@ -11,7 +12,6 @@ OPTIONAL_PACKAGES = (
     "pyarrow",
     "polars",
     "fsspec",
-    "pytz",
     "typing_extensions",
     "pyspark",
     "IPython",
@@ -41,8 +41,11 @@ site.main()
 """
 
 
-def run_blocked(cwd, script, blocked=OPTIONAL_PACKAGES):
+def run_blocked(cwd, script, blocked=OPTIONAL_PACKAGES, pytz_tripwire=False):
     # An empty working directory keeps modules next to the caller's off the path that -c puts first.
+    if pytz_tripwire:
+        # pandas and pyarrow import pytz inside a try block, so the stand-in only serves scripts without them.
+        (pathlib.Path(cwd) / "pytz.py").write_text('raise AssertionError("pytz imported")\n')
     proc = subprocess.run(
         [sys.executable, "-S", "-c", BLOCK_IMPORTS + textwrap.dedent(script), ",".join(blocked)],
         capture_output=True,
@@ -162,7 +165,6 @@ def test_spark_timestamps(tmp_path):
 
 
 def test_spark_timestamps_to_pandas(tmp_path):
-    # pandas before 3.0 cannot be imported without pytz.
     pytest.importorskip("pandas", minversion="3.0.0")
     run_blocked(
         tmp_path,
@@ -201,14 +203,15 @@ def test_spark_udf_needs_numpy(tmp_path, blocked):
     )
 
 
-def test_spark_udf_with_a_timestamp_needs_pytz(tmp_path):
-    """The binding's Python UDF path needs pytz to pass a timestamp to a function."""
+def test_spark_udf_with_a_timestamp_needs_no_package(tmp_path):
+    """A timestamp reaches a Python UDF through the standard library's zoneinfo, so pytz is not needed."""
     if importlib.util.find_spec("numpy") is None:
         pytest.skip("a UDF needs numpy")
     run_blocked(
         tmp_path,
         """
         import datetime
+        import sys
 
         import duckdb
         from duckdb.experimental.spark.sql import SparkSession
@@ -218,12 +221,30 @@ def test_spark_udf_with_a_timestamp_needs_pytz(tmp_path):
         assert spark.createDataFrame([(1,)], "n int").select(plus_one("n")).collect()[0][0] == 2
         year = spark.udf.register("year_of", lambda t: t.year, "int")
         df = spark.createDataFrame([(datetime.datetime(2024, 1, 2),)], "t timestamp")
-        try:
-            df.select(year("t")).collect()
-        except duckdb.InvalidInputException as error:
-            assert "'pytz' failed to import" in str(error), repr(error)
-        else:
-            raise AssertionError("a UDF of a timestamp without pytz did not raise")
+        assert df.select(year("t")).collect()[0][0] == 2024
+        assert "pytz" not in sys.modules
         """,
-        ("pytz",),
+        blocked=tuple(package for package in OPTIONAL_PACKAGES if package != "numpy"),
+        pytz_tripwire=True,
+    )
+
+
+def test_timestamptz_fetch_needs_no_package(tmp_path):
+    run_blocked(
+        tmp_path,
+        """
+        import datetime
+        import sys
+        import zoneinfo
+
+        import duckdb
+
+        con = duckdb.connect()
+        con.execute("SET TimeZone = 'Europe/Amsterdam'")
+        value = con.execute("SELECT TIMESTAMPTZ '2024-07-01 00:00:00+00'").fetchone()[0]
+        assert value == datetime.datetime(2024, 7, 1, 2, tzinfo=zoneinfo.ZoneInfo("Europe/Amsterdam"))
+        assert value.tzinfo is zoneinfo.ZoneInfo("Europe/Amsterdam")
+        assert "pytz" not in sys.modules
+        """,
+        pytz_tripwire=True,
     )

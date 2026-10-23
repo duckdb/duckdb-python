@@ -20,6 +20,18 @@
 
 namespace duckdb {
 
+struct DatetimeTimezoneCacheItem : public PythonImportCacheItem {
+
+public:
+	DatetimeTimezoneCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("timezone", parent), utc("utc", this) {
+	}
+	~DatetimeTimezoneCacheItem() override {
+	}
+
+	PythonImportCacheItem utc;
+};
+
 struct DatetimeDatetimeCacheItem : public PythonImportCacheItem {
 
 public:
@@ -55,7 +67,7 @@ public:
 public:
 	DatetimeCacheItem()
 	    : PythonImportCacheItem("datetime"), date(this), time("time", this), timedelta("timedelta", this),
-	      datetime(this), timezone("timezone", this) {
+	      datetime(this), timezone(this) {
 	}
 	~DatetimeCacheItem() override {
 	}
@@ -64,7 +76,7 @@ public:
 	PythonImportCacheItem time;
 	PythonImportCacheItem timedelta;
 	DatetimeDatetimeCacheItem datetime;
-	PythonImportCacheItem timezone;
+	DatetimeTimezoneCacheItem timezone;
 };
 
 } // namespace duckdb

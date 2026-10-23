@@ -661,11 +661,29 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			return nb::str(fallback_str.c_str(), fallback_str.size());
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
-			// We have to add the timezone info
-			auto tz_utc = import_cache.pytz.timezone()("UTC");
-			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
-			auto tz_info = import_cache.pytz.timezone()(client_properties.time_zone);
-			return timestamp_utc.attr("astimezone")(tz_info);
+			nb::object zone;
+			try {
+				zone = import_cache.zoneinfo.ZoneInfo()(client_properties.time_zone);
+			} catch (nb::python_error &e) {
+				if (!e.matches(PyExc_KeyError)) {
+					throw;
+				}
+				throw InvalidInputException(
+				    "Time zone '%s' is not available to Python's zoneinfo. Install the 'tzdata' "
+				    "package, or SET TimeZone to a name the IANA database has.",
+				    client_properties.time_zone);
+			}
+			auto timestamp_utc = py_timestamp.attr("replace")(nb::arg("tzinfo") = import_cache.datetime.timezone.utc());
+			try {
+				return timestamp_utc.attr("astimezone")(zone);
+			} catch (nb::python_error &e) {
+				// The local wall time can leave Python's year range while the UTC instant is inside it.
+				if (!e.matches(PyExc_OverflowError)) {
+					throw;
+				}
+				auto fallback_str = val.ToString();
+				return nb::str(fallback_str.c_str(), fallback_str.size());
+			}
 		}
 		return py_timestamp;
 	}

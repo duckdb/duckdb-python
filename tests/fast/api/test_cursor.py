@@ -1,5 +1,8 @@
 # simple DB API testcase
 
+import datetime
+import zoneinfo
+
 import pytest
 
 import duckdb
@@ -93,7 +96,8 @@ class TestDBAPICursor:
         # Because the 'timezone' setting was not explicitly set for the connection
         # the setting of the DBConfig is used instead
         res = con1.execute("SELECT make_timestamptz(2000,01,20,03,30,59)").fetchone()
-        assert str(res) == "(datetime.datetime(2000, 1, 20, 3, 30, 59, tzinfo=<UTC>),)"
+        assert res == (datetime.datetime(2000, 1, 20, 3, 30, 59, tzinfo=zoneinfo.ZoneInfo("UTC")),)
+        assert res[0].tzinfo.key == "UTC"
 
     def test_cursor_closed(self):
         con = duckdb.connect(":memory:")
