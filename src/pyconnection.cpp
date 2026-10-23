@@ -1794,7 +1794,7 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const nb::object &obje
 		default:
 			return NumpyObjectType::INVALID;
 		}
-	} else if (duckdb::PyUtil::IsDictLike(object)) {
+	} else if (PyDict_Check(object.ptr())) {
 		int dim = -1;
 		for (auto item : nb::cast<nb::dict>(object)) {
 			if (!IsValidNumpyDimensions(item.second, dim)) {
@@ -1802,9 +1802,9 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const nb::object &obje
 			}
 		}
 		return NumpyObjectType::DICT;
-	} else if (duckdb::PyUtil::IsListLike(object)) {
+	} else if (PyList_Check(object.ptr()) || PyTuple_Check(object.ptr())) {
 		int dim = -1;
-		for (auto item : nb::cast<nb::list>(object)) {
+		for (auto item : object) {
 			if (!IsValidNumpyDimensions(item, dim)) {
 				return NumpyObjectType::INVALID;
 			}

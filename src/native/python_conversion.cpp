@@ -762,7 +762,9 @@ struct PythonVectorConversion {
 		if (result.GetType().id() != LogicalTypeId::BOOLEAN) {
 			throw TypeMismatchException(
 			    LogicalType::BOOLEAN, result.GetType(),
-			    "Python Conversion Failure: Expected a value of type %s, but got a value of type boolean");
+			    StringUtil::Format(
+			        "Python Conversion Failure: Expected a value of type %s, but got a value of type boolean",
+			        result.GetType().ToString()));
 		}
 		FlatVector::GetDataMutable<bool>(result)[result_offset] = val;
 	}

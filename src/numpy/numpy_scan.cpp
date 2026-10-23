@@ -33,30 +33,31 @@ void ScanNumpyColumn(NumpyArray &numpy_col, idx_t stride, idx_t offset, Vector &
 }
 
 template <class T, class V>
-void ScanNumpyCategoryTemplated(NumpyArray &column, idx_t offset, Vector &out, idx_t count) {
+void ScanNumpyCategoryTemplated(NumpyArray &column, idx_t stride, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)column.Data();
 	auto tgt_ptr = (V *)FlatVector::GetData(out);
 	auto &tgt_mask = FlatVector::ValidityMutable(out);
 	for (idx_t i = 0; i < count; i++) {
-		if (src_ptr[i + offset] == -1) {
+		auto code = src_ptr[stride / sizeof(T) * (i + offset)];
+		if (code == -1) {
 			// Null value
 			tgt_mask.SetInvalid(i);
 		} else {
-			tgt_ptr[i] = src_ptr[i + offset];
+			tgt_ptr[i] = code;
 		}
 	}
 }
 
 template <class T>
-void ScanNumpyCategory(NumpyArray &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
+void ScanNumpyCategory(NumpyArray &column, idx_t stride, idx_t count, idx_t offset, Vector &out, string &src_type) {
 	if (src_type == "int8") {
-		ScanNumpyCategoryTemplated<int8_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int8_t, T>(column, stride, offset, out, count);
 	} else if (src_type == "int16") {
-		ScanNumpyCategoryTemplated<int16_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int16_t, T>(column, stride, offset, out, count);
 	} else if (src_type == "int32") {
-		ScanNumpyCategoryTemplated<int32_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int32_t, T>(column, stride, offset, out, count);
 	} else if (src_type == "int64") {
-		ScanNumpyCategoryTemplated<int64_t, T>(column, offset, out, count);
+		ScanNumpyCategoryTemplated<int64_t, T>(column, stride, offset, out, count);
 	} else {
 		throw NotImplementedException("The Pandas type " + src_type + " for categorical types is not implemented yet");
 	}
@@ -522,13 +523,13 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 	case NumpyNullableType::CATEGORY: {
 		switch (out.GetType().InternalType()) {
 		case PhysicalType::UINT8:
-			ScanNumpyCategory<uint8_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint8_t>(array, stride, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT16:
-			ScanNumpyCategory<uint16_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint16_t>(array, stride, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT32:
-			ScanNumpyCategory<uint32_t>(array, count, offset, out, bind_data.internal_categorical_type);
+			ScanNumpyCategory<uint32_t>(array, stride, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");

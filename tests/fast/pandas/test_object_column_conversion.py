@@ -1416,6 +1416,15 @@ def test_other_conversions_keep_their_casts(duckdb_cursor, prepare, expected):
             convert()
 
 
+def test_bool_refused_by_a_number_type_names_the_expected_type(duckdb_cursor):
+    duckdb_cursor.create_function("produce", lambda: True, [], duckdb.sqltype("INTEGER"), side_effects=True)
+    with pytest.raises(duckdb.TypeMismatchException) as error:
+        duckdb_cursor.execute("SELECT produce()").fetchall()
+    message = str(error.value)
+    assert "%s" not in message
+    assert "Expected a value of type INTEGER, but got a value of type boolean" in message
+
+
 @not_yet("the error for a long string outside the sample repeats the whole string")
 def test_error_preview_of_a_long_string_is_bounded(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, "é" * 100000, at=2000))

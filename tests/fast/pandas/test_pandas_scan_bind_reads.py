@@ -10,6 +10,7 @@ import subprocess
 import sys
 import textwrap
 import tracemalloc
+import types
 from collections.abc import Callable
 from typing import Any, NamedTuple
 
@@ -1031,3 +1032,210 @@ def test_dict_array_bind_allocates_nothing_per_row(duckdb_cursor, path, make_arr
     positions = np.arange(BIND_HEAP_ROWS, dtype="int64")
     source = {"i": positions, "x": make_array(positions)}
     assert _bind_heap_peak(duckdb_cursor, source, path) < BIND_HEAP_ROWS // 4
+
+
+def _categorical_codes_as_a_view(monkeypatch):
+    # pandas 2 hands out cat.codes as a view of the column's codes, which pandas 3 copies; a view reproduces pandas 2.
+    def codes(accessor):
+        return pd.Series(accessor._parent.codes, index=accessor._index, copy=False)
+
+    monkeypatch.setattr(pd.core.arrays.categorical.CategoricalAccessor, "codes", property(codes))
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize(
+    "rows",
+    [slice(None, None, 2), slice(1, None, 2), slice(None, None, -2)],
+    ids=["every_second", "every_second_from_1", "every_second_reversed"],
+)
+@pytest.mark.parametrize(
+    ("categories", "codes"),
+    [(3, "int8"), (200, "int16"), (300, "int16"), (40000, "int32")],
+    ids=["int8_codes", "int16_codes_of_a_one_byte_enum", "int16_codes", "int32_codes"],
+)
+def test_strided_view_of_a_text_categorical_reads_its_rows(duckdb_cursor, monkeypatch, path, rows, categories, codes):
+    _categorical_codes_as_a_view(monkeypatch)
+    positions = np.arange(_SLICED_ROWS, dtype="int64")
+    kept = positions[rows]
+    category_codes = (positions % categories).astype(codes)
+    category_codes[_missing_at(positions, kept[_edge_rows(len(kept))])] = -1
+    labels = pd.Index([f"k{n}" for n in range(categories)], dtype=object)
+    column = pd.Categorical.from_codes(category_codes, categories=labels)
+    source = pd.DataFrame({"i": positions, "x": column}).iloc[rows]
+    read_codes = source["x"].cat.codes.to_numpy()
+    assert (read_codes.dtype, read_codes.strides[0]) == (np.dtype(codes), rows.step * read_codes.itemsize)
+    expected = [None if pd.isna(value) else value for value in source.sort_values("i")["x"].tolist()]
+    assert len(expected) > PANDAS_PARTITION_ROWS
+    result = _scan_in_order(duckdb_cursor, source, path)
+    assert _length_and_first_differences(result, expected) == (len(expected), [])
+
+
+_REVERSED_ROWS = [slice(None, None, -1), slice(None, None, -2), slice(0, None, -1)]
+_REVERSED_IDS = ["reversed", "every_second_reversed", "first_row_reversed"]
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize("rows", _REVERSED_ROWS, ids=_REVERSED_IDS)
+@pytest.mark.parametrize(
+    "name",
+    [pytest.param(name, marks=_NEEDS_PYARROW) if name in _COLUMNS_NEEDING_PYARROW else name for name in FRAME_COLUMNS],
+)
+def test_reversed_frame_column_reads_its_rows_in_order(duckdb_cursor, path, rows, name):
+    source = pd.DataFrame({name: FRAME_COLUMNS[name].build()}).iloc[rows]
+    sql = f'SELECT typeof("{name}"), "{name}" FROM {{source}}'
+    # The type can follow the view: a category column whose view skips its only missing value reads as BIGINT.
+    contiguous = _execute(duckdb_cursor, source.copy(), path, sql).fetchall()
+    assert [value for _, value in contiguous] == FRAME_COLUMNS[name].values[rows]
+    assert _execute(duckdb_cursor, source, path, sql).fetchall() == contiguous
+
+
+_LONG_REVERSED_ROWS = 2 * VECTOR_ROWS + 5
+
+
+def _reversed_dict_column(name):
+    build, sql_type, values = DICT_COLUMNS[name]
+    return pytest.param(
+        lambda: {name: build()[::-1]},
+        f"SELECT typeof({name}), {name} FROM {{source}}",
+        ([f"typeof({name})", name], [(sql_type, value) for value in values[::-1]]),
+        id=f"dict_{name}",
+    )
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize(
+    ("make_source", "sql", "expected"),
+    [
+        *[_reversed_dict_column(name) for name in DICT_COLUMNS],
+        pytest.param(
+            lambda: {"a": np.arange(_LONG_REVERSED_ROWS, dtype="int64")[::-1]},
+            "SELECT * FROM {source}",
+            (["a"], [(value,) for value in range(_LONG_REVERSED_ROWS - 1, -1, -1)]),
+            id="dict_across_vectors",
+        ),
+        pytest.param(
+            lambda: np.arange(5, dtype="int64")[::-1],
+            "SELECT * FROM {source}",
+            (["column0"], [(4,), (3,), (2,), (1,), (0,)]),
+            id="ndarray",
+        ),
+        pytest.param(
+            lambda: np.arange(6, dtype="int64").reshape(2, 3)[:, ::-1],
+            "SELECT * FROM {source}",
+            (["column0", "column1"], [(2, 5), (1, 4), (0, 3)]),
+            id="two_dimensional_ndarray",
+        ),
+        pytest.param(
+            lambda: [np.arange(3, dtype="int64")[::-1]],
+            "SELECT * FROM {source}",
+            (["column0"], [(2,), (1,), (0,)]),
+            id="list_of_arrays",
+        ),
+        pytest.param(
+            lambda: {"a": np.array([42], dtype="int64")[::-1]},
+            "SELECT * FROM {source}",
+            (["a"], [(42,)]),
+            id="dict_of_one_reversed_item",
+        ),
+    ],
+)
+def test_reversed_numpy_array_reads_its_rows_in_order(duckdb_cursor, path, make_source, sql, expected):
+    assert _names_and_rows(duckdb_cursor, make_source(), path, sql) == expected
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize("container", [tuple, list])
+@pytest.mark.parametrize(
+    ("arrays", "expected"),
+    [
+        pytest.param(
+            [np.array([1, 2], dtype="int64"), np.array(["a", "b"], dtype=object)],
+            (["column0", "column1"], [(1, "a"), (2, "b")]),
+            id="two_arrays",
+        ),
+        pytest.param([np.array([1.5, 2.5], dtype="float64")], (["column0"], [(1.5,), (2.5,)]), id="one_array"),
+        pytest.param([[1, 2], [3, 4]], "not suitable for replacement scans", id="lists_that_are_not_arrays"),
+        pytest.param(
+            [np.arange(2, dtype="int64"), np.arange(3, dtype="int64")],
+            "not suitable for replacement scans",
+            id="arrays_of_unequal_lengths",
+        ),
+        pytest.param([], "at least one column", id="empty"),
+    ],
+)
+def test_tuple_of_arrays_reads_like_a_list_of_arrays(duckdb_cursor, path, container, arrays, expected):
+    source = container(arrays)
+    if isinstance(expected, str):
+        with pytest.raises(duckdb.InvalidInputException, match=expected):
+            _execute(duckdb_cursor, source, path, "SELECT * FROM {source}").fetchall()
+    else:
+        assert _names_and_rows(duckdb_cursor, source, path, "SELECT * FROM {source}") == expected
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize(
+    "arrow_stream",
+    [
+        pytest.param(True, id="as_pandas_gives_it", marks=_NEEDS_PYARROW),
+        pytest.param(False, id="without_an_arrow_stream"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("make_series", "sql_type", "values"),
+    [
+        pytest.param(lambda: pd.Series(np.array([1, 2, 3], dtype="int64")), "BIGINT", [1, 2, 3], id="int64"),
+        pytest.param(lambda: pd.Series(np.array([1, 2], dtype="int64"), name="x"), "BIGINT", [1, 2], id="named_int64"),
+        pytest.param(
+            lambda: pd.Series(np.array([1.5, np.nan], dtype="float64")), "DOUBLE", [1.5, None], id="float64_nan"
+        ),
+        pytest.param(lambda: pd.Series(pd.array([1, None, 3], dtype="Int64")), "BIGINT", [1, None, 3], id="Int64"),
+        pytest.param(lambda: pd.Series(["a", None, "c"], dtype=object), "VARCHAR", ["a", None, "c"], id="object_text"),
+        pytest.param(
+            lambda: pd.Series(_NAIVE_TIMES),
+            _NAIVE_TIMESTAMP,
+            [timestamp.to_pydatetime() for timestamp in _NAIVE_TIMES],
+            id="datetime",
+        ),
+        pytest.param(
+            lambda: pd.Series(np.array([1, 2], dtype="int64"), index=["a", "b"]), "BIGINT", [1, 2], id="text_index"
+        ),
+        pytest.param(
+            lambda: pd.Series([1, 2], index=["a", "b"], dtype="int64[pyarrow]"),
+            "BIGINT",
+            [1, 2],
+            id="arrow_backed_with_a_text_index",
+            marks=_NEEDS_PYARROW,
+        ),
+    ],
+)
+def test_series_reads_as_one_column_named_value(
+    duckdb_cursor, monkeypatch, path, arrow_stream, make_series, sql_type, values
+):
+    if not arrow_stream:
+        # A pandas 2 Series has no Arrow stream; taking pandas 3's away reproduces it.
+        monkeypatch.delattr(pd.Series, "__arrow_c_stream__", raising=False)
+    series = make_series()
+    assert _names_and_rows(duckdb_cursor, series, path, "SELECT * FROM {source}") == (
+        ["value"],
+        [(value,) for value in values],
+    )
+    types_read = _execute(duckdb_cursor, series, path, "SELECT DISTINCT typeof(value) FROM {source}").fetchall()
+    assert types_read == [(sql_type,)]
+
+
+@pytest.mark.parametrize("path", PATHS)
+@pytest.mark.parametrize(
+    ("make_source", "type_name"),
+    [
+        pytest.param(lambda: range(3), "range", id="range"),
+        pytest.param(lambda: {1, 2}, "set", id="set"),
+        pytest.param(lambda: (array for array in [np.arange(2)]), "generator", id="generator_of_arrays"),
+        pytest.param(lambda: iter([np.arange(2)]), "list_iterator", id="iterator_of_arrays"),
+        pytest.param(lambda: collections.deque([np.arange(2)]), "deque", id="deque_of_arrays"),
+        pytest.param(lambda: {"a": np.arange(2)}.values(), "dict_values", id="dict_values_of_arrays"),
+        pytest.param(lambda: types.MappingProxyType({"a": np.arange(2)}), "mappingproxy", id="mapping_of_arrays"),
+    ],
+)
+def test_iterable_that_is_not_a_supported_container_is_refused(duckdb_cursor, path, make_source, type_name):
+    with pytest.raises(duckdb.InvalidInputException, match=rf'(?s)of type "{type_name}".*not suitable for replacement'):
+        _execute(duckdb_cursor, make_source(), path, "SELECT * FROM {source}").fetchall()
