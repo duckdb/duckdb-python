@@ -258,7 +258,7 @@ nb::dict DuckDBPyResult::FetchNumpyInternal(bool chunked, idx_t vectors_per_chun
 }
 
 static void ReplaceDFColumn(PandasDataFrame &df, const char *col_name, idx_t idx, const nb::handle &new_value) {
-	df.attr("drop")("columns"_a = col_name, "inplace"_a = true);
+	df.attr("__delitem__")(col_name);
 	df.attr("insert")(idx, col_name, new_value, "allow_duplicates"_a = false);
 }
 
