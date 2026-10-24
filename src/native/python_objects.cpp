@@ -662,9 +662,9 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		}
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
 			// We have to add the timezone info
-			auto tz_utc = import_cache.pytz.timezone()("UTC");
-			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
-			auto tz_info = import_cache.pytz.timezone()(client_properties.time_zone);
+			auto tz_utc = import_cache.zoneinfo.ZoneInfo()("UTC");
+			auto timestamp_utc = py_timestamp.attr("replace")(nb::arg("tzinfo") = tz_utc);
+			auto tz_info = import_cache.zoneinfo.ZoneInfo()(client_properties.time_zone);
 			return timestamp_utc.attr("astimezone")(tz_info);
 		}
 		return py_timestamp;

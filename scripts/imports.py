@@ -122,9 +122,9 @@ import duckdb.filesystem
 duckdb.filesystem.ModifiedMemoryFileSystem
 duckdb.Value
 
-import pytz
+import zoneinfo
 
-pytz.timezone
+zoneinfo.ZoneInfo
 
 import types
 

@@ -30,23 +30,23 @@ class TestNativeTimeZone:
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
         assert res[0].hour == 14
         assert res[0].minute == 52
-        assert res[0].tzinfo.zone == "America/Los_Angeles"
+        assert res[0].tzinfo.key == "America/Los_Angeles"
 
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchall()[0]
         assert res[0].hour == 14
         assert res[0].minute == 52
-        assert res[0].tzinfo.zone == "America/Los_Angeles"
+        assert res[0].tzinfo.key == "America/Los_Angeles"
 
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchmany(1)[0]
         assert res[0].hour == 14
         assert res[0].minute == 52
-        assert res[0].tzinfo.zone == "America/Los_Angeles"
+        assert res[0].tzinfo.key == "America/Los_Angeles"
 
         duckdb_cursor.execute("SET timezone='UTC';")
         res = duckdb_cursor.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
         assert res[0].hour == 21
         assert res[0].minute == 52
-        assert res[0].tzinfo.zone == "UTC"
+        assert res[0].tzinfo.key == "UTC"
 
     def test_native_python_time_timezone(self, duckdb_cursor):
         res = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ as tz from '{filename}'").fetchone()
