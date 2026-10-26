@@ -1,5 +1,4 @@
 # ruff: noqa: F841
-import datetime
 import gc
 import os
 import tempfile
@@ -35,7 +34,7 @@ class TestRelation:
 
         # now create a relation from it
         csv_rel = duckdb.from_csv_auto(temp_file_name)
-        assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert df_rel.fetchall() == csv_rel.fetchall()
 
     def test_relation_view(self, duckdb_cursor):
         def create_view(duckdb_cursor) -> None:
@@ -59,23 +58,23 @@ class TestRelation:
     def test_filter_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.filter("i > 1").execute().fetchall() == [(2, "two"), (3, "three"), (4, "four")]
+        assert rel.filter("i > 1").fetchall() == [(2, "two"), (3, "three"), (4, "four")]
 
     def test_projection_operator_single(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.project("i").execute().fetchall() == [(1,), (2,), (3,), (4,)]
+        assert rel.project("i").fetchall() == [(1,), (2,), (3,), (4,)]
 
     def test_projection_operator_double(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.order("j").execute().fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
+        assert rel.order("j").fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
 
     def test_limit_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.limit(2).execute().fetchall() == [(1, "one"), (2, "two")]
-        assert rel.limit(2, offset=1).execute().fetchall() == [(2, "two"), (3, "three")]
+        assert rel.limit(2).fetchall() == [(1, "one"), (2, "two")]
+        assert rel.limit(2, offset=1).fetchall() == [(2, "two"), (3, "three")]
 
     def test_intersect_operator(self):
         conn = duckdb.connect()
@@ -86,60 +85,29 @@ class TestRelation:
         rel = conn.from_df(test_df)
         rel_2 = conn.from_df(test_df_2)
 
-        assert rel.intersect(rel_2).order("i").execute().fetchall() == [(3,), (4,)]
+        assert rel.intersect(rel_2).order("i").fetchall() == [(3,), (4,)]
 
     def test_aggregate_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.aggregate("sum(i)").execute().fetchall() == [(10,)]
-        assert rel.aggregate("j, sum(i)").order("#2").execute().fetchall() == [
+        assert rel.aggregate("sum(i)").fetchall() == [(10,)]
+        assert rel.aggregate("j, sum(i)").order("#2").fetchall() == [
             ("one", 1),
             ("two", 2),
             ("three", 3),
             ("four", 4),
         ]
 
-    def test_relation_fetch_df_chunk(self, duckdb_cursor):
-        duckdb_cursor.execute(f"create table tbl as select * from range({duckdb.__standard_vector_size__ * 3})")
-
-        rel = duckdb_cursor.table("tbl")
-        # default arguments
-        df1 = rel.fetch_df_chunk()
-        assert len(df1) == duckdb.__standard_vector_size__
-
-        df2 = rel.fetch_df_chunk(2)
-        assert len(df2) == duckdb.__standard_vector_size__ * 2
-
-        duckdb_cursor.execute(
-            f"create table dates as select (DATE '2021/02/21' + INTERVAL (i) DAYS)::DATE a from range({duckdb.__standard_vector_size__ * 4}) t(i)"  # noqa: E501
-        )
-
-        rel = duckdb_cursor.table("dates")
-        # default arguments
-        df1 = rel.fetch_df_chunk()
-        assert len(df1) == duckdb.__standard_vector_size__
-        assert df1["a"][0].__class__ == pd.Timestamp
-
-        # date as object
-        df1 = rel.fetch_df_chunk(date_as_object=True)
-        assert len(df1) == duckdb.__standard_vector_size__
-        assert df1["a"][0].__class__ == datetime.date
-
-        # vectors and date as object
-        df1 = rel.fetch_df_chunk(2, date_as_object=True)
-        assert len(df1) == duckdb.__standard_vector_size__ * 2
-        assert df1["a"][0].__class__ == datetime.date
-
     def test_distinct_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.distinct().order("all").execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
+        assert rel.distinct().order("all").fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_union_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        print(rel.union(rel).execute().fetchall())
-        assert rel.union(rel).execute().fetchall() == [
+        print(rel.union(rel).fetchall())
+        assert rel.union(rel).fetchall() == [
             (1, "one"),
             (2, "two"),
             (3, "three"),
@@ -156,7 +124,7 @@ class TestRelation:
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel2 = conn.from_df(test_df)
-        assert rel.join(rel2, "i").execute().fetchall() == [
+        assert rel.join(rel2, "i").fetchall() == [
             (1, "one", "one"),
             (2, "two", "two"),
             (3, "three", "three"),
@@ -168,14 +136,14 @@ class TestRelation:
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel2 = conn.from_df(test_df)
-        assert rel.except_(rel2).execute().fetchall() == []
+        assert rel.except_(rel2).fetchall() == []
 
     def test_create_operator(self):
         conn = duckdb.connect()
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel.create("test_df")
-        assert conn.query("select * from test_df").execute().fetchall() == [
+        assert conn.query("select * from test_df").fetchall() == [
             (1, "one"),
             (2, "two"),
             (3, "three"),
@@ -187,7 +155,7 @@ class TestRelation:
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = conn.from_df(test_df)
         rel.create_view("test_df")
-        assert conn.query("select * from test_df").execute().fetchall() == [
+        assert conn.query("select * from test_df").fetchall() == [
             (1, "one"),
             (2, "two"),
             (3, "three"),
@@ -301,7 +269,7 @@ class TestRelation:
         rel_3 = conn.table("test_table3")
         rel_3.insert([6, "six"])
 
-        assert rel_3.execute().fetchall() == [
+        assert rel_3.fetchall() == [
             (1, "one"),
             (2, "two"),
             (3, "three"),
@@ -317,7 +285,7 @@ class TestRelation:
         df_rel.write_csv(temp_file_name)
 
         csv_rel = duckdb.from_csv_auto(temp_file_name)
-        assert df_rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert df_rel.fetchall() == csv_rel.fetchall()
 
     def test_table_update_with_schema(self, duckdb_cursor):
         duckdb_cursor.sql("create schema not_main;")
@@ -349,20 +317,13 @@ class TestRelation:
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        with pytest.raises(TypeError, match="incompatible function arguments"):
+        with pytest.raises(TypeError, match="missing 1 required positional argument: 'sql_query'"):
             rel.query("select j from test")
-
-    def test_execute_fail(self):
-        conn = duckdb.connect()
-        conn.execute("CREATE TABLE test (i INTEGER)")
-        rel = conn.table("test")
-        with pytest.raises(TypeError, match="incompatible function arguments"):
-            rel.execute("select j from test")
 
     def test_df_proj(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = duckdb.project(test_df, "i")
-        assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
+        assert rel.fetchall() == [(1,), (2,), (3,), (4,)]
 
     def test_relation_lifetime(self, duckdb_cursor):
         def create_relation(con):
@@ -433,24 +394,24 @@ class TestRelation:
     def test_df_filter(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = duckdb.filter(test_df, "i > 1")
-        assert rel.execute().fetchall() == [(2, "two"), (3, "three"), (4, "four")]
+        assert rel.fetchall() == [(2, "two"), (3, "three"), (4, "four")]
 
     def test_df_order_by(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = duckdb.order(test_df, "j")
-        assert rel.execute().fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
+        assert rel.fetchall() == [(4, "four"), (1, "one"), (3, "three"), (2, "two")]
 
     def test_df_distinct(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         rel = duckdb.distinct(test_df).order("i")
-        assert rel.execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
+        assert rel.fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_df_write_csv(self):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))  # noqa: PTH118
         duckdb.write_csv(test_df, temp_file_name)
         csv_rel = duckdb.from_csv_auto(temp_file_name)
-        assert csv_rel.execute().fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
+        assert csv_rel.fetchall() == [(1, "one"), (2, "two"), (3, "three"), (4, "four")]
 
     def test_join_types(self):
         test_df1 = pd.DataFrame.from_dict({"i": [1, 2, 3, 4]})
@@ -459,9 +420,9 @@ class TestRelation:
         rel1 = con.from_df(test_df1)
         rel2 = con.from_df(test_df2)
 
-        assert rel1.join(rel2, "i=j", "inner").aggregate("count()").fetchone()[0] == 2
+        assert rel1.join(rel2, "i=j", "inner").aggregate("count()").fetchall()[0][0] == 2
 
-        assert rel1.join(rel2, "i=j", "left").aggregate("count()").fetchone()[0] == 4
+        assert rel1.join(rel2, "i=j", "left").aggregate("count()").fetchall()[0][0] == 4
 
     def test_fetchnumpy(self):
         start, stop = -1000, 2000
@@ -507,17 +468,15 @@ class TestRelation:
         # Execute the relation once
         rel.fetchall()
         assert counter.count == 1
-        # Close the result
+        # A relation keeps no result, so closing it runs nothing and leaves it usable
         rel.close()
-        # Verify that the query was not run again
         assert counter.count == 1
         rel.fetchall()
         assert counter.count == 2
 
-        # Verify that the query is run at least once if it's closed before it was executed.
         rel = conn.sql("select my_counter()")
         rel.close()
-        assert counter.count == 3
+        assert counter.count == 2
 
     def test_relation_print(self):
         con = duckdb.connect()
@@ -539,27 +498,8 @@ class TestRelation:
         # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
         query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
         rel = duckdb_cursor.sql(query)
-        res = rel.fetchone()
-        assert res is not None
-
-        res = rel.fetchmany(num_rows)
-        assert len(res) == num_rows - 1
-
-        res = rel.fetchmany(5)
-        assert len(res) == 0
-        res = rel.fetchmany(5)
-        assert len(res) == 0
-        res = rel.fetchone()
-        assert res is None
-
-        rel.execute()
-        res = rel.fetchone()
-        assert res is not None
-
-        res = rel.fetchall()
-        assert len(res) == num_rows - 1
-        res = rel.fetchall()
-        assert len(res) == num_rows
+        assert len(rel.fetchall()) == num_rows
+        assert len(rel.fetchall()) == num_rows
 
         rel = duckdb_cursor.sql(query)
         projection = rel.select("column0")
@@ -593,7 +533,7 @@ class TestRelation:
         assert len(res) == 50
 
         relation = duckdb_cursor.sql("select a from materialized_two")
-        assert relation.fetchone() == ("a",)
+        assert relation.fetchall()[0] == ("a",)
 
         described = materialized_one.describe()
         res = described.fetchall()
@@ -636,9 +576,9 @@ class TestRelation:
             """
             ).to_view("vw")
 
-        create_view(duckdb_cursor)
-        res = duckdb_cursor.sql("select * from vw").fetchone()
-        assert res == ("test",)
+        with pytest.raises(duckdb.InvalidInputException, match=r"register\("):
+            create_view(duckdb_cursor)
+        assert duckdb_cursor.sql("select * from tbl").fetchall() == [("test",)]
 
     def test_materialized_relation_view2(self, duckdb_cursor):
         # This creates a MaterializedRelation
@@ -676,6 +616,37 @@ class TestRelation:
 
         res = con.sql("select * from vw").fetchall()
         assert res == expected
+
+    @pytest.mark.parametrize(
+        "make_relation",
+        [
+            lambda con: con.from_df(pd.DataFrame({"a": [1, 2, 3]})),
+            lambda con: con.from_arrow(pytest.importorskip("pyarrow").table({"a": [1, 2, 3]})),
+            lambda con: con.sql("select range as a from range(3)").map(lambda df: df),
+        ],
+        ids=["pandas", "arrow", "map"],
+    )
+    def test_persistent_view_over_python_object(self, tmp_path, make_relation):
+        # A persistent view is written to the database file, and a scan over a Python object has no
+        # representation there, so the catalog change must be refused rather than stored dangling.
+        # It is refused at the call, so inside a transaction nothing waits for the commit.
+        con = duckdb.connect(str(tmp_path / "db.duckdb"))
+        rel = make_relation(con)
+        with pytest.raises(duckdb.InvalidInputException, match="database file"):
+            rel.create_view("vw")
+        assert con.sql("select view_name from duckdb_views() where not internal").fetchall() == []
+
+        con.execute("begin")
+        with pytest.raises(duckdb.InvalidInputException, match="database file"):
+            rel.create_view("vw")
+        # The refusal executed nothing, so the transaction is still usable.
+        assert con.execute("select 1").fetchall() == [(1,)]
+        con.execute("rollback")
+        assert con.sql("select view_name from duckdb_views() where not internal").fetchall() == []
+
+        # Temporary views never reach the file, so they keep working on the same database
+        assert rel.query("tmp_vw", "select count(*) from tmp_vw").fetchall() == [(3,)]
+        con.close()
 
     def test_relation_select_dtypes_quotes_identifiers_with_spaces(self, duckdb_cursor):
         df = pd.DataFrame({"na me": ["alice", "bob"], "x": [1, 2]})

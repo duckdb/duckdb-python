@@ -61,22 +61,27 @@ jobs:
           git fetch origin
           git checkout ${{ inputs.duckdb_git_ref }}
 
-      - name: Install Ccache
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install ccache
-
-      - name: Install Astral UV and enable the cache
-        uses: astral-sh/setup-uv@v7
+      # Its own key: RelWithDebInfo objects with coverage flags share nothing with the other builds. A dispatch
+      # that builds another ref or engine commit must not write the branch's cache.
+      - name: Setup Ccache
+        uses: ./.github/actions/ccache-action
         with:
-          version: "0.9.0"
+          key: ubuntu-coverage
+          save: ${{ inputs.git_ref == '' && inputs.duckdb_git_ref == '' && 'true' || 'false' }}
+
+      # No setup-uv cache: its entries ran to 900 MB per ref and crowded the ccaches out of the repository's budget.
+      - name: Install Astral UV
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.12.23"
           python-version: 3.12
-          enable-cache: true
-          cache-suffix: -${{ github.workflow }}
+          enable-cache: false
 
       - name: Run tests with coverage
         shell: bash
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
         run: |
           if [[ "${{ inputs.testsuite }}" == "all" ]]; then
             uv run coverage run -m pytest ./tests

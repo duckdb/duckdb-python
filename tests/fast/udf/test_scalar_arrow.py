@@ -212,5 +212,61 @@ class TestPyArrowUDF:
             name="func", function=func, return_type="STRUCT(x integer, y varchar)", type="arrow", side_effects=False
         )
 
-        res = duckdb_cursor.sql("select func(1).y").fetchone()
+        res = duckdb_cursor.sql("select func(1).y").fetchall()[0]
         assert res == ("this is not an inlined string",)
+
+    def test_nested_result_in_several_chunks_is_read_whole(self, duckdb_cursor):
+        def nested_in_two_chunks(x):
+            rows = [{"n": [v, v + 1], "s": f"not an inlined string {v}"} for v in x.to_pylist()]
+            return pa.chunked_array([rows[:4], rows[4:]])
+
+        duckdb_cursor.create_function(
+            "nested_in_two_chunks", nested_in_two_chunks, [BIGINT], "STRUCT(n BIGINT[], s VARCHAR)", type="arrow"
+        )
+        res = duckdb_cursor.sql("select nested_in_two_chunks(i) from range(10) t(i)").fetchall()
+        assert res == [({"n": [i, i + 1], "s": f"not an inlined string {i}"},) for i in range(10)]
+
+    def test_rows_of_every_chunk_count_towards_the_expected_rows(self, duckdb_cursor):
+        def twice(x):
+            return pa.chunked_array(x.chunks * 2)
+
+        duckdb_cursor.create_function("twice", twice, [BIGINT], BIGINT, type="arrow")
+        with pytest.raises(duckdb.InvalidInputException, match="Returned pyarrow table should have 3 tuples, found 6"):
+            duckdb_cursor.sql("select twice(i) from range(3) t(i)").fetchall()
+
+    def test_a_result_without_columns_is_refused(self, duckdb_cursor):
+        duckdb_cursor.create_function("no_columns", lambda x: pa.table({}), [BIGINT], BIGINT, type="arrow")
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Provided table/dataframe must have at least one column"
+        ):
+            duckdb_cursor.sql("select no_columns(i) from range(3) t(i)").fetchall()
+
+    @pytest.mark.parametrize(
+        ("export", "message"),
+        [
+            pytest.param("released", "has already been consumed and cannot be scanned again", id="released"),
+            pytest.param("not_a_capsule", "did not export an 'arrow_array_stream' capsule", id="not_a_capsule"),
+            pytest.param(
+                "raises",
+                "exporting the result of the Arrow function failed: ValueError: export sentinel",
+                id="raises",
+            ),
+        ],
+    )
+    def test_a_result_exporting_an_unusable_stream_is_refused(self, duckdb_cursor, export, message):
+        class Exporting(pa.Table):
+            def __arrow_c_stream__(self, requested_schema=None) -> object:
+                if export == "raises":
+                    sentinel = "export sentinel"
+                    raise ValueError(sentinel)
+                if export == "not_a_capsule":
+                    return 42
+                capsule = pa.table({"a": [1, 2, 3]}).__arrow_c_stream__()
+                pa.RecordBatchReader._import_from_c_capsule(capsule)
+                return capsule
+
+        duckdb_cursor.create_function(
+            "unusable", lambda x: Exporting.__new__(Exporting), [BIGINT], BIGINT, type="arrow"
+        )
+        with pytest.raises(duckdb.InvalidInputException, match=message):
+            duckdb_cursor.sql("select unusable(i) from range(3) t(i)").fetchall()

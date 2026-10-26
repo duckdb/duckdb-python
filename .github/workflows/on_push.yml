@@ -1,17 +1,26 @@
-name: Tests and coverage on push
+name: Tests on push
+# The fork workflow. Feature branches live in contributors' forks; upstream
+# holds only the protected branches and the merge queue refs, which are ignored
+# here. Every push to a fork branch gets the full-API build with its
+# assertions on the fast suite, and the fork keeps its own ccache for it (the
+# ccache action saves on every ref outside duckdb/duckdb-python). Pull requests
+# into upstream run the complete gate in on_pr.yml. Coverage runs on dispatch.
 on:
   push:
     branches-ignore:
       - main
       - v*.*-*
+      - gh-readonly-queue/**
     paths-ignore:
       - '**.md'
       - 'LICENSE'
       - '.editorconfig'
       - 'scripts/**'
-      - '.github//**'
+      - '.github/**'
       - '!.github/workflows/on_push.yml'
-      - '!.github/workflows/coverage.yml'
+      - '!.github/workflows/assert_test.yml'
+      - '!.github/workflows/code_quality.yml'
+      - '!.github/actions/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,10 +31,10 @@ jobs:
     name: Code-quality checks
     uses: ./.github/workflows/code_quality.yml
 
-  test:
-    name: Run coverage tests
+  assert_test:
+    name: Full-API build with assertions
     needs: code_quality
-    uses: ./.github/workflows/coverage.yml
+    uses: ./.github/workflows/assert_test.yml
     with:
       git_ref: ${{ github.ref }}
       testsuite: fast

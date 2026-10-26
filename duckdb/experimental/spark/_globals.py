@@ -33,7 +33,7 @@ Note that this approach is taken after from NumPy.
 
 __ALL__ = ["_NoValue"]
 
-from typing_extensions import Self
+from typing import Self
 
 # Disallow reloading this module so as to preserve the identities of the
 # classes defined here.

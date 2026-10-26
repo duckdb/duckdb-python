@@ -180,7 +180,7 @@ def arrow_table_query(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_table()
+        duckdb_conn.sql("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_table()
         queue.put(True)
     except Exception:
         queue.put(False)
@@ -190,7 +190,7 @@ def fetch_record_batch_query(duckdb_conn, queue):
     # Get a new connection
     duckdb_conn = duckdb.connect()
     try:
-        duckdb_conn.execute("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_reader()
+        duckdb_conn.sql("select i from (values (42), (84), (NULL), (128)) tbl(i)").to_arrow_reader()
         queue.put(True)
     except Exception:
         queue.put(False)
@@ -353,7 +353,6 @@ def description(_, queue):
     duckdb_conn.execute("CREATE TABLE test (i bool, j TIME, k VARCHAR)")
     duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )")
     rel = duckdb_conn.table("test")
-    rel.execute()
     try:
         rel.description  # noqa: B018
         queue.put(True)

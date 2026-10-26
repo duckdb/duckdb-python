@@ -1,0 +1,313 @@
+# Which DuckDB functions each family holds, entered through .str(), .dt(), .list() and .json() on an expression.
+# Entry keys: sql, subject (where the expression goes among the arguments), types (pins one overload where the
+# candidates disagree on the return class), returns (macros only, the catalog gives them none), params, lambda, doc.
+# covers names the rule saying which catalog functions the family must account for; ignore holds the ones it skips.
+
+[str]
+blurb = "Text functions, applied to this expression as the string."
+covers = "string"
+ignore = [
+  # Composes a name=value directory component from a column name and a value; neither argument is the string a method would act on.
+  "hive_partition_component",
+  "array_extract",
+  "bar",
+  "chr",
+  "concat",
+  "format_bytes",
+  "greatest",
+  "hash",
+  "hex",
+  "least",
+  "list_slice",
+  "repeat",
+  "to_base",
+  "to_base64",
+]
+[str.methods]
+ascii = { sql = "ascii", doc = "The Unicode code point of the first character" }
+bin = { sql = "bin" }
+bit_length = { sql = "bit_length" }
+# concat_ws takes the separator first, so the expression is the second argument.
+concat_ws = { sql = "concat_ws", subject = 1 }
+contains = { sql = "contains" }
+damerau_levenshtein = { sql = "damerau_levenshtein", doc = "Edit distance, counting a swap of neighbours as one edit" }
+format = { sql = "format" }
+from_base64 = { sql = "from_base64" }
+hamming = { sql = "hamming", doc = "How many positions differ, for two strings of equal length" }
+ilike_escape = { sql = "ilike_escape", doc = "Matches the pattern, ignoring case" }
+instr = { sql = "instr", doc = "Where the search string first occurs, or 0" }
+jaccard = { sql = "jaccard" }
+jaro_similarity = { sql = "jaro_similarity" }
+jaro_winkler_similarity = { sql = "jaro_winkler_similarity" }
+left = { sql = "left" }
+left_grapheme = { sql = "left_grapheme" }
+length = { sql = "length" }
+length_grapheme = { sql = "length_grapheme" }
+levenshtein = { sql = "levenshtein", doc = "The number of single-character edits between two strings" }
+like_escape = { sql = "like_escape", doc = "Whether it matches the pattern" }
+lower = { sql = "lower" }
+lpad = { sql = "lpad", doc = "Padded on the left with the character, to a total length" }
+ltrim = { sql = "ltrim", doc = "Trimmed on the left of any of the characters, spaces by default" }
+md5 = { sql = "md5" }
+md5_number = { sql = "md5_number" }
+nfc_normalize = { sql = "nfc_normalize" }
+not_ilike_escape = { sql = "not_ilike_escape", doc = "Does not match, ignoring case" }
+not_like_escape = { sql = "not_like_escape", doc = "Does not match the pattern" }
+overlay = { sql = "overlay", doc = "The replacement written over the string, at a position" }
+parse_dirname = { sql = "parse_dirname" }
+parse_dirpath = { sql = "parse_dirpath", doc = "The path up to the last separator, as Python's os.path.dirname gives it" }
+parse_filename = { sql = "parse_filename", doc = "The last component of the path, optionally without its extension" }
+parse_formatted_bytes = { sql = "parse_formatted_bytes", doc = "A human-readable size such as '4KB' as a number of bytes" }
+parse_path = { sql = "parse_path", doc = "The path split into its directories and filename" }
+path_join = { sql = "path_join", doc = "The path components joined with the platform's separator" }
+prefix = { sql = "prefix" }
+printf = { sql = "printf" }
+regexp_escape = { sql = "regexp_escape", doc = "The string escaped so it matches itself as a regular expression" }
+regexp_extract = { sql = "regexp_extract", doc = "The first match of the pattern, or an empty string" }
+regexp_extract_all = { sql = "regexp_extract_all", doc = "Every match of the pattern, as a list" }
+regexp_full_match = { sql = "regexp_full_match" }
+regexp_matches = { sql = "regexp_matches", doc = "Whether the pattern matches anywhere in the string" }
+regexp_replace = { sql = "regexp_replace", doc = "The first match of the pattern replaced" }
+replace = { sql = "replace", doc = "Every occurrence of the source replaced by the target" }
+reverse = { sql = "reverse" }
+right = { sql = "right" }
+right_grapheme = { sql = "right_grapheme" }
+rpad = { sql = "rpad", doc = "Padded on the right with the character, to a total length" }
+rtrim = { sql = "rtrim", doc = "Trimmed on the right of any of the characters, spaces by default" }
+sha1 = { sql = "sha1" }
+sha256 = { sql = "sha256" }
+string_split = { sql = "string_split" }
+string_split_regex = { sql = "string_split_regex" }
+strip_accents = { sql = "strip_accents" }
+strlen = { sql = "strlen" }
+substring = { sql = "substring", doc = "The rest of the string from a start position" }
+substring_grapheme = { sql = "substring_grapheme", doc = "The rest of the string, counting grapheme clusters" }
+suffix = { sql = "suffix" }
+translate = { sql = "translate", doc = "Each character in `from` replaced by the one in `to`" }
+trim = { sql = "trim", doc = "Trimmed on both sides of any of the characters, spaces by default" }
+unbin = { sql = "unbin" }
+unhex = { sql = "unhex" }
+unicode = { sql = "unicode", doc = "The Unicode code point of the first character, as an INTEGER" }
+upper = { sql = "upper" }
+url_decode = { sql = "url_decode" }
+url_encode = { sql = "url_encode" }
+
+[dt]
+blurb = "Date and time functions, applied to this expression as the date, time or timestamp."
+covers = "temporal"
+ignore = [
+  # date_add is date + interval, which the + operator already says.
+  "date_add",
+  # Run-together spellings of what diff, part, sub and trunc already carry.
+  "datediff",
+  "datepart",
+  "datesub",
+  "datetrunc",
+  "epoch_ms",
+  "equi_width_bins",
+  "generate_series",
+  "isfinite",
+  "isinf",
+  "json_copy_strftime_if_date",
+  "json_copy_strftime_if_timestamp",
+  "range",
+]
+[dt.methods]
+age = { sql = "age", doc = "The time between two timestamps, or between one and now" }
+century = { sql = "century" }
+day = { sql = "day" }
+dayname = { sql = "dayname" }
+# A macro, day(last_day(date)), so it returns a number whatever it is given.
+days_in_month = { sql = "days_in_month", doc = "How many days the date's month has" }
+dayofmonth = { sql = "dayofmonth" }
+dayofweek = { sql = "dayofweek" }
+dayofyear = { sql = "dayofyear" }
+decade = { sql = "decade" }
+diff = { sql = "date_diff", subject = 1 }
+epoch = { sql = "epoch" }
+epoch_ns = { sql = "epoch_ns" }
+epoch_us = { sql = "epoch_us" }
+era = { sql = "era" }
+hour = { sql = "hour" }
+isodow = { sql = "isodow" }
+isoyear = { sql = "isoyear" }
+julian = { sql = "julian" }
+last_day = { sql = "last_day" }
+microsecond = { sql = "microsecond" }
+millennium = { sql = "millennium" }
+millisecond = { sql = "millisecond" }
+minute = { sql = "minute" }
+month = { sql = "month" }
+monthname = { sql = "monthname" }
+nanosecond = { sql = "nanosecond" }
+normalized_interval = { sql = "normalized_interval" }
+part = { sql = "date_part", subject = 1, params = ["part"] }
+quarter = { sql = "quarter" }
+second = { sql = "second" }
+strftime = { sql = "strftime", doc = "Format as text, with a strftime pattern" }
+sub = { sql = "date_sub", subject = 1 }
+time_bucket = { sql = "time_bucket", subject = 1 }
+timetz_byte_comparable = { sql = "timetz_byte_comparable" }
+# Pinned to the offset form; moving a timestamp to another zone is AT TIME ZONE, written with sql_expr.
+timezone = { sql = "timezone", types = ["TIMESTAMP"], doc = "The time zone offset, in seconds" }
+timezone_hour = { sql = "timezone_hour" }
+timezone_minute = { sql = "timezone_minute" }
+trunc = { sql = "date_trunc", subject = 1 }
+week = { sql = "week" }
+weekday = { sql = "weekday" }
+weekofyear = { sql = "weekofyear" }
+year = { sql = "year" }
+yearweek = { sql = "yearweek" }
+
+[list]
+blurb = "List functions, applied to this expression as the list. A callable argument is given expressions, not values."
+covers = "list"
+ignore = [
+  "array_length",
+  "concat",
+  "generate_series",
+  "length",
+  "list_concat",
+  "list_slice",
+  "list_value",
+  "list_zip",
+  "range",
+  "unpivot_list",
+]
+[list.methods]
+aggregate = { sql = "list_aggregate", doc = "The named aggregate applied to the elements" }
+any_value = { sql = "list_any_value", doc = "Any one element, whichever is cheapest" }
+# A macro, list_concat(l, list_value(e)), so a list whatever it is given.
+append = { sql = "list_append", returns = "list" }
+approx_count_distinct = { sql = "list_approx_count_distinct", doc = "An approximate count of the distinct elements" }
+avg = { sql = "list_avg", doc = "The average of the elements" }
+bit_and = { sql = "list_bit_and", doc = "The bitwise AND of the elements" }
+bit_or = { sql = "list_bit_or", doc = "The bitwise OR of the elements" }
+bit_xor = { sql = "list_bit_xor", doc = "The bitwise XOR of the elements" }
+bool_and = { sql = "list_bool_and", doc = "Whether every element is true" }
+bool_or = { sql = "list_bool_or", doc = "Whether any element is true" }
+contains = { sql = "list_contains" }
+cosine_distance = { sql = "list_cosine_distance" }
+cosine_similarity = { sql = "list_cosine_similarity", doc = "The cosine similarity of two lists of numbers" }
+count = { sql = "list_count", doc = "How many elements are not NULL" }
+distance = { sql = "list_distance", doc = "The Euclidean distance between two lists of numbers" }
+distinct = { sql = "list_distinct" }
+entropy = { sql = "list_entropy", doc = "The entropy of the elements" }
+extract = { sql = "list_extract" }
+filter = { sql = "list_filter", lambda = 1, doc = "The elements the function holds for: `lambda x: x > 0`" }
+first = { sql = "list_first", doc = "The first element" }
+flatten = { sql = "flatten" }
+grade_up = { sql = "list_grade_up", doc = "The positions the elements would take once sorted, rather than the elements" }
+has_all = { sql = "list_has_all" }
+has_any = { sql = "list_has_any" }
+histogram = { sql = "list_histogram", doc = "How often each element occurs, as a map" }
+inner_product = { sql = "list_inner_product" }
+intersect = { sql = "list_intersect", doc = "The distinct elements present in both lists" }
+kurtosis = { sql = "list_kurtosis", doc = "The kurtosis of the elements" }
+kurtosis_pop = { sql = "list_kurtosis_pop", doc = "The population kurtosis of the elements" }
+last = { sql = "list_last", doc = "The last element" }
+mad = { sql = "list_mad", doc = "The median absolute deviation of the elements" }
+max = { sql = "list_max", doc = "The largest element" }
+median = { sql = "list_median", doc = "The middle element" }
+min = { sql = "list_min", doc = "The smallest element" }
+mask = { sql = "list_where", doc = "The elements where the matching boolean is true" }
+mode = { sql = "list_mode", doc = "The most frequent element" }
+negative_inner_product = { sql = "list_negative_inner_product", doc = "The inner product of two lists, negated" }
+position = { sql = "list_position", doc = "The index of the element, or NULL when absent" }
+# A macro, list_concat(list_value(e), l), so a list whatever it is given.
+prepend = { sql = "list_prepend", subject = 1, returns = "list" }
+product = { sql = "list_product", doc = "The product of the elements" }
+reduce = { sql = "list_reduce", lambda = 2, doc = "The list folded to one value, left to right: `lambda acc, x: acc + x`" }
+resize = { sql = "list_resize" }
+# A macro, the slice l[:-:-1], so a list whatever it is given.
+reverse = { sql = "list_reverse", returns = "list", doc = "The elements in reverse order" }
+reverse_sort = { sql = "list_reverse_sort" }
+select = { sql = "list_select", doc = "The elements at the given indexes" }
+sem = { sql = "list_sem", doc = "The standard error of the mean of the elements" }
+skewness = { sql = "list_skewness", doc = "The skewness of the elements" }
+sort = { sql = "list_sort" }
+stddev_pop = { sql = "list_stddev_pop", doc = "The population standard deviation of the elements" }
+stddev_samp = { sql = "list_stddev_samp", doc = "The sample standard deviation of the elements" }
+# A macro over string_agg, which always returns text.
+string_agg = { sql = "list_string_agg", returns = "str", doc = "The elements joined as text, separated by commas" }
+sum = { sql = "list_sum", doc = "The sum of the elements" }
+transform = { sql = "list_transform", lambda = 1, doc = "Each element through the function: `lambda x: x * 2`" }
+unique = { sql = "list_unique" }
+var_pop = { sql = "list_var_pop", doc = "The population variance of the elements" }
+var_samp = { sql = "list_var_samp", doc = "The sample variance of the elements" }
+
+[json]
+blurb = "JSON functions, applied to this expression as the document."
+covers = "json"
+ignore = [
+  "json_copy_strftime_if_date",
+  "json_copy_strftime_if_timestamp",
+  "json_deserialize_sql",
+  "json_group_array",
+  "json_group_object",
+  "json_group_structure",
+  "json_merge_patch",
+  "json_array",
+  "json_object",
+  "json_quote",
+  "json_serialize_plan",
+  "json_serialize_sql",
+]
+[json.methods]
+# The pins choose the single-path overload; the list-of-paths overload returns a list, leaving the class ambiguous.
+array_length = { sql = "json_array_length", types = ["JSON"], doc = "How many elements the array holds" }
+contains = { sql = "json_contains" }
+deep_merge = { sql = "json_deep_merge" }
+exists = { sql = "json_exists", types = ["JSON", "VARCHAR"] }
+extract = { sql = "json_extract", types = ["JSON", "VARCHAR"] }
+extract_path = { sql = "json_extract_path", types = ["JSON", "VARCHAR"] }
+extract_path_text = { sql = "json_extract_path_text", types = ["JSON", "VARCHAR"] }
+extract_string = { sql = "json_extract_string", types = ["JSON", "VARCHAR"] }
+insert = { sql = "json_insert" }
+keys = { sql = "json_keys", doc = "The keys of the object, as a list" }
+merge_patch_diff = { sql = "json_merge_patch_diff" }
+normalize = { sql = "json_normalize", doc = "The document minified, with object keys sorted" }
+# A macro over json_extract, which returns JSON for a single path.
+parse = { sql = "json", returns = "json", doc = "The text parsed as a JSON document, minified" }
+pretty = { sql = "json_pretty", doc = "The document printed with indentation" }
+remove = { sql = "json_remove" }
+replace = { sql = "json_replace" }
+set = { sql = "json_set" }
+strip_nulls = { sql = "json_strip_nulls", doc = "The document without its null-valued object fields" }
+structure = { sql = "json_structure", doc = "The shape of the document, with types in place of values" }
+transform = { sql = "json_transform" }
+transform_strict = { sql = "json_transform_strict" }
+type = { sql = "json_type", types = ["JSON"], doc = "The type of the top value: OBJECT, ARRAY, VARCHAR and so on" }
+valid = { sql = "json_valid", doc = "Whether the text is valid JSON" }
+value = { sql = "json_value", types = ["JSON", "VARCHAR"] }
+# Method names follow pandas and Polars where those two agree; the SQL name is DuckDB's.
+[aggregates]
+blurb = "The aggregate functions reachable as methods on every expression."
+[aggregates.methods]
+sum = { sql = "sum", doc = "The sum of the values." }
+mean = { sql = "avg", doc = "The average of the values." }
+avg = { sql = "avg", doc = "The average of the values. The same as `mean`." }
+min = { sql = "min", doc = "The smallest value." }
+max = { sql = "max", doc = "The largest value." }
+count = { sql = "count", doc = "How many values are not NULL. For rows, use `count_all()`." }
+median = { sql = "median", doc = "The middle value." }
+std = { sql = "stddev_samp", doc = "The sample standard deviation." }
+var = { sql = "var_samp", doc = "The sample variance." }
+first = { sql = "first", doc = "The first value seen. Order it with `.over()` or `sort` to make that mean something." }
+last = { sql = "last", doc = "The last value seen." }
+any_value = { sql = "any_value", doc = "Any one of the values, whichever is cheapest." }
+bit_and = { sql = "bit_and", doc = "The bitwise AND of the values." }
+bit_or = { sql = "bit_or", doc = "The bitwise OR of the values." }
+bool_and = { sql = "bool_and", doc = "Whether every value is true." }
+bool_or = { sql = "bool_or", doc = "Whether any value is true." }
+product = { sql = "product", doc = "The product of the values." }
+string_agg = { sql = "string_agg", doc = "The values joined as text. Pass the separator as an argument." }
+skewness = { sql = "skewness", doc = "The skewness of the distribution." }
+kurtosis = { sql = "kurtosis", doc = "The kurtosis of the distribution." }
+entropy = { sql = "entropy", doc = "The entropy of the distribution." }
+array_agg = { sql = "array_agg", doc = "The values gathered into a list." }
+mode = { sql = "mode", doc = "The most frequent value." }
+quantile = { sql = "quantile_disc", doc = "The value at a quantile, one of the values themselves. Pass the quantile, 0 to 1." }
+quantile_cont = { sql = "quantile_cont", doc = "The value at a quantile, interpolated. Pass the quantile, 0 to 1." }
+arg_min = { sql = "arg_min", doc = "The value of the argument where this is smallest." }
+arg_max = { sql = "arg_max", doc = "The value of the argument where this is largest." }

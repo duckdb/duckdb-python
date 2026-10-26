@@ -9,8 +9,8 @@ core execution. Primary signal is LOCAL WALLTIME:
 Under CI Callgrind threads are serialized, so wall-clock contention is invisible there; the deterministic count
 still captures per-batch Produce GIL calls + UDF dispatch. Never gated either way.
 
-GOTCHA: a SINGLE-BATCH arrow table does NOT parallelize (one batch = one serial scan unit). The arrow scan bench
-MUST use a MULTI-BATCH table AND a CPU-heavy aggregate (a cheap sum is bandwidth-bound and won't parallelize).
+GOTCHA: the arrow scan splits each batch into ranges of 122880 rows, so a batch shorter than two ranges is one serial
+scan unit. The arrow scan bench MUST use a CPU-heavy aggregate (a cheap sum is bandwidth-bound and won't parallelize).
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import pandas as pd  # noqa: E402
 pytestmark = pytest.mark.informational
 
 N_SCAN = 1_000_000
-BATCH = 20_000  # -> 50 record batches; MULTI-BATCH required for the arrow scan to parallelize (see GOTCHA)
+BATCH = 20_000  # -> 50 record batches, each one serial scan unit (see GOTCHA)
 N_UDF_NATIVE = 200_000  # native UDF = one Python call per row; keep modest (Callgrind instruments every call)
 N_UDF_ARROW = 1_000_000  # arrow UDF = one call per chunk (vectorized)
 THREADS = [1, 4, 8]
@@ -51,6 +51,16 @@ def arrow_multibatch() -> pa.Table:
 
 
 @pytest.fixture(scope="module")
+def arrow_one_chunk() -> pa.Table:
+    return pa.table(
+        {
+            "a": pa.array(np.arange(N_SCAN), type=pa.int64()),
+            "b": pa.array(np.arange(N_SCAN, dtype="float64") * 1.5, type=pa.float64()),
+        }
+    )
+
+
+@pytest.fixture(scope="module")
 def pandas_frame() -> pd.DataFrame:
     return pd.DataFrame({"a": np.arange(N_SCAN), "b": np.arange(N_SCAN, dtype="float64") * 1.5})
 
@@ -64,6 +74,19 @@ def test_scan_arrow_parallel(benchmark: BenchmarkFixture, arrow_multibatch: pa.T
     con = duckdb.connect(config={"threads": threads})
     try:
         con.register("t", arrow_multibatch)
+        q = f"SELECT sum({HEAVY}) FROM t"
+        con.execute(q).fetchall()  # warm
+        benchmark(lambda: con.execute(q).fetchall())
+    finally:
+        con.close()
+
+
+@pytest.mark.parametrize("threads", THREADS)
+def test_scan_arrow_one_chunk_parallel(benchmark: BenchmarkFixture, arrow_one_chunk: pa.Table, threads: int) -> None:
+    # the speedup over threads shows whether the scan splits a single batch into ranges (see GOTCHA)
+    con = duckdb.connect(config={"threads": threads})
+    try:
+        con.register("t", arrow_one_chunk)
         q = f"SELECT sum({HEAVY}) FROM t"
         con.execute(q).fetchall()  # warm
         benchmark(lambda: con.execute(q).fetchall())

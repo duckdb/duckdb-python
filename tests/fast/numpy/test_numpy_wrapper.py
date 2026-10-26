@@ -90,3 +90,18 @@ class TestNumpyArrayRoundtrip:
         con.register("t", df)
         out = con.execute("SELECT * FROM t ORDER BY i").df()
         pd.testing.assert_frame_equal(out.reset_index(drop=True), df)
+
+
+class TestNumpyArrayNullSlots:
+    """The data slot under a NULL holds zero rather than whatever the reused buffer held before."""
+
+    @pytest.mark.parametrize("sql_type", ["DECIMAL(4,1)", "DECIMAL(18,3)", "DECIMAL(38,3)", "HUGEINT", "BIGINT"])
+    @pytest.mark.parametrize("n", [10, 3000])
+    def test_numeric_null_slot_holds_zero(self, con, sql_type, n):
+        # Fetching and dropping a result of the same size first can leave its values in memory the next result reuses.
+        con.execute(f"SELECT 7::{sql_type} AS x FROM range({n})").fetchnumpy()
+        got = con.execute(f"SELECT CASE WHEN i % 2 = 0 THEN 7::{sql_type} END AS x FROM range({n}) t(i)").fetchnumpy()
+        data = np.ma.getdata(got["x"])
+        assert np.ma.getmaskarray(got["x"]).tolist() == [i % 2 == 1 for i in range(n)]
+        assert data[1::2].tolist() == [0] * (n // 2)
+        assert data[::2].tolist() == [7] * (n // 2)

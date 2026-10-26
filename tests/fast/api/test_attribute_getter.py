@@ -6,15 +6,15 @@ import duckdb
 class TestGetAttribute:
     def test_basic_getattr(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)")
-        assert rel.a.fetchmany(5) == [(0,), (1,), (2,), (3,), (4,)]
-        assert rel.b.fetchmany(5) == [(5,), (6,), (7,), (8,), (9,)]
-        assert rel.c.fetchmany(5) == [(2,), (0,), (1,), (2,), (0,)]
+        assert rel.a.fetchall()[:5] == [(0,), (1,), (2,), (3,), (4,)]
+        assert rel.b.fetchall()[:5] == [(5,), (6,), (7,), (8,), (9,)]
+        assert rel.c.fetchall()[:5] == [(2,), (0,), (1,), (2,), (0,)]
 
     def test_basic_getitem(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)")
-        assert rel["a"].fetchmany(5) == [(0,), (1,), (2,), (3,), (4,)]
-        assert rel["b"].fetchmany(5) == [(5,), (6,), (7,), (8,), (9,)]
-        assert rel["c"].fetchmany(5) == [(2,), (0,), (1,), (2,), (0,)]
+        assert rel["a"].fetchall()[:5] == [(0,), (1,), (2,), (3,), (4,)]
+        assert rel["b"].fetchall()[:5] == [(5,), (6,), (7,), (8,), (9,)]
+        assert rel["c"].fetchall()[:5] == [(2,), (0,), (1,), (2,), (0,)]
 
     def test_getitem_nonexistant(self, duckdb_cursor):
         rel = duckdb_cursor.sql("select i as a, (i + 5) % 10 as b, (i + 2) % 3 as c from range(100) tbl(i)")
@@ -54,4 +54,4 @@ class TestGetAttribute:
 
     def test_getattr_doublequotes(self, duckdb_cursor):
         rel = duckdb_cursor.sql('select 1 as "tricky"", ""quotes", 2 as tricky, 3 as quotes')
-        assert rel[rel.columns[0]].fetchone() == (1,)
+        assert rel[rel.columns[0]].fetchall()[0] == (1,)

@@ -22,29 +22,10 @@ class TestMaterializedRelationSlow:
         # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
         query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
         rel = duckdb_cursor.sql(query)
-        res = rel.fetchone()
-        assert res is not None
+        assert rel.limit(1).fetchall() == [(42, "test", "this is a long string", True)]
+        assert len(rel.fetchall()) == num_rows
+        assert len(rel.fetchall()) == num_rows
 
-        res = rel.fetchmany(num_rows)
-        assert len(res) == num_rows - 1
-
-        res = rel.fetchmany(5)
-        assert len(res) == 0
-        res = rel.fetchmany(5)
-        assert len(res) == 0
-        res = rel.fetchone()
-        assert res is None
-
-        rel.execute()
-        res = rel.fetchone()
-        assert res is not None
-
-        res = rel.fetchall()
-        assert len(res) == num_rows - 1
-        res = rel.fetchall()
-        assert len(res) == num_rows
-
-        rel = duckdb_cursor.sql(query)
         projection = rel.select("column0")
         assert projection.fetchall() == [(42,) for _ in range(num_rows)]
 

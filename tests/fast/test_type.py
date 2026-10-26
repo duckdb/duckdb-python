@@ -85,6 +85,13 @@ class TestType:
         type = duckdb.struct_type([BIGINT, BOOLEAN])
         assert str(type) == "STRUCT(v1 BIGINT, v2 BOOLEAN)"
 
+    @pytest.mark.parametrize("fields", [{}, []])
+    def test_empty_struct_type(self, fields):
+        type = duckdb.struct_type(fields)
+        assert type == duckdb.sql("select {} as s").types[0]
+        assert duckdb.execute("select ?", [duckdb.Value({}, type)]).fetchall() == [({},)]
+        assert duckdb.sql(f"select {{}}::{type}").fetchall() == [({},)]
+
     def test_incomplete_struct_type(self):
         with pytest.raises(
             duckdb.InvalidInputException, match="Could not convert empty dictionary to a duckdb STRUCT type"

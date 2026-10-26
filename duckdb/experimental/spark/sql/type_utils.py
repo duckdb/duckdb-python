@@ -74,7 +74,8 @@ _sqltype_to_spark_class = {
     "struct": StructType,
     "map": MapType,
     # union
-    # enum
+    # Spark has no enum type; a pandas categorical reads as string.
+    "enum": StringType,
     # null (???)
     "float": FloatType,
     "double": DoubleType,

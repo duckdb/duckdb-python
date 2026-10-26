@@ -109,7 +109,7 @@ class TestCategory:
         res = duckdb_cursor.table("test").fetchall()
         assert res == []
 
-        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'test' to UINT8"):
+        with pytest.raises(duckdb.ConversionException, match="Could not convert string 'test' to ENUM"):
             duckdb_cursor.execute("insert into test VALUES('test')")
         duckdb_cursor.execute("insert into test VALUES(NULL)")
         res = duckdb_cursor.table("test").fetchall()

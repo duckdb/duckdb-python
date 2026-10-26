@@ -49,8 +49,9 @@ class TestConnectionClose:
         duckdb.set_default_connection(con)
         duckdb.close()
 
-        # 'duckdb.close()' closes this connection, because we explicitly set it as the default
-        with pytest.raises(duckdb.ConnectionException, match="Connection Error: Connection already closed"):
+        # 'duckdb.close()' closes this connection, because we explicitly set it as the default.
+        # The relation path reports the engine's text for a closed connection.
+        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             con.sql("select 42").fetchall()
 
         default_con = duckdb.default_connection()
@@ -61,7 +62,7 @@ class TestConnectionClose:
         duckdb.sql("select 42").fetchall()
 
         # Show that the 'default_con' is still closed
-        with pytest.raises(duckdb.ConnectionException, match="Connection Error: Connection already closed"):
+        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             default_con.sql("select 42").fetchall()
 
         duckdb.close()

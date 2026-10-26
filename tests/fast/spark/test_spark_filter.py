@@ -3,7 +3,6 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 
-from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.errors import PySparkTypeError
 from spark_namespace.sql.functions import array_contains, col
 from spark_namespace.sql.types import (
@@ -138,11 +137,8 @@ class TestDataFrameFilter:
         df2 = df.filter(array_contains(df.languages, "Java"))
         res = df2.collect()
 
-        james_name = {"firstname": "James", "middlename": "", "lastname": "Smith"}
-        anna_name = {"firstname": "Anna", "middlename": "Rose", "lastname": ""}
-        if USE_ACTUAL_SPARK:
-            james_name = Row(**james_name)
-            anna_name = Row(**anna_name)
+        james_name = Row(firstname="James", middlename="", lastname="Smith")
+        anna_name = Row(firstname="Anna", middlename="Rose", lastname="")
         assert res == [
             Row(
                 name=james_name,
@@ -160,11 +156,8 @@ class TestDataFrameFilter:
 
         df2 = df.filter(df.name.lastname == "Williams")
         res = df2.collect()
-        julia_name = {"firstname": "Julia", "middlename": "", "lastname": "Williams"}
-        mike_name = {"firstname": "Mike", "middlename": "Mary", "lastname": "Williams"}
-        if USE_ACTUAL_SPARK:
-            julia_name = Row(**julia_name)
-            mike_name = Row(**mike_name)
+        julia_name = Row(firstname="Julia", middlename="", lastname="Williams")
+        mike_name = Row(firstname="Mike", middlename="Mary", lastname="Williams")
         assert res == [
             Row(
                 name=julia_name,

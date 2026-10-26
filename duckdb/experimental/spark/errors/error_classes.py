@@ -18,6 +18,12 @@ import json
 
 ERROR_CLASSES_JSON = """
 {
+  "AMBIGUOUS_REFERENCE" : {
+    "message" : [
+      "Reference <name> is ambiguous, could be: <referenceNames>."
+    ],
+    "sqlState" : "42704"
+  },
   "APPLICATION_NAME_NOT_SET" : {
     "message" : [
       "An application name must be set in your configuration."
@@ -106,22 +112,26 @@ ERROR_CLASSES_JSON = """
   "CANNOT_INFER_EMPTY_SCHEMA": {
     "message": [
       "Can not infer schema from empty dataset."
-    ]
+    ],
+    "sqlState": "42K09"
   },
   "CANNOT_INFER_SCHEMA_FOR_TYPE": {
     "message": [
       "Can not infer schema for type: `<data_type>`."
-    ]
+    ],
+    "sqlState": "42K09"
   },
   "CANNOT_INFER_TYPE_FOR_FIELD": {
     "message": [
       "Unable to infer the type of the field `<field_name>`."
-    ]
+    ],
+    "sqlState": "42K09"
   },
   "CANNOT_MERGE_TYPE": {
     "message": [
       "Can not merge type `<data_type1>` and `<data_type2>`."
-    ]
+    ],
+    "sqlState": "42K09"
   },
   "CANNOT_OPEN_SOCKET": {
     "message": [
@@ -147,6 +157,12 @@ ERROR_CLASSES_JSON = """
     "message": [
       "returnType can not be specified when `<arg_name>` is a user-defined function, but got <return_type>."
     ]
+  },
+  "COLUMN_ALREADY_EXISTS" : {
+    "message" : [
+      "The column <columnName> already exists. Choose another name or rename the existing column."
+    ],
+    "sqlState" : "42711"
   },
   "COLUMN_IN_LIST": {
     "message": [
@@ -230,10 +246,22 @@ ERROR_CLASSES_JSON = """
       "Duplicated field names in Arrow Struct are not allowed, got <field_names>"
     ]
   },
+  "FIELD_NOT_FOUND" : {
+    "message" : [
+      "No such struct field <fieldName> in <fields>."
+    ],
+    "sqlState" : "42704"
+  },
   "HIGHER_ORDER_FUNCTION_SHOULD_RETURN_COLUMN" : {
     "message" : [
       "Function `<func_name>` should return Column, got <return_type>."
     ]
+  },
+  "INCOMPATIBLE_COLUMN_TYPE" : {
+    "message" : [
+      "<operator> can only be performed on tables with compatible column types. The <columnOrdinalNumber> column of the <tableOrdinalNumber> table is <dataType1> type which is not compatible with <dataType2> at the same column of the first table.<hint>."
+    ],
+    "sqlState" : "42825"
   },
   "INCORRECT_CONF_FOR_PROFILE" : {
     "message" : [
@@ -285,6 +313,12 @@ ERROR_CLASSES_JSON = """
     "message": [
       "Pandas UDF should return StructType for <eval_type>, got <return_type>."
     ]
+  },
+  "INVALID_SAVE_MODE" : {
+    "message" : [
+      "The specified save mode <mode> is invalid. Valid save modes include \\"append\\", \\"overwrite\\", \\"ignore\\", \\"error\\", \\"errorifexists\\", and \\"default\\"."
+    ],
+    "sqlState" : "42000"
   },
   "INVALID_TIMEOUT_TIMESTAMP" : {
     "message" : [
@@ -370,6 +404,12 @@ ERROR_CLASSES_JSON = """
     "message" : [
       "A master URL must be set in your configuration."
     ]
+  },
+  "MISSING_GROUP_BY" : {
+    "message" : [
+      "The query does not include a GROUP BY clause. Add GROUP BY or turn it into the window functions using OVER clauses."
+    ],
+    "sqlState" : "42803"
   },
   "MISSING_LIBRARY_FOR_PROFILER" : {
     "message" : [
@@ -626,6 +666,12 @@ ERROR_CLASSES_JSON = """
       "No active Spark session found. Please create a new Spark session before running the code."
     ]
   },
+  "NUM_COLUMNS_MISMATCH" : {
+    "message" : [
+      "<operator> can only be performed on inputs with the same number of columns, but the first input has <firstNumColumns> columns and the <invalidOrdinalNum> input has <invalidNumColumns> columns."
+    ],
+    "sqlState" : "42826"
+  },
   "ONLY_ALLOWED_FOR_SINGLE_COLUMN" : {
     "message" : [
       "Argument `<arg_name>` can only be provided for a single column."
@@ -635,6 +681,18 @@ ERROR_CLASSES_JSON = """
     "message" : [
       "Only a single trigger is allowed."
     ]
+  },
+  "PARSE_SYNTAX_ERROR" : {
+    "message" : [
+      "Syntax error at or near <error><hint>."
+    ],
+    "sqlState" : "42601"
+  },
+  "PATH_ALREADY_EXISTS" : {
+    "message" : [
+      "Path <outputPath> already exists. Set mode as \\"overwrite\\" to overwrite the existing path."
+    ],
+    "sqlState" : "42K04"
   },
   "PIPE_FUNCTION_EXITED" : {
     "message" : [
@@ -797,10 +855,40 @@ ERROR_CLASSES_JSON = """
       "Unknown response: <response>."
     ]
   },
+  "UNRESOLVED_COLUMN" : {
+    "message" : [
+      "A column, variable, or function parameter with name <objectName> cannot be resolved."
+    ],
+    "sub_class" : {
+      "WITHOUT_SUGGESTION" : {
+        "message" : [
+          ""
+        ]
+      },
+      "WITH_SUGGESTION" : {
+        "message" : [
+          "Did you mean one of the following? [<proposal>]."
+        ]
+      }
+    },
+    "sqlState" : "42703"
+  },
+  "UNRESOLVED_COLUMN_AMONG_FIELD_NAMES" : {
+    "message" : [
+      "Cannot resolve column name \\"<colName>\\" among (<fieldNames>)."
+    ],
+    "sqlState" : "42703"
+  },
   "UNSUPPORTED_DATA_TYPE" : {
     "message" : [
       "Unsupported DataType `<data_type>`."
     ]
+  },
+  "UNSUPPORTED_DATATYPE" : {
+    "message" : [
+      "Unsupported data type <typeName>."
+    ],
+    "sqlState" : "0A000"
   },
   "UNSUPPORTED_DATA_TYPE_FOR_ARROW" : {
     "message" : [
@@ -816,6 +904,25 @@ ERROR_CLASSES_JSON = """
     "message" : [
       "<data_type> is only supported with pyarrow 2.0.0 and above."
     ]
+  },
+  "UNSUPPORTED_DATA_TYPE_FOR_DATASOURCE" : {
+    "message" : [
+      "The <format> datasource doesn't support the column <columnName> of the type <columnType>."
+    ],
+    "sqlState" : "0A000"
+  },
+  "UNSUPPORTED_FEATURE" : {
+    "message" : [
+      "The feature is not supported:"
+    ],
+    "sub_class" : {
+      "SET_OPERATION_ON_MAP_TYPE" : {
+        "message" : [
+          "Cannot have MAP type columns in DataFrame which calls set operations (INTERSECT, EXCEPT, etc.), but the type of column <colName> is <dataType>."
+        ]
+      }
+    },
+    "sqlState" : "0A000"
   },
   "UNSUPPORTED_JOIN_TYPE" : {
     "message" : [
@@ -910,6 +1017,11 @@ ERROR_CLASSES_JSON = """
   "ZERO_INDEX": {
     "message": [
       "Index must be non-zero."
+    ]
+  },
+  "_LEGACY_ERROR_TEMP_1323" : {
+    "message" : [
+      "\\"<colName>\\" is not a numeric column. Aggregation function can only be applied on a numeric column."
     ]
   }
 }

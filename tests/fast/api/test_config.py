@@ -67,15 +67,15 @@ class TestDBConfig:
         con_regular = duckdb.connect(":memory:")
         regex = re.compile("duckdb/.* python/.*")
         # Expands to: SELECT * FROM pragma_user_agent()
-        assert regex.match(con_regular.sql("PRAGMA user_agent").fetchone()[0]) is not None
-        custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchone()
+        assert regex.match(con_regular.sql("PRAGMA user_agent").fetchall()[0][0]) is not None
+        custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchall()[0]
         assert custom_user_agent[0] == ""
 
     def test_user_agent_custom(self, duckdb_cursor):
         con_regular = duckdb.connect(":memory:", config={"custom_user_agent": "CUSTOM_STRING"})
         regex = re.compile("duckdb/.* python/.* CUSTOM_STRING")
-        assert regex.match(con_regular.sql("PRAGMA user_agent").fetchone()[0]) is not None
-        custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchone()
+        assert regex.match(con_regular.sql("PRAGMA user_agent").fetchall()[0][0]) is not None
+        custom_user_agent = con_regular.sql("SELECT current_setting('custom_user_agent')").fetchall()[0]
         assert custom_user_agent[0] == "CUSTOM_STRING"
 
     def test_secret_manager_option(self, duckdb_cursor):

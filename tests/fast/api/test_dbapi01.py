@@ -37,5 +37,5 @@ class TestMultipleResultSets:
         cursor.execute("CREATE TABLE integers (i integer)")
         cursor.execute("INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)")
         rel = connection.table("integers")
-        res = rel.aggregate("sum(i)").execute().fetchnumpy()
+        res = rel.aggregate("sum(i)").fetchnumpy()
         assert res["sum(i)"][0] == 45

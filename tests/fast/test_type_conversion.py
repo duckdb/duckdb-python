@@ -22,7 +22,7 @@ class TestIssue115FloatToUnion:
             lambda: 1.5,
             return_type=duckdb.union_type({"u1": VARCHAR, "u2": BIGINT, "u3": DOUBLE}),
         )
-        result = conn.sql("SELECT return_float()").fetchone()[0]
+        result = conn.sql("SELECT return_float()").fetchall()[0][0]
         assert result == 1.5
 
     def test_udf_float_to_ambiguous_union_type(self):
@@ -33,7 +33,7 @@ class TestIssue115FloatToUnion:
             lambda: 1.5,
             return_type=duckdb.union_type({"u1": VARCHAR, "u2": BIGINT, "u3": DOUBLE, "u4": FLOAT, "u5": DOUBLE}),
         )
-        result = conn.sql("SELECT return_float()").fetchone()[0]
+        result = conn.sql("SELECT return_float()").fetchall()[0][0]
         assert result == 1.5
 
     def test_udf_dict_with_float_in_union_struct(self):
@@ -47,7 +47,7 @@ class TestIssue115FloatToUnion:
 
         return_type = DuckDBPyType(list[dict[str, str | int | np.float64 | np.float32 | float]])
         conn.create_function("test", test, return_type=return_type)
-        result = conn.sql("SELECT test()").fetchone()[0]
+        result = conn.sql("SELECT test()").fetchall()[0][0]
         assert len(result) == 2
         assert result[0]["b"] == pytest.approx(1.2)
         assert result[1]["b"] == pytest.approx(2.4)
@@ -66,7 +66,7 @@ class TestIssue115FloatToUnion:
             lambda: 42,
             return_type=duckdb.union_type({"u1": VARCHAR, "u2": BIGINT, "u3": BIGINT}),
         )
-        result = conn.sql("SELECT return_int()").fetchone()[0]
+        result = conn.sql("SELECT return_int()").fetchall()[0][0]
         assert result == 42
 
     def test_udf_string_to_ambiguous_union_type(self):
@@ -77,7 +77,7 @@ class TestIssue115FloatToUnion:
             lambda: "hello",
             return_type=duckdb.union_type({"u1": VARCHAR, "u2": BIGINT, "u3": VARCHAR}),
         )
-        result = conn.sql("SELECT return_str()").fetchone()[0]
+        result = conn.sql("SELECT return_str()").fetchall()[0][0]
         assert result == "hello"
 
 
@@ -131,12 +131,12 @@ class TestIssue330LargeIntegerPrecision:
         value = (2**128 - 1) // 15 * 7
         conn = duckdb.connect()
         conn.create_function("big_hugeint", lambda: value, return_type=HUGEINT)
-        result = conn.sql("SELECT big_hugeint()").fetchone()[0]
+        result = conn.sql("SELECT big_hugeint()").fetchall()[0][0]
         assert result == value
 
     def test_udf_return_large_uhugeint(self):
         value = 2**128 - 1
         conn = duckdb.connect()
         conn.create_function("big_uhugeint", lambda: value, return_type=UHUGEINT)
-        result = conn.sql("SELECT big_uhugeint()").fetchone()[0]
+        result = conn.sql("SELECT big_uhugeint()").fetchall()[0][0]
         assert result == value

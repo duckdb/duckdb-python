@@ -10,12 +10,60 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/function/to_interval.hpp"
 
-#include "datetime.h" // Python datetime initialize #1
-
 #include <duckdb/common/types/variant.hpp>
 #include <duckdb/function/scalar/variant_utils.hpp>
 
 namespace duckdb {
+
+namespace {
+
+//! Interned once: building the name for every read costs an allocation per converted value
+struct AttributeName {
+	explicit AttributeName(const char *text) : name(PyUnicode_InternFromString(text)) {
+		if (!name) {
+			throw nb::python_error();
+		}
+	}
+	PyObject *const name;
+};
+
+struct TemporalNames {
+	AttributeName year {"year"};
+	AttributeName month {"month"};
+	AttributeName day {"day"};
+	AttributeName hour {"hour"};
+	AttributeName minute {"minute"};
+	AttributeName second {"second"};
+	AttributeName microsecond {"microsecond"};
+	AttributeName tzinfo {"tzinfo"};
+};
+
+const TemporalNames &Names() {
+	static const TemporalNames names;
+	return names;
+}
+
+nb::object GetAttribute(nb::handle obj, const AttributeName &attribute) {
+	auto value = nb::steal(PyObject_GetAttr(obj.ptr(), attribute.name));
+	if (!value) {
+		throw nb::python_error();
+	}
+	return value;
+}
+
+int32_t GetIntAttribute(nb::handle obj, const AttributeName &attribute) {
+	auto value = GetAttribute(obj, attribute);
+	auto result = PyLong_AsLong(value.ptr());
+	if (result == -1 && PyErr_Occurred()) {
+		throw nb::python_error();
+	}
+	if (result < NumericLimits<int32_t>::Minimum() || result > NumericLimits<int32_t>::Maximum()) {
+		throw InvalidInputException("Attribute of a date or time object does not fit a 32-bit integer");
+	}
+	return static_cast<int32_t>(result);
+}
+
+} // namespace
 
 PyDictionary::PyDictionary(nb::object dict) {
 	keys = nb::list(dict.attr("keys")());
@@ -24,7 +72,9 @@ PyDictionary::PyDictionary(nb::object dict) {
 	this->dict = std::move(dict);
 }
 
+// Reading a field runs Python code, which may drop the caller's only reference to the object
 PyTimeDelta::PyTimeDelta(nb::handle &obj) {
+	auto owner = nb::borrow<nb::object>(obj);
 	days = PyTimeDelta::GetDays(obj);
 	seconds = PyTimeDelta::GetSeconds(obj);
 	microseconds = PyTimeDelta::GetMicros(obj);
@@ -74,26 +124,53 @@ PyDecimal::PyDecimal(nb::handle &obj) : obj(obj) {
 	}
 }
 
-bool PyDecimal::TryGetType(LogicalType &type) {
-	int32_t width = digits.size();
+struct DecimalWidthScale {
+	int32_t width = 0;
+	int64_t scale = 0;
+	bool fits = false;
+};
 
+static DecimalWidthScale ComputeDecimalWidthScale(idx_t digit_count, PyDecimalExponentType exponent_type,
+                                                  int64_t exponent_value) {
+	DecimalWidthScale result;
+
+	if (digit_count > Decimal::MAX_WIDTH_DECIMAL) {
+		return result;
+	}
+
+	if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
+		if (exponent_value > Decimal::MAX_WIDTH_DECIMAL - digit_count) {
+			return result;
+		}
+		result.width = static_cast<int32_t>(digit_count) + static_cast<int32_t>(exponent_value);
+		result.scale = 0;
+		result.fits = true;
+		return result;
+	}
+
+	result.scale = exponent_value;
+	if (result.scale > Decimal::MAX_WIDTH_INT128) {
+		return result;
+	}
+
+	result.width = static_cast<int32_t>(digit_count);
+	if (result.scale > result.width) {
+		result.width = static_cast<int32_t>(result.scale) + 1; // add 1 for the non-decimal values
+	}
+	result.fits = result.width <= Decimal::MAX_WIDTH_INT128;
+	return result;
+}
+
+bool PyDecimal::TryGetType(LogicalType &type) {
 	switch (exponent_type) {
-	case PyDecimalExponentType::EXPONENT_SCALE: {
+	case PyDecimalExponentType::EXPONENT_SCALE:
 	case PyDecimalExponentType::EXPONENT_POWER: {
-		auto scale = exponent_value;
-		if (exponent_type == PyDecimalExponentType::EXPONENT_POWER) {
-			width += scale;
-		}
-		if (scale > width) {
-			// The value starts with 1 or more zeros, which are optimized out of the 'digits' array
-			// 0.001; width=1, exponent=-3
-			width = scale + 1; // DECIMAL(4,3) - add 1 for the non-decimal values
-		}
-		if (width > Decimal::MAX_WIDTH_INT128) {
+		auto ws = ComputeDecimalWidthScale(digits.size(), exponent_type, exponent_value);
+		if (!ws.fits) {
 			type = LogicalType::DOUBLE;
 			return true;
 		}
-		type = LogicalType::DECIMAL(width, scale);
+		type = LogicalType::DECIMAL(ws.width, static_cast<uint8_t>(ws.scale));
 		return true;
 	}
 	case PyDecimalExponentType::EXPONENT_INFINITY: {
@@ -107,7 +184,6 @@ bool PyDecimal::TryGetType(LogicalType &type) {
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("case not implemented for type PyDecimalExponentType");
 	} // LCOV_EXCL_STOP
-	}
 }
 // LCOV_EXCL_START
 static void ExponentNotRecognized() {
@@ -117,12 +193,12 @@ static void ExponentNotRecognized() {
 
 void PyDecimal::SetExponent(nb::handle &exponent) {
 	if (nb::isinstance<nb::int_>(exponent)) {
-		this->exponent_value = nb::cast<int32_t>(exponent);
+		this->exponent_value = nb::cast<int64_t>(exponent);
 		if (this->exponent_value >= 0) {
 			exponent_type = PyDecimalExponentType::EXPONENT_POWER;
 			return;
 		}
-		exponent_value *= -1;
+		exponent_value = exponent_value <= -INT64_MAX ? INT64_MAX : -exponent_value;
 		exponent_type = PyDecimalExponentType::EXPONENT_SCALE;
 		return;
 	}
@@ -140,10 +216,6 @@ void PyDecimal::SetExponent(nb::handle &exponent) {
 	// LCOV_EXCL_START
 	ExponentNotRecognized();
 	// LCOV_EXCL_STOP
-}
-
-static bool WidthFitsInDecimal(int32_t width) {
-	return width >= 0 && width <= Decimal::MAX_WIDTH_DECIMAL;
 }
 
 template <class OP>
@@ -165,43 +237,33 @@ static Value CastToDouble(nb::handle &obj) {
 	string converted = nb::cast<std::string>(nb::str(obj));
 	string_t decimal_string(converted);
 	double double_val;
-	bool try_cast = TryCast::Operation<string_t, double>(decimal_string, double_val, true);
-	(void)try_cast;
-	D_ASSERT(try_cast);
+	if (!TryCast::Operation<string_t, double>(decimal_string, double_val, true)) {
+		throw InvalidInputException("Failed to convert Decimal value to DOUBLE: %s", converted);
+	}
 	return Value::DOUBLE(double_val);
 }
 
 Value PyDecimal::ToDuckValue() {
-	int32_t width = digits.size();
-	if (!WidthFitsInDecimal(width)) {
-		return CastToDouble(obj);
-	}
 	switch (exponent_type) {
 	case PyDecimalExponentType::EXPONENT_SCALE: {
-		uint8_t scale = exponent_value;
-		D_ASSERT(WidthFitsInDecimal(width));
-		if (scale > width) {
-			// Values like '0.001'
-			width = scale + 1; // leave 1 room for the non-decimal value
-		}
-		if (!WidthFitsInDecimal(width)) {
+		auto ws = ComputeDecimalWidthScale(digits.size(), exponent_type, exponent_value);
+		if (!ws.fits) {
 			return CastToDouble(obj);
 		}
-		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, width, scale);
+		return PyDecimalCastSwitch<PyDecimalScaleConverter>(*this, ws.width, static_cast<uint8_t>(ws.scale));
 	}
 	case PyDecimalExponentType::EXPONENT_POWER: {
-		uint8_t scale = exponent_value;
-		width += scale;
-		if (!WidthFitsInDecimal(width)) {
+		auto ws = ComputeDecimalWidthScale(digits.size(), exponent_type, exponent_value);
+		if (!ws.fits) {
 			return CastToDouble(obj);
 		}
-		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, width, scale);
+		return PyDecimalCastSwitch<PyDecimalPowerConverter>(*this, ws.width, static_cast<uint8_t>(exponent_value));
 	}
 	case PyDecimalExponentType::EXPONENT_NAN: {
 		return Value::FLOAT(NAN);
 	}
 	case PyDecimalExponentType::EXPONENT_INFINITY: {
-		return Value::FLOAT(INFINITY);
+		return Value::FLOAT(signed_value ? -INFINITY : INFINITY);
 	}
 	// LCOV_EXCL_START
 	default: {
@@ -210,15 +272,23 @@ Value PyDecimal::ToDuckValue() {
 	}
 }
 
-PyTime::PyTime(nb::handle &obj) : obj(obj) {
+PyTime::PyTime(nb::handle &obj) : obj(nb::borrow<nb::object>(obj)) {
 	hour = PyTime::GetHours(obj);          // NOLINT
 	minute = PyTime::GetMinutes(obj);      // NOLINT
 	second = PyTime::GetSeconds(obj);      // NOLINT
 	microsecond = PyTime::GetMicros(obj);  // NOLINT
 	timezone_obj = PyTime::GetTZInfo(obj); // NOLINT
 }
-dtime_t PyTime::ToDuckTime() {
+// A subclass may answer a field read with any integer, and the engine does not check a time's fields itself
+static dtime_t CheckedTime(int32_t hour, int32_t minute, int32_t second, int32_t microsecond) {
+	if (!Time::IsValidTime(hour, minute, second, microsecond)) {
+		throw InvalidInputException("Time out of range: %d:%d:%d.%d", hour, minute, second, microsecond);
+	}
 	return Time::FromTime(hour, minute, second, microsecond);
+}
+
+dtime_t PyTime::ToDuckTime() {
+	return CheckedTime(hour, minute, second, microsecond);
 }
 
 Value PyTime::ToDuckValue() {
@@ -231,24 +301,23 @@ Value PyTime::ToDuckValue() {
 }
 
 int32_t PyTime::GetHours(nb::handle &obj) {
-	return PyDateTime_TIME_GET_HOUR(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().hour);
 }
 
 int32_t PyTime::GetMinutes(nb::handle &obj) {
-	return PyDateTime_TIME_GET_MINUTE(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().minute);
 }
 
 int32_t PyTime::GetSeconds(nb::handle &obj) {
-	return PyDateTime_TIME_GET_SECOND(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().second);
 }
 
 int32_t PyTime::GetMicros(nb::handle &obj) {
-	return PyDateTime_TIME_GET_MICROSECOND(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().microsecond);
 }
 
 nb::object PyTime::GetTZInfo(nb::handle &obj) {
-	// The object returned is borrowed, there is no reference to steal
-	return nb::borrow<nb::object>(PyDateTime_TIME_GET_TZINFO(obj.ptr())); // NOLINT
+	return GetAttribute(obj, Names().tzinfo);
 }
 
 interval_t PyTimezone::GetUTCOffset(nb::handle &datetime, nb::handle &tzone_obj) {
@@ -273,7 +342,7 @@ int32_t PyTimezone::GetUTCOffsetSeconds(nb::handle &tzone_obj) {
 	return timedelta.seconds;
 }
 
-PyDateTime::PyDateTime(nb::handle &obj) : obj(obj) {
+PyDateTime::PyDateTime(nb::handle &obj) : obj(nb::borrow<nb::object>(obj)) {
 	year = PyDateTime::GetYears(obj);
 	month = PyDateTime::GetMonths(obj);
 	day = PyDateTime::GetDays(obj);
@@ -320,43 +389,43 @@ date_t PyDateTime::ToDate() {
 	return Date::FromDate(year, month, day);
 }
 dtime_t PyDateTime::ToDuckTime() {
-	return Time::FromTime(hour, minute, second, micros);
+	return CheckedTime(hour, minute, second, micros);
 }
 
 int32_t PyDateTime::GetYears(nb::handle &obj) {
-	return PyDateTime_GET_YEAR(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().year);
 }
 
 int32_t PyDateTime::GetMonths(nb::handle &obj) {
-	return PyDateTime_GET_MONTH(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().month);
 }
 
 int32_t PyDateTime::GetDays(nb::handle &obj) {
-	return PyDateTime_GET_DAY(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().day);
 }
 
 int32_t PyDateTime::GetHours(nb::handle &obj) {
-	return PyDateTime_DATE_GET_HOUR(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().hour);
 }
 
 int32_t PyDateTime::GetMinutes(nb::handle &obj) {
-	return PyDateTime_DATE_GET_MINUTE(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().minute);
 }
 
 int32_t PyDateTime::GetSeconds(nb::handle &obj) {
-	return PyDateTime_DATE_GET_SECOND(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().second);
 }
 
 int32_t PyDateTime::GetMicros(nb::handle &obj) {
-	return PyDateTime_DATE_GET_MICROSECOND(obj.ptr()); // NOLINT
+	return GetIntAttribute(obj, Names().microsecond);
 }
 
 nb::object PyDateTime::GetTZInfo(nb::handle &obj) {
-	// The object returned is borrowed, there is no reference to steal
-	return nb::borrow<nb::object>(PyDateTime_DATE_GET_TZINFO(obj.ptr())); // NOLINT
+	return GetAttribute(obj, Names().tzinfo);
 }
 
 PyDate::PyDate(nb::handle &ele) {
+	auto owner = nb::borrow<nb::object>(ele);
 	year = PyDateTime::GetYears(ele);
 	month = PyDateTime::GetMonths(ele);
 	day = PyDateTime::GetDays(ele);
@@ -371,11 +440,34 @@ Value PyDate::ToDuckValue() {
 	return value;
 }
 
-void PythonObject::Initialize() {
-	PyDateTime_IMPORT; // NOLINT: Python datetime initialize #2
+enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
+
+//! datetime, date and time accept their pickle state as the single argument, which skips the keyword argument
+//! parsing of the field form and costs less than half of it
+template <size_t N>
+nb::object FromPickleState(nb::handle type, const unsigned char (&state)[N]) {
+	auto bytes = nb::steal(PyBytes_FromStringAndSize(reinterpret_cast<const char *>(state), N));
+	if (!bytes) {
+		throw nb::python_error();
+	}
+	return type(bytes);
 }
 
-enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
+//! Python's datetime, date and time hold years 1 to 9999; the pickle state has no range check of its own
+bool PythonYear(int32_t year) {
+	return year >= 1 && year <= 9999;
+}
+
+//! Python's time stops at 23:59:59.999999 and knows no leap second; a TIME from Arrow may hold any count of
+//! microseconds
+bool PythonTime(int32_t hour, int32_t minute, int32_t second, int32_t microsecond) {
+	return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59 && microsecond >= 0 &&
+	       microsecond <= 999999;
+}
+
+unsigned char Byte(int32_t value) {
+	return static_cast<unsigned char>(value);
+}
 
 InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
 	if (timestamp == timestamp_t::infinity()) {
@@ -553,13 +645,16 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
 		Time::Convert(time, hour, min, sec, micros);
+		if (!PythonYear(year)) {
+			auto fallback_str = val.ToString();
+			return nb::str(fallback_str.c_str(), fallback_str.size());
+		}
 		nb::object py_timestamp;
 		try {
-			auto python_conversion = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros);
-			if (!python_conversion) {
-				throw nb::python_error();
-			}
-			py_timestamp = nb::steal<nb::object>(python_conversion);
+			const unsigned char state[10] = {Byte(year >> 8),   Byte(year),  Byte(month), Byte(day),
+			                                 Byte(hour),        Byte(min),   Byte(sec),   Byte(micros >> 16),
+			                                 Byte(micros >> 8), Byte(micros)};
+			py_timestamp = FromPickleState(import_cache.datetime.datetime(), state);
 		} catch (nb::python_error &e) {
 			// Failed to convert, fall back to str
 			auto fallback_str = val.ToString();
@@ -581,13 +676,15 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		auto time = time_tz.time();
 		auto offset = time_tz.offset();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		if (!PythonTime(hour, min, sec, microsec)) {
+			auto fallback_str = val.ToString();
+			return nb::str(fallback_str.c_str(), fallback_str.size());
+		}
 		nb::object py_time;
 		try {
-			auto python_conversion = PyTime_FromTime(hour, min, sec, microsec);
-			if (!python_conversion) {
-				throw nb::python_error();
-			}
-			py_time = nb::steal<nb::object>(python_conversion);
+			const unsigned char state[6] = {Byte(hour),           Byte(min),           Byte(sec),
+			                                Byte(microsec >> 16), Byte(microsec >> 8), Byte(microsec)};
+			py_time = FromPickleState(import_cache.datetime.time(), state);
 		} catch (nb::python_error &e) {
 			// Failed to convert, fall back to str
 			auto fallback_str = val.ToString();
@@ -612,12 +709,14 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			time = dtime_t(val.GetValueUnsafe<dtime_ns_t>().value / 1000);
 		}
 		duckdb::Time::Convert(time, hour, min, sec, usec);
+		if (!PythonTime(hour, min, sec, usec)) {
+			auto fallback = val.ToString();
+			return nb::str(fallback.c_str(), fallback.size());
+		}
 		try {
-			auto pytime = PyTime_FromTime(hour, min, sec, usec);
-			if (!pytime) {
-				throw nb::python_error();
-			}
-			return nb::steal<nb::object>(pytime);
+			const unsigned char state[6] = {Byte(hour),       Byte(min),       Byte(sec),
+			                                Byte(usec >> 16), Byte(usec >> 8), Byte(usec)};
+			return FromPickleState(import_cache.datetime.time(), state);
 		} catch (nb::python_error &e) {
 			{
 				auto fallback = val.ToString();
@@ -636,12 +735,13 @@ nb::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 			return nb::borrow<nb::object>(import_cache.datetime.date.min());
 		}
 		duckdb::Date::Convert(date, year, month, day);
+		if (!PythonYear(year)) {
+			auto fallback = val.ToString();
+			return nb::str(fallback.c_str(), fallback.size());
+		}
 		try {
-			auto pydate = PyDate_FromDate(year, month, day);
-			if (!pydate) {
-				throw nb::python_error();
-			}
-			return nb::steal<nb::object>(pydate);
+			const unsigned char state[4] = {Byte(year >> 8), Byte(year), Byte(month), Byte(day)};
+			return FromPickleState(import_cache.datetime.date(), state);
 		} catch (nb::python_error &e) {
 			{
 				auto fallback = val.ToString();

@@ -120,6 +120,12 @@ public:
 	}
 };
 
+class PyResourceInUseException : public OperationalError {
+public:
+	explicit PyResourceInUseException(const string &err) : OperationalError(err) {
+	}
+};
+
 class PyConnectionException : public OperationalError {
 public:
 	explicit PyConnectionException(const string &err) : OperationalError(err) {
@@ -287,6 +293,8 @@ void PyThrowException(ErrorData &error, PyObject *http_exception) {
 		throw PyOutOfMemoryException(error.Message());
 	case ExceptionType::CONNECTION:
 		throw PyConnectionException(error.Message());
+	case ExceptionType::RESOURCE_IN_USE:
+		throw PyResourceInUseException(error.Message());
 	case ExceptionType::SERIALIZATION:
 		throw PySerializationException(error.Message());
 	case ExceptionType::CONSTRAINT:
@@ -347,6 +355,7 @@ void RegisterExceptions(const nb::module_ &m) {
 	nb::exception<PyTransactionException>(m, "TransactionException", operational_error);
 	nb::exception<PyOutOfMemoryException>(m, "OutOfMemoryException", operational_error);
 	nb::exception<PyConnectionException>(m, "ConnectionException", operational_error);
+	nb::exception<PyResourceInUseException>(m, "ResourceInUseException", operational_error);
 	// no object size error
 	// no null pointer errors
 	auto io_exception = nb::exception<PyIOException>(m, "IOException", operational_error).ptr();

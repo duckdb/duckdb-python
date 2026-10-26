@@ -4,29 +4,96 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.errors import PySparkTypeError, PySparkValueError
+from spark_namespace.errors import (
+    AnalysisException,
+    ParseException,
+    PySparkTypeError,
+    PySparkValueError,
+    error_condition,
+)
 from spark_namespace.sql.column import Column
-from spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.functions import col, lit, struct, when
 from spark_namespace.sql.types import (
     ArrayType,
+    BinaryType,
     BooleanType,
+    ByteType,
+    DateType,
+    DayTimeIntervalType,
+    DecimalType,
+    DoubleType,
+    FloatType,
     IntegerType,
     LongType,
     MapType,
+    NullType,
     Row,
+    ShortType,
     StringType,
     StructField,
     StructType,
+    TimestampNTZType,
+    TimestampType,
 )
+
+requires_tree_string = pytest.mark.skipif(
+    not hasattr(StructType, "treeString"), reason="StructType.treeString is only introduced in PySpark 4.0.0"
+)
+
+PERSON_SCHEMA = StructType(
+    [
+        StructField("id", IntegerType(), True),
+        StructField(
+            "person",
+            StructType([StructField("name", StringType(), True), StructField("age", IntegerType(), True)]),
+            True,
+        ),
+        StructField("hobbies", ArrayType(StringType()), True),
+    ]
+)
+PERSON_TREE = (
+    "root\n"
+    " |-- id: integer (nullable = true)\n"
+    " |-- person: struct (nullable = true)\n"
+    " |    |-- name: string (nullable = true)\n"
+    " |    |-- age: integer (nullable = true)\n"
+    " |-- hobbies: array (nullable = true)\n"
+    " |    |-- element: string (containsNull = true)\n"
+)
+FLAT_TYPES = [
+    ("b", ByteType()),
+    ("s", ShortType()),
+    ("i", IntegerType()),
+    ("l", LongType()),
+    ("f", FloatType()),
+    ("d", DoubleType()),
+    ("m", DecimalType(10, 2)),
+    ("str", StringType()),
+    ("bool", BooleanType()),
+    ("date", DateType()),
+    ("ts", TimestampType()),
+    ("ntz", TimestampNTZType()),
+    ("bin", BinaryType()),
+    ("iv", DayTimeIntervalType()),
+    ("null", NullType()),
+]
 
 
 def assert_column_objects_equal(col1: Column, col2: Column):
     assert type(col1) is type(col2)
     if not USE_ACTUAL_SPARK:
-        assert col1.expr == col2.expr
+        # An expression has no truth value, so the comparison is on the SQL text.
+        assert str(col1.expr) == str(col2.expr)
 
 
 class TestDataFrame:
+    def test_row_is_exported_from_sql_module(self):
+        if USE_ACTUAL_SPARK:
+            from pyspark.sql import Row as SqlRow
+        else:
+            from duckdb.experimental.spark.sql import Row as SqlRow
+        assert SqlRow is Row
+
     def test_dataframe_from_list_of_tuples(self, spark):
         # Valid
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "CA")]
@@ -43,15 +110,20 @@ class TestDataFrame:
 
         if USE_ACTUAL_SPARK:
             from py4j.protocol import Py4JJavaError
+            from spark_namespace.errors import IllegalArgumentException
 
-            with pytest.raises(Py4JJavaError):
-                spark.createDataFrame(address, ["id", "address", "state"])
+            # Spark only checks the row length when the rows are collected.
+            ragged = spark.createDataFrame(address, ["id", "address", "state"])
+            with pytest.raises(
+                (IllegalArgumentException, Py4JJavaError), match="3 fields are required while 2 values are provided"
+            ):
+                ragged.collect()
         else:
-            with pytest.raises(PySparkTypeError, match="LENGTH_SHOULD_BE_THE_SAME"):
+            with pytest.raises(PySparkValueError, match="LENGTH_SHOULD_BE_THE_SAME"):
                 spark.createDataFrame(address, ["id", "address", "state"])
 
-        # Dataframe instead of list
-        with pytest.raises(PySparkTypeError, match="SHOULD_NOT_DATAFRAME"):
+        # Dataframe instead of list; Spark 4 renamed the error class from SHOULD_NOT_DATAFRAME to INVALID_TYPE.
+        with pytest.raises(PySparkTypeError, match="should not be a DataFrame"):
             spark.createDataFrame(df, ["id", "address", "state"])
 
         # Not a list
@@ -59,73 +131,53 @@ class TestDataFrame:
             spark.createDataFrame(5, ["id", "address", "test"])
 
         # Empty list
-        if not USE_ACTUAL_SPARK:
-            # TODO: Spark raises PySparkValueError [CANNOT_INFER_EMPTY_SCHEMA]  # noqa: TD002, TD003
-            df = spark.createDataFrame([], ["id", "address", "test"])
-            res = df.collect()
-            assert res == []
+        with pytest.raises(PySparkValueError, match="CANNOT_INFER_EMPTY_SCHEMA"):
+            spark.createDataFrame([], ["id", "address", "test"])
 
-        # Duplicate column names
+        # Duplicate column names: inference merges the fields by name, so both become strings
         address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "DE")]
         df = spark.createDataFrame(address, ["id", "address", "id"])
-        res = df.collect()
-        exptected_res_str = (
-            "[Row(id=1, address='14851 Jeffrey Rd', id='DE'), Row(id=2, address='43421 "
-            "Margarita St', id='NY'), Row(id=3, address='13111 Siemon Ave', id='DE')]"
-        )
-        if USE_ACTUAL_SPARK:
-            # Spark uses string for both ID columns. DuckDB correctly infers the types.
-            exptected_res_str = (
-                exptected_res_str.replace("id=1", "id='1'").replace("id=2", "id='2'").replace("id=3", "id='3'")
-            )
-        assert str(res) == exptected_res_str
+        assert df.columns == ["id", "address", "id"]
+        assert df.collect() == [
+            ("1", "14851 Jeffrey Rd", "DE"),
+            ("2", "43421 Margarita St", "NY"),
+            ("3", "13111 Siemon Ave", "DE"),
+        ]
 
-        # Not enough column names
-        if not USE_ACTUAL_SPARK:
-            # TODO: Spark does not raise this error  # noqa: TD002, TD003
-            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                spark.createDataFrame(address, ["id", "address"])
+        # Not enough column names: the remaining columns get default names
+        df = spark.createDataFrame(address, ["id", "address"])
+        assert df.columns == ["id", "address", "_3"]
 
         # Empty column names list
-        # Columns are filled in with default names
-        # TODO: check against Spark behavior  # noqa: TD002, TD003
         df = spark.createDataFrame(address, [])
-        res = df.collect()
-        assert res == [
-            Row(col0=1, col1="14851 Jeffrey Rd", col2="DE"),
-            Row(col0=2, col1="43421 Margarita St", col2="NY"),
-            Row(col0=3, col1="13111 Siemon Ave", col2="DE"),
+        assert df.columns == ["_1", "_2", "_3"]
+        assert df.collect() == [
+            Row(_1=1, _2="14851 Jeffrey Rd", _3="DE"),
+            Row(_1=2, _2="43421 Margarita St", _3="NY"),
+            Row(_1=3, _2="13111 Siemon Ave", _3="DE"),
         ]
 
         # Too many column names
-        if not USE_ACTUAL_SPARK:
-            # In Spark, this leads to an IndexError
-            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
+        with pytest.raises(IndexError):
+            spark.createDataFrame(address, ["id", "address", "one", "two", "three"])
 
-        # Column names is not a list (but is iterable)
-        if not USE_ACTUAL_SPARK:
-            # These things do not work in Spark or throw different errors
-            df = spark.createDataFrame(address, {"a": 5, "b": 6, "c": 42})
-            res = df.collect()
-            assert res == [
-                Row(a=1, b="14851 Jeffrey Rd", c="DE"),
-                Row(a=2, b="43421 Margarita St", c="NY"),
-                Row(a=3, b="13111 Siemon Ave", c="DE"),
-            ]
+        # Column names is not a list
+        with pytest.raises(PySparkTypeError):
+            spark.createDataFrame(address, {"a": 5, "b": 6, "c": 42})
 
-            # Column names is not a list (string, becomes a single column name)
-            with pytest.raises(PySparkValueError, match="number of columns in the DataFrame don't match"):
-                spark.createDataFrame(address, "a")
+        with pytest.raises(PySparkTypeError):
+            spark.createDataFrame(address, 5)
 
-            with pytest.raises(TypeError, match="must be an iterable, not int"):
-                spark.createDataFrame(address, 5)
+        # A string is a schema, and "a" is not a type
+        with pytest.raises(ParseException):
+            spark.createDataFrame(address, "a")
 
     def test_dataframe(self, spark):
         # Create DataFrame
         df = spark.createDataFrame([("Scala", 25000), ("Spark", 35000), ("PHP", 21000)])
+        assert df.columns == ["_1", "_2"]
         res = df.collect()
-        assert res == [Row(col0="Scala", col1=25000), Row(col0="Spark", col1=35000), Row(col0="PHP", col1=21000)]
+        assert res == [Row(_1="Scala", _2=25000), Row(_1="Spark", _2=35000), Row(_1="PHP", _2=21000)]
 
     @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="We can't create tables with our Spark test setup")
     def test_writing_to_table(self, spark):
@@ -252,30 +304,15 @@ class TestDataFrame:
 
         df2 = spark.createDataFrame(data=structureData, schema=structureSchema)
         res = df2.collect()
-        expected_res = [
-            Row(
-                name={"firstname": "James", "middlename": "", "lastname": "Smith"}, id="36636", gender="M", salary=3100
-            ),
-            Row(
-                name={"firstname": "Michael", "middlename": "Rose", "lastname": ""}, id="40288", gender="M", salary=4300
-            ),
-            Row(
-                name={"firstname": "Robert", "middlename": "", "lastname": "Williams"},
-                id="42114",
-                gender="M",
-                salary=1400,
-            ),
-            Row(
-                name={"firstname": "Maria", "middlename": "Anne", "lastname": "Jones"},
-                id="39192",
-                gender="F",
-                salary=5500,
-            ),
-            Row(name={"firstname": "Jen", "middlename": "Mary", "lastname": "Brown"}, id="", gender="F", salary=-1),
+        name = Row("firstname", "middlename", "lastname")
+        assert res == [
+            Row(name=name("James", "", "Smith"), id="36636", gender="M", salary=3100),
+            Row(name=name("Michael", "Rose", ""), id="40288", gender="M", salary=4300),
+            Row(name=name("Robert", "", "Williams"), id="42114", gender="M", salary=1400),
+            Row(name=name("Maria", "Anne", "Jones"), id="39192", gender="F", salary=5500),
+            Row(name=name("Jen", "Mary", "Brown"), id="", gender="F", salary=-1),
         ]
-        if USE_ACTUAL_SPARK:
-            expected_res = [Row(name=Row(**r.name), id=r.id, gender=r.gender, salary=r.salary) for r in expected_res]
-        assert res == expected_res
+        assert res[0].name.firstname == "James"
         schema = df2.schema
         assert schema == StructType(
             [
@@ -374,7 +411,10 @@ class TestDataFrame:
         data = [(56, "Carol"), (20, "Alice")]
         df = spark.createDataFrame(data, ["age", "name"])
 
-        assert_column_objects_equal(df["age"], col("age"))
+        assert_column_objects_equal(df["age"], df.age)
+        if not USE_ACTUAL_SPARK:
+            assert str(df["age"].expr).endswith('."age"')
+            assert str(col("age").expr) == '"age"'
 
     def test_getitem_dataframe(self, spark):
         data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
@@ -389,7 +429,9 @@ class TestDataFrame:
         data = [(56, "Ben", "Street1"), (20, "Tom", "Street2")]
         df = spark.createDataFrame(data, ["age", "name", "address"])
 
-        assert_column_objects_equal(df.age, col("age"))
+        assert_column_objects_equal(df.age, df["age"])
+        if not USE_ACTUAL_SPARK:
+            assert str(df.age.expr).endswith('."age"')
 
     def test_head_first(self, spark):
         data = [(56, "Carol"), (20, "Alice"), (3, "Dave"), (3, "Anna"), (1, "Ben")]
@@ -420,13 +462,35 @@ class TestDataFrame:
         assert df.drop("two", col("three")).columns == expected
         assert df.drop("two", col("three"), col("missing")).columns == expected
 
+    def test_drop_ignores_case(self, spark):
+        df = spark.createDataFrame([(1, 2)], ["a", "b"])
+        assert df.drop("A").columns == ["b"]
+        assert df.drop(col("A")).columns == ["b"]
+        assert df.drop(df["A"]).columns == ["b"]
+        assert df.drop(df.a).collect() == [Row(b=2)]
+
+    def test_drop_ignores_what_is_not_a_column_reference(self, spark):
+        df = spark.createDataFrame([(1, 2)], ["a", "b"])
+        other = spark.createDataFrame([(1, 3)], ["a", "c"])
+        assert df.drop(df.a + 1).columns == ["a", "b"]
+        assert df.drop(df.a.alias("x")).columns == ["a", "b"]
+        assert df.drop(other.c).columns == ["a", "b"]
+        assert df.drop(other.a).columns == ["a", "b"]
+
+    def test_drop_every_column(self, spark):
+        df = spark.createDataFrame([(1, 2)], ["a", "b"])
+        assert df.drop("a", "b").columns == []
+        assert df.drop("a", "b").schema == StructType([])
+
     def test_cache(self, spark):
         data = [(1, 2, 3, 4)]
         df = spark.createDataFrame(data, ["one", "two", "three", "four"])
+        one = df.one
         cached = df.cache()
-        assert df is not cached
-        assert cached.collect() == df.collect()
+        assert cached is df
         assert cached.collect() == [Row(one=1, two=2, three=3, four=4)]
+        assert df.select(one).collect() == [Row(one=1)]
+        assert df.filter(df.two == 2).select(df.three).collect() == [Row(three=3)]
 
     def test_dtypes(self, spark):
         data = [("Alice", 25, 5000.0), ("Bob", 30, 6000.0)]
@@ -471,52 +535,88 @@ class TestDataFrame:
 
     def test_printSchema(self, spark, capsys):
         data = [("Alice", 25, 5000), ("Bob", 30, 6000)]
-        df = spark.createDataFrame(data, ["name", "age", "salary"])
-        df.printSchema()
-        captured = capsys.readouterr()
-        output = captured.out
-
-        assert "root" in output
-        assert "name" in output
-        assert "age" in output
-        assert "salary" in output
-        assert "string" in output or "varchar" in output.lower()
-        assert "int" in output.lower() or "bigint" in output.lower()
-
-    def test_printSchema_nested(self, spark, capsys):
-        from spark_namespace.sql.types import ArrayType, IntegerType, StringType, StructField, StructType
-
         schema = StructType(
-            [
-                StructField("id", IntegerType(), True),
-                StructField(
-                    "person",
-                    StructType([StructField("name", StringType(), True), StructField("age", IntegerType(), True)]),
-                    True,
-                ),
-                StructField("hobbies", ArrayType(StringType()), True),
-            ]
+            [StructField("name", StringType()), StructField("age", LongType()), StructField("salary", LongType())]
         )
-        data = [
-            (1, {"name": "Alice", "age": 25}, ["reading", "coding"]),
-            (2, {"name": "Bob", "age": 30}, ["gaming", "music"]),
-        ]
         df = spark.createDataFrame(data, schema)
         df.printSchema()
-        captured = capsys.readouterr()
-        output = captured.out
+        assert capsys.readouterr().out == (
+            "root\n"
+            " |-- name: string (nullable = true)\n"
+            " |-- age: long (nullable = true)\n"
+            " |-- salary: long (nullable = true)\n"
+            "\n"
+        )
 
-        assert "root" in output
-        assert "person" in output
-        assert "hobbies" in output
+    def test_printSchema_nested(self, spark, capsys):
+        df = spark.createDataFrame(
+            [
+                (1, {"name": "Alice", "age": 25}, ["reading", "coding"]),
+                (2, {"name": "Bob", "age": 30}, ["gaming", "music"]),
+            ],
+            PERSON_SCHEMA,
+        )
+        df.printSchema()
+        assert capsys.readouterr().out == PERSON_TREE + "\n"
+        df.printSchema(1)
+        assert capsys.readouterr().out == (
+            "root\n"
+            " |-- id: integer (nullable = true)\n"
+            " |-- person: struct (nullable = true)\n"
+            " |-- hobbies: array (nullable = true)\n"
+            "\n"
+        )
+        df.printSchema(level=2)
+        assert capsys.readouterr().out == PERSON_TREE + "\n"
 
-    def test_printSchema_negative_level(self, spark):
-        data = [("Alice", 25)]
-        df = spark.createDataFrame(data, ["name", "age"])
+    @pytest.mark.parametrize("level", [0, -1])
+    def test_printSchema_negative_level(self, spark, capsys, level):
+        df = spark.createDataFrame([(1, {"name": "Alice", "age": 25}, ["reading"])], PERSON_SCHEMA)
+        df.printSchema(level=level)
+        assert capsys.readouterr().out == PERSON_TREE + "\n"
 
-        with pytest.raises(PySparkValueError):
-            df.printSchema(level=-1)
+    def test_printSchema_type_names(self, spark, capsys):
+        schema = StructType([StructField(name, data_type) for name, data_type in FLAT_TYPES])
+        df = spark.createDataFrame([], schema)
+        df.printSchema()
+        assert capsys.readouterr().out == (
+            "root\n"
+            " |-- b: byte (nullable = true)\n"
+            " |-- s: short (nullable = true)\n"
+            " |-- i: integer (nullable = true)\n"
+            " |-- l: long (nullable = true)\n"
+            " |-- f: float (nullable = true)\n"
+            " |-- d: double (nullable = true)\n"
+            " |-- m: decimal(10,2) (nullable = true)\n"
+            " |-- str: string (nullable = true)\n"
+            " |-- bool: boolean (nullable = true)\n"
+            " |-- date: date (nullable = true)\n"
+            " |-- ts: timestamp (nullable = true)\n"
+            " |-- ntz: timestamp_ntz (nullable = true)\n"
+            " |-- bin: binary (nullable = true)\n"
+            " |-- iv: interval day to second (nullable = true)\n"
+            " |-- null: void (nullable = true)\n"
+            "\n"
+        )
+        assert df.dtypes == [
+            ("b", "tinyint"),
+            ("s", "smallint"),
+            ("i", "int"),
+            ("l", "bigint"),
+            ("f", "float"),
+            ("d", "double"),
+            ("m", "decimal(10,2)"),
+            ("str", "string"),
+            ("bool", "boolean"),
+            ("date", "date"),
+            ("ts", "timestamp"),
+            ("ntz", "timestamp_ntz"),
+            ("bin", "binary"),
+            ("iv", "interval day to second"),
+            ("null", "void"),
+        ]
 
+    @requires_tree_string
     def test_treeString_basic(self, spark):
         data = [("Alice", 25, 5000)]
         df = spark.createDataFrame(data, ["name", "age", "salary"])
@@ -529,6 +629,7 @@ class TestDataFrame:
         assert "(nullable = true)" in tree
         assert tree.count(" |-- ") == 3
 
+    @requires_tree_string
     def test_treeString_nested_struct(self, spark):
         from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
 
@@ -552,6 +653,7 @@ class TestDataFrame:
         assert "name:" in tree
         assert "age:" in tree
 
+    @requires_tree_string
     def test_treeString_with_level(self, spark):
         from spark_namespace.sql.types import IntegerType, StringType, StructField, StructType
 
@@ -574,14 +676,23 @@ class TestDataFrame:
         data = [(1, {"name": "Alice", "details": {"address": "123 Main St"}})]
         df = spark.createDataFrame(data, schema)
 
-        # Level 1 should only show top-level fields
-        tree_level_1 = df.schema.treeString(level=1)
-        assert " |-- id:" in tree_level_1
-        assert " |-- person: struct" in tree_level_1
-        # Should not show nested field names at level 1
-        lines = tree_level_1.split("\n")
-        assert len([line for line in lines if line.strip()]) <= 3
+        assert df.schema.treeString(maxDepth=1) == (
+            "root\n |-- id: integer (nullable = true)\n |-- person: struct (nullable = true)\n"
+        )
+        assert df.schema.treeString(2) == (
+            "root\n"
+            " |-- id: integer (nullable = true)\n"
+            " |-- person: struct (nullable = true)\n"
+            " |    |-- name: string (nullable = true)\n"
+            " |    |-- details: struct (nullable = true)\n"
+        )
+        full = df.schema.treeString()
+        assert full.endswith(" |    |    |-- address: string (nullable = true)\n")
+        assert df.schema.treeString(3) == full
+        assert df.schema.treeString(0) == full
+        assert df.schema.treeString(-1) == full
 
+    @requires_tree_string
     def test_treeString_array_type(self, spark):
         from spark_namespace.sql.types import ArrayType, StringType, StructField, StructType
 
@@ -591,9 +702,230 @@ class TestDataFrame:
 
         data = [("Alice", ["reading", "coding"])]
         df = spark.createDataFrame(data, schema)
-        tree = df.schema.treeString()
+        assert df.schema.treeString() == (
+            "root\n"
+            " |-- name: string (nullable = true)\n"
+            " |-- hobbies: array (nullable = true)\n"
+            " |    |-- element: string (containsNull = true)\n"
+        )
 
-        assert "root\n" in tree
-        assert " |-- name:" in tree
-        assert " |-- hobbies: array<" in tree
-        assert "(nullable = true)" in tree
+    @requires_tree_string
+    @pytest.mark.parametrize(
+        ("max_depth", "expected"),
+        [
+            pytest.param(
+                None,
+                (
+                    "root\n"
+                    " |-- id: integer (nullable = true)\n"
+                    " |-- person: struct (nullable = true)\n"
+                    " |    |-- name: string (nullable = true)\n"
+                    " |    |-- details: struct (nullable = true)\n"
+                    " |    |    |-- address: string (nullable = false)\n"
+                    " |-- arr: array (nullable = true)\n"
+                    " |    |-- element: string (containsNull = false)\n"
+                    " |-- arr_struct: array (nullable = true)\n"
+                    " |    |-- element: struct (containsNull = true)\n"
+                    " |    |    |-- x: integer (nullable = true)\n"
+                    " |-- arr_arr: array (nullable = true)\n"
+                    " |    |-- element: array (containsNull = true)\n"
+                    " |    |    |-- element: long (containsNull = true)\n"
+                    " |-- map: map (nullable = true)\n"
+                    " |    |-- key: string\n"
+                    " |    |-- value: integer (valueContainsNull = false)\n"
+                    " |-- map_nested: map (nullable = true)\n"
+                    " |    |-- key: string\n"
+                    " |    |-- value: struct (valueContainsNull = true)\n"
+                    " |    |    |-- y: decimal(5,2) (nullable = true)\n"
+                    " |-- a\\nb: string (nullable = true)\n"
+                ),
+                id="all",
+            ),
+            pytest.param(
+                2,
+                (
+                    "root\n"
+                    " |-- id: integer (nullable = true)\n"
+                    " |-- person: struct (nullable = true)\n"
+                    " |    |-- name: string (nullable = true)\n"
+                    " |    |-- details: struct (nullable = true)\n"
+                    " |-- arr: array (nullable = true)\n"
+                    " |    |-- element: string (containsNull = false)\n"
+                    " |-- arr_struct: array (nullable = true)\n"
+                    " |    |-- element: struct (containsNull = true)\n"
+                    " |-- arr_arr: array (nullable = true)\n"
+                    " |    |-- element: array (containsNull = true)\n"
+                    " |-- map: map (nullable = true)\n"
+                    " |    |-- key: string\n"
+                    " |    |-- value: integer (valueContainsNull = false)\n"
+                    " |-- map_nested: map (nullable = true)\n"
+                    " |    |-- key: string\n"
+                    " |    |-- value: struct (valueContainsNull = true)\n"
+                    " |-- a\\nb: string (nullable = true)\n"
+                ),
+                id="2",
+            ),
+        ],
+    )
+    def test_treeString_nesting(self, max_depth, expected):
+        schema = StructType(
+            [
+                StructField("id", IntegerType()),
+                StructField(
+                    "person",
+                    StructType(
+                        [
+                            StructField("name", StringType()),
+                            StructField("details", StructType([StructField("address", StringType(), False)])),
+                        ]
+                    ),
+                ),
+                StructField("arr", ArrayType(StringType(), False)),
+                StructField("arr_struct", ArrayType(StructType([StructField("x", IntegerType())]))),
+                StructField("arr_arr", ArrayType(ArrayType(LongType()))),
+                StructField("map", MapType(StringType(), IntegerType(), False)),
+                StructField("map_nested", MapType(StringType(), StructType([StructField("y", DecimalType(5, 2))]))),
+                StructField("a\nb", StringType()),
+            ]
+        )
+        assert (schema.treeString() if max_depth is None else schema.treeString(max_depth)) == expected
+
+
+class TestRepeatedColumnNames:
+    @pytest.fixture
+    def repeated(self, spark):
+        return spark.createDataFrame([(1, "Ann")], ["id", "name"]).toDF("x", "x")
+
+    def test_reference_is_ambiguous(self, repeated):
+        assert repeated.columns == ["x", "x"]
+        for make in (lambda: repeated.select("x"), lambda: repeated.x, lambda: repeated["x"]):
+            with pytest.raises(AnalysisException) as error:
+                make().collect()
+            assert error_condition(error.value) == "AMBIGUOUS_REFERENCE"
+
+    def test_columns_keep_their_values(self, repeated):
+        assert [tuple(r) for r in repeated.withColumn("z", lit(1)).collect()] == [(1, "Ann", 1)]
+        assert [tuple(r) for r in repeated.withColumnRenamed("x", "y").collect()] == [(1, "Ann")]
+        assert [tuple(r) for r in repeated.toDF("a", "b").collect()] == [(1, "Ann")]
+
+    @pytest.fixture
+    def beside(self, spark):
+        """A repeated name beside a name equal to the name DuckDB's binder gives the repeat's second column."""
+        return spark.createDataFrame([(10, 20, 30)], ["x", "x", "x_1"])
+
+    @pytest.mark.parametrize(
+        "derive",
+        [
+            lambda df: df,
+            lambda df: df.limit(1),
+            lambda df: df.select("*"),
+            lambda df: df.distinct(),
+            lambda df: df.sort("x_1"),
+            lambda df: df.filter(col("x_1") > 0),
+        ],
+    )
+    def test_unique_name_beside_a_repeat(self, beside, derive):
+        df = derive(beside)
+        assert df.select("x_1").collect() == [Row(x_1=30)]
+        assert [tuple(r) for r in df.select(df.x_1, df["x_1"], col("x_1") + 1).collect()] == [(30, 30, 31)]
+        assert [tuple(r) for r in df.filter(col("x_1") == 30).collect()] == [(10, 20, 30)]
+        assert df.groupBy().sum("x_1").collect() == [Row(**{"sum(x_1)": 30})]
+        assert df.groupBy("x_1").count().collect() == [Row(x_1=30, count=1)]
+        assert df.withColumn("y", col("x_1") * 2).select("y").collect() == [Row(y=60)]
+        assert df.sort(col("x_1").desc()).select("x_1").collect() == [Row(x_1=30)]
+        assert [tuple(r) for r in df.drop("x_1").collect()] == [(10, 20)]
+
+    def test_unique_name_beside_a_repeat_from_sql_and_renames(self, spark):
+        assert spark.sql("SELECT 10 AS x, 20 AS x, 30 AS x_1").select("x_1").collect() == [Row(x_1=30)]
+        source = spark.createDataFrame([(10, 20, 30)], ["a", "b", "c"])
+        assert source.toDF("x", "x", "x_1").select("x_1").collect() == [Row(x_1=30)]
+        renamed = source.toDF("x", "y", "x_1").withColumnRenamed("y", "x")
+        assert renamed.select("x_1").collect() == [Row(x_1=30)]
+        assert source.select("a", "b").toDF("x", "x_1").select("x", "x", "x_1").select("x_1").collect() == [Row(x_1=20)]
+        assert source.toDF("x", "X", "x_1").select("x_1").collect() == [Row(x_1=30)]
+
+    def test_name_of_a_repeat_in_duckdb_is_unresolved(self, repeated):
+        for make in (
+            lambda: repeated.select("x_1"),
+            lambda: repeated.select(col("x_1")),
+            lambda: repeated.filter(col("x_1") == "Ann"),
+            lambda: repeated["x_1"],
+        ):
+            with pytest.raises(AnalysisException) as error:
+                make().collect()
+            assert error_condition(error.value) == "UNRESOLVED_COLUMN.WITH_SUGGESTION"
+
+    def test_join_on_a_unique_name_beside_a_repeat(self, spark, beside):
+        other = spark.createDataFrame([(30, "hit")], ["k", "v"])
+        assert beside.join(other, beside["x_1"] == other["k"]).select("v").collect() == [Row(v="hit")]
+        assert beside.join(other, col("x_1") == col("k")).select("v").collect() == [Row(v="hit")]
+        keyed = spark.createDataFrame([(30,)], ["x_1"])
+        assert [tuple(r) for r in beside.join(keyed, "x_1").select("x_1").collect()] == [(30,)]
+
+    @pytest.mark.parametrize(
+        "derive",
+        [
+            lambda j, a: j.limit(1),
+            lambda j, a: j.sort("x"),
+            lambda j, a: j.distinct(),
+            lambda j, a: j.select("*"),
+            lambda j, a: j.filter(a.x > 0),
+            lambda j, a: j.limit(1).filter(col("x") > 0),
+        ],
+    )
+    def test_join_output_name_beside_a_repeat(self, spark, derive):
+        a = spark.createDataFrame([(1, 10)], ["id", "x"])
+        b = spark.createDataFrame([(1, 30)], ["id", "id_1"])
+        df = derive(a.join(b, a.id == b.id), a)
+        assert df.select("id_1").collect() == [Row(id_1=30)]
+        assert df.filter(col("id_1") == 30).select("x").collect() == [Row(x=10)]
+        assert df.groupBy().sum("id_1").collect() == [Row(**{"sum(id_1)": 30})]
+        crossed = a.crossJoin(b).filter(a.id == b.id)
+        assert crossed.select("id_1").collect() == [Row(id_1=30)]
+
+    @pytest.fixture
+    def filtered_join(self, spark):
+        a = spark.createDataFrame([(1, 10)], ["id", "x"]).alias("a")
+        b = spark.createDataFrame([(1, 30)], ["id", "id_1"]).alias("b")
+        return a.join(b, a.id == b.id).filter(a.x > 0)
+
+    def test_filtered_join_as_a_join_input(self, spark, filtered_join):
+        other = spark.createDataFrame([(100,)], ["z"])
+        for joined in (filtered_join.crossJoin(other), other.crossJoin(filtered_join)):
+            assert joined.select("id_1", col("id_1") + 1).collect() == [Row(id_1=30, **{"(id_1 + 1)": 31})]
+            assert joined.groupBy().sum("id_1").collect() == [Row(**{"sum(id_1)": 30})]
+        assert [tuple(r) for r in filtered_join.crossJoin(other).select("*").collect()] == [(1, 10, 1, 30, 100)]
+        keyed = spark.createDataFrame([(30, "hit")], ["k", "v"])
+        assert filtered_join.join(keyed, col("id_1") == col("k")).select("v").collect() == [Row(v="hit")]
+
+    def test_filtered_join_on_names_as_a_join_input(self, spark):
+        a = spark.createDataFrame([(1, 10, 7)], ["id", "x", "k"])
+        b = spark.createDataFrame([(1, 20)], ["id", "x"])
+        joined = a.join(b, "id").filter(col("k") > 0).crossJoin(spark.createDataFrame([(100,)], ["z"]))
+        assert [tuple(r) for r in joined.collect()] == [(1, 10, 7, 20, 100)]
+
+    def test_view_of_a_join_with_repeated_names(self, spark, filtered_join):
+        a = spark.createDataFrame([(1, 10)], ["id", "x"]).alias("a")
+        b = spark.createDataFrame([(1, 30)], ["id", "id_1"]).alias("b")
+        for name, df in (("repeated_join_view", a.join(b, a.id == b.id)), ("repeated_filter_view", filtered_join)):
+            df.createOrReplaceTempView(name)
+            assert spark.table(name).select("id_1").collect() == [Row(id_1=30)]
+        repeated = spark.createDataFrame([(10, 20)], ["x", "x"]).alias("r")
+        repeated.crossJoin(spark.createDataFrame([(30,)], ["x_1"])).createOrReplaceTempView("repeated_input_view")
+        assert spark.table("repeated_input_view").select("x_1").collect() == [Row(x_1=30)]
+        # Spark's view keeps the repeated names; DuckDB names a view's columns apart.
+        expected = ["x", "x", "x_1"] if USE_ACTUAL_SPARK else ["x", "x_2", "x_1"]
+        assert spark.table("repeated_input_view").columns == expected
+
+    def test_repeat_beside_a_name_of_another_join_input(self, spark):
+        a = spark.createDataFrame([(10, 20)], ["x", "x"]).alias("a")
+        b = spark.createDataFrame([(30,)], ["x_1"]).alias("b")
+        y = spark.createDataFrame([(7,)], ["y"]).alias("y")
+        for joined in (a.crossJoin(b), b.crossJoin(a), a.crossJoin(y).crossJoin(b)):
+            assert joined.select("x_1").collect() == [Row(x_1=30)]
+            assert joined.select(col("x_1")).collect() == [Row(x_1=30)]
+            assert joined.filter(col("x_1") == 30).select("x_1").collect() == [Row(x_1=30)]
+            assert joined.groupBy(col("x_1")).count().collect() == [Row(x_1=30, count=1)]
+            assert joined.sort(col("x_1")).select("x_1").collect() == [Row(x_1=30)]
+        assert [tuple(r) for r in a.crossJoin(y).crossJoin(b).select(y.y, col("y.y")).collect()] == [(7, 7)]
+        assert a.join(b, col("x_1") == 30).select("x_1").collect() == [Row(x_1=30)]

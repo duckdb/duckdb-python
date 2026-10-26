@@ -1,7 +1,7 @@
 """numpy ingest: object-string scan, NaN-to-NULL, masked scan, analyzer bind. See benchmarks/README.md.
 
 Gotchas: the object-string bench MUST mix ASCII + non-ASCII + a null or it misses the transcode ladder (see
-README traps); analyzer bind is the one place count(*) is correct (cost is at bind, not scan).
+README traps); the analyzer bind bench selects the column with LIMIT 0, which binds it and plans an empty result.
 """
 
 from __future__ import annotations
@@ -32,7 +32,10 @@ _MIXED_STRINGS = [None if _MIXED[i % 5] is None else f"{_MIXED[i % 5]}{i}" for i
 # mixed python types in an object column -> the analyzer must sample/widen through the type ladder at bind
 _MIXED_TYPES = [(i if i % 3 == 0 else (float(i) if i % 3 == 1 else f"s{i}")) for i in range(ANALYZER_N)]
 
-# READ (sum over a registered frame) is engine-aggregate dominated -> informational. The analyzer BIND (count(*),
+# row 0 is never masked and every value is a str or None, so the object column binds VARCHAR whether or not masks apply
+_MASK = np.arange(N) % 10 == 3
+
+# READ (sum over a registered frame) is engine-aggregate dominated -> informational. The analyzer BIND (LIMIT 0,
 # no scan) is a pure per-bind binding cost -> gate.
 
 
@@ -45,7 +48,7 @@ def df_double_with_nan() -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def df_object_string_mixed() -> pd.DataFrame:
-    return pd.DataFrame({"s": pd.array(_MIXED_STRINGS, dtype=object)})
+    return pd.DataFrame({"s": pd.Series(_MIXED_STRINGS, dtype=object)})
 
 
 @pytest.fixture(scope="module")
@@ -54,6 +57,16 @@ def df_masked_int() -> pd.DataFrame:
     arr = pd.array(np.arange(N), dtype="Int64")
     arr[::10] = pd.NA
     return pd.DataFrame({"a": arr})
+
+
+@pytest.fixture(scope="module")
+def np_masked_int() -> dict[str, np.ma.MaskedArray]:
+    return {"a": np.ma.array(np.arange(N, dtype="int64"), mask=_MASK)}
+
+
+@pytest.fixture(scope="module")
+def np_masked_object_string() -> dict[str, np.ma.MaskedArray]:
+    return {"s": np.ma.array(np.array(_MIXED_STRINGS, dtype=object), mask=_MASK)}
 
 
 @pytest.fixture(scope="module")
@@ -98,8 +111,38 @@ def test_read_numpy_object_string_mixed(
     benchmark(lambda: con.execute("SELECT count(s), sum(length(s)) FROM t").fetchall())
 
 
-# BIND: PandasAnalyzer sampling cost. count(*) is correct HERE ONLY: the cost is at bind, so forcing a scan would
-# drown the per-bind signal. Re-binds the object column each call.
+@pytest.mark.informational
+def test_read_numpy_object_mixed_types(
+    benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection, df_object_mixed_types: pd.DataFrame
+) -> None:
+    # int and float values reach str() in the object -> VARCHAR scan; no other bench sends a non-null non-str there
+    con.register("t", df_object_mixed_types)
+    con.execute("SELECT count(v), sum(length(v)) FROM t").fetchall()  # warm
+    benchmark(lambda: con.execute("SELECT count(v), sum(length(v)) FROM t").fetchall())
+
+
+@pytest.mark.informational
+def test_read_numpy_ma_int(
+    benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection, np_masked_int: dict[str, np.ma.MaskedArray]
+) -> None:
+    con.register("t", np_masked_int)
+    con.execute("SELECT sum(a) FROM t").fetchall()  # warm
+    benchmark(lambda: con.execute("SELECT sum(a) FROM t").fetchall())
+
+
+@pytest.mark.informational
+def test_read_numpy_ma_object_string(
+    benchmark: BenchmarkFixture,
+    con: duckdb.DuckDBPyConnection,
+    np_masked_object_string: dict[str, np.ma.MaskedArray],
+) -> None:
+    con.register("t", np_masked_object_string)
+    con.execute("SELECT count(s), sum(length(s)) FROM t").fetchall()  # warm
+    benchmark(lambda: con.execute("SELECT count(s), sum(length(s)) FROM t").fetchall())
+
+
+# BIND: PandasAnalyzer sampling cost. LIMIT 0 binds the object column (re-running the analyzer each call) and plans
+# an empty result, so no scan drowns the per-bind signal.
 
 
 @pytest.mark.gate
@@ -107,5 +150,5 @@ def test_bind_analyzer_object(
     benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection, df_object_mixed_types: pd.DataFrame
 ) -> None:
     con.register("t", df_object_mixed_types)
-    con.execute("SELECT count(*) FROM t").fetchall()  # warm
-    benchmark(lambda: con.execute("SELECT count(*) FROM t").fetchall())
+    con.execute("SELECT v FROM t LIMIT 0").fetchall()  # warm
+    benchmark(lambda: con.execute("SELECT v FROM t LIMIT 0").fetchall())

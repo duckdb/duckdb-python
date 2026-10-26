@@ -17,7 +17,20 @@ struct RegisteredArray {
 	NumpyArray numpy_array;
 };
 
+//! The scan reads a mask as one bool byte per row from its first element, so any other layout or dtype is copied.
+std::unique_ptr<RegisteredArray> RegisterMask(nb::handle mask);
+
+//! str() of each label, made unique the way the engine names result columns.
+vector<string> ColumnNamesFromLabels(nb::handle labels);
+
+//! The row count of an array for a column slot, which must be one dimensional.
+idx_t ColumnArrayRows(const string &column, nb::handle array);
+//! Every array a column slot holds must be one dimensional with the row count of the frame or dict it came from.
+void CheckColumnArray(const string &column, nb::handle array, idx_t row_count, const string &counted_from);
+
 struct PandasColumnBindData {
+	//! The bound column name, as errors about the column show it
+	string name;
 	NumpyType numpy_type;
 	std::unique_ptr<PandasColumn> pandas_col;
 	std::unique_ptr<RegisteredArray> mask;
@@ -28,8 +41,9 @@ struct PandasColumnBindData {
 };
 
 struct Pandas {
-	static void Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
-	                 vector<LogicalType> &return_types, vector<Identifier> &names);
+	//! Returns the frame's row count
+	static idx_t Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
+	                  vector<LogicalType> &return_types, vector<Identifier> &names);
 };
 
 } // namespace duckdb

@@ -1,4 +1,6 @@
 import datetime
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -410,3 +412,28 @@ def sorted_get_objects(catalogs):
         res.append(new_catalog)
 
     return res
+
+
+def test_the_driver_works_in_a_process_that_never_imports_duckdb(tmp_path):
+    # The ADBC driver manager loads the module as a plain shared library, so the linked extensions must be
+    # registered on load, not by the Python import.
+    script = f"""
+import sys
+import pyarrow as pa
+from adbc_driver_duckdb import dbapi
+assert "duckdb" not in sys.modules and "_duckdb" not in sys.modules
+with dbapi.connect({(tmp_path / "w.duckdb").as_posix()!r}) as conn, conn.cursor() as cur:
+    cur.execute("SELECT current_catalog(), version() LIKE 'v%'")
+    print(cur.fetchall())
+    print(cur.adbc_ingest("t", pa.table({{"a": [1, 2]}}), mode="create"))
+    cur.execute("SELECT count(*), max(a) FROM t")
+    print(cur.fetchall())
+assert "duckdb" not in sys.modules and "_duckdb" not in sys.modules
+"""
+    try:
+        proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120, check=False)
+    except subprocess.TimeoutExpired as hang:
+        pytest.fail(f"the child hung\nstdout:\n{hang.stdout}\nstderr:\n{hang.stderr}")
+    assert proc.returncode == 0, proc.stderr
+    # The editable build may print its rebuild notice first, so only the tail of stdout is compared.
+    assert proc.stdout.splitlines()[-3:] == ["[('w', True)]", "2", "[(2, 2)]"], proc.stdout

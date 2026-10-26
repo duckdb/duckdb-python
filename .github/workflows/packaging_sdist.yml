@@ -70,9 +70,11 @@ jobs:
           fi
 
       - name: Install Astral UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.0
         with:
-          version: "0.9.0"
+          version: "0.12.23"
+          # No setup-uv cache: it would save on pull request and feature branch refs and crowd out the ccaches.
+          enable-cache: false
           python-version: 3.12
 
       - name: Build sdist

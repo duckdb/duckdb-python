@@ -1,14 +1,11 @@
-"""Tests that all types in _ExpressionLike are accepted by the implicit conversion path.
-
-pybind11 registers implicit conversions so that any C++ method taking
-``const DuckDBPyExpression &`` silently accepts Python scalars.  The stubs
-declare these as ``_ExpressionLike``.  This file verifies every type in that
-union actually works at runtime.
+"""Tests that every Python value an expression operand may be is accepted where an expression is expected.
 
 Key semantics:
-- ``str`` always becomes a **ColumnExpression** (column reference), never a string constant.
-- ``bytes`` is decoded as UTF-8 by pybind11 and also becomes a ColumnExpression.
-- All other types become **ConstantExpression** via ``TransformPythonValue``.
+- ``str`` is a value, a string constant; a column is named with ``ColumnExpression``.
+- ``bytes`` is a BLOB constant.
+- ``None`` is SQL NULL, and the other plain values become constants of their SQL type.
+- An object no expression can hold raises TypeError.
+- The relation methods still read a bare string as a column name (``rel.select("i")``, ``rel.sort("x")``).
 """
 
 import datetime
@@ -152,35 +149,44 @@ def test_none_filter_keeps_no_rows():
     assert rel.filter(ColumnExpression("a") != None).fetchall() == []  # noqa: E711
 
 
-def test_unconvertible_operand_preserves_notimplemented():
-    """An unconvertible operand must still yield NotImplemented so Python falls back.
+def test_unconvertible_operand_raises_type_error():
+    """An unconvertible operand raises TypeError, never a thrown duckdb error.
 
-    `expr == object()` stays a bool, `expr + object()` raises TypeError -- not a thrown duckdb error.
+    Changed: an operand no expression can hold raises TypeError; `==` returned False.
     """
     a = ColumnExpression("a")
-    assert (a == object()) is False
-    assert (a != object()) is True
+    with pytest.raises(TypeError, match="as an expression operand"):
+        a == object()  # noqa: B015
+    with pytest.raises(TypeError, match="as an expression operand"):
+        a != object()  # noqa: B015
     with pytest.raises(TypeError):
         a + object()
 
 
 # ---------------------------------------------------------------------------
-# 2. Binary operator with str: str becomes a ColumnExpression (column ref)
+# 2. Binary operator with str: str is a string constant
 # ---------------------------------------------------------------------------
 
 
 def test_binary_operator_str_rhs(rel):
-    """Str on the RHS becomes a ColumnExpression (column reference)."""
-    # ColumnExpression("i") == "i"  →  column i == column i  →  True
-    expr = ColumnExpression("i") == "i"
+    """Str on the RHS is a string constant.
+
+    Changed: a bare string operand is a value; it was a column reference.
+    """
+    expr = ColumnExpression("s") == "hello"
+    assert str(expr) == "(\"s\" = 'hello')"
     result = rel.select(expr).fetchall()
     assert result == [(True,)]
 
 
 def test_binary_operator_bytes_rhs(rel):
-    """Bytes on the RHS is decoded as UTF-8 and (like str) becomes a ColumnExpression (column reference)."""
-    expr = ColumnExpression("i") == b"i"
+    """Bytes on the RHS is a BLOB constant.
+
+    Changed: bytes, like bytearray, is a BLOB value; it was a column reference.
+    """
+    expr = ColumnExpression("s").cast("BLOB") == b"hello"
     assert isinstance(expr, duckdb.Expression)
+    assert str(expr) == "(CAST(\"s\" AS BLOB) = '\\x68\\x65\\x6c\\x6c\\x6f'::BLOB)"
     assert rel.select(expr).fetchall() == [(True,)]
 
 
@@ -242,7 +248,6 @@ def test_between_with_date_scalars(rel):
 
 # ---------------------------------------------------------------------------
 # 6. CaseExpression / when / otherwise with scalar values
-#    Note: str values become column refs, so we use int/None scalars here.
 # ---------------------------------------------------------------------------
 
 
@@ -396,10 +401,13 @@ def test_expressions_are_not_identity_cached():
     ids=["isin", "coalesce", "function_expression"],
 )
 def test_unconvertible_arg_raises_clean_error(build):
-    """A value with no expression conversion raises InvalidInputException, not a raw C++ error."""
+    """A value with no expression conversion raises TypeError, not a raw C++ error.
+
+    Changed: an operand no expression can hold raises TypeError; it was InvalidInput.
+    """
 
     class NotConvertible:
         pass
 
-    with pytest.raises(duckdb.InvalidInputException, match="arguments of type Expression"):
+    with pytest.raises(TypeError, match="as an expression operand"):
         build(NotConvertible())

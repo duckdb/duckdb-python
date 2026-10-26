@@ -143,6 +143,16 @@ bool PythonFilesystem::Exists(const string &filename, const char *func_name) con
 
 	return nb::cast<bool>(filesystem.attr(func_name)(filename));
 }
+// fsspec writes a Windows path as file://C:/..., with the drive where a URI's host goes, and the engine reads only the
+// standard file:///C:/...
+static string WithDriveLetterAsPath(string uri) {
+	if (StringUtil::StartsWith(uri, "file://") && uri.size() >= 9 && StringUtil::CharacterIsAlpha(uri[7]) &&
+	    uri[8] == ':') {
+		uri.insert(7, "/");
+	}
+	return uri;
+}
+
 vector<OpenFileInfo> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	nb::gil_scoped_acquire gil;
 
@@ -154,8 +164,7 @@ vector<OpenFileInfo> PythonFilesystem::Glob(const string &path, FileOpener *open
 	vector<OpenFileInfo> results;
 	auto unstrip_protocol = filesystem.attr("unstrip_protocol");
 	for (auto item : returner) {
-		string file_path = nb::cast<std::string>(unstrip_protocol(nb::str(item)));
-		results.emplace_back(file_path);
+		results.emplace_back(WithDriveLetterAsPath(nb::cast<std::string>(unstrip_protocol(nb::str(item)))));
 	}
 	return results;
 }
@@ -163,14 +172,14 @@ string PythonFilesystem::PathSeparator(const string &path) {
 	return "/";
 }
 int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	// TODO: this value should be cached on the PythonFileHandle
 	nb::gil_scoped_acquire gil;
 
 	return nb::cast<int64_t>(filesystem.attr("size")(handle.path));
 }
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	auto seek = PythonFileHandle::GetHandle(handle).attr("seek");
@@ -189,31 +198,51 @@ bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	return false;
 }
 void PythonFilesystem::MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	auto move = filesystem.attr("mv");
 	move(nb::str(source.c_str(), source.size()), nb::str(dest.c_str(), dest.size()));
 }
 void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	auto remove = filesystem.attr("rm");
 	remove(nb::str(filename.c_str(), filename.size()));
 }
 timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	// TODO: this value should be cached on the PythonFileHandle
 	nb::gil_scoped_acquire gil;
 
-	auto last_mod = filesystem.attr("modified")(handle.path);
+	nb::object last_mod;
+	try {
+		last_mod = filesystem.attr("modified")(handle.path);
+	} catch (nb::python_error &error) {
+		// fsspec's default modified() raises NotImplementedError, and DirectFileReader turns a NotImplementedException
+		// from the metadata it reads into NULL for that column.
+		if (!error.matches(PyExc_NotImplementedError)) {
+			throw;
+		}
+		auto message = GetName() + ": modified() is not implemented";
+		// str() of the exception can itself raise, and the error is still a NotImplementedException without its text.
+		try {
+			auto detail = nb::cast<std::string>(nb::str(error.value()));
+			if (!detail.empty()) {
+				message += ": " + detail;
+			}
+		} catch (nb::python_error &) {
+		} catch (nb::cast_error &) {
+		}
+		throw NotImplementedException(message);
+	}
 
 	// datetime.timestamp() returns a float; truncate to int64 seconds (nb::cast<int64_t> would reject a float)
 	return Timestamp::FromEpochSeconds((int64_t)nb::cast<double>(last_mod.attr("timestamp")()));
 }
 void PythonFilesystem::FileSync(FileHandle &handle) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	PythonFileHandle::GetHandle(handle).attr("flush")();
@@ -222,33 +251,41 @@ bool PythonFilesystem::DirectoryExists(const string &directory, optional_ptr<Fil
 	return Exists(directory, "isdir");
 }
 void PythonFilesystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	filesystem.attr("rm")(directory, nb::arg("recursive") = true);
 }
 void PythonFilesystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	filesystem.attr("mkdir")(nb::str(directory.c_str(), directory.size()));
 }
 bool PythonFilesystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                  FileOpener *opener) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 	bool nonempty = false;
 
 	for (auto item : filesystem.attr("ls")(nb::str(directory.c_str(), directory.size()))) {
 		bool is_dir = nb::cast<std::string>(item["type"]) == "directory";
-		callback(nb::cast<std::string>(item["name"]), is_dir);
+		// fsspec names an entry by its full path, and the engine joins the name it gets onto the directory
+		auto path = nb::cast<std::string>(item["name"]);
+		auto end = path.find_last_not_of('/');
+		if (end == string::npos) {
+			continue;
+		}
+		auto separator = path.find_last_of('/', end);
+		auto begin = separator == string::npos ? 0 : separator + 1;
+		callback(path.substr(begin, end - begin + 1), is_dir);
 		nonempty = true;
 	}
 
 	return nonempty;
 }
 void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	filesystem.attr("touch")(handle.path, nb::arg("truncate") = true);
@@ -257,7 +294,7 @@ bool PythonFilesystem::IsPipe(const string &filename, optional_ptr<FileOpener> o
 	return false;
 }
 idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {
-	D_ASSERT(!duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	nb::gil_scoped_acquire gil;
 
 	return nb::cast<idx_t>(PythonFileHandle::GetHandle(handle).attr("tell")());

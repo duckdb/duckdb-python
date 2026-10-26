@@ -1,15 +1,13 @@
 name: Tests and builds on PR
+# No paths filter: Summary is a required status check, and a check that never
+# reports blocks the merge. Docs-only changes pay the full run.
 on:
   pull_request:
     branches:
       - main
       - v*.*-*
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.editorconfig'
-      - 'scripts/**'
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -20,21 +18,44 @@ jobs:
     name: Code-quality checks
     uses: ./.github/workflows/code_quality.yml
 
+  # A draft PR runs only the code quality checks; its pushes are built and tested
+  # by on_push.yml in the contributor's fork. The two jobs below run for ready
+  # PRs and in the merge queue, with the same inputs, so a queue failure is never
+  # a surprise.
   packaging_test:
-    name: Build a minimal set of packages and run all tests on them
+    name: Build a minimal set of packages and test them
     needs: code_quality
-    # Skip packaging tests for draft PRs
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     uses: ./.github/workflows/packaging.yml
     with:
       minimal: true
       testsuite: all
 
-  coverage_test:
-    name: Run coverage tests
+  assert_test:
+    name: Full-API build with assertions
     needs: code_quality
-    # Only run coverage test for draft PRs
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
-    uses: ./.github/workflows/coverage.yml
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    uses: ./.github/workflows/assert_test.yml
     with:
-      testsuite: all
+      testsuite: fast
+
+  summary:
+    name: Summary
+    # The one required status check: red when any job failed or was cancelled,
+    # green when every job passed or was skipped by its own condition.
+    if: ${{ always() }}
+    needs:
+      - code_quality
+      - packaging_test
+      - assert_test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"result": "(failure|cancelled)"'; then
+            echo "::error::A job failed or was cancelled."
+            exit 1
+          fi

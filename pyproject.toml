@@ -29,6 +29,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Programming Language :: C++",
 ]
 authors = [{name = "DuckDB Foundation"}]
@@ -44,7 +45,7 @@ Changelog = "https://github.com/duckdb/duckdb-python/releases"
 all = [ # users can install duckdb with 'duckdb[all]', which will install this list
     "ipython", # used in duckdb.query_graph
     "fsspec",  # used in duckdb.filesystem
-    "numpy",   # used in duckdb.experimental.spark and in duckdb.fetchnumpy()
+    "numpy",   # used in duckdb.fetchnumpy()
     "pandas",  # used for pandas dataframes all over the place
     "pyarrow", # used for pyarrow support
     "adbc-driver-manager", # for the adbc driver
@@ -88,12 +89,22 @@ build-dir = "build/{cache_tag}"
 
 [tool.scikit-build.wheel]
 cmake = true
+# One stable ABI wheel for CPython 3.12 and up, where nanobind can link the stable ABI; an older interpreter gets
+# a wheel of its own from the same setting.
+py-api = "cp312"
 packages.duckdb = "duckdb"
 packages.adbc_driver_duckdb = "adbc_driver_duckdb"
 packages._duckdb-stubs = "_duckdb-stubs"
 
 [tool.scikit-build.cmake.define]
 BUILD_EXTENSIONS = "core_functions;json;parquet;icu"
+# Extensions to statically link into the module, picked from BUILD_EXTENSIONS.
+# Empty means all of BUILD_EXTENSIONS. Always passed so a stale CMake cache
+# value never survives an override being dropped.
+LINK_EXTENSIONS = ""
+# Link time optimization mode for the engine, the bindings and the module link:
+# thin, full, or empty for none. Always passed for the same reason.
+DUCKDB_PY_LTO = ""
 
 [tool.duckdb_packaging]
 # The version this branch releases next. A release forces exactly this version, a
@@ -105,6 +116,15 @@ release_version = "2.1.0"
 if.env.CIBUILDWHEEL_BUILD_IDENTIFIER = true
 build-dir = "build/shared"
 build.tool-args = ["-v"]
+
+# Override: the Linux wheels link with ThinLTO, the platforms DuckDB's own release does it for. clang and lld come
+# from the before-build step and CC/CXX from the environment table under [tool.cibuildwheel.linux]. macOS and
+# Windows get no define and stay native, like DuckDB's release.
+[[tool.scikit-build.overrides]]
+if.env.CIBUILDWHEEL_BUILD_IDENTIFIER = true
+if.platform-system = "^linux$"
+inherit.cmake.define = "append"
+cmake.define.DUCKDB_PY_LTO = "thin"
 
 # Override: if COVERAGE is set then:
 # - we create a RelWithDebInfo build
@@ -124,6 +144,11 @@ inherit.cmake.define = "append"
 cmake.define.CMAKE_CXX_FLAGS = "--coverage -O0"
 cmake.define.CMAKE_C_FLAGS = "--coverage -O0"
 cmake.define.CMAKE_SHARED_LINKER_FLAGS = "--coverage"
+
+# Override: an editable build keeps the full API, for the debug asserts on the GIL that the stable ABI cannot express.
+[[tool.scikit-build.overrides]]
+if.state = "editable"
+wheel.py-api = ""
 
 # Override: if we're in editable mode then make sure a build dir is set. Note that COVERAGE runs have their own
 #   build-dir, and we don't want to interfere with that. We're also disabling unity builds to help with debugging.
@@ -185,6 +210,7 @@ include = [
     "external/duckdb/tools/cpp/**",
     "external/duckdb/.github/config/out_of_tree_extensions.cmake",
     "external/duckdb/.github/config/in_tree_extensions.cmake",
+    "external/duckdb/.github/config/extensions/**",
 ]
 exclude = [
     "/*",
@@ -198,16 +224,18 @@ exclude = [
 #
 # This section has dependency groups for testing and development. Tread carefully, the current setup makes sure that
 # test dependencies can be installed on as many platforms we build wheel for. Especially picky are:
-# - tensorflow: we can only run tests on cp310-cp311, for osx there is no tensorflow-cpu, for windows we need
+# - tensorflow: we can only run tests on cp311, for osx there is no tensorflow-cpu, for windows we need
 #          tensorflow-cpu-aws and there is no distribution availalbe for Linux aarch64.
 # - torch: since we can't use gpu acceleration, we need to rely on torch-cpu, which isn't available on pypi. We use
 #          `tool.uv.index` and `tool.uv.sources` to make sure the official pytorch index is used. Even there, we don't
-#          have a wheel available for x86_64 OSX + cp313.
-# - numpy: tensorflow doesn't play nice with numpy>2 so for every platform that can run tensorflow (cp310-cp311) we use
+#          have a wheel available for x86_64 OSX + cp313 and later.
+# - adbc-driver-manager: no cp315 wheels yet (1.12.0 stops at cp314); the adbc tests importorskip it on 3.15.
+# - numpy: tensorflow doesn't play nice with numpy>2 so for every platform that can run tensorflow (cp311) we use
 #          numpy<2. numpy<2 has no wheels for cp31[2|3], meaning an sdist will be used. However, on Windows amd64 +
 #          cp313 this results in a segfault / access violation. To get around this, we install numpy>=2 on all >=cp312
 #          platforms. Then for windows arm64, for which there is no tensorflow, we only allow numpy>=2.3 because that
 #          ships arm64 win32 wheels.
+# - pyarrow: pyarrow>=26 refuses to import with numpy<2, so wherever numpy<2 is installed pyarrow stays below 26.
 ######################################################################################################
 
 [tool.uv]
@@ -217,20 +245,20 @@ default-groups = ["dev"]
 # build wheels for.
 # See https://docs.astral.sh/uv/concepts/resolution/#universal-resolution
 environments = [ # no need to resolve packages beyond these platforms with uv...
-    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "python_version >= '3.10' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'AMD64'",
     "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
-    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "python_version >= '3.11' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "python_version >= '3.11' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 required-environments = [ # ... but do always resolve for all of them
-    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "python_version >= '3.10' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "python_version >= '3.10' and sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "python_version >= '3.11' and sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'AMD64'",
     "python_version >= '3.11' and sys_platform == 'win32' and platform_machine == 'ARM64'",
-    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'x86_64'",
-    "python_version >= '3.10' and sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "python_version >= '3.11' and sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "python_version >= '3.11' and sys_platform == 'linux' and platform_machine == 'aarch64'",
 ]
 
 # We just need pytorch for tests, wihtout GPU acceleration. PyPI doesn't host a cpu-only version for Linux, so we have
@@ -246,18 +274,8 @@ torchvision = [ { index = "pytorch-cpu" } ]
 
 # todo: adjust for windows arm64 while test dependencies become available
 [dependency-groups] # used for development only, requires pip >=25.1.0
-stubdeps = [ # dependencies used for typehints in the stubs
-    "pybind11-stubgen",
-    "mypy",
-    "fsspec",
-    "pandas",
-    "polars>=1.33.0",
-    "pyarrow; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "typing-extensions",
-]
 test = [ # dependencies used for running tests
-    "adbc-driver-manager>=1.10.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
-    "adbc-driver-manager>=1.7.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "adbc-driver-manager>=1.10.0; python_version < '3.15' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "pytest",
     "pytest-reraise",
     "pytest-timeout",
@@ -277,10 +295,9 @@ test = [ # dependencies used for running tests
     "requests",
     "urllib3",
     "fsspec>=2022.11.0; sys_platform != 'win32' or platform_machine != 'ARM64'",
-    "pandas>=3.0.0; python_version > '3.10'",
-    "pandas<3.0.0; python_version < '3.11'",
-    "pyarrow>=23.0.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
-    "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pandas>=3.0.0",
+    "pyarrow>=23.0.0,<26; python_version < '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0; python_version >= '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
     "torch>=2.2.2; python_version < '3.13' and ( sys_platform != 'win32' or platform_machine != 'ARM64' )",
     "torch>=2.2.2,<2.12.1; python_version > '3.11' and python_version < '3.13' and sys_platform == 'win32' and platform_machine == 'ARM64'",
     "torch>=2.2.2,<2.11.0; python_version >= '3.13' and python_version < '3.14' and ( sys_platform != 'darwin' or platform_machine != 'x86_64' ) and ( sys_platform != 'win32' or platform_machine != 'ARM64' )",
@@ -292,7 +309,7 @@ test = [ # dependencies used for running tests
     "typing-extensions",
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
     "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
-    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64'",
 ]
 bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Minimal, not the heavy `test` group.
           # Constraints mirror `test` so the lockfile resolves identically; torch/tf are local-only (importorskip).
@@ -302,19 +319,16 @@ bench = [ # Pinned deps for the benchmark suite (see benchmarks/README.md). Mini
     "pytz",
     "numpy<2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version < '3.12'",
     "numpy>=2; ( sys_platform != 'win32' or platform_machine != 'ARM64' ) and python_version >= '3.12'",
-    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64' and python_version >= '3.11'",
-    "pandas>=3.0.0; python_version > '3.10'",
-    "pandas<3.0.0; python_version < '3.11'",
-    "pyarrow>=23.0.0; python_version >= '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
-    "pyarrow>=18.0.0; python_version < '3.10' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "numpy>=2.3; sys_platform == 'win32' and platform_machine == 'ARM64'",
+    "pandas>=3.0.0",
+    "pyarrow>=23.0.0,<26; python_version < '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
+    "pyarrow>=23.0.0; python_version >= '3.12' and (sys_platform != 'win32' or platform_machine != 'ARM64')",
 ]
 scripts = [ # dependencies used for running scripts
-    "cxxheaderparser",
     "ipython",
     "ipywidgets",
     "numpy",
     "pandas",
-    "pcpp",
     "polars>=1.33.0",
     "pyarrow; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "pytz"
@@ -327,13 +341,16 @@ build = [
     "cmake>=3.29.0",
     "ninja>=1.10",
     "nanobind>=3.0",
+    # C API headers for the editable build. Unpinned because the test group forces numpy<2 on
+    # Python 3.11 for tensorflow, and one universal resolution must satisfy both. Release wheels
+    # build isolated against the numpy>=2.0 in [build-system].
+    "numpy",
     "scikit_build_core>=0.11.4",
 ]
 dev = [ # tooling like uv will install this automatically when syncing the environment
     "pre-commit",
     "mypy",
     "ruff>=0.13.0",
-    {include-group = "stubdeps"},
     {include-group = "build"},
     {include-group = "test"},
     {include-group = "scripts"},
@@ -361,8 +378,10 @@ filterwarnings = [
     # Jupyter is throwing DeprecationWarnings
     "ignore:function ham() is deprecated:DeprecationWarning",
     # Pyspark is throwing these warnings
-    "ignore:distutils Version classes are deprecated:DeprecationWarning",
-    "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning",
+    "ignore:distutils Version classes are deprecated:DeprecationWarning:pyspark",
+    "ignore:is_datetime64tz_dtype is deprecated:DeprecationWarning:pyspark",
+    "ignore:The distutils package is deprecated:DeprecationWarning:pyspark",
+    "ignore:The copy keyword is deprecated:DeprecationWarning:pyspark",
 ]
 
 [tool.mypy]
@@ -511,7 +530,16 @@ build-frontend = { name = "build[uv]", args = ["--env-dir", "/tmp/duckdb-build-e
 before-build = [
   'pip install -U "build>=1.6.0"',
   'rm -rf /tmp/duckdb-build-env',
-  'yum install -y ccache',
+  'yum install -y ccache clang lld',
+]
+# The wheels build with clang, like the engine's own Linux release. In CI the build-wheel action's CIBW_ENVIRONMENT
+# replaces this table and carries the same two variables; this copy serves a local cibuildwheel run.
+environment = { CC = "clang", CXX = "clang++" }
+# The build runs in a container that keeps its files, so the compile database is checked there, in front of the
+# default repair command.
+repair-wheel-command = [
+  'python {project}/scripts/check_compile_commands.py {project}/build/shared/compile_commands.json --lto thin --compiler clang',
+  'auditwheel repair -w {dest_dir} {wheel}',
 ]
 
 [tool.cibuildwheel.macos]

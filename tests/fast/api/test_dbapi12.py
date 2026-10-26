@@ -57,8 +57,8 @@ class TestRelationApi:
         test_rel(rel_df, duckdb_cursor)
 
     def test_fromquery(self, duckdb_cursor):
-        assert duckdb.from_query("select 42").fetchone()[0] == 42
-        assert duckdb_cursor.query("select 43").fetchone()[0] == 43
+        assert duckdb.from_query("select 42").fetchall()[0][0] == 42
+        assert duckdb_cursor.query("select 43").fetchall()[0][0] == 43
 
         # assert duckdb_cursor.from_query('select 44').execute().fetchone()[0] == 44
         # assert duckdb_cursor.from_query('select 45').execute().fetchone()[0] == 45

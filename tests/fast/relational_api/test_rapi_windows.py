@@ -1,7 +1,5 @@
 import pytest
 
-import duckdb
-
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_of_table(duckdb_cursor):
@@ -31,11 +29,11 @@ def table(duckdb_cursor):
 class TestRAPIWindows:
     # general purpose win functions
     def test_row_number(self, table):
-        result = table.row_number("over ()").execute().fetchall()
+        result = table.row_number("over ()").fetchall()
         expected = list(range(1, 9))
         assert len(result) == len(expected)
         assert all(r[0] == e for r, e in zip(result, expected, strict=False))
-        result = table.row_number("over (partition by id order by t asc)", "id, v, t").order("id").execute().fetchall()
+        result = table.row_number("over (partition by id order by t asc)", "id, v, t").order("id").fetchall()
         expected = [
             (1, 1, 1, 1),
             (1, 1, 2, 2),
@@ -50,32 +48,32 @@ class TestRAPIWindows:
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_rank(self, table):
-        result = table.rank("over ()").execute().fetchall()
+        result = table.rank("over ()").fetchall()
         expected = [1] * 8
         assert len(result) == len(expected)
         assert all(r[0] == e for r, e in zip(result, expected, strict=False))
-        result = table.rank("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
+        result = table.rank("over (partition by id order by v asc)", "id, v").order("id").fetchall()
         expected = [(1, 1, 1), (1, 1, 1), (1, 2, 3), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, None, 3)]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     @pytest.mark.parametrize("f", ["dense_rank", "rank_dense"])
     def test_dense_rank(self, table, f):
-        result = getattr(table, f)("over ()").execute().fetchall()
+        result = getattr(table, f)("over ()").fetchall()
         expected = [1] * 8
         assert len(result) == len(expected)
         assert all(r[0] == e for r, e in zip(result, expected, strict=False))
-        result = getattr(table, f)("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
+        result = getattr(table, f)("over (partition by id order by v asc)", "id, v").order("id").fetchall()
         expected = [(1, 1, 1), (1, 1, 1), (1, 2, 2), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, None, 3)]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_percent_rank(self, table):
-        result = table.percent_rank("over ()").execute().fetchall()
+        result = table.percent_rank("over ()").fetchall()
         expected = [0.0] * 8
         assert len(result) == len(expected)
         assert all(r[0] == e for r, e in zip(result, expected, strict=False))
-        result = table.percent_rank("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
+        result = table.percent_rank("over (partition by id order by v asc)", "id, v").order("id").fetchall()
         expected = [
             (1, 1, 0.0),
             (1, 1, 0.0),
@@ -90,11 +88,11 @@ class TestRAPIWindows:
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_cume_dist(self, table):
-        result = table.cume_dist("over ()").execute().fetchall()
+        result = table.cume_dist("over ()").fetchall()
         expected = [1.0] * 8
         assert len(result) == len(expected)
         assert all(r[0] == e for r, e in zip(result, expected, strict=False))
-        result = table.cume_dist("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
+        result = table.cume_dist("over (partition by id order by v asc)", "id, v").order("id").fetchall()
         expected = [
             (1, 1, 2 / 3),
             (1, 1, 2 / 3),
@@ -109,17 +107,14 @@ class TestRAPIWindows:
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_ntile(self, table):
-        result = table.n_tile("over (order by v)", 3, "v").execute().fetchall()
+        result = table.n_tile("over (order by v)", 3, "v").fetchall()
         expected = [(-1, 1), (1, 1), (1, 1), (2, 2), (5, 2), (10, 2), (11, 3), (None, 3)]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_lag(self, table):
         result = (
-            table.lag("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
-            .order("id")
-            .execute()
-            .fetchall()
+            table.lag("v", "over (partition by id order by t asc)", projected_columns="id, v, t").order("id").fetchall()
         )
         expected = [
             (1, 1, 1, None),
@@ -136,7 +131,6 @@ class TestRAPIWindows:
         result = (
             table.lag("v", "over (partition by id order by t asc)", default_value="-1", projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -154,7 +148,6 @@ class TestRAPIWindows:
         result = (
             table.lag("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -174,7 +167,6 @@ class TestRAPIWindows:
         result = (
             table.lead("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -192,7 +184,6 @@ class TestRAPIWindows:
         result = (
             table.lead("v", "over (partition by id order by t asc)", default_value="-1", projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -210,7 +201,6 @@ class TestRAPIWindows:
         result = (
             table.lead("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -230,7 +220,6 @@ class TestRAPIWindows:
         result = (
             table.first_value("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -254,7 +243,6 @@ class TestRAPIWindows:
                 projected_columns="id, v, t",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -274,7 +262,6 @@ class TestRAPIWindows:
         result = (
             table.nth_value("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -292,7 +279,6 @@ class TestRAPIWindows:
         result = (
             table.nth_value("v", "over (partition by id order by t asc)", offset=4, projected_columns="id, v, t")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -313,7 +299,6 @@ class TestRAPIWindows:
         result = (
             table.any_value("v", window_spec="over (partition by id order by t asc)", projected_columns="id")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 1), (2, 11), (2, 11), (3, 5), (3, 5), (3, 5)]
@@ -322,10 +307,7 @@ class TestRAPIWindows:
 
     def test_arg_max(self, table):
         result = (
-            table.arg_max("t", "v", window_spec="over (partition by id)", projected_columns="id")
-            .order("id")
-            .execute()
-            .fetchall()
+            table.arg_max("t", "v", window_spec="over (partition by id)", projected_columns="id").order("id").fetchall()
         )
         expected = [(1, 3), (1, 3), (1, 3), (2, -1), (2, -1), (3, -2), (3, -2), (3, -2)]
         assert len(result) == len(expected)
@@ -333,10 +315,7 @@ class TestRAPIWindows:
 
     def test_arg_min(self, table):
         result = (
-            table.arg_min("t", "v", window_spec="over (partition by id)", projected_columns="id")
-            .order("id")
-            .execute()
-            .fetchall()
+            table.arg_min("t", "v", window_spec="over (partition by id)", projected_columns="id").order("id").fetchall()
         )
         expected = [(1, 2), (1, 2), (1, 2), (2, 4), (2, 4), (3, 0), (3, 0), (3, 0)]
         assert len(result) == len(expected)
@@ -353,7 +332,6 @@ class TestRAPIWindows:
                     projected_columns="id",
                 )
                 .order("id")
-                .execute()
                 .fetchall()
             )
         ]
@@ -369,7 +347,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 0), (2, 11), (2, 10), (3, 5), (3, 5), (3, 5)]
@@ -384,7 +361,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 3), (2, 11), (2, 11), (3, 5), (3, -1), (3, -1)]
@@ -399,7 +375,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 0), (1, 2), (2, 11), (2, 1), (3, 5), (3, -6), (3, -6)]
@@ -407,24 +382,7 @@ class TestRAPIWindows:
         assert all(r == e for r, e in zip(result, expected, strict=False))
 
     def test_bitstring_agg(self, table):
-        with pytest.raises(duckdb.BinderException, match="Could not retrieve required statistics"):
-            table.bitstring_agg(
-                "v",
-                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
-                projected_columns="id",
-            ).order("id").execute().fetchall()
-        result = (
-            table.bitstring_agg(
-                "v",
-                min=-1,
-                max=11,
-                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
-                projected_columns="id",
-            )
-            .order("id")
-            .execute()
-            .fetchall()
-        )
+        window_spec = "over (partition by id order by t asc rows between unbounded preceding and current row)"
         expected = [
             (1, "0010000000000"),
             (1, "0010000000000"),
@@ -435,14 +393,20 @@ class TestRAPIWindows:
             (3, "1000001000000"),
             (3, "1000001000000"),
         ]
-        assert len(result) == len(expected)
-        assert all(r == e for r, e in zip(result, expected, strict=False))
+        # Without explicit bounds the binder takes min and max from the column statistics.
+        result = table.bitstring_agg("v", window_spec=window_spec, projected_columns="id").order("id").fetchall()
+        assert result == expected
+        result = (
+            table.bitstring_agg("v", min=-1, max=11, window_spec=window_spec, projected_columns="id")
+            .order("id")
+            .fetchall()
+        )
+        assert result == expected
 
     def test_bool_and(self, table):
         result = (
             table.bool_and("t::BOOL", window_spec="over (partition by id)", projected_columns="id")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, True), (1, True), (1, True), (2, True), (2, True), (3, False), (3, False), (3, False)]
@@ -453,7 +417,6 @@ class TestRAPIWindows:
         result = (
             table.bool_or("t::BOOL", window_spec="over (partition by id)", projected_columns="id")
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, True), (1, True), (1, True), (2, True), (2, True), (3, True), (3, True), (3, True)]
@@ -468,7 +431,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
@@ -484,7 +446,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, 0.21), (1, 0.38), (1, 0.25), (2, 10.45), (2, 5.24), (3, 9.87), (3, 11.59), (3, 9.92)]
@@ -500,7 +461,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, 0.21), (1, 0.75), (1, 0.75), (2, 10.45), (2, 10.49), (3, 9.87), (3, 23.19), (3, 29.75)]
@@ -519,7 +479,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -543,7 +502,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -567,7 +525,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 2), (2, 11), (2, 11), (3, 5), (3, 5), (3, 5)]
@@ -582,7 +539,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 1), (2, 11), (2, 10), (3, 5), (3, -1), (3, -1)]
@@ -597,7 +553,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 1), (1, 2), (2, 11), (2, 110), (3, 5), (3, -5), (3, -5)]
@@ -613,7 +568,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, "e"), (1, "e/h"), (1, "e/h/l"), (2, "o"), (2, "o/l"), (3, "wor"), (3, "wor/,"), (3, "wor/,/ld")]
@@ -628,7 +582,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1), (1, 2), (1, 4), (2, 11), (2, 21), (3, 5), (3, 4), (3, 4)]
@@ -643,7 +596,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 1.0), (1, 1.0), (1, 1.0), (2, 11.0), (2, 10.5), (3, 5.0), (3, 2.0), (3, 2.0)]
@@ -658,7 +610,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 2), (1, 2), (1, 1), (2, 10), (2, 10), (3, None), (3, -1), (3, -1)]
@@ -673,7 +624,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 2.0), (1, 1.5), (1, 1.0), (2, 10.0), (2, 10.5), (3, None), (3, -1.0), (3, 2.0)]
@@ -688,7 +638,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [
@@ -713,7 +662,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [(1, 2), (1, 1), (1, 1), (2, 10), (2, 10), (3, None), (3, -1), (3, -1)]
@@ -727,7 +675,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         )
         expected = [
@@ -752,7 +699,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, 0.0), (1, 0.5), (1, 0.47), (2, 0.0), (2, 0.5), (3, None), (3, 0.0), (3, 3.0)]
@@ -769,7 +715,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, None), (1, 0.71), (1, 0.58), (2, None), (2, 0.71), (3, None), (3, None), (3, 4.24)]
@@ -785,7 +730,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, 0.0), (1, 0.25), (1, 0.22), (2, 0.0), (2, 0.25), (3, None), (3, 0.0), (3, 9.0)]
@@ -802,7 +746,6 @@ class TestRAPIWindows:
                 projected_columns="id",
             )
             .order("id")
-            .execute()
             .fetchall()
         ]
         expected = [(1, None), (1, 0.5), (1, 0.33), (2, None), (2, 0.5), (3, None), (3, None), (3, 18.0)]

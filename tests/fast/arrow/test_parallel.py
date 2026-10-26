@@ -24,8 +24,8 @@ class TestArrowParallel:
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data], ["a"]).to_batches(10000))
         rel = duckdb_conn.from_arrow(tbl)
         # Also test multiple reads
-        assert rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000000
-        assert rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000000
+        assert rel.aggregate("(count(a))::INT").fetchall()[0][0] == 1000000
+        assert rel.aggregate("(count(a))::INT").fetchall()[0][0] == 1000000
 
     def test_parallel_types_and_different_batches(self, duckdb_cursor):
         if not can_run:
@@ -43,7 +43,7 @@ class TestArrowParallel:
             userdata_parquet_table2 = pyarrow.Table.from_batches(userdata_parquet_table.to_batches(i))
             rel = duckdb_conn.from_arrow(userdata_parquet_table2)
             result = rel.filter("first_name='Jose' and salary > 134708.82").aggregate("count(*)")
-            assert result.execute().fetchone()[0] == 4
+            assert result.fetchall()[0][0] == 4
 
     def test_parallel_fewer_batches_than_threads(self, duckdb_cursor):
         if not can_run:
@@ -56,4 +56,4 @@ class TestArrowParallel:
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data], ["a"]).to_batches(2))
         rel = duckdb_conn.from_arrow(tbl)
         # Also test multiple reads
-        assert rel.aggregate("(count(a))::INT").execute().fetchone()[0] == 1000
+        assert rel.aggregate("(count(a))::INT").fetchall()[0][0] == 1000

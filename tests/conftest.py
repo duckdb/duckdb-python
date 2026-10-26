@@ -174,6 +174,13 @@ def spark():
     return spark.session.builder.appName("pyspark").getOrCreate()
 
 
+@pytest.fixture(autouse=True)
+def release_default_connection():
+    yield
+    # An open result holds its connection, so one left on the shared default connection would fail later tests.
+    duckdb.default_connection().abort()
+
+
 @pytest.fixture
 def duckdb_cursor():
     connection = duckdb.connect("")

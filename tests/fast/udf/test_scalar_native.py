@@ -195,10 +195,7 @@ class TestNativeUDF:
         """
         )
         # added extra column to the struct
-        assert len(res.fetchone()[0].keys()) == 3
-        # TODO: this is needed, otherwise the old transaction is still active when we try  # noqa: TD002, TD003
-        #  to start a new transaction inside of 'create_function', which means the call would fail
-        res.fetchall()
+        assert len(res.fetchall()[0][0].keys()) == 3
 
         def swap_keys(dict):
             reversed_keys = list(dict.keys())[::-1]  # Reverse the keys
@@ -251,6 +248,6 @@ class TestNativeUDF:
 
         duckdb_cursor.create_function("example", example, return_type=return_type)
 
-        (res,) = duckdb_cursor.sql("SELECT example()").fetchone()
+        (res,) = duckdb_cursor.sql("SELECT example()").fetchall()[0]
         for key, val in res.items():
             assert key == val

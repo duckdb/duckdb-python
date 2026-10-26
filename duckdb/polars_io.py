@@ -212,9 +212,10 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
     if node_type == "Float":
         # Direct float literals
         float_literal = tree[node_type]
-        assert isinstance(float_literal, (float, int, str)), (
-            f"The value of a Float should be a float, int or str but got {type(float_literal)}"
-        )
+        if not isinstance(float_literal, (float, int, str)):
+            # JSON has no inf/nan, polars serializes them as null
+            msg = f"The value of a Float should be a float, int or str but got {type(float_literal)}"
+            raise NotImplementedError(msg)
         return str(float_literal)
 
     if node_type == "Function":
@@ -290,12 +291,27 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             )
             return str(Decimal(decimal_value[0]) / Decimal(10 ** decimal_value[-1]))
 
-        # Datetime with microseconds since epoch
+        # Datetime: [value since epoch, time unit, time zone]
         if dtype.startswith("{'Datetime'") or dtype == "Datetime":
-            micros = value["Datetime"]
-            assert isinstance(micros, list), f"A {dtype} should be a one member list but got {type(micros)}"
-            dt_timestamp = datetime.datetime.fromtimestamp(micros[0] / 1_000_000, tz=datetime.timezone.utc)
-            return f"'{dt_timestamp!s}'::TIMESTAMP"
+            datetime_value = value["Datetime"]
+            assert isinstance(datetime_value, list), f"A {dtype} should be a list but got {type(datetime_value)}"
+            epoch_value = datetime_value[0]
+            time_unit = datetime_value[1] if len(datetime_value) > 1 else "Microseconds"
+            time_zone = datetime_value[2] if len(datetime_value) > 2 else None
+            assert isinstance(epoch_value, int), f"A {dtype} value should be an int but got {type(epoch_value)}"
+            if time_unit == "Milliseconds":
+                micros = epoch_value * 1_000
+            elif time_unit == "Microseconds":
+                micros = epoch_value
+            else:
+                # A TIMESTAMP literal cannot hold nanoseconds, let polars apply the filter
+                msg = f"Unsupported datetime time unit {time_unit!r}"
+                raise NotImplementedError(msg)
+            dt_timestamp = datetime.datetime(1970, 1, 1) + datetime.timedelta(microseconds=micros)
+            if time_zone is None:
+                return f"'{dt_timestamp!s}'::TIMESTAMP"
+            # The value is UTC; compare as an instant so the session TimeZone does not shift it
+            return f"'{dt_timestamp!s}+00'::TIMESTAMPTZ"
 
         # Match simple numeric/boolean types
         if dtype in (
@@ -313,6 +329,10 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
             "Float64",
             "Boolean",
         ):
+            if value[dtype] is None:
+                # JSON has no inf/nan, polars serializes them as null
+                msg = f"Non-finite {dtype} literals cannot be pushed down"
+                raise NotImplementedError(msg)
             return str(value[dtype])
 
         # Time type
@@ -390,11 +410,16 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             relation_final = relation_final.filter(duck_predicate)
         results = relation_final.to_arrow_reader() if batch_size is None else relation_final.to_arrow_reader(batch_size)
 
-        for record_batch in iter(results.read_next_batch, None):
-            if fallback_predicate is not None:
-                # We have a predicate, but did not manage to push it down, we fallback here
-                yield pl.from_arrow(record_batch).filter(fallback_predicate)  # type: ignore[arg-type,misc,unused-ignore]
-            else:
-                yield pl.from_arrow(record_batch)  # type: ignore[misc,unused-ignore]
+        # The reader holds the connection until it is read to the end or closed, so a source polars stops reading
+        # early must close it, or the connection stays refused
+        try:
+            for record_batch in iter(results.read_next_batch, None):
+                if fallback_predicate is not None:
+                    # We have a predicate, but did not manage to push it down, we fallback here
+                    yield pl.from_arrow(record_batch).filter(fallback_predicate)  # type: ignore[arg-type,misc,unused-ignore]
+                else:
+                    yield pl.from_arrow(record_batch)  # type: ignore[misc,unused-ignore]
+        finally:
+            results.close()
 
     return register_io_source(source_generator, schema=schema, is_pure=True)

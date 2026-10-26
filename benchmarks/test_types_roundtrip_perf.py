@@ -27,6 +27,8 @@ TYPE_EXPR = {
     "date": "DATE '2020-01-01' + (i % 3650)::INTEGER",
     "bool": "(i % 2 = 0)",
     "timestamp": "TIMESTAMP '2020-01-01' + (i * INTERVAL 1 SECOND)",
+    "time": "TIME '00:00:00' + to_seconds(i % 86400)",
+    "interval": "to_seconds(i)",
     "decimal64": "((i::DECIMAL(18, 3)) / 1000)",
     "decimal128": "((i * 1.5)::DECIMAL(28, 6))",
     "hugeint": "(i::HUGEINT * 1000000000000)",

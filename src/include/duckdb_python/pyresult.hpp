@@ -8,9 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb_python/numpy/numpy_result_conversion.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb.hpp"
-#include "duckdb/main/chunk_scan_state.hpp"
+#include "duckdb_python/engine/connection.hpp"
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/dataframe.hpp"
@@ -19,10 +21,40 @@ namespace duckdb {
 
 struct DuckDBPyResult {
 public:
-	explicit DuckDBPyResult(unique_ptr<QueryResult> result);
+	static constexpr idx_t DEFAULT_ARROW_BATCH_SIZE = 131072;
+
+public:
+	//! names_override is the result's own names where they differ from the submitted statement's, which they do
+	//! for a statement the client wrote over rows it already held
+	explicit DuckDBPyResult(shared_ptr<engine::Result> result, vector<Identifier> names_override = {});
 	~DuckDBPyResult();
 
 public:
+	const shared_ptr<engine::Result> &EngineResult() const {
+		return result;
+	}
+	//! Pins the result for one call of the relational surface and refuses a second call that overlaps it, as the
+	//! connection refuses a second call of its own. The DB-API surface is serialised by the connection lock instead.
+	class Use {
+	public:
+		explicit Use(DuckDBPyResult &result);
+		~Use();
+
+		Use(const Use &) = delete;
+		Use &operator=(const Use &) = delete;
+
+		engine::Result &operator*() const {
+			return *pinned;
+		}
+		engine::Result *operator->() const {
+			return pinned.get();
+		}
+
+	private:
+		DuckDBPyResult &result;
+		//! Held for the call, so a close from another call cannot free the result under this one
+		shared_ptr<engine::Result> pinned;
+	};
 	Optional<nb::tuple> Fetchone();
 
 	nb::list Fetchmany(idx_t size);
@@ -31,7 +63,7 @@ public:
 
 	nb::dict FetchNumpy();
 
-	nb::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1,
+	nb::dict FetchNumpyInternal(bool chunked = false, idx_t vectors_per_chunk = 1,
 	                            std::unique_ptr<NumpyResultConversion> conversion = nullptr);
 
 	PandasDataFrame FetchDF(bool date_as_object);
@@ -43,21 +75,33 @@ public:
 	nb::dict FetchTF();
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
-	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = 1000000);
-	nb::object FetchArrowCapsule(idx_t rows_per_batch = 1000000);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
+	nb::object FetchArrowCapsule(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
+	static void CheckBatchSize(idx_t rows_per_batch);
 
 	static nb::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);
 
 	void Close();
-
-	bool IsClosed() const;
+	//! Runs the statement to its end without reading its rows, then closes the result
+	void Complete();
+	//! Whether the statement may change a database, nextval included, and still has work left to run
+	bool HasWritesToRun() const;
 
 	unique_ptr<DataChunk> FetchChunk();
+	//! Every row the result still holds, the rows buffered from a partial fetch first; the result is empty
+	//! afterwards. Call with the GIL held.
+	unique_ptr<ColumnDataCollection> TakeRows(const engine::InterruptCheck &check);
+	//! The names the Python layer reports, which are names_override when that is set.
+	const vector<Identifier> &ResultNames() const;
+	//! The rows a completed DML statement changed, -1 otherwise
+	int64_t Rowcount();
+	//! The accumulated count of an executemany, which spans several results
+	void OverrideRowcount(int64_t rowcount);
 
 	vector<string> GetNames();
-	const vector<LogicalType> &GetTypes();
+	const vector<LogicalType> &GetTypes() const;
 
-	ClientProperties GetClientProperties();
+	const ClientProperties &GetClientProperties() const;
 
 private:
 	void FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
@@ -65,38 +109,34 @@ private:
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const nb::handle &o);
 
 	void ConvertDateTimeTypes(PandasDataFrame &df, bool date_as_object) const;
-	//! The names the Python layer reports, see the definition for why this is not always the result's own.
-	const vector<Identifier> &ResultNames() const;
-	unique_ptr<DataChunk> FetchNext(QueryResult &result);
-	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+	bool Empty() const {
+		return !result;
+	}
+	//! Flat vectors, for the row fetch
+	unique_ptr<DataChunk> FetchNext();
+	unique_ptr<DataChunk> FetchNextRaw();
+	unique_ptr<DataChunk> TakeBufferedRows();
 	std::unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
-
-	//! Re-feed an already-MATERIALIZED result (a ColumnDataCollection, e.g. from
-	//! rel.execute()) back through the engine on the user's own context. The eager
-	//! variant installs a PhysicalArrowCollector to produce an ArrowQueryResult
-	//! (parallel); the stream variant produces a lazy StreamQueryResult that co-owns
-	//! the context (so it survives `del conn`). Never call these on a StreamQueryResult:
-	//! a lazy result already has a live context and is converted/wrapped directly.
-	void PromoteMaterializedToArrow(idx_t batch_size);
 
 	template <typename T>
 	T RunWithArrowSchema(const std::function<T(const ArrowSchema &)> &fun, bool dedup_col_names);
-	duckdb::pyarrow::Table MaterializedResultToArrowTable(const ArrowSchema &arrow_schema, idx_t rows_per_batch);
+	//! The stream's private data owns the result, and its callbacks run without the GIL.
 	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch);
 
 private:
+	shared_ptr<engine::Result> result;
+	//! Set while a call of the relational surface runs on this result
+	atomic<bool> in_use {false};
+	int64_t rowcount_override = -1;
 	idx_t chunk_offset = 0;
-
-	unique_ptr<QueryResult> result;
-	//! Set only when the result was re-bound (promotion to Arrow de-duplicates column names
-	//! and core exposes no setter), so the original names survive. Empty means "use result's".
+	//! Set only for a result the client submitted over rows of an earlier one, whose names the scan deduplicated
+	//! and whose originals the caller carries here. Empty means the result's own names.
 	vector<Identifier> names_override;
 	unique_ptr<DataChunk> current_chunk;
 	// Holds the categories of Categorical/ENUM types
 	unordered_map<idx_t, nb::list> categories;
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, nb::object> categories_type;
-	bool result_closed = false;
 };
 
 } // namespace duckdb

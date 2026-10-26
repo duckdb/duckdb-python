@@ -23,6 +23,16 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
+def schema_join():
+    con = duckdb.connect()
+    con.execute("create schema s1")
+    con.execute("create table s1.t1 as select 1 as id, 2 as x")
+    con.execute("create table t2 as select 1 as id, 3 as y")
+    yield con.table("s1.t1").join(con.table("t2"), "t1.id = t2.id")
+    con.close()
+
+
+@pytest.fixture
 def filter_rel():
     con = duckdb.connect()
     rel = con.sql(
@@ -109,10 +119,10 @@ class TestExpression:
             rel.select(CoalesceOperator())
 
         rel4 = rel.select(CoalesceOperator(ConstantExpression(None)))
-        assert rel4.fetchone() == (None,)
+        assert rel4.fetchall()[0] == (None,)
 
         rel5 = rel.select(CoalesceOperator(ConstantExpression(42)))
-        assert rel5.fetchone() == (42,)
+        assert rel5.fetchall()[0] == (42,)
 
         exprtest = con.table("exprtest")
         rel6 = exprtest.select(CoalesceOperator(ColumnExpression("a")))
@@ -163,26 +173,28 @@ class TestExpression:
         res = rel7.fetchall()
         assert res == [(42,), (43,), (1,), (45,)]
 
-        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 42)).sort("a")
+        # Changed: a bare string operand is a value; the columns are named.
+        a, b = ColumnExpression("a"), ColumnExpression("b")
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator(a, b) == 42)).sort("a")
         res = rel7.fetchall()
         assert res == [(None, 1), (42, 10)]
 
         rel7 = exprtest.filter(
-            (CoalesceOperator("a", "b") == 1) | (CoalesceOperator("a", "b") == 43) | (CoalesceOperator("a", "b") == 45)
+            (CoalesceOperator(a, b) == 1) | (CoalesceOperator(a, b) == 43) | (CoalesceOperator(a, b) == 45)
         ).sort("a")
         res = rel7.fetchall()
         assert res == [(None, 1), (43, 100), (45, 0)]
 
         rel7 = exprtest.filter(
-            (CoalesceOperator("a", "b") == 1)
-            | (CoalesceOperator("a", "b") == 42)
-            | (CoalesceOperator("a", "b") == 43)
-            | (CoalesceOperator("a", "b") == 45)
+            (CoalesceOperator(a, b) == 1)
+            | (CoalesceOperator(a, b) == 42)
+            | (CoalesceOperator(a, b) == 43)
+            | (CoalesceOperator(a, b) == 45)
         ).sort("a")
         res = rel7.fetchall()
         assert res == [(None, 1), (42, 10), (43, 100), (45, 0)]
 
-        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator("a", "b") == 1)).sort("a")
+        rel7 = exprtest.filter((ColumnExpression("b") == 1) | (CoalesceOperator(a, b) == 1)).sort("a")
         res = rel7.fetchall()
         assert res == [(None, 1)]
 
@@ -635,6 +647,103 @@ class TestExpression:
         res = rel2.fetchall()
         assert res == [(2,)]
 
+    @pytest.mark.parametrize(
+        "excluded",
+        [
+            ColumnExpression("b", "id"),
+        ],
+    )
+    def test_star_expression_exclude_qualified(self, excluded):
+        con = duckdb.connect()
+        a = con.sql("select 1 as id, 10 as x").set_alias("a")
+        b = con.sql("select 1 as id, 20 as y").set_alias("b")
+        joined = a.join(b, "a.id = b.id")
+
+        rel = joined.select(StarExpression(exclude=[excluded]))
+        assert rel.columns == ["id", "x", "y"]
+        assert rel.fetchall() == [(1, 10, 20)]
+
+    # Changed: a name is never split on dots; a dotted name is one column.
+    @pytest.mark.parametrize("excluded", ["b.id", ColumnExpression("b.id")])
+    def test_star_expression_exclude_takes_a_dotted_name_whole(self, excluded):
+        con = duckdb.connect()
+        a = con.sql("select 1 as id, 10 as x").set_alias("a")
+        b = con.sql("select 1 as id, 20 as y").set_alias("b")
+        joined = a.join(b, "a.id = b.id")
+
+        assert str(StarExpression(exclude=[excluded])) == '* EXCLUDE ("b.id")'
+        with pytest.raises(duckdb.BinderException, match="in EXCLUDE list not found"):
+            joined.select(StarExpression(exclude=[excluded]))
+
+    @pytest.mark.parametrize(
+        ("excluded", "columns"),
+        [
+            (ColumnExpression("s1", "t1", "id"), ["x", "id", "y"]),
+            (ColumnExpression("memory", "s1", "t1", "id"), ["x", "id", "y"]),
+            (ColumnExpression("t2", "id"), ["id", "x", "y"]),
+        ],
+    )
+    def test_star_expression_exclude_schema_and_catalog(self, schema_join, excluded, columns):
+        assert schema_join.select(StarExpression(exclude=[excluded])).columns == columns
+
+    @pytest.mark.parametrize(
+        "excluded",
+        [
+            ColumnExpression("zz", "id"),
+            # Changed: a name is never split on dots; a dotted name is one column.
+            ColumnExpression("memory.s1.t1.id"),
+            "memory.s1.t1.id",
+        ],
+    )
+    def test_star_expression_exclude_unknown_qualifier(self, schema_join, excluded):
+        with pytest.raises(duckdb.BinderException, match="in EXCLUDE list not found"):
+            schema_join.select(StarExpression(exclude=[excluded]))
+
+    def test_star_expression_exclude_ignores_an_unknown_schema(self, schema_join):
+        excluded = ColumnExpression("s9", "t1", "id")
+        assert schema_join.select(StarExpression(exclude=[excluded])).columns == ["x", "id", "y"]
+
+    @pytest.mark.parametrize("names", [("c", "s", "t", "col", "x")])
+    def test_star_expression_exclude_name_part_count(self, names):
+        with pytest.raises(ValueError, match="1 to 4 name parts"):
+            StarExpression(exclude=[ColumnExpression(*names)])
+
+    def test_column_expression_takes_at_least_one_name(self):
+        # Changed: a column without a name is refused where it is built.
+        with pytest.raises(ValueError, match="cannot be empty"):
+            ColumnExpression()
+
+    def test_star_expression_exclude_takes_one_dotted_part_whole(self):
+        # Changed: a name is never split on dots; a dotted name is one column.
+        assert str(StarExpression(exclude=[ColumnExpression("c.s.t.col.x")])) == '* EXCLUDE ("c.s.t.col.x")'
+
+    @pytest.mark.parametrize(
+        ("dotted", "parts"),
+        [
+            ("a", ("a",)),
+            ("a.b.c.d", ("a", "b", "c", "d")),
+            ("a.b.c.d.e", ("a", "b", "c", "d", "e")),
+            ('"a.b".c', ("a.b", "c")),
+        ],
+    )
+    def test_column_expression_keeps_every_name_part(self, dotted, parts):
+        # Changed: a name is never split on dots; a path is given in parts.
+        assert str(ColumnExpression(dotted)) == '"' + dotted.replace('"', '""') + '"'
+        assert str(ColumnExpression(*parts)) == ".".join('"' + part + '"' for part in parts)
+
+    @pytest.mark.parametrize("column", ["s.a.b.c", "t.s.a.b.c"])
+    def test_column_expression_nested_struct_path(self, column):
+        con = duckdb.connect()
+        rel = con.sql("select {'a': {'b': {'c': 1}}, 'b': {'c': 2}} as s").set_alias("t")
+        # Changed: a name is never split on dots; a path is given in parts.
+        assert rel.select(ColumnExpression(*column.split("."))).fetchall() == [(1,)]
+
+    def test_column_expression_quoted_dot(self):
+        con = duckdb.connect()
+        rel = con.sql('select 1 as "b.a", 2 as b')
+        # Changed: a name is never split on dots; it is given as it is.
+        assert rel.select(ColumnExpression("b.a")).fetchall() == [(1,)]
+
     def test_struct_expression(self):
         con = duckdb.connect()
 
@@ -690,7 +799,10 @@ class TestExpression:
                 ) tbl(text, start, "end")
             """
         )
-        expr = FunctionExpression("array_slice", "start", "text", "end")
+        # Changed: a bare string operand is a value; the columns are named.
+        expr = FunctionExpression(
+            "array_slice", ColumnExpression("start"), ColumnExpression("text"), ColumnExpression("end")
+        )
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [("tes",), ("his is",), ("di",)]
@@ -710,7 +822,9 @@ class TestExpression:
         )
 
         rel = con.table("tbl")
-        expr = FunctionExpression("||", FunctionExpression("||", "c0", "c1"), "c2")
+        # Changed: a bare string operand is a value; the columns are named.
+        c0, c1, c2 = ColumnExpression("c0"), ColumnExpression("c1"), ColumnExpression("c2")
+        expr = FunctionExpression("||", FunctionExpression("||", c0, c1), c2)
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [("abc",), ("def",), ("ghi",)]
@@ -727,11 +841,13 @@ class TestExpression:
                 ) tbl(text)
             """
         )
-        expr = FunctionExpression("first", "text")
-        with pytest.raises(
-            duckdb.BinderException, match="Binder Error: Aggregates cannot be present in a Project relation!"
-        ):
-            rel.select(expr)
+        # A projection may hold an aggregate; the column is named, since a bare string is a value.
+        expr = FunctionExpression("first", ColumnExpression("text"))
+        expected = con.execute(
+            "SELECT first(text) FROM (VALUES ('test'), ('this is a long string'), ('medium length')) tbl(text)"
+        ).fetchall()
+        assert rel.select(expr).fetchall() == expected
+        assert con.sql("SELECT 1 AS x").project("sum(x) AS total").fetchall() == [(1,)]
 
     def test_case_expression(self):
         con = duckdb.connect()
@@ -813,7 +929,8 @@ class TestExpression:
     def test_struct_column_expression(self):
         con = duckdb.connect()
         rel = con.sql("select {'l': 1, 'ee': 33, 't': 7} as leet")
-        expr = ColumnExpression("leet.ee")
+        # Changed: a name is never split on dots; a path is given in parts.
+        expr = ColumnExpression("leet", "ee")
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(33,)]
@@ -841,7 +958,8 @@ class TestExpression:
         expr = ~expr
         # AND operator
 
-        expr = expr & (ConstantExpression("b") != "b")
+        # Changed: a bare string operand is a value; the columns are named.
+        expr = expr & (ConstantExpression("b") != ColumnExpression("b"))
         rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
@@ -969,18 +1087,18 @@ class TestExpression:
         con = duckdb.connect()
         rel = con.sql("select * from range(1000000) t(a)")
         count = FunctionExpression("count", "a").cast("int")
-        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
-        assert rel.aggregate([count]).execute().fetchone()[0] == 1000000
+        assert rel.aggregate([count]).fetchall()[0][0] == 1000000
+        assert rel.aggregate([count]).fetchall()[0][0] == 1000000
 
     def test_aggregate_error(self):
         con = duckdb.connect()
 
         # Not necessarily an error, but even non-aggregates are accepted
         rel = con.sql("select * from values (5) t(a)")
-        res = rel.aggregate(["a"]).execute().fetchone()[0]
+        res = rel.aggregate(["a"]).fetchall()[0][0]
         assert res == 5
 
-        res = rel.aggregate([5]).execute().fetchone()[0]
+        res = rel.aggregate([5]).fetchall()[0][0]
         assert res == 5
 
         class MyClass:
@@ -997,4 +1115,4 @@ class TestExpression:
             duckdb.InvalidInputException,
             match="Please provide either a string or list of Expression objects, not <class 'int'>",
         ):
-            rel.aggregate(5).execute().fetchone()
+            rel.aggregate(5).fetchall()[0]

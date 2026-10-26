@@ -29,6 +29,43 @@ class TestParameterList:
         res = con.execute("select isnan(cast(? as double))", (float("nan"),))
         assert res.fetchone()[0]
 
+    @pytest.mark.parametrize(
+        ("param", "query"),
+        [
+            ([float("nan")], "select isnan(?[1])"),
+            ({"a": float("nan")}, "select isnan(?.a)"),
+            ({"key": ["k"], "value": [float("nan")]}, "select isnan(?['k'])"),
+            ([[1.0, float("nan")]], "select isnan(?[1][2])"),
+            ([{"a": [float("nan")]}], "select isnan(?[1].a[1])"),
+        ],
+    )
+    def test_nested_nan_param(self, param, query):
+        con = duckdb.connect()
+        assert con.execute(query, [param]).fetchone() == (True,)
+
+    @pytest.mark.parametrize(
+        ("value", "query"),
+        [
+            (duckdb.Value(float("nan"), duckdb.sqltype("DOUBLE")), "select isnan(?)"),
+            (duckdb.Value({"k": float("nan")}, duckdb.sqltype("MAP(VARCHAR, DOUBLE)")), "select isnan(?['k'])"),
+            (duckdb.Value({"a": float("nan")}, duckdb.sqltype("STRUCT(a DOUBLE)")), "select isnan(?.a)"),
+            (duckdb.Value([float("nan"), 1.0], duckdb.sqltype("DOUBLE[2]")), "select isnan(?[1])"),
+            (duckdb.Value({float("nan"): 1}, duckdb.sqltype("MAP(DOUBLE, INTEGER)")), "select isnan(map_keys(?)[1])"),
+            (
+                duckdb.Value((float("nan"), [float("nan")]), duckdb.sqltype("STRUCT(a DOUBLE, b DOUBLE[])")),
+                "select isnan(?.b[1])",
+            ),
+        ],
+    )
+    def test_nan_typed_value_param(self, value, query):
+        con = duckdb.connect()
+        assert con.execute(query, [value]).fetchone() == (True,)
+
+    def test_nested_nan_typed_param(self):
+        con = duckdb.connect()
+        value = duckdb.Value((float("nan"), 1.0), duckdb.sqltype("STRUCT(a DOUBLE, b DOUBLE)"))
+        assert con.execute("select isnan(?.a)", [value]).fetchone() == (True,)
+
     def test_string_parameter(self, duckdb_cursor):
         conn = duckdb.connect()
         conn.execute("create table orders (o_orderdate date)")

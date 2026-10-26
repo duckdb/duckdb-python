@@ -2,7 +2,6 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.functions import (
     any_value,
     approx_count_distinct,
@@ -89,13 +88,11 @@ class TestDataFrameGroupBy:
 
         df2 = df.groupBy("department").mean("salary").sort("department")
         res = df2.collect()
-        expected_res_str = (
-            "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', "
-            "mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
+        assert (
+            str(res)
+            == "[Row(department='Finance', avg(salary)=87750.0), Row(department='Marketing', avg(salary)=85500.0), "
+            "Row(department='Sales', avg(salary)=85666.66666666667)]"
         )
-        if USE_ACTUAL_SPARK:
-            expected_res_str = expected_res_str.replace("mean(", "avg(")
-        assert str(res) == expected_res_str
 
         df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()
@@ -299,8 +296,102 @@ class TestDataFrameGroupBy:
     def test_group_by_skewness(self, spark):
         df = spark.createDataFrame([[1, "A"], [1, "A"], [2, "A"]], ["c", "group"])
         res = df.groupBy("group").agg(skewness(df.c).alias("v")).collect()
-        # TODO: Why is this different?  # noqa: TD002, TD003
-        if USE_ACTUAL_SPARK:
-            assert pytest.approx(res[0].v) == 0.7071067811865475
-        else:
-            assert pytest.approx(res[0].v) == 1.7320508075688699
+        assert pytest.approx(res[0].v) == 0.7071067811865475
+
+
+@pytest.fixture
+def mixed(spark):
+    rows = [(1, 2, 1.5, "x", True), (1, 3, None, "y", False), (2, 5, 2.5, "x", None)]
+    return spark.createDataFrame(rows, "a int, b long, d double, s string, f boolean")
+
+
+def _sorted_tuples(df):
+    return sorted((tuple(r) for r in df.collect()), key=repr)
+
+
+class TestGroupedDataWithoutColumns:
+    @pytest.mark.parametrize(
+        ("method", "name", "x", "y"),
+        [
+            ("sum", "sum", (3, 7, 4.0), (1, 3, None)),
+            ("avg", "avg", (1.5, 3.5, 2.0), (1.0, 3.0, None)),
+            ("mean", "avg", (1.5, 3.5, 2.0), (1.0, 3.0, None)),
+            ("min", "min", (1, 2, 1.5), (1, 3, None)),
+            ("max", "max", (2, 5, 2.5), (1, 3, None)),
+        ],
+    )
+    def test_every_numeric_column(self, mixed, method, name, x, y):
+        res = getattr(mixed.groupBy("s"), method)()
+        assert res.columns == ["s", f"{name}(a)", f"{name}(b)", f"{name}(d)"]
+        assert _sorted_tuples(res) == [("x", *x), ("y", *y)]
+
+    def test_keys_are_aggregated_too(self, mixed):
+        res = mixed.groupBy("a").sum()
+        assert res.columns == ["a", "sum(a)", "sum(b)", "sum(d)"]
+        assert _sorted_tuples(res) == [(1, 2, 5, 1.5), (2, 2, 5, 2.5)]
+        assert mixed.groupBy("A").max().columns == ["A", "max(a)", "max(b)", "max(d)"]
+
+    def test_without_keys(self, mixed):
+        assert mixed.groupBy().sum().collect() == [Row(**{"sum(a)": 4, "sum(b)": 10, "sum(d)": 4.0})]
+        assert _sorted_tuples(mixed.groupBy().max()) == [(2, 5, 2.5)]
+
+
+class TestGroupByExpressions:
+    def test_expression_keys(self, spark, mixed):
+        res = mixed.groupBy(mixed.a + 1).count()
+        assert res.columns == ["(a + 1)", "count"]
+        assert _sorted_tuples(res) == [(2, 2), (3, 1)]
+        res = mixed.groupBy((col("a") * 10).alias("k")).agg(sum("b"))
+        assert res.columns == ["k", "sum(b)"]
+        assert _sorted_tuples(res) == [(10, 5), (20, 5)]
+        assert _sorted_tuples(mixed.groupBy(mixed.a + 1).sum()) == [(2, 2, 5, 1.5), (3, 2, 5, 2.5)]
+
+    @pytest.mark.parametrize("derive", ["withColumn", "filter", "select"])
+    def test_expression_keys_on_derived_frames(self, mixed, derive):
+        derived = {
+            "withColumn": lambda: mixed.withColumn("c", col("b") * 2),
+            "filter": lambda: mixed.filter(mixed.b > 0),
+            "select": lambda: mixed.select("a", "b"),
+        }[derive]()
+        res = derived.groupBy(derived.a + 1).agg(sum("b"))
+        assert res.columns == ["(a + 1)", "sum(b)"]
+        assert _sorted_tuples(res) == [(2, 5), (3, 5)]
+
+    def test_expression_keys_on_a_join(self, spark, mixed):
+        other = spark.createDataFrame([(1, "p"), (2, "q")], "a int, w string")
+        joined = mixed.join(other, "a")
+        res = joined.groupBy(joined.w, joined.s).count()
+        assert res.columns == ["w", "s", "count"]
+        assert _sorted_tuples(res) == [("p", "x", 1), ("p", "y", 1), ("q", "x", 1)]
+        assert _sorted_tuples(joined.groupBy(other.w).count()) == [("p", 2), ("q", 1)]
+
+
+class TestGroupedDataColumnNames:
+    @pytest.fixture
+    def odd_names(self, spark):
+        return spark.createDataFrame([("x", 5, 1, 2), ("x", 7, 1, 3)], ["k", "2024", "null", "my value"])
+
+    @pytest.mark.parametrize(
+        ("method", "values"),
+        [("sum", (12, 2, 5)), ("avg", (6.0, 1.0, 2.5)), ("max", (7, 1, 3)), ("min", (5, 1, 2))],
+    )
+    def test_every_numeric_column(self, odd_names, method, values):
+        res = getattr(odd_names.groupBy("k"), method)()
+        assert res.columns == ["k", f"{method}(2024)", f"{method}(null)", f"{method}(my value)"]
+        assert [tuple(r) for r in res.collect()] == [("x", *values)]
+
+    def test_named_columns(self, odd_names):
+        assert [tuple(r) for r in odd_names.groupBy("k").sum("2024").collect()] == [("x", 12)]
+        res = odd_names.groupBy("k").mean("my value")
+        assert res.columns == ["k", "avg(my value)"]
+        assert [tuple(r) for r in res.collect()] == [("x", 2.5)]
+        res = odd_names.groupBy("k").sum("MY VALUE")
+        assert res.columns == ["k", "sum(MY VALUE)"]
+        assert [tuple(r) for r in res.collect()] == [("x", 5)]
+
+    def test_global(self, odd_names):
+        res = odd_names.groupBy().sum()
+        assert res.columns == ["sum(2024)", "sum(null)", "sum(my value)"]
+        assert [tuple(r) for r in res.collect()] == [(12, 2, 5)]
+        assert odd_names.groupBy().count().collect() == [Row(count=2)]
+        assert odd_names.groupBy("k").count().columns == ["k", "count"]

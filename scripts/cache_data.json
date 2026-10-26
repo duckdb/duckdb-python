@@ -80,7 +80,8 @@
             "pandas.Int32Dtype",
             "pandas.Int64Dtype",
             "pandas.Float32Dtype",
-            "pandas.Float64Dtype"
+            "pandas.Float64Dtype",
+            "pandas.arrays"
         ],
         "required": false
     },
@@ -835,6 +836,27 @@
         "type": "attribute",
         "full_path": "polars.Decimal",
         "name": "Decimal",
+        "children": []
+    },
+    "pandas.arrays": {
+        "type": "attribute",
+        "full_path": "pandas.arrays",
+        "name": "arrays",
+        "children": [
+            "pandas.arrays.ArrowStringArray",
+            "pandas.arrays.StringArray"
+        ]
+    },
+    "pandas.arrays.ArrowStringArray": {
+        "type": "attribute",
+        "full_path": "pandas.arrays.ArrowStringArray",
+        "name": "ArrowStringArray",
+        "children": []
+    },
+    "pandas.arrays.StringArray": {
+        "type": "attribute",
+        "full_path": "pandas.arrays.StringArray",
+        "name": "StringArray",
         "children": []
     }
 }

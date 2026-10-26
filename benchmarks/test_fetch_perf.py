@@ -89,6 +89,11 @@ def test_fetchall_timestamptz(benchmark: BenchmarkFixture, con: duckdb.DuckDBPyC
     )
 
 
+def test_fetchall_timetz(benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection) -> None:
+    # TIMETZ is fetchall only: df() does not support it, so it cannot join TYPE_EXPR in the roundtrip module
+    _bench_fetchall(benchmark, con, f"SELECT TIMETZ '00:00:00+02' + to_seconds(i % 86400) FROM range({N_STR}) t(i)")
+
+
 def test_fetchall_decimal128(benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection) -> None:
     _bench_fetchall(benchmark, con, f"SELECT ((i * 1.5)::DECIMAL(28, 6)) FROM range({N_ROW}) t(i)")
 

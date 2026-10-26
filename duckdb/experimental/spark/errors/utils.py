@@ -38,6 +38,12 @@ class ErrorClassesReader:
 
         return message_template.translate(table).format(**message_parameters)
 
+    def get_sqlstate(self, error_class: str | None) -> str | None:
+        """Returns the SQLSTATE of an error class, or None when it has none."""
+        if error_class is None:
+            return None
+        return self.error_info_map.get(error_class.split(".")[0], {}).get("sqlState")
+
     def get_message_template(self, error_class: str) -> str:
         """Returns the message template for corresponding error class from error_classes.py.
 

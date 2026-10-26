@@ -6,11 +6,6 @@ namespace duckdb {
 PythonDependencyItem::PythonDependencyItem(unique_ptr<RegisteredObject> &&object) : object(std::move(object)) {
 }
 
-PythonDependencyItem::~PythonDependencyItem() { // NOLINT - cannot throw in exception
-	nb::gil_scoped_acquire gil;
-	object.reset();
-}
-
 shared_ptr<DependencyItem> PythonDependencyItem::Create(nb::object object) {
 	auto registered_object = make_uniq<RegisteredObject>(std::move(object));
 	return make_shared_ptr<PythonDependencyItem>(std::move(registered_object));

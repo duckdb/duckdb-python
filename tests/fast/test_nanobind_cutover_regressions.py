@@ -8,6 +8,8 @@ regression tests next to those suites instead.
 
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 import duckdb
@@ -91,21 +93,28 @@ class TestProjectDfKeyword:
         assert duckdb.project(self._df(), "x", connection=con).fetchall() == [(1,), (2,), (3,)]
 
     def test_df_keyword_matches_positional_semantics(self):
-        # The regression: `df=` raised TypeError (df was positional-only). It must now be accepted and
-        # behave identically to the positional-df form. With no positional projection expression both
-        # forms mirror main's Project (None for empty projection); the point is that df= is accepted.
-        via_keyword = duckdb.project(df=self._df(), groups="x")
-        via_positional = duckdb.project(self._df(), groups="x")
-        assert via_keyword is None
-        assert via_positional is None
+        # The regression: `df=` raised TypeError (df was positional-only). It must be accepted and behave
+        # identically to the positional-df form. With no projection both now refuse.
+        with pytest.raises(TypeError):
+            duckdb.project(df=self._df(), groups="x")
+        with pytest.raises(TypeError):
+            duckdb.project(self._df(), groups="x")
 
-    def test_df_keyword_does_not_raise_type_error(self):
-        try:
+    @pytest.mark.parametrize(
+        ("projection", "expected"),
+        [
+            pytest.param("x", [(1,), (2,), (3,)], id="column"),
+            pytest.param("x + 1 AS b", [(2,), (3,), (4,)], id="expression"),
+        ],
+    )
+    def test_the_frame_by_keyword_with_the_projection_positional(self, projection, expected):
+        assert duckdb.project(projection, df=self._df()).fetchall() == expected
+
+    def test_df_keyword_leaves_only_the_projection_missing(self):
+        # A TypeError may come from the missing projection, never from the keyword itself.
+        with pytest.raises(TypeError):
             duckdb.project(df=self._df())
-        except TypeError as e:  # pragma: no cover - fails pre-fix
-            pytest.fail(f"df= keyword should be accepted, got TypeError: {e}")
-        except Exception:
-            pass
+        assert duckdb.project(self._df(), "x").fetchall() == [(1,), (2,), (3,)]
 
 
 # ===========================================================================
@@ -163,8 +172,8 @@ class TestEnumDefaultRendersAsMember:
 
     def test_explain_signature_shows_enum_member(self):
         rel = duckdb.sql("select 1 i")
-        doc = type(rel).explain.__doc__ or ""
-        assert "type: ExplainType = ExplainType.STANDARD" in doc, doc
+        signature = inspect.signature(type(rel).explain)
+        assert signature.parameters["type"].default is duckdb.ExplainType.STANDARD
 
     def test_nb_signature_default_object_is_enum_member(self):
         # The embedded default objects must be the actual enum members.
@@ -199,7 +208,7 @@ class TestEnumCasterAcceptsStrIntEnum:
         con = duckdb.connect()
         con.create_function("f_str", lambda x: x, [int], int, type="native")
         con.create_function("f_enum", lambda x: x, [int], int, type=PythonUDFType.NATIVE)
-        assert con.sql("select f_str(21) + f_enum(21)").fetchone() == (42,)
+        assert con.sql("select f_str(21) + f_enum(21)").fetchall()[0] == (42,)
 
 
 # ===========================================================================

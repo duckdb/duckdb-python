@@ -73,7 +73,10 @@ jobs:
     name: Build an sdist and determine versions
     uses: ./.github/workflows/packaging_sdist.yml
     with:
-      testsuite: ${{ inputs.testsuite }}
+      # In minimal mode the sdist job proves that the sdist file set builds on the host
+      # toolchain, installs and reports its versions, and leaves the suite to the wheel
+      # jobs, which compile the same source. Full runs still test the sdist itself.
+      testsuite: ${{ inputs.minimal && 'none' || inputs.testsuite }}
       duckdb-python-sha: ${{ inputs.duckdb-python-sha != '' && inputs.duckdb-python-sha || github.sha }}
       duckdb-sha: ${{ inputs.duckdb-sha }}
       set-version: ${{ inputs.set-version }}

@@ -53,3 +53,9 @@ class TestWithColumnsRenamed:
         if not USE_ACTUAL_SPARK:
             with pytest.raises(ValueError, match=re.escape("DataFrame does not contain column(s): unknown col")):
                 df2.withColumnsRenamed({"unknown col": "new name", "full name": "name"})
+
+    def test_rename_column_named_in_another_case(self, spark):
+        df = spark.createDataFrame([(1, 2)], ["A", "b"])
+        res = df.withColumnsRenamed({"a": "x", "B": "y"})
+        assert res.columns == ["x", "y"]
+        assert res.collect() == [(1, 2)]

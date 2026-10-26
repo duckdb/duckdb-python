@@ -1,6 +1,4 @@
 # this is used for clang-tidy checks
-add_subdirectory(pyrelation)
-add_subdirectory(pyexpression)
 add_subdirectory(numpy)
 add_subdirectory(native)
 add_subdirectory(jupyter)
@@ -10,6 +8,7 @@ add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
 add_subdirectory(arrow)
+add_subdirectory(engine)
 
 add_library(
   python_src OBJECT
@@ -18,10 +17,9 @@ add_library(
   importer.cpp
   map.cpp
   path_like.cpp
+  pyappender.cpp
   pyconnection.cpp
-  pyexpression.cpp
   pyfilesystem.cpp
-  pyrelation.cpp
   pyresult.cpp
   pystatement.cpp
   pyutil.cpp

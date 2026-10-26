@@ -1,4 +1,5 @@
 name: 'Setup Ccache'
+description: 'Restore the ccache for a key and save it at job end on a protected branch of this repository, or on any ref of a fork.'
 inputs:
   key:
     description: 'Cache key (defaults to github.job)'
@@ -15,7 +16,11 @@ runs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ inputs.key || github.job }}
-         save: ${{ inputs.save == 'true' && (github.repository != 'duckdb/duckdb-python' || contains('["refs/heads/main", "refs/heads/v1.4-andium", "refs/heads/v1.5-variegata"]', github.ref)) }}
+         # Only protected branches write, which in this repository are main and the release branches. Pull
+         # requests restore from their base branch, pushes and merge queue entries from the default branch;
+         # none of them saves. The merge queue is excluded by name as well, because ref_protected is not
+         # documented for its temporary branches. Forks save on every ref.
+         save: ${{ inputs.save == 'true' && (github.repository != 'duckdb/duckdb-python' || (github.ref_protected && github.event_name != 'merge_group')) }}
          # Dump verbose ccache statistics report at end of CI job.
          verbose: 1
          # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.

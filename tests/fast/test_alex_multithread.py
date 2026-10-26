@@ -114,22 +114,25 @@ class TestPythonMultithreading:
         duckdb_con.execute("""CREATE OR REPLACE TABLE my_inserts (thread_name varchar)""")
 
         thread_count = 3
+        refused = []
 
-        # Kick off multiple threads (in the same process)
-        # Pass in the same connection as an argument, and an object to store the results
+        def insert_or_refuse(con):
+            # A thread that finds the connection busy with another call is refused instead of waiting for it
+            try:
+                insert_from_same_connection(con)
+            except duckdb.ResourceInUseException:
+                refused.append(current_thread().name)
+
         threads = [
-            Thread(target=insert_from_same_connection, args=(duckdb_con,), name="my_thread_" + str(i))
-            for i in range(thread_count)
+            Thread(target=insert_or_refuse, args=(duckdb_con,), name="my_thread_" + str(i)) for i in range(thread_count)
         ]
         for thread in threads:
             thread.start()
 
         for thread in threads:
-            thread.join()
+            thread.join(timeout=60)
+            assert not thread.is_alive()
 
-        assert duckdb_con.execute("""SELECT * FROM my_inserts order by thread_name""").fetchall() == [
-            ("my_thread_0",),
-            ("my_thread_1",),
-            ("my_thread_2",),
-        ]
+        inserted = [row[0] for row in duckdb_con.execute("""SELECT * FROM my_inserts""").fetchall()]
+        assert sorted(inserted + refused) == ["my_thread_0", "my_thread_1", "my_thread_2"]
         duckdb_con.close()

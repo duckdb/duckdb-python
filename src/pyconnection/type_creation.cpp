@@ -55,9 +55,6 @@ static child_list_t<LogicalType> GetChildList(const nb::object &container) {
 
 std::unique_ptr<DuckDBPyType> DuckDBPyConnection::StructType(const nb::object &fields) {
 	child_list_t<LogicalType> types = GetChildList(fields);
-	if (types.empty()) {
-		throw InvalidInputException("Can not create an empty struct type!");
-	}
 	auto struct_type = LogicalType::STRUCT(std::move(types));
 	return make_uniq<DuckDBPyType>(struct_type);
 }
@@ -93,13 +90,7 @@ std::unique_ptr<DuckDBPyType> DuckDBPyConnection::StringType(const string &colla
 }
 
 std::unique_ptr<DuckDBPyType> DuckDBPyConnection::Type(const string &type_str) {
-	auto &connection = con.GetConnection();
-	auto &context = *connection.context;
-	std::unique_ptr<DuckDBPyType> result;
-	context.RunFunctionInTransaction([&result, &type_str, &context]() {
-		result = make_uniq<DuckDBPyType>(TransformStringToLogicalType(type_str, context));
-	});
-	return result;
+	return make_uniq<DuckDBPyType>(DuckDBPyType::ParseTypeName(*con.GetConnection().context, type_str));
 }
 
 } // namespace duckdb

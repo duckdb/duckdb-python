@@ -15,6 +15,7 @@ class TestArrowBufferSize:
         assert res[0][0].type == pa.string()
         res = con.query("select 'bla'").to_arrow_reader()
         assert res.schema[0].type == pa.string()
+        res.close()
 
         # All Large String
         con.execute("SET arrow_large_buffer_size=True")
@@ -22,6 +23,7 @@ class TestArrowBufferSize:
         assert res[0][0].type == pa.large_string()
         res = con.query("select 'bla'").to_arrow_reader()
         assert res.schema[0].type == pa.large_string()
+        res.close()
 
         # All small string again
         con.execute("SET arrow_large_buffer_size=False")

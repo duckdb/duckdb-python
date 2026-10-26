@@ -1,9 +1,18 @@
 import pytest
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.errors import AnalysisException, error_condition
 from spark_namespace.sql.types import (
     Row,
 )
 
 _ = pytest.importorskip("duckdb.experimental.spark")
+
+if USE_ACTUAL_SPARK:
+    import pyspark
+
+    SPARK_3 = pyspark.__version__.startswith("3.")
+else:
+    SPARK_3 = False
 
 
 class TestDataFrameDropDuplicates:
@@ -84,3 +93,35 @@ class TestDataFrameDropDuplicates:
 
         dropDisDF = df.dropDuplicates(["table", "min"]).sort("table", "min")
         assert dropDisDF.count() == 3
+
+    @pytest.mark.parametrize("subset", [[], ()])
+    def test_drop_duplicates_with_an_empty_subset(self, spark, subset):
+        # Spark compares rows on no columns at all, so they are all duplicates of the first.
+        df = spark.createDataFrame([(1,), (2,), (2,)], ["x"])
+        assert df.dropDuplicates(subset).count() == 1
+        assert df.dropDuplicates().count() == 2
+        assert df.dropDuplicates(None).count() == 2
+        assert df.filter(df.x > 5).dropDuplicates(subset).count() == 0
+
+    def test_drop_duplicates_on_a_repeated_name(self, spark):
+        # Spark compares every column of the name, so rows that differ in the second "id" both stay.
+        df = spark.createDataFrame([(1, 1), (1, 2), (1, 2), (2, 2)], ["id", "x"]).toDF("id", "id")
+        assert sorted(tuple(row) for row in df.dropDuplicates(["id"]).collect()) == [(1, 1), (1, 2), (2, 2)]
+        assert sorted(tuple(row) for row in df.dropDuplicates(["ID"]).collect()) == [(1, 1), (1, 2), (2, 2)]
+
+    def test_drop_duplicates_after_a_join(self, spark):
+        # The window must compare the join's own columns, not the inputs' columns a positional key would reach.
+        a = spark.createDataFrame([(1,)], ["id"])
+        b = spark.createDataFrame([(1, 10), (1, 20)], ["id", "v"])
+        joined = a.join(b, "id")
+        assert [row.v for row in joined.dropDuplicates(["v"]).sort("v").collect()] == [10, 20]
+        assert joined.filter(joined.v > 0).dropDuplicates(["v"]).count() == 2
+        assert joined.dropDuplicates(["id"]).count() == 1
+
+    def test_drop_duplicates_on_an_unknown_name(self, spark):
+        df = spark.createDataFrame([(1, 1)], ["id", "x"])
+        with pytest.raises(AnalysisException) as error:
+            df.dropDuplicates(["nope"]).collect()
+        # Spark 3.5 raises the same error under a legacy class.
+        expected = "_LEGACY_ERROR_TEMP_1201" if SPARK_3 else "UNRESOLVED_COLUMN_AMONG_FIELD_NAMES"
+        assert error_condition(error.value) == expected

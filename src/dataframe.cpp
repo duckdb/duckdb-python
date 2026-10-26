@@ -49,7 +49,7 @@ bool PandasDataFrame::IsPyArrowBacked(const nb::handle &df) {
 }
 
 nb::object PandasDataFrame::ToArrowTable(const nb::object &df) {
-	D_ASSERT(duckdb::PyUtil::GilCheck());
+	DUCKDB_PY_ASSERT_GIL_HELD();
 	try {
 		return nb::module_::import_("pyarrow").attr("lib").attr("Table").attr("from_pandas")(df);
 	} catch (nb::python_error &) {

@@ -1,6 +1,8 @@
-#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pandas/pandas_analyzer.hpp"
+#include "duckdb_python/pandas/pandas_bind.hpp"
+#include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 #include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
@@ -349,6 +351,58 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 	return LogicalType::STRUCT(struct_children);
 }
 
+//! Whether every type in the tree is one GetItemType builds from plain Python values: only those may reach
+//! UpgradeType, which throws on ARRAY and UNION and has no merge rules for the other DuckDB types
+static bool IsAnalyzerType(const LogicalType &type) {
+	if (type.HasAlias() || type.HasExtensionInfo()) {
+		return false;
+	}
+	switch (type.id()) {
+	case LogicalTypeId::SQLNULL:
+	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::BLOB:
+		return true;
+	case LogicalTypeId::VARCHAR:
+		return StringType::GetCollation(type).empty();
+	case LogicalTypeId::LIST:
+		return IsAnalyzerType(ListType::GetChildType(type));
+	case LogicalTypeId::MAP:
+		return IsAnalyzerType(MapType::KeyType(type)) && IsAnalyzerType(MapType::ValueType(type));
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructType::GetChildTypes(type)) {
+			if (!IsAnalyzerType(child.second)) {
+				return false;
+			}
+		}
+		return true;
+	default:
+		return false;
+	}
+}
+
 //! 'can_convert' is used to communicate if internal structures encountered here are valid
 //! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
@@ -430,12 +484,20 @@ LogicalType PandasAnalyzer::GetItemType(nb::object ele, bool &can_convert) {
 		LogicalType ltype;
 		ltype = NumpyToLogicalType(extended_type);
 		if (extended_type.type == NumpyNullableType::OBJECT) {
-			LogicalType converted_type = InnerAnalyze(ele, can_convert, 1);
+			LogicalType converted_type = InnerAnalyze(ele, can_convert);
 			if (can_convert) {
 				ltype = converted_type;
 			}
 		}
 		return LogicalType::LIST(ltype);
+	}
+	case PythonObjectType::Value: {
+		auto value_type = PythonValueType(ele);
+		if (IsAnalyzerType(value_type)) {
+			return value_type;
+		}
+		can_convert = false;
+		return LogicalType::VARCHAR;
 	}
 	case PythonObjectType::Other:
 		// Fall back to string for unknown types
@@ -459,27 +521,16 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
-LogicalType PandasAnalyzer::InnerAnalyze(nb::object column, bool &can_convert, idx_t increment) {
-	idx_t rows = nb::len(column);
-
-	if (rows == 0) {
-		return LogicalType::SQLNULL;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto pandas_series = import_cache.pandas.Series();
-
-	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
-	if (pandas_series && duckdb::PyUtil::IsInstance(column, pandas_series)) {
-		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
-		column = column.attr("__array__")();
-	}
-	auto row = column.attr("__getitem__");
-
+template <class GET_CELL>
+LogicalType PandasAnalyzer::SampleType(idx_t rows, idx_t increment, bool &can_convert, GET_CELL &&get_cell) {
 	LogicalType item_type = LogicalType::SQLNULL;
 	vector<LogicalType> types;
 	for (idx_t i = 0; i < rows; i += increment) {
-		auto obj = row(i);
-		auto next_item_type = GetItemType(obj, can_convert);
+		nb::object obj = get_cell(i);
+		if (!obj.is_valid()) {
+			continue;
+		}
+		auto next_item_type = GetItemType(std::move(obj), can_convert);
 		types.push_back(next_item_type);
 
 		if (!can_convert || !UpgradeType(context, item_type, next_item_type)) {
@@ -495,25 +546,52 @@ LogicalType PandasAnalyzer::InnerAnalyze(nb::object column, bool &can_convert, i
 	return item_type;
 }
 
-bool PandasAnalyzer::Analyze(nb::object column) {
+LogicalType PandasAnalyzer::InnerAnalyze(nb::object array, bool &can_convert) {
+	auto row = array.attr("__getitem__");
+	return SampleType(nb::len(array), 1, can_convert, [&](idx_t i) { return row(i); });
+}
+
+bool PandasAnalyzer::Analyze(const PandasNumpyColumn &column, idx_t rows, optional_ptr<const RegisteredArray> mask) {
 	// Disable analyze
 	if (sample_size == 0) {
 		return false;
 	}
 
-	bool can_convert = true;
-	idx_t increment = GetSampleIncrement(nb::len(column));
-	LogicalType type = InnerAnalyze(column, can_convert, increment);
+	auto cells = static_cast<PyObject *const *>(column.array.Data());
+	auto step = column.stride / sizeof(PyObject *);
+	// Bytes, because a numpy bool can hold any nonzero byte for true
+	auto masked = mask ? static_cast<const uint8_t *>(mask->numpy_array.Data()) : nullptr;
+	auto cell_at = [&](idx_t row) -> PyObject * {
+		return masked && masked[row] != 0 ? nullptr : cells[step * row];
+	};
 
-	if (type == LogicalType::SQLNULL && increment > 1) {
-		// We did not see the whole dataset, hence we are not sure if nulls are really nulls
-		// as a fallback we try to identify this specific type
-		auto first_valid_index = column.attr("first_valid_index")();
-		if (GetPythonObjectType(first_valid_index) != PythonObjectType::None) {
-			// This means we do have a value that is not null, figure out its type
-			auto row = column.attr("__getitem__");
-			auto obj = row(first_valid_index);
-			type = GetItemType(obj, can_convert);
+	bool can_convert = true;
+	sample = PandasSample();
+	sample.increment = GetSampleIncrement(rows);
+	LogicalType type = SampleType(rows, sample.increment, can_convert,
+	                              [&](idx_t row) { return nb::borrow<nb::object>(cell_at(row)); });
+
+	if (can_convert && type == LogicalType::SQLNULL && sample.increment > 1) {
+		// Rows between the sampled ones can hold values, so the first of them types the column
+		for (idx_t row = 0; row < rows; row++) {
+			// A loop of its own over runs of None halves the walk over an all None column
+			while (row < rows && cells[step * row] == Py_None) {
+				row++;
+			}
+			if (row == rows) {
+				break;
+			}
+			auto cell = cell_at(row);
+			// GetItemType types float NaN SQLNULL too, but slower than this test over a long NaN prefix
+			if (!cell || (PyFloat_CheckExact(cell) && std::isnan(PyFloat_AsDouble(cell)))) {
+				continue;
+			}
+			auto row_type = GetItemType(nb::borrow<nb::object>(cell), can_convert);
+			if (!can_convert || row_type.id() != LogicalTypeId::SQLNULL) {
+				type = row_type;
+				sample.fallback_row = row;
+				break;
+			}
 		}
 	}
 	if (can_convert) {

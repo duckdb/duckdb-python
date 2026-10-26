@@ -1,37 +1,60 @@
 name: Warm the build caches
 run-name: Warm the build caches on ${{ github.ref_name }}
 
-# Runs the seed builds after pushes that change what the wheels compile, so the
-# per platform ccaches track the branch instead of going stale between
-# releases. PR builds restore these caches. Without this workflow every PR pays
-# the accumulated submodule delta on every platform.
+# Runs the seed builds and the full-API build with assertions after pushes that change
+# what they compile, so the ccaches track the branch instead of going stale
+# between releases. PR, merge queue and feature branch builds restore these
+# caches and never save. Without this workflow every PR pays the accumulated
+# submodule delta on every platform.
 #
-# The branch list matches the cache writing refs in the ccache-action. The
-# workflow only triggers on branches this file exists on. Keep this file
-# identical across branches.
+# The branch patterns narrow the trigger to main and the release branches; the
+# job conditions then require a protected ref, the same rule the ccache-action
+# saves under, because the pattern also matches names like vendoring-v2.0-x.
+# Keep this file identical across the branches that have assert_test.yml.
 on:
   push:
     branches:
       - main
-      - v1.4-andium
-      - v1.5-variegata
+      - v*.*-*
     paths:
       - 'external/duckdb'
       - 'src/**'
+      - 'cmake/**'
       - 'CMakeLists.txt'
       - 'pyproject.toml'
+      - '.pre-commit-config.yaml'
       - '.github/workflows/cache_warm.yml'
+      - '.github/workflows/code_quality.yml'
       - '.github/workflows/packaging_wheels.yml'
+      - '.github/workflows/assert_test.yml'
       - '.github/actions/**'
 
+# Runs are queued, not cancelled: the ccache action saves in its post step even
+# after a cancel, and with evict-old-files the newest entry would then hold only
+# what had compiled before the stop.
 concurrency:
   group: cache-warm-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   warm_caches:
     name: Build the seed wheels to warm the caches
+    if: ${{ github.ref_protected }}
     uses: ./.github/workflows/packaging_wheels.yml
     with:
       minimal: true
+      build-sanity: false
+      save-cache: true
       testsuite: none
+
+  warm_assert_cache:
+    name: Build the full-API build with assertions to warm its cache
+    if: ${{ github.ref_protected }}
+    uses: ./.github/workflows/assert_test.yml
+    with:
+      testsuite: none
+
+  warm_pre_commit_cache:
+    name: Run the code quality checks to warm the pre-commit cache
+    if: ${{ github.ref_protected }}
+    uses: ./.github/workflows/code_quality.yml

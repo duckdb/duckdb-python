@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(
 def RoundTripStringView(query, array):
     con = duckdb.connect()
     con.execute("SET produce_arrow_string_view=True")
-    arrow_tbl = con.execute(query).to_arrow_table()
+    arrow_tbl = con.sql(query).to_arrow_table()
     # Assert that we spit the same as the defined array
     arrow_tbl[0].validate(full=True)
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
@@ -27,14 +27,14 @@ def RoundTripStringView(query, array):
 
     # Create a table using the schema and the array
     gt_table = pa.Table.from_arrays([array], schema=schema)  # noqa: F841
-    arrow_table = con.execute("select * from gt_table").to_arrow_table()  # noqa: F841
+    arrow_table = con.sql("select * from gt_table").to_arrow_table()  # noqa: F841
     assert arrow_tbl[0].combine_chunks().tolist() == array.tolist()
 
 
 def RoundTripDuckDBInternal(query):
     con = duckdb.connect()
     con.execute("SET produce_arrow_string_view=True")
-    arrow_tbl = con.execute(query).to_arrow_table()
+    arrow_tbl = con.sql(query).to_arrow_table()
     arrow_tbl.validate(full=True)
     res = con.execute(query).fetchall()
     from_arrow_res = con.execute("FROM arrow_tbl order by str").fetchall()
@@ -151,3 +151,35 @@ class TestArrowStringView:
         # result_roundtrip_pl = con.execute("select * from polars_df order by all").fetchall()
 
         # assert result == result_roundtrip_pl
+
+
+def _view_typed(con, sql, view_type):
+    table = con.sql(sql).to_arrow_table()
+    kind = pa.string_view() if view_type == "string_view" else pa.binary_view()
+    return table.set_column(0, "k", table["k"].cast(kind))
+
+
+@pytest.mark.parametrize("build_side", ["native", "arrow"])
+@pytest.mark.parametrize("source", ["table", "reader"])
+@pytest.mark.parametrize("view_type", ["string_view", "binary_view"])
+def test_join_on_a_view_typed_key_matches_native(source, view_type, build_side):
+    """A hash join's runtime filters on a view typed key are applied by DuckDB; the rows match a native join."""
+    con = duckdb.connect()
+    key_type = "VARCHAR" if view_type == "string_view" else "BLOB"
+    con.execute(
+        "CREATE TABLE probe_native AS SELECT CASE WHEN i % 997 = 0 THEN NULL "
+        f"ELSE ('key' || lpad(i::VARCHAR, 6, '0'))::{key_type} END AS k, i AS v FROM range(50000) t(i)"
+    )
+    con.execute(
+        f"CREATE TABLE build_native AS SELECT ('key' || lpad((i * 401)::VARCHAR, 6, '0'))::{key_type} AS k, "
+        "i AS w FROM range(200) t(i)"
+    )
+    probe = _view_typed(con, "FROM probe_native", view_type)
+    build = _view_typed(con, "FROM build_native", view_type)
+    query = "SELECT count(*), min(v), max(v), sum(w) FROM {} JOIN {} USING (k)"
+    expected = con.execute(query.format("probe_native", "build_native")).fetchall()
+    assert expected[0][0] > 0
+    con.register("probe_arrow", probe if source == "table" else probe.to_reader())
+    con.register("build_arrow", build if source == "table" else build.to_reader())
+    build_name = "build_arrow" if build_side == "arrow" else "build_native"
+    assert con.execute(query.format("probe_arrow", build_name)).fetchall() == expected

@@ -12,7 +12,6 @@ namespace duckdb {
 class PythonDependencyItem : public DependencyItem {
 public:
 	explicit PythonDependencyItem(unique_ptr<RegisteredObject> &&object);
-	~PythonDependencyItem() override;
 
 public:
 	static shared_ptr<DependencyItem> Create(nb::object object);

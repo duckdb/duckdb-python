@@ -3,8 +3,8 @@ import datetime
 import os
 
 import pytest
-from conftest import getTimeSeriesData
 from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.errors import IllegalArgumentException
 
 import pandas as pd
 from duckdb import InvalidInputException, read_csv
@@ -54,7 +54,7 @@ class TestSparkToCSV:
 
         df.write.csv(temp_file_name)
 
-        csv_rel = spark.read.csv(temp_file_name)
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True)
 
         assert df.collect() == csv_rel.collect()
 
@@ -65,7 +65,7 @@ class TestSparkToCSV:
 
         df.write.csv(temp_file_name, sep=",")
 
-        csv_rel = spark.read.csv(temp_file_name, sep=",")
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True, sep=",")
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_na_rep(self, spark, tmp_path):
@@ -76,7 +76,7 @@ class TestSparkToCSV:
 
         df.write.csv(temp_file_name, nullValue="test")
 
-        csv_rel = spark.read.csv(temp_file_name, nullValue="test")
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True, nullValue="test")
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_header(self, spark, tmp_path):
@@ -87,7 +87,7 @@ class TestSparkToCSV:
 
         df.write.csv(temp_file_name)
 
-        csv_rel = spark.read.csv(temp_file_name)
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True)
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_quotechar(self, spark, tmp_path):
@@ -99,7 +99,7 @@ class TestSparkToCSV:
 
         df.write.csv(temp_file_name, quote="'", sep=",")
 
-        csv_rel = spark.read.csv(temp_file_name, sep=",", quote="'")
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True, sep=",", quote="'")
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_escapechar(self, spark, tmp_path):
@@ -116,33 +116,26 @@ class TestSparkToCSV:
         df = spark.createDataFrame(pandas_df)
 
         df.write.csv(temp_file_name, quote='"', escape="!")
-        csv_rel = spark.read.csv(temp_file_name, quote='"', escape="!")
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True, quote='"', escape="!")
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_date_format(self, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
-        pandas_df = pd.DataFrame(getTimeSeriesData())
-        dt_index = pandas_df.index
-        pandas_df = pd.DataFrame({"A": dt_index, "B": dt_index.shift(1)}, index=dt_index)
+        df = spark.createDataFrame([(datetime.date(2024, 2, 3),), (datetime.date(1999, 12, 31),)], "d date")
 
-        df = spark.createDataFrame(pandas_df)
+        df.write.csv(temp_file_name, dateFormat="yyyyMMdd")
 
-        df.write.csv(temp_file_name, dateFormat="%Y%m%d")
-
-        csv_rel = spark.read.csv(temp_file_name, dateFormat="%Y%m%d")
+        csv_rel = spark.read.csv(temp_file_name, schema="d date", dateFormat="yyyyMMdd")
 
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_timestamp_format(self, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
-        data = [datetime.time(hour=23, minute=1, second=34, microsecond=234345)]
-        pandas_df = pd.DataFrame({"0": pd.Series(data=data, dtype="object")})
+        df = spark.createDataFrame([(datetime.datetime(2024, 2, 3, 23, 1, 34),)], "t timestamp")
 
-        df = spark.createDataFrame(pandas_df)
+        df.write.csv(temp_file_name, timestampFormat="MM/dd/yyyy HH:mm:ss")
 
-        df.write.csv(temp_file_name, timestampFormat="%m/%d/%Y")
-
-        csv_rel = spark.read.csv(temp_file_name, timestampFormat="%m/%d/%Y")
+        csv_rel = spark.read.csv(temp_file_name, schema="t timestamp", timestampFormat="MM/dd/yyyy HH:mm:ss")
 
         assert df.collect() == csv_rel.collect()
 
@@ -151,24 +144,23 @@ class TestSparkToCSV:
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, quoteAll=None)
 
-        csv_rel = spark.read.csv(temp_file_name)
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True)
         assert df.collect() == csv_rel.collect()
 
     def test_to_csv_quoting_on(self, pandas_df_strings, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
-        df.write.csv(temp_file_name, quoteAll="force")
+        df.write.csv(temp_file_name, quoteAll=True)
 
-        csv_rel = spark.read.csv(temp_file_name)
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True)
         assert df.collect() == csv_rel.collect()
 
-    def test_to_csv_quoting_quote_all(self, pandas_df_strings, spark, tmp_path):
+    @pytest.mark.parametrize("quote_all", ["force", csv.QUOTE_ALL])
+    def test_to_csv_quoting_not_a_flag(self, pandas_df_strings, spark, tmp_path, quote_all):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
-        df.write.csv(temp_file_name, quoteAll=csv.QUOTE_ALL)
-
-        csv_rel = spark.read.csv(temp_file_name)
-        assert df.collect() == csv_rel.collect()
+        with pytest.raises(IllegalArgumentException, match="quoteAll flag can be true or false"):
+            df.write.csv(temp_file_name, quoteAll=quote_all)
 
     def test_to_csv_encoding_incorrect(self, pandas_df_strings, spark, tmp_path):
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
@@ -182,7 +174,7 @@ class TestSparkToCSV:
         temp_file_name = os.path.join(tmp_path, "temp_file.csv")  # noqa: PTH118
         df = spark.createDataFrame(pandas_df_strings)
         df.write.csv(temp_file_name, encoding="UTF-8")
-        csv_rel = spark.read.csv(temp_file_name)
+        csv_rel = spark.read.csv(temp_file_name, inferSchema=True)
         assert df.collect() == csv_rel.collect()
 
     @pytest.mark.skipif(

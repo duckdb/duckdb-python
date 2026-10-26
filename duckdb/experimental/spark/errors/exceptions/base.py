@@ -31,6 +31,18 @@ class PySparkException(Exception):
         self.error_class = error_class
         self.message_parameters = message_parameters
 
+    def getCondition(self) -> str | None:
+        """Returns an error condition, the name Spark 4 uses for an error class.
+
+        .. versionadded:: 4.0.0
+
+        See Also:
+        --------
+        :meth:`PySparkException.getMessageParameters`
+        :meth:`PySparkException.getSqlState`
+        """
+        return self.error_class
+
     def getErrorClass(self) -> str | None:
         """Returns an error class as a string.
 
@@ -55,10 +67,8 @@ class PySparkException(Exception):
         """
         return self.message_parameters
 
-    def getSqlState(self) -> None:
-        """Returns an SQLSTATE as a string.
-
-        Errors generated in Python have no SQLSTATE, so it always returns None.
+    def getSqlState(self) -> str | None:
+        """Returns an SQLSTATE as a string, or None when the error class has none.
 
         .. versionadded:: 3.4.0
 
@@ -67,7 +77,7 @@ class PySparkException(Exception):
         :meth:`PySparkException.getErrorClass`
         :meth:`PySparkException.getMessageParameters`
         """
-        return None
+        return self.error_reader.get_sqlstate(self.error_class)
 
     def __str__(self) -> str:  # noqa: D105
         if self.getErrorClass() is not None:

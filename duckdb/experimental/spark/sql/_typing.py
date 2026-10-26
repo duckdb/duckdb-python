@@ -16,21 +16,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from collections.abc import Callable
-from typing import (
-    Any,
-    TypeVar,
-)
-
-try:
-    from typing import Literal, Protocol
-except ImportError:
-    from typing import Literal
-
-    from typing_extensions import Protocol
-
 import datetime
 import decimal
+from collections.abc import Callable
+from typing import Any, Literal, Protocol, TypeVar
 
 from .._typing import PrimitiveType
 from . import types

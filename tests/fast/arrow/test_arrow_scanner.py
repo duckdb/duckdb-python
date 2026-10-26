@@ -39,7 +39,7 @@ class TestArrowScanner:
 
         rel = duckdb_conn.from_arrow(arrow_scanner)
 
-        assert rel.aggregate("count(*)").execute().fetchone()[0] == 12
+        assert rel.aggregate("count(*)").fetchall()[0][0] == 12
 
     def test_parallel_scanner_replacement_scans(self, duckdb_cursor):
         if not can_run:
@@ -112,4 +112,4 @@ class TestArrowScanner:
 
         rel = duckdb.from_arrow(arrow_scanner)
 
-        assert rel.aggregate("count(*)").execute().fetchone()[0] == 12
+        assert rel.aggregate("count(*)").fetchall()[0][0] == 12

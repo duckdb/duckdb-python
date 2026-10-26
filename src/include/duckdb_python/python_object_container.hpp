@@ -22,8 +22,13 @@ public:
 	}
 
 	~PythonObjectContainer() {
-		nb::gil_scoped_acquire acquire;
-		py_obj.clear();
+		if (nb::detail::cleanup_guard guard {}) {
+			py_obj.clear();
+		} else {
+			for (auto &obj : py_obj) {
+				obj.release();
+			}
+		}
 	}
 
 	void Push(nb::object &&obj) {

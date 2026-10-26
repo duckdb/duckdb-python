@@ -18,8 +18,10 @@ public:
 	    : RegisteredObject(std::move(fs)), filenames(std::move(filenames_p)) {
 	}
 	~FileSystemObject() override {
-		nb::gil_scoped_acquire acquire;
-		// Assert that the 'obj' is a filesystem
+		nb::detail::cleanup_guard guard {};
+		if (!guard) {
+			return;
+		}
 		D_ASSERT(duckdb::PyUtil::IsInstance(
 		    obj, DuckDBPyConnection::ImportCache()->duckdb.filesystem.ModifiedMemoryFileSystem()));
 		// Destructors are implicitly noexcept: a Python exception escaping here (fsspec `_rm` raises

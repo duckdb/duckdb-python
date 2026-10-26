@@ -2,7 +2,6 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.functions import col, lit
 
 
@@ -18,7 +17,7 @@ class TestWithColumn:
 
         columns = ["firstname", "middlename", "lastname", "dob", "gender", "salary"]
         df = spark.createDataFrame(data=data, schema=columns)
-        assert df.schema["salary"].dataType.typeName() == ("long" if USE_ACTUAL_SPARK else "integer")
+        assert df.schema["salary"].dataType.typeName() == "long"
 
         # The type of 'salary' has been cast to Bigint
         new_df = df.withColumn("salary", col("salary").cast("BIGINT"))

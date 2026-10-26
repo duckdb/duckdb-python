@@ -21,12 +21,6 @@ def _parse_json_func(error_prefix: str):
     return parse_func
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="errors_as_json stopped applying to parser/syntax errors in duckdb v1.6.0-dev10062 "
-    "(catalog errors still emit JSON; the get_table_names path is unaffected). Likely an upstream "
-    "regression; remove this xfail once it is restored.",
-)
 def test_json_syntax_error():
     conn = duckdb.connect()
     conn.execute("SET errors_as_json='true'")
@@ -41,12 +35,6 @@ def test_json_catalog_error():
         conn.execute("SELECT * FROM nonexistent_table")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="errors_as_json stopped applying to parser/syntax errors in duckdb v1.6.0-dev10062 "
-    "(catalog errors still emit JSON; the get_table_names path is unaffected). Likely an upstream "
-    "regression; remove this xfail once it is restored.",
-)
 def test_json_syntax_error_extract_statements():
     conn = duckdb.connect()
     conn.execute("SET errors_as_json='true'")

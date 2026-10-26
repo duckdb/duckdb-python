@@ -6,6 +6,7 @@ list arg to values() is ONE row whose columns are the list items, so a list of N
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -41,6 +42,42 @@ def tuples_wide() -> list[tuple[int, int, int]]:
 @pytest.fixture(scope="module")
 def dicts_wide() -> list[dict[str, int | str]]:
     return [{"a": i, "b": i + 1, "c": f"s{i}"} for i in range(WIDE_N)]
+
+
+_PLUS_TWO = datetime.timezone(datetime.timedelta(hours=2))
+_START = datetime.datetime(2020, 1, 1, 12, 30, 15, 250_000)
+
+
+def _temporal(kind: str, i: int) -> object:
+    moment = _START + datetime.timedelta(seconds=i, microseconds=i)
+    if kind == "datetime":
+        return moment
+    if kind == "datetime_tz":
+        return moment.replace(tzinfo=_PLUS_TWO)
+    if kind == "date":
+        return moment.date()
+    if kind == "time":
+        return moment.time()
+    return datetime.timedelta(days=i % 1000, seconds=i % 86400, microseconds=i)
+
+
+def _binary(kind: str, i: int) -> object:
+    payload = b"payload_%d" % i
+    if kind == "bytes":
+        return payload
+    if kind == "bytearray":
+        return bytearray(payload)
+    return memoryview(payload)
+
+
+@pytest.fixture(scope="module", params=["datetime", "datetime_tz", "date", "time", "timedelta"])
+def temporal_list(request: pytest.FixtureRequest) -> list[object]:
+    return [_temporal(request.param, i) for i in range(WIDE_N)]
+
+
+@pytest.fixture(scope="module", params=["bytes", "bytearray", "memoryview"])
+def binary_list(request: pytest.FixtureRequest) -> list[object]:
+    return [_binary(request.param, i) for i in range(WIDE_N)]
 
 
 # executemany: bind + execute one parameter set per row, into a real table (CREATE OR REPLACE so it doesn't grow).
@@ -83,3 +120,23 @@ def test_ingest_values_dicts(
     # each dict cell -> STRUCT value (TransformDictionaryToStruct recursion)
     con.values(dicts_wide).fetchall()  # warm
     benchmark(lambda: con.values(dicts_wide).fetchall())
+
+
+# One LIST cell instead of one column per value: binding a relation with WIDE_N columns would dwarf the per-value
+# conversion these two measure.
+
+
+def test_ingest_values_temporal(
+    benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection, temporal_list: list[object]
+) -> None:
+    # each element reads the value's fields (and the zone's utcoffset for an aware datetime)
+    con.values([temporal_list]).fetchall()  # warm
+    benchmark(lambda: con.values([temporal_list]).fetchall())
+
+
+def test_ingest_values_binary(
+    benchmark: BenchmarkFixture, con: duckdb.DuckDBPyConnection, binary_list: list[object]
+) -> None:
+    # bytearray and memoryview take their own size and buffer accessors on the way to BLOB
+    con.values([binary_list]).fetchall()  # warm
+    benchmark(lambda: con.values([binary_list]).fetchall())

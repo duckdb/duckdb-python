@@ -44,9 +44,15 @@ jobs:
         run: echo "sha=$(git rev-parse HEAD:external/duckdb)" >> "$GITHUB_OUTPUT"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
+          version: "0.12.23"
+          # No setup-uv cache: since setup-uv v9 it saves unpruned and would crowd out the ccaches.
+          enable-cache: false
           python-version: "3.13"
+          # The benchmark step runs $VIRTUAL_ENV/bin/python under valgrind; setup-uv v6 and later no longer
+          # activate the venv on their own.
+          activate-environment: true
 
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind

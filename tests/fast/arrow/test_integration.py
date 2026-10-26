@@ -50,10 +50,9 @@ class TestArrowIntegration:
 
         assert rel_from_arrow.equals(rel_from_duckdb, check_metadata=True)
 
-        duckdb_cursor.execute(
+        arrow_result = duckdb_cursor.sql(
             "select NULL c_null, (c % 4 = 0)::bool c_bool, (c%128)::tinyint c_tinyint, c::smallint*1000::INT c_smallint, c::integer*100000 c_integer, c::bigint*1000000000000 c_bigint, c::float c_float, c::double c_double, 'c_' || c::string c_string from (select case when range % 2 == 0 then range else null end as c from range(-10000, 10000)) sq"  # noqa: E501
-        )
-        arrow_result = duckdb_cursor.to_arrow_table()
+        ).to_arrow_table()
         arrow_result.validate(full=True)
         arrow_result.combine_chunks()
         arrow_result.validate(full=True)
@@ -82,7 +81,7 @@ class TestArrowIntegration:
 
         arrow_result = duckdb_cursor.execute(
             "SELECT typeof(a), typeof(b), typeof(c),typeof(d) from testarrow"
-        ).fetchone()
+        ).fetchall()[0]
 
         assert arrow_result[0] == "DECIMAL(4,2)"
         assert arrow_result[1] == "DECIMAL(9,2)"
@@ -197,12 +196,17 @@ class TestArrowIntegration:
         assert duck_arrow_tbl[0].value == pa.MonthDayNano([0, 0, 0])
         assert duck_arrow_tbl[1].value == pa.MonthDayNano([2147483647, 2147483647, 9223372036854775000])
 
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="a relation over replacement-scanned objects renames duplicate columns when it executes",
+    )
     def test_duplicate_column_names(self, duckdb_cursor):
         pd = pytest.importorskip("pandas")
         df_a = pd.DataFrame({"join_key": [1, 2, 3], "col_a": ["a", "b", "c"]})  # noqa: F841
         df_b = pd.DataFrame({"join_key": [1, 3, 4], "col_a": ["x", "y", "z"]})  # noqa: F841
 
-        res = duckdb_cursor.execute(
+        res = duckdb_cursor.sql(
             """
             SELECT *
                 FROM

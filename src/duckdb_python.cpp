@@ -6,9 +6,8 @@
 
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pyconnection/seam.hpp"
 #include "duckdb_python/pystatement.hpp"
-#include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
 #include "duckdb_python/functional.hpp"
@@ -19,10 +18,16 @@
 #include "duckdb_python/nb/conversions/python_csv_line_terminator_enum.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/adbc/adbc-init.hpp"
+#include "duckdb_python/arrow/predicate_translation.hpp"
+#include "duckdb_python/arrow/python_arrow_scan.hpp"
 
 #ifndef DUCKDB_PYTHON_LIB_NAME
 #define DUCKDB_PYTHON_LIB_NAME _duckdb
 #endif
+
+// Defined by the static extension loader generated at configure time from LINK_EXTENSIONS
+// (see duckdb_python_link_extensions in cmake/duckdb_loader.cmake)
+extern "C" int32_t duckdb_register_static_extensions(void);
 
 namespace duckdb {
 
@@ -316,8 +321,9 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->Execute(query, params);
 	    },
-	    "Execute the given SQL query, optionally using prepared statements with parameters set", nb::arg("query"),
-	    nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
+	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
+	    "its first rows are ready, so an error there raises here; every other statement runs to its end",
+	    nb::arg("query"), nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "executemany",
 	    [](const nb::object &query, nb::object params = nb::list(),
@@ -347,6 +353,26 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    conn->Interrupt();
 	    },
 	    "Interrupt pending operations", nb::kw_only(), nb::arg("connection").none() = nb::none());
+	m.def(
+	    "complete",
+	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    conn->Complete();
+	    },
+	    "Run the result of execute() to its end without reading its rows", nb::kw_only(),
+	    nb::arg("connection").none() = nb::none());
+	m.def(
+	    "abort",
+	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    conn->Abort();
+	    },
+	    "Cancel the rest of the result of execute(); a statement that may write fails an open transaction",
+	    nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "query_progress",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
@@ -436,60 +462,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    "Fetch a chunk of the result as DataFrame following execute()", nb::arg("vectors_per_chunk") = 1, nb::kw_only(),
 	    nb::arg("date_as_object") = false, nb::arg("connection").none() = nb::none());
 	m.def(
-	    "pl",
-	    [](idx_t rows_per_batch, bool lazy, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchPolars(rows_per_batch, lazy);
-	    },
-	    "Fetch a result as Polars DataFrame following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("lazy") = false, nb::arg("connection").none() = nb::none());
-	m.def(
-	    "to_arrow_table",
-	    [](idx_t batch_size, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchArrow(batch_size);
-	    },
-	    "Fetch a result as Arrow table following execute()", nb::arg("batch_size") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "to_arrow_reader",
-	    [](idx_t batch_size, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchRecordBatchReader(batch_size);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", nb::arg("batch_size") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "fetch_arrow_table",
-	    [](idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_arrow_table() is deprecated, use to_arrow_table() instead.",
-		                 0);
-		    return conn->FetchArrow(rows_per_batch);
-	    },
-	    "Fetch a result as Arrow table following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "fetch_record_batch",
-	    [](const idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    PyErr_WarnEx(PyExc_DeprecationWarning, "fetch_record_batch() is deprecated, use to_arrow_reader() instead.",
-		                 0);
-		    return conn->FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Fetch an Arrow RecordBatchReader following execute()", nb::arg("rows_per_batch") = 1000000, nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
 	    "torch",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
@@ -558,6 +530,31 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    "Append the passed DataFrame to the named table", nb::arg("table_name"), nb::arg("df"), nb::kw_only(),
 	    nb::arg("by_name") = false, nb::arg("connection").none() = nb::none());
 	m.def(
+	    "appender",
+	    [](const string &table, const std::optional<nb::list> &columns, const string &action,
+	       const std::optional<nb::list> &key, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->CreateAppender(table, columns, action, key);
+	    },
+	    "Create an appender that buffers rows and inserts, upserts, updates or deletes them in the named table at each "
+	    "flush",
+	    nb::arg("table"), nb::kw_only(), nb::arg("columns").none() = nb::none(), nb::arg("action") = "insert",
+	    nb::arg("key").none() = nb::none(), nb::arg("connection").none() = nb::none());
+	m.def(
+	    "query_appender",
+	    [](const string &dml, const nb::dict &columns, const std::optional<string> &source,
+	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
+		    if (!conn) {
+			    conn = DuckDBPyConnection::DefaultConnection();
+		    }
+		    return conn->CreateQueryAppender(dml, columns, source);
+	    },
+	    "Create an appender that buffers rows of the declared columns and runs the DML over them at each flush",
+	    nb::arg("dml"), nb::arg("columns"), nb::kw_only(), nb::arg("source").none() = nb::none(),
+	    nb::arg("connection").none() = nb::none());
+	m.def(
 	    "register",
 	    [](const string &name, const nb::object &python_object, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
@@ -577,89 +574,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    },
 	    "Unregister the view name", nb::arg("view_name"), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
-	    "table",
-	    [](const string &tname, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->Table(tname);
-	    },
-	    "Create a relation object for the named table", nb::arg("table_name"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "view",
-	    [](const string &vname, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->View(vname);
-	    },
-	    "Create a relation object for the named view", nb::arg("view_name"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "values",
-	    // nanobind forbids a named typed parameter after nb::args; the keyword-only `connection` is therefore
-	    // taken from **kwargs (a None/absent value falls back to the default connection, as before).
-	    [](const nb::args &params, const nb::kwargs &kwargs) {
-		    std::shared_ptr<DuckDBPyConnection> conn;
-		    if (kwargs.contains("connection") && !kwargs["connection"].is_none()) {
-			    conn = nb::cast<std::shared_ptr<DuckDBPyConnection>>(kwargs["connection"]);
-		    }
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->Values(params);
-	    },
-	    "Create a relation object from the passed values");
-	m.def(
-	    "table_function",
-	    [](const string &fname, nb::object params = nb::list(), std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->TableFunction(fname, params);
-	    },
-	    "Create a relation object from the named table function with given parameters", nb::arg("name"),
-	    nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
-	m.def(
-	    "read_json",
-	    [](const nb::object &name, const Optional<nb::object> &columns = nb::none(),
-	       const Optional<nb::object> &sample_size = nb::none(), const Optional<nb::object> &maximum_depth = nb::none(),
-	       const Optional<nb::str> &records = nb::none(), const Optional<nb::str> &format = nb::none(),
-	       const Optional<nb::object> &date_format = nb::none(),
-	       const Optional<nb::object> &timestamp_format = nb::none(),
-	       const Optional<nb::object> &compression = nb::none(),
-	       const Optional<nb::object> &maximum_object_size = nb::none(),
-	       const Optional<nb::object> &ignore_errors = nb::none(),
-	       const Optional<nb::object> &convert_strings_to_integers = nb::none(),
-	       const Optional<nb::object> &field_appearance_threshold = nb::none(),
-	       const Optional<nb::object> &map_inference_threshold = nb::none(),
-	       const Optional<nb::object> &maximum_sample_files = nb::none(),
-	       const Optional<nb::object> &filename = nb::none(),
-	       const Optional<nb::object> &hive_partitioning = nb::none(),
-	       const Optional<nb::object> &union_by_name = nb::none(), const Optional<nb::object> &hive_types = nb::none(),
-	       const Optional<nb::object> &hive_types_autocast = nb::none(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->ReadJSON(name, columns, sample_size, maximum_depth, records, format, date_format,
-		                          timestamp_format, compression, maximum_object_size, ignore_errors,
-		                          convert_strings_to_integers, field_appearance_threshold, map_inference_threshold,
-		                          maximum_sample_files, filename, hive_partitioning, union_by_name, hive_types,
-		                          hive_types_autocast);
-	    },
-	    "Create a relation object from the JSON file in 'name'", nb::arg("path_or_buffer"), nb::kw_only(),
-	    nb::arg("columns") = nb::none(), nb::arg("sample_size") = nb::none(), nb::arg("maximum_depth") = nb::none(),
-	    nb::arg("records") = nb::none(), nb::arg("format") = nb::none(), nb::arg("date_format") = nb::none(),
-	    nb::arg("timestamp_format") = nb::none(), nb::arg("compression") = nb::none(),
-	    nb::arg("maximum_object_size") = nb::none(), nb::arg("ignore_errors") = nb::none(),
-	    nb::arg("convert_strings_to_integers") = nb::none(), nb::arg("field_appearance_threshold") = nb::none(),
-	    nb::arg("map_inference_threshold") = nb::none(), nb::arg("maximum_sample_files") = nb::none(),
-	    nb::arg("filename") = nb::none(), nb::arg("hive_partitioning") = nb::none(),
-	    nb::arg("union_by_name") = nb::none(), nb::arg("hive_types") = nb::none(),
-	    nb::arg("hive_types_autocast") = nb::none(), nb::arg("connection").none() = nb::none());
-	m.def(
 	    "extract_statements",
 	    [](const string &query, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
@@ -668,127 +582,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    return conn->ExtractStatements(query);
 	    },
 	    "Parse the query string and extract the Statement object(s) produced", nb::arg("query"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "sql",
-	    [](const nb::object &query, string alias = "", nb::object params = nb::list(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->RunQuery(query, alias, params);
-	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
-	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "query",
-	    [](const nb::object &query, string alias = "", nb::object params = nb::list(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->RunQuery(query, alias, params);
-	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
-	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "from_query",
-	    [](const nb::object &query, string alias = "", nb::object params = nb::list(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->RunQuery(query, alias, params);
-	    },
-	    "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	    "run the query as-is.",
-	    nb::arg("query"), nb::kw_only(), nb::arg("alias") = "", nb::arg("params") = nb::none(),
-	    nb::arg("connection").none() = nb::none());
-	// nanobind's all-or-nothing nb::arg rule forbids naming just the source parameter alongside **kwargs, so the
-	// module-level read_csv / from_csv_auto take (*args, **kwargs) and recover the advertised keywords by hand:
-	// the source may be positional or passed as `path_or_buffer=`, and the connection as `connection=` / `conn=`.
-	// Each recovered keyword is popped from kwargs so ReadCSV's unknown-parameter check only sees CSV options.
-	// N2: extra positional args (e.g. read_csv("a", "b")) are silently dropped rather than raising; negligible.
-	auto module_read_csv = [](nb::args args, nb::kwargs kwargs) {
-		nb::object name = nb::none();
-		if (args.size() >= 1) {
-			name = nb::object(args[0]);
-		} else if (kwargs.contains("path_or_buffer")) {
-			name = kwargs["path_or_buffer"];
-			PyDict_DelItemString(kwargs.ptr(), "path_or_buffer");
-		}
-		std::shared_ptr<DuckDBPyConnection> conn;
-		for (const char *conn_key : {"connection", "conn"}) {
-			if (kwargs.contains(conn_key)) {
-				nb::object conn_arg = kwargs[conn_key];
-				PyDict_DelItemString(kwargs.ptr(), conn_key);
-				if (!conn && !conn_arg.is_none()) {
-					conn = nb::cast<std::shared_ptr<DuckDBPyConnection>>(conn_arg);
-				}
-			}
-		}
-		if (!conn) {
-			conn = DuckDBPyConnection::DefaultConnection();
-		}
-		return conn->ReadCSV(name, kwargs);
-	};
-	m.def("read_csv", module_read_csv, "Create a relation object from the CSV file in 'name'");
-	m.def("from_csv_auto", module_read_csv, "Create a relation object from the CSV file in 'name'");
-	m.def(
-	    "from_df",
-	    [](const PandasDataFrame &value, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(value);
-	    },
-	    "Create a relation object from the DataFrame in df", nb::arg("df"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "from_arrow",
-	    [](nb::object &arrow_object, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromArrow(arrow_object);
-	    },
-	    "Create a relation object from an Arrow object", nb::arg("arrow_object"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "from_parquet",
-	    [](const nb::object &path_or_buffer, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const nb::object &compression = nb::none(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromParquet(path_or_buffer, binary_as_string, file_row_number, filename, hive_partitioning,
-		                             union_by_name, compression);
-	    },
-	    "Create a relation object from the Parquet path(s) or file-like object(s) in 'path_or_buffer'",
-	    nb::arg("path_or_buffer"), nb::arg("binary_as_string") = false, nb::kw_only(),
-	    nb::arg("file_row_number") = false, nb::arg("filename") = false, nb::arg("hive_partitioning") = false,
-	    nb::arg("union_by_name") = false, nb::arg("compression") = nb::none(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "read_parquet",
-	    [](const nb::object &path_or_buffer, bool binary_as_string, bool file_row_number, bool filename,
-	       bool hive_partitioning, bool union_by_name, const nb::object &compression = nb::none(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromParquet(path_or_buffer, binary_as_string, file_row_number, filename, hive_partitioning,
-		                             union_by_name, compression);
-	    },
-	    "Create a relation object from the Parquet path(s) or file-like object(s) in 'path_or_buffer'",
-	    nb::arg("path_or_buffer"), nb::arg("binary_as_string") = false, nb::kw_only(),
-	    nb::arg("file_row_number") = false, nb::arg("filename") = false, nb::arg("hive_partitioning") = false,
-	    nb::arg("union_by_name") = false, nb::arg("compression") = nb::none(),
 	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "get_table_names",
@@ -824,137 +617,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    },
 	    "Load an installed extension", nb::arg("extension"), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
-	    "project",
-	    // nanobind forbids named typed parameters after nb::args, so this takes (*args, **kwargs) and recovers the
-	    // advertised signature by hand: `df` may be positional (args[0]) or the `df=` keyword (the stubs advertise
-	    // it as positional-or-keyword); the remaining positionals are projection expressions; `groups` /
-	    // `connection` are keyword-only (pulled from kwargs, preserving the previous defaults/None-handling).
-	    [](const nb::args &args, const nb::kwargs &kwargs) {
-		    nb::object df_obj = nb::none();
-		    nb::args proj_args = nb::steal<nb::args>(PyTuple_New(0));
-		    if (args.size() >= 1) {
-			    df_obj = nb::object(args[0]);
-			    proj_args = nb::steal<nb::args>(PyTuple_GetSlice(args.ptr(), 1, static_cast<Py_ssize_t>(args.size())));
-		    } else if (kwargs.contains("df")) {
-			    df_obj = kwargs["df"];
-			    PyDict_DelItemString(kwargs.ptr(), "df");
-		    }
-		    auto df = nb::cast<PandasDataFrame>(df_obj);
-		    string groups = "";
-		    if (kwargs.contains("groups") && !kwargs["groups"].is_none()) {
-			    groups = nb::cast<std::string>(kwargs["groups"]);
-		    }
-		    std::shared_ptr<DuckDBPyConnection> conn;
-		    if (kwargs.contains("connection") && !kwargs["connection"].is_none()) {
-			    conn = nb::cast<std::shared_ptr<DuckDBPyConnection>>(kwargs["connection"]);
-		    }
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Project(proj_args, groups);
-	    },
-	    "Project the relation object by the projection in project_expr");
-	m.def(
-	    "distinct",
-	    [](const PandasDataFrame &df, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Distinct();
-	    },
-	    "Retrieve distinct rows from this relation object", nb::arg("df"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "write_csv",
-	    [](const PandasDataFrame &df, const string &filename, const nb::object &sep = nb::none(),
-	       const nb::object &na_rep = nb::none(), const nb::object &header = nb::none(),
-	       const nb::object &quotechar = nb::none(), const nb::object &escapechar = nb::none(),
-	       const nb::object &date_format = nb::none(), const nb::object &timestamp_format = nb::none(),
-	       const nb::object &quoting = nb::none(), const nb::object &encoding = nb::none(),
-	       const nb::object &compression = nb::none(), const nb::object &overwrite = nb::none(),
-	       const nb::object &per_thread_output = nb::none(), const nb::object &use_tmp_file = nb::none(),
-	       const nb::object &partition_by = nb::none(), const nb::object &write_partition_columns = nb::none(),
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    conn->FromDF(df)->ToCSV(filename, sep, na_rep, header, quotechar, escapechar, date_format, timestamp_format,
-		                            quoting, encoding, compression, overwrite, per_thread_output, use_tmp_file,
-		                            partition_by, write_partition_columns);
-	    },
-	    "Write the relation object to a CSV file in 'file_name'", nb::arg("df"), nb::arg("filename"), nb::kw_only(),
-	    nb::arg("sep") = nb::none(), nb::arg("na_rep") = nb::none(), nb::arg("header") = nb::none(),
-	    nb::arg("quotechar") = nb::none(), nb::arg("escapechar") = nb::none(), nb::arg("date_format") = nb::none(),
-	    nb::arg("timestamp_format") = nb::none(), nb::arg("quoting") = nb::none(), nb::arg("encoding") = nb::none(),
-	    nb::arg("compression") = nb::none(), nb::arg("overwrite") = nb::none(),
-	    nb::arg("per_thread_output") = nb::none(), nb::arg("use_tmp_file") = nb::none(),
-	    nb::arg("partition_by") = nb::none(), nb::arg("write_partition_columns") = nb::none(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "aggregate",
-	    [](const PandasDataFrame &df, const nb::object &expr, const string &groups = "",
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Aggregate(expr, groups);
-	    },
-	    "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", nb::arg("df"),
-	    nb::arg("aggr_expr"), nb::arg("group_expr") = "", nb::kw_only(), nb::arg("connection").none() = nb::none());
-	m.def(
-	    "alias",
-	    [](const PandasDataFrame &df, const string &expr, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->SetAlias(expr);
-	    },
-	    "Rename the relation object to new alias", nb::arg("df"), nb::arg("alias"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "filter",
-	    [](const PandasDataFrame &df, const nb::object &expr, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Filter(expr);
-	    },
-	    "Filter the relation object by the filter in filter_expr", nb::arg("df"), nb::arg("filter_expr"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "limit",
-	    [](const PandasDataFrame &df, int64_t n, int64_t offset = 0,
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Limit(n, offset);
-	    },
-	    "Only retrieve the first n rows from this relation object, starting at offset", nb::arg("df"), nb::arg("n"),
-	    nb::arg("offset") = 0, nb::kw_only(), nb::arg("connection").none() = nb::none());
-	m.def(
-	    "order",
-	    [](const PandasDataFrame &df, const string &expr, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Order(expr);
-	    },
-	    "Reorder the relation object by order_expr", nb::arg("df"), nb::arg("order_expr"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "query_df",
-	    [](const PandasDataFrame &df, const string &view_name, const string &sql_query,
-	       std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(df)->Query(view_name, sql_query);
-	    },
-	    "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation object",
-	    nb::arg("df"), nb::arg("virtual_table_name"), nb::arg("sql_query"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
-	m.def(
 	    "description",
 	    [](std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
 		    if (!conn) {
@@ -974,27 +636,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    "Get result set row count", nb::kw_only(), nb::arg("connection").none() = nb::none());
 	// END_OF_CONNECTION_METHODS
 
-	// We define these "wrapper" methods manually because they are overloaded
-	m.def(
-	    "arrow",
-	    [](idx_t rows_per_batch, std::shared_ptr<DuckDBPyConnection> conn) -> duckdb::pyarrow::RecordBatchReader {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FetchRecordBatchReader(rows_per_batch);
-	    },
-	    "Alias of to_arrow_reader(). We recommend using to_arrow_reader() instead.",
-	    nb::arg("rows_per_batch") = 1000000, nb::kw_only(), nb::arg("connection").none() = nb::none());
-	m.def(
-	    "arrow",
-	    [](nb::object &arrow_object, std::shared_ptr<DuckDBPyConnection> conn) -> std::unique_ptr<DuckDBPyRelation> {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromArrow(arrow_object);
-	    },
-	    "Create a relation object from an Arrow object", nb::arg("arrow_object"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
 	m.def(
 	    "df",
 	    [](bool date_as_object, std::shared_ptr<DuckDBPyConnection> conn) -> PandasDataFrame {
@@ -1004,17 +645,6 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    return conn->FetchDF(date_as_object);
 	    },
 	    "Fetch a result as DataFrame following execute()", nb::kw_only(), nb::arg("date_as_object") = false,
-	    nb::arg("connection").none() = nb::none());
-	m.def(
-	    "df",
-	    [](const PandasDataFrame &value,
-	       std::shared_ptr<DuckDBPyConnection> conn) -> std::unique_ptr<DuckDBPyRelation> {
-		    if (!conn) {
-			    conn = DuckDBPyConnection::DefaultConnection();
-		    }
-		    return conn->FromDF(value);
-	    },
-	    "Create a relation object from the DataFrame df", nb::arg("df"), nb::kw_only(),
 	    nb::arg("connection").none() = nb::none());
 }
 
@@ -1080,6 +710,12 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	(void)keep_alive;
 	// END
 
+	// A static initializer registered the linked extensions when the library was loaded. Repeating the call is a no-op
+	// on a healthy build and makes a broken build fail at import instead of at the first connect.
+	if (duckdb_register_static_extensions() != 0) {
+		throw std::runtime_error("Failed to register the statically linked DuckDB extensions");
+	}
+
 	nb::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
@@ -1105,11 +741,10 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
-	DuckDBPyExpression::Initialize(m);
 	DuckDBPyStatement::Initialize(m);
-	DuckDBPyRelation::Initialize(m);
+	DuckDBPyAppender::Initialize(m);
+	DuckDBPySeam::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	PythonObject::Initialize();
 
 	m.doc() = "DuckDB is an embeddable SQL OLAP Database Management System";
 	m.attr("__package__") = "duckdb";
@@ -1139,6 +774,9 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g., syntax highlighting",
 	      nb::arg("query"));
+	m.def("_set_arrow_sources", &DuckDBPyConnection::SetArrowSources, nb::arg("sources"));
+	m.def("_translate_predicate", &TranslatePredicateForTesting, nb::arg("connection"), nb::arg("predicate"),
+	      nb::arg("columns").none() = nb::none(), nb::arg("schema").none() = nb::none(), nb::arg("select") = "*");
 	nb::enum_<PySQLTokenType>(m, "token_type")
 	    .value("identifier", PySQLTokenType::PY_SQL_TOKEN_IDENTIFIER)
 	    .value("numeric_const", PySQLTokenType::PY_SQL_TOKEN_NUMERIC_CONSTANT)
@@ -1154,6 +792,7 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	static char clean_default_connection_sentinel;
 	m.attr("_clean_default_connection") =
 	    nb::capsule(&clean_default_connection_sentinel, [](void *) noexcept { DuckDBPyConnection::Cleanup(); });
+	WatchInterpreterExit();
 }
 
 } // namespace duckdb

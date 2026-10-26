@@ -45,6 +45,8 @@ pandas.Int32Dtype
 pandas.Int64Dtype
 pandas.Float32Dtype
 pandas.Float64Dtype
+pandas.arrays.ArrowStringArray
+pandas.arrays.StringArray
 
 import datetime
 

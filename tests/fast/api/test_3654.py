@@ -19,8 +19,8 @@ class Test3654:
         con = duckdb.connect()
         con.register("df1", df1)
         rel = con.view("df1")
-        print(rel.execute().fetchall())
-        assert rel.execute().fetchall() == [(1,), (1,), (2,)]
+        print(rel.fetchall())
+        assert rel.fetchall() == [(1,), (1,), (2,)]
 
     def test_3654_arrow(self, duckdb_cursor):
         if not can_run:
@@ -35,5 +35,5 @@ class Test3654:
         con = duckdb.connect()
         con.register("df1", table)
         rel = con.view("df1")
-        print(rel.execute().fetchall())
-        assert rel.execute().fetchall() == [(1,), (1,), (2,)]
+        print(rel.fetchall())
+        assert rel.fetchall() == [(1,), (1,), (2,)]

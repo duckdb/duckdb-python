@@ -1,17 +1,7 @@
-#include "duckdb_python/arrow/arrow_array_stream.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 
-#include "duckdb/common/assert.hpp"
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/limits.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
-
-#include "duckdb_python/pyconnection/pyconnection.hpp"
-#include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyresult.hpp"
+#include "duckdb_python/pyutil.hpp"
 
 namespace duckdb {
 
@@ -42,5 +32,12 @@ nb::object ToArrowTable(const vector<LogicalType> &types, const vector<string> &
 }
 
 } // namespace pyarrow
+
+void TransformDuckToArrowChunk(nb::object pyarrow_schema, ArrowArray &data, nb::list &batches) {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	auto pyarrow_lib_module = nb::module_::import_("pyarrow").attr("lib");
+	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
+	batches.append(batch_import_func(reinterpret_cast<uint64_t>(&data), pyarrow_schema));
+}
 
 } // namespace duckdb

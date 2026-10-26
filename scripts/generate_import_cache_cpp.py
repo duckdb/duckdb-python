@@ -171,7 +171,7 @@ for value in json_data.values():
 
 for file in files:
     content = file.to_string()
-    path = f"src/duckdb_py/include/duckdb_python/import_cache/modules/{file.file_name}"
+    path = f"src/include/duckdb_python/import_cache/modules/{file.file_name}"
     import_cache_path = Path(script_dir) / ".." / path
     import_cache_path.write_text(content)
 
@@ -198,7 +198,7 @@ import_cache_file = f"""
 
 #pragma once
 
-#include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/nb/casters.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb_python/import_cache/python_import_cache_modules.hpp"
@@ -215,17 +215,17 @@ public:
 {get_root_modules(files)}
 
 public:
-    py::handle AddCache(py::object item);
+    nb::handle AddCache(nb::object item);
 
 private:
-    vector<py::object> owned_objects;
+    vector<nb::object> owned_objects;
 }};
 
 }} // namespace duckdb
 
 """
 
-import_cache_path = Path(script_dir) / ".." / "src/duckdb_py/include/duckdb_python/import_cache/python_import_cache.hpp"
+import_cache_path = Path(script_dir) / ".." / "src/include/duckdb_python/import_cache/python_import_cache.hpp"
 import_cache_path.write_text(import_cache_file)
 
 
@@ -236,9 +236,7 @@ def get_module_file_path_includes(files: list[ModuleFile]):
 
 module_includes = get_module_file_path_includes(files)
 
-modules_header = (
-    Path(script_dir) / ".." / ("src/duckdb_py/include/duckdb_python/import_cache/python_import_cache_modules.hpp")
-)
+modules_header = Path(script_dir) / ".." / "src/include/duckdb_python/import_cache/python_import_cache_modules.hpp"
 modules_header.write_text(module_includes)
 
 # Generate the python_import_cache_modules.hpp file

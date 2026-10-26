@@ -37,7 +37,7 @@ nb::handle PythonImportCacheItem::AddCache(PythonImportCache &cache, nb::object 
 
 void PythonImportCacheItem::LoadModule(PythonImportCache &cache) {
 	try {
-		duckdb::PyUtil::GilAssert();
+		DUCKDB_PY_ASSERT_GIL_HELD();
 		object = AddCache(cache, std::move(nb::module_::import_(name.c_str())));
 		load_succeeded = true;
 	} catch (nb::python_error &e) {

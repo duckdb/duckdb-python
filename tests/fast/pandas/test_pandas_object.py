@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 import duckdb
 import numpy as np
 import pandas as pd
@@ -18,6 +20,19 @@ class TestPandasObject:
         pandas_df_2 = pd.DataFrame(data, columns=["c"], dtype=object)  # noqa: F841
         assert con.execute("FROM pandas_df_2 limit 1").fetchall() == [(None,)]
         assert con.execute("select typeof(c) FROM pandas_df_2 limit 1").fetchall() == [('"NULL"',)]
+
+    def test_object_strings_of_every_utf8_width(self, duckdb_cursor):
+        # each word short enough to sit inside the DuckDB string and repeated to point into the str's own bytes
+        words = ["ascii", "café", "ā", "€", "😀"]
+        values = [text for word in words for text in (word, word * 20)] + [None]
+        df = pd.DataFrame({"s": pd.Series(values, dtype=object)})  # noqa: F841
+        assert [row[0] for row in duckdb_cursor.sql("SELECT s FROM df").fetchall()] == values
+
+    def test_object_string_with_a_lone_surrogate(self, duckdb_cursor):
+        df = pd.DataFrame({"s": pd.Series(["fine", "x\ud800y"], dtype=object)})  # noqa: F841
+        with pytest.raises(duckdb.InvalidInputException, match=r"surrogate '\\ud800' at position 1 is not allowed"):
+            duckdb_cursor.sql("SELECT s FROM df").fetchall()
+        assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
 
     def test_object_to_string(self, duckdb_cursor):
         con = duckdb.connect(database=":memory:", read_only=False)

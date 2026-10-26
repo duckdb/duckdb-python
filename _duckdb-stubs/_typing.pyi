@@ -8,7 +8,7 @@ from collections.abc import Mapping, Iterator, Sequence, Callable
 
 if TYPE_CHECKING:
     import pyarrow as pa
-    from ._expression import Expression
+    from duckdb._expression import Expression
     from ._sqltypes import DuckDBPyType
 
 # Numpy protocols

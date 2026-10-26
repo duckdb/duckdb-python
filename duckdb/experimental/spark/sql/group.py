@@ -15,13 +15,17 @@
 # limitations under the License.
 #
 
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import TYPE_CHECKING, overload
 
+from duckdb import Expression
+
+from ..errors import AnalysisException
 from ..exception import ContributionsAcceptedError
-from .column import Column
-from .dataframe import DataFrame
-from .functions import _to_column_expr
+from . import functions
+from .column import Column, _name_parts, _named_expr, _ref_name
+from .dataframe import DataFrame, _aggregate, _name_key
+from .functions import _to_column_expr, col
 from .types import NumericType
 
 # Only import symbols needed for type checking if something is type checking
@@ -32,23 +36,26 @@ if TYPE_CHECKING:
 __all__ = ["GroupedData", "Grouping"]
 
 
+def _numeric_columns(df: DataFrame) -> list[str]:
+    # Spark reads these names as attribute names too, so a name with a backtick raises there as well.
+    return [x.name for x in df.schema.fields if isinstance(x.dataType, NumericType)]
+
+
 def _api_internal(self: "GroupedData", name: str, *cols: str) -> DataFrame:
-    expressions = ",".join(list(cols))
-    group_by = str(self._grouping) if self._grouping else ""
-    projections = self._grouping.get_columns()
-    jdf = self._df.relation.apply(
-        function_name=name,  # aggregate function
-        function_aggr=expressions,  # inputs to aggregate
-        group_expr=group_by,  # groups
-        projected_columns=projections,  # projections
-    )
-    return DataFrame(jdf, self.session)
+    non_numeric = {_name_key(x.name) for x in self._df.schema.fields if not isinstance(x.dataType, NumericType)}
+    for column in cols:
+        parts = _name_parts(column)
+        if len(parts) == 1 and _name_key(parts[0]) in non_numeric:
+            raise AnalysisException(error_class="_LEGACY_ERROR_TEMP_1323", message_parameters={"colName": column})
+    function = getattr(functions, name)
+    return self._agg([function(Column(self._df._scope_column_expr(c), _ref_name(c))) for c in cols])
 
 
 def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
     def _api(self: "GroupedData", *cols: str) -> DataFrame:
         name = f.__name__
-        return _api_internal(self, name, *cols)
+        # Without columns Spark aggregates every numeric column, grouping keys included.
+        return _api_internal(self, name, *(cols or _numeric_columns(self._df)))
 
     _api.__name__ = f.__name__
     _api.__doc__ = f.__doc__
@@ -58,7 +65,8 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
 class Grouping:  # noqa: D101
     def __init__(self, *cols: "ColumnOrName", **kwargs) -> None:  # noqa: D107
         self._type = ""
-        self._cols = [_to_column_expr(x) for x in cols]
+        self._columns = [col(x) if isinstance(x, str) else x for x in cols]
+        self._cols = [_to_column_expr(x) for x in self._columns]
         if "special" in kwargs:
             special = kwargs["special"]
             accepted_special = ["cube", "rollup"]
@@ -68,6 +76,13 @@ class Grouping:  # noqa: D101
     def get_columns(self) -> str:  # noqa: D102
         columns = ",".join([str(x) for x in self._cols])
         return columns
+
+    def named_columns(self, columns: list[str], references: Collection[str]) -> list[Expression]:
+        """The grouping expressions aliased to the names Spark gives them in a projection over ``columns``.
+
+        ``references`` holds the renderings of the qualified references to the columns, folded to lower case.
+        """
+        return [_named_expr(x, columns, references) for x in self._columns]
 
     def __str__(self) -> str:  # noqa: D105
         columns = self.get_columns()
@@ -118,9 +133,8 @@ class GroupedData:
         |  Bob|    2|
         +-----+-----+
         """
-        return _api_internal(self, "count").withColumnRenamed("count_star()", "count")
+        return self._agg([functions.count(functions.lit(1)).alias("count")])
 
-    @df_varargs_api
     def mean(self, *cols: str) -> DataFrame:
         """Computes average values for each numeric columns for each group.
 
@@ -131,6 +145,7 @@ class GroupedData:
         cols : str
             column names. Non-numeric columns are ignored.
         """
+        return self.avg(*cols)
 
     def avg(self, *cols: str) -> DataFrame:
         """Computes average values for each numeric columns for each group.
@@ -177,12 +192,7 @@ class GroupedData:
         |     5.0|      110.0|
         +--------+-----------+
         """
-        columns = list(cols)
-        if len(columns) == 0:
-            schema = self._df.schema
-            # Take only the numeric types of the relation
-            columns: list[str] = [x.name for x in schema.fields if isinstance(x.dataType, NumericType)]
-        return _api_internal(self, "avg", *columns)
+        return _api_internal(self, "avg", *(cols or _numeric_columns(self._df)))
 
     @df_varargs_api
     def max(self, *cols: str) -> DataFrame:
@@ -413,13 +423,12 @@ class GroupedData:
         assert exprs, "exprs should not be empty"
         if len(exprs) == 1 and isinstance(exprs[0], dict):
             raise ContributionsAcceptedError
-        else:
-            # Columns
-            assert all(isinstance(c, Column) for c in exprs), "all exprs should be Column"
-            expressions = list(self._grouping._cols)
-            expressions.extend([x.expr for x in exprs])
-            group_by = str(self._grouping)
-            rel = self._df.relation.select(*expressions, groups=group_by)
-        return DataFrame(rel, self.session)
+        assert all(isinstance(c, Column) for c in exprs), "all exprs should be Column"
+        return self._agg(list(exprs))
+
+    def _agg(self, exprs: list[Column]) -> DataFrame:
+        self._df._check_references(*self._grouping._columns, *exprs)
+        groups = self._grouping.named_columns(self._df.columns, self._df._qualified_references())
+        return DataFrame(_aggregate(self._df, groups, exprs, str(self._grouping)), self.session)
 
     # TODO: add 'pivot'  # noqa: TD002, TD003

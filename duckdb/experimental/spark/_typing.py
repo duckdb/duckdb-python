@@ -17,11 +17,7 @@
 # under the License.
 
 from collections.abc import Callable, Iterable, Sized
-from typing import Literal, TypeVar
-
-from typing_extensions import Protocol, Self
-
-from numpy import float32, float64, int32, int64, ndarray
+from typing import Literal, Protocol, Self, TypeVar
 
 F = TypeVar("F", bound=Callable)
 T_co = TypeVar("T_co", covariant=True)
@@ -43,5 +39,3 @@ class SizedIterable(Protocol, Sized, Iterable[T_co]): ...
 
 
 S = TypeVar("S", bound=SupportsOrdering)
-
-NumberOrArray = TypeVar("NumberOrArray", float, int, complex, int32, int64, float32, float64, ndarray)

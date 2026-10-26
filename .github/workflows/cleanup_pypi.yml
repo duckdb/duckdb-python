@@ -70,9 +70,11 @@ jobs:
           exit 1
 
       - name: Install Astral UV
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.0
         with:
-          version: "0.9.0"
+          version: "0.12.23"
+          # No setup-uv cache: since setup-uv v9 it saves unpruned and would crowd out the ccaches.
+          enable-cache: false
 
       - name: Install dependencies
         run: uv sync --only-group pypi --no-install-project

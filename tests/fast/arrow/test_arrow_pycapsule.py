@@ -67,14 +67,12 @@ class TestArrowPyCapsuleExport:
         assert actual.num_rows == 0
         assert actual.schema.equals(expected.schema)
 
-    def test_capsule_slow_path_after_execute(self):
-        """Pre-executed relation takes the slow path (MaterializedQueryResult) and still works."""
+    def test_capsule_of_a_materialized_relation(self):
         conn = duckdb.connect()
         sql = "SELECT i, i::DOUBLE AS d FROM range(500) t(i)"
         expected = conn.sql(sql).to_arrow_table()
 
-        rel = conn.sql(sql)
-        rel.execute()  # forces MaterializedCollector, not PhysicalArrowCollector
+        rel = conn.sql(sql).materialize()
         actual = pa.table(rel)
         assert actual.equals(expected)
 

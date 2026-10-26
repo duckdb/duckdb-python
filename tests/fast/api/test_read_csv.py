@@ -37,48 +37,48 @@ def create_temp_csv(tmp_path):
 class TestReadCSV:
     def test_using_connection_wrapper(self):
         rel = duckdb.read_csv(TestFile("category.csv"))
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_using_connection_wrapper_with_keyword(self):
         rel = duckdb.read_csv(TestFile("category.csv"), dtype={"category_id": "string"})
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1", "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_no_options(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"))
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_dtype(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), dtype={"category_id": "string"})
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1", "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_dtype_as_list(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), dtype=["string"])
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1", "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), dtype=["double"])
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1.0, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_sep(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), sep=" ")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1|Action|2006-02-15", datetime.time(4, 46, 27))
 
     def test_delimiter(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), delimiter=" ")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1|Action|2006-02-15", datetime.time(4, 46, 27))
 
@@ -88,7 +88,7 @@ class TestReadCSV:
 
     def test_header_true(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"))
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
@@ -97,20 +97,19 @@ class TestReadCSV:
 
     def test_na_values(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), na_values="Action")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_na_values_list(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), na_values=["Action", "Animation"])
-        res = rel.fetchone()
-        assert res == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
-        res = rel.fetchone()
-        assert res == (2, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+        rows = rel.fetchall()
+        assert rows[0] == (1, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
+        assert rows[1] == (2, None, datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_skiprows(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), skiprows=1)
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 
@@ -121,7 +120,7 @@ class TestReadCSV:
 
     def test_quotechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("unquote_without_delimiter.csv"), quotechar="", header=False)
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ('"AAA"BB',)
 
@@ -133,7 +132,7 @@ class TestReadCSV:
 
     def test_escapechar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("quote_escape.csv"), escapechar=";", header=False)
-        res = rel.limit(1, 1).fetchone()
+        res = rel.limit(1, 1).fetchall()[0]
         print(res)
         assert res == ("345", "TEST6", '"text""2""text"')
 
@@ -145,13 +144,13 @@ class TestReadCSV:
 
     def test_encoding_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("quote_escape.csv"), encoding="UTF-8")
-        res = rel.limit(1, 1).fetchone()
+        res = rel.limit(1, 1).fetchall()[0]
         print(res)
         assert res == (345, "TEST6", 'text"2"text')
 
     def test_date_format_as_datetime(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("datetime.csv"))
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (
             123,
@@ -163,7 +162,7 @@ class TestReadCSV:
 
     def test_date_format_as_date(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("datetime.csv"), date_format="%Y-%m-%d")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (
             123,
@@ -175,7 +174,7 @@ class TestReadCSV:
 
     def test_timestamp_format(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("datetime.csv"), timestamp_format="%Y-%m-%d %H:%M:%S")
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         assert res == (
             123,
             "TEST2",
@@ -186,13 +185,13 @@ class TestReadCSV:
 
     def test_sample_size_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("problematic.csv"), sample_size=-1)
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1", "1", "1")
 
     def test_all_varchar(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile("category.csv"), all_varchar=True)
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == ("1", "Action", "2006-02-15 04:46:27")
 
@@ -281,7 +280,7 @@ class TestReadCSV:
         pathlib = pytest.importorskip("pathlib")
         path = pathlib.Path(TestFile("category.csv"))
         rel = duckdb_cursor.read_csv(path)
-        res = rel.fetchone()
+        res = rel.fetchall()[0]
         print(res)
         assert res == (1, "Action", datetime.datetime(2006, 2, 15, 4, 46, 27))
 

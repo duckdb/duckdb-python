@@ -25,7 +25,9 @@ See Also:
     - DuckDB Type System: https://duckdb.org/docs/sql/data_types/overview
 """
 
-from duckdb import sqltypes
+import collections.abc
+
+from duckdb.sqltypes import DuckDBPyType
 
 
 class DBAPITypeObject:
@@ -35,36 +37,40 @@ class DBAPITypeObject:
     It allows checking whether a specific DuckDB type belongs to a broader
     category like STRING, NUMBER, DATETIME, etc.
 
-    The type object supports equality comparison with DuckDBPyType instances,
-    returning True if the type belongs to this category.
+    A category is a set of type ids, as DuckDBPyType.id gives them. A DuckDBPyType
+    belongs to the category when its id is in the set, whatever its parameters
+    (such as the width and scale of a DECIMAL) or its alias (such as JSON, a VARCHAR).
 
     Args:
-        types: A list of DuckDBPyType instances that belong to this type category.
+        type_ids: Lowercase type ids of the types that belong to this category.
 
     Example:
-        >>> string_types = DBAPITypeObject([sqltypes.VARCHAR, sqltypes.CHAR])
-        >>> result = sqltypes.VARCHAR == string_types  # True
-        >>> result = sqltypes.INTEGER == string_types  # False
+        >>> string_types = DBAPITypeObject({"varchar"})
+        >>> result = duckdb.sqltypes.VARCHAR == string_types  # True
+        >>> result = duckdb.sqltypes.INTEGER == string_types  # False
 
     Note:
         This follows the DB API 2.0 specification where type objects are compared
         using equality operators rather than isinstance() checks.
     """
 
-    def __init__(self, types: list[sqltypes.DuckDBPyType]) -> None:
+    def __init__(self, type_ids: collections.abc.Iterable[str]) -> None:
         """Initialize a DB API type object.
 
         Args:
-            types: List of DuckDB types that belong to this category.
+            type_ids: Lowercase type ids, as DuckDBPyType.id gives them, of the types that belong to this category.
         """
-        self.types = types
+        if isinstance(type_ids, str):
+            msg = "type_ids must be a collection of type ids, not a single str"
+            raise TypeError(msg)
+        self.type_ids = frozenset(type_ids)
 
     def __eq__(self, other: object) -> bool:
         """Check if a DuckDB type belongs to this type category.
 
         This method implements the DB API 2.0 type checking mechanism.
-        It returns True if the other object is a DuckDBPyType that
-        is contained in this type category.
+        It returns True if the other object is a DuckDBPyType whose id
+        is in this type category.
 
         Args:
             other: The object to compare, typically a DuckDBPyType instance.
@@ -73,34 +79,32 @@ class DBAPITypeObject:
             True if other is a DuckDBPyType in this category, False otherwise.
 
         Example:
-            >>> NUMBER == sqltypes.INTEGER  # True
-            >>> NUMBER == sqltypes.VARCHAR  # False
+            >>> NUMBER == duckdb.sqltypes.INTEGER  # True
+            >>> NUMBER == duckdb.sqltypes.VARCHAR  # False
         """
-        if isinstance(other, sqltypes.DuckDBPyType):
-            return other in self.types
-        return False
+        return isinstance(other, DuckDBPyType) and other.id in self.type_ids
 
     def __repr__(self) -> str:
         """Return a string representation of this type object.
 
         Returns:
-            A string showing the type object and its contained DuckDB types.
+            A string listing the type ids of this category, uppercase and sorted.
 
         Example:
             >>> repr(STRING)
             '<DBAPITypeObject [VARCHAR]>'
         """
-        return f"<DBAPITypeObject [{','.join(str(x) for x in self.types)}]>"
+        return f"<DBAPITypeObject [{','.join(sorted(type_id.upper() for type_id in self.type_ids))}]>"
 
 
 # Define the standard DB API 2.0 type objects for DuckDB
 
-STRING = DBAPITypeObject([sqltypes.VARCHAR])
+STRING = DBAPITypeObject({"varchar"})
 """
 STRING type object for text-based database columns.
 
 This type object represents all string/text types in DuckDB. Currently includes:
-- VARCHAR: Variable-length character strings
+- VARCHAR: Variable-length character strings, and the types that alias it, such as JSON
 
 Use this to check if a column contains textual data that should be handled
 as Python strings.
@@ -113,22 +117,22 @@ Example:
 """
 
 NUMBER = DBAPITypeObject(
-    [
-        sqltypes.TINYINT,
-        sqltypes.UTINYINT,
-        sqltypes.SMALLINT,
-        sqltypes.USMALLINT,
-        sqltypes.INTEGER,
-        sqltypes.UINTEGER,
-        sqltypes.BIGINT,
-        sqltypes.UBIGINT,
-        sqltypes.HUGEINT,
-        sqltypes.UHUGEINT,
-        sqltypes.DuckDBPyType("BIGNUM"),
-        sqltypes.DuckDBPyType("DECIMAL"),
-        sqltypes.FLOAT,
-        sqltypes.DOUBLE,
-    ]
+    {
+        "tinyint",
+        "utinyint",
+        "smallint",
+        "usmallint",
+        "integer",
+        "uinteger",
+        "bigint",
+        "ubigint",
+        "hugeint",
+        "uhugeint",
+        "bignum",
+        "decimal",
+        "float",
+        "double",
+    }
 )
 """
 NUMBER type object for numeric database columns.
@@ -144,7 +148,7 @@ Integer Types:
 
 Decimal Types:
 - BIGNUM: Arbitrary precision integers
-- DECIMAL: Fixed-point decimal numbers
+- DECIMAL: Fixed-point decimal numbers, of every width and scale
 
 Floating Point Types:
 - FLOAT: 32-bit floating point
@@ -161,16 +165,16 @@ Example:
 """
 
 DATETIME = DBAPITypeObject(
-    [
-        sqltypes.DATE,
-        sqltypes.TIME,
-        sqltypes.TIME_TZ,
-        sqltypes.TIMESTAMP,
-        sqltypes.TIMESTAMP_TZ,
-        sqltypes.TIMESTAMP_NS,
-        sqltypes.TIMESTAMP_MS,
-        sqltypes.TIMESTAMP_S,
-    ]
+    {
+        "date",
+        "time",
+        "time with time zone",
+        "timestamp",
+        "timestamp with time zone",
+        "timestamp_ns",
+        "timestamp_ms",
+        "timestamp_s",
+    }
 )
 """
 DATETIME type object for date and time database columns.
@@ -201,7 +205,7 @@ Example:
     >>> cursor.description[2][1] == DATETIME  # Check if third column is date/time
 """
 
-BINARY = DBAPITypeObject([sqltypes.BLOB])
+BINARY = DBAPITypeObject({"blob"})
 """
 BINARY type object for binary data database columns.
 

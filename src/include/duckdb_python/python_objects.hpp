@@ -10,19 +10,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/main/client_properties.hpp"
 
-#include "datetime.h" //from python
-
-/* Backport for Python < 3.10 */
-#if PY_VERSION_HEX < 0x030a00a1
-#ifndef PyDateTime_TIME_GET_TZINFO
-#define PyDateTime_TIME_GET_TZINFO(o) ((((PyDateTime_Time *)o)->hastzinfo) ? ((PyDateTime_Time *)o)->tzinfo : Py_None)
-#endif
-#ifndef PyDateTime_DATE_GET_TZINFO
-#define PyDateTime_DATE_GET_TZINFO(o)                                                                                  \
-	((((PyDateTime_DateTime *)o)->hastzinfo) ? ((PyDateTime_DateTime *)o)->tzinfo : Py_None)
-#endif
-#endif
-
 namespace duckdb {
 
 struct PyDictionary {
@@ -73,22 +60,18 @@ struct PyDecimal {
 
 	struct PyDecimalPowerConverter {
 		template <typename T, typename = std::enable_if<std::numeric_limits<T>::is_integer, T>>
-		static Value Operation(bool signed_value, vector<uint8_t> &digits, uint8_t width, uint8_t scale) {
+		static Value Operation(bool signed_value, vector<uint8_t> &digits, uint8_t width, uint8_t exponent) {
 			T value = 0;
 			for (auto &digit : digits) {
 				value = value * 10 + digit;
 			}
-			D_ASSERT(scale >= 0);
-			int64_t multiplier =
-			    NumericHelper::POWERS_OF_TEN[MinValue<uint8_t>(scale, NumericHelper::CACHED_POWERS_OF_TEN - 1)];
-			for (auto power = scale; power > NumericHelper::CACHED_POWERS_OF_TEN; power--) {
-				multiplier *= 10;
+			for (idx_t i = 0; i < exponent; i++) {
+				value *= 10;
 			}
-			value *= multiplier;
 			if (signed_value) {
 				value = -value;
 			}
-			return Value::DECIMAL(value, width, scale);
+			return Value::DECIMAL(value, width, 0);
 		}
 	};
 
@@ -98,7 +81,7 @@ public:
 	bool signed_value = false;
 
 	PyDecimalExponentType exponent_type;
-	int32_t exponent_value;
+	int64_t exponent_value;
 
 public:
 	bool TryGetType(LogicalType &type);
@@ -128,7 +111,7 @@ private:
 struct PyTime {
 public:
 	PyTime(nb::handle &obj);
-	nb::handle &obj;
+	nb::object obj;
 	int32_t hour;
 	int32_t minute;
 	int32_t second;
@@ -150,7 +133,7 @@ private:
 struct PyDateTime {
 public:
 	PyDateTime(nb::handle &obj);
-	nb::handle &obj;
+	nb::object obj;
 	int32_t year;
 	int32_t month;
 	int32_t day;
@@ -199,7 +182,6 @@ public:
 };
 
 struct PythonObject {
-	static void Initialize();
 	static nb::object FromStruct(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 	static nb::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };

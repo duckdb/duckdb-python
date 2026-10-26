@@ -10,10 +10,20 @@
 
 #include "duckdb.hpp"
 #include "duckdb_python/nb/casters.hpp"
+#include "duckdb_python/registered_py_object.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
+
+//! Carried through the bind input so that SQL text can never forge a reference to the callable
+struct MapFunctionInfo : public TableFunctionInfo {
+	MapFunctionInfo(nb::object function_p, nb::object schema_p)
+	    : function(std::move(function_p)), schema(std::move(schema_p)) {
+	}
+	PyObjectHolder function;
+	PyObjectHolder schema;
+};
 
 struct MapFunction : public TableFunction {
 

@@ -1,0 +1,100 @@
+name: Full-API build with assertions and tests
+# Every release wheel is compiled with NDEBUG, and the wheels for 3.12 and up
+# are abi3, so D_ASSERT and the GIL asserts in src/include/duckdb_python/pyutil.hpp
+# compile to nothing in every wheel job. The editable install is the one build
+# that keeps the full CPython API, and FORCE_ASSERT keeps D_ASSERT live in
+# optimized code, the engine's relassert build. A Debug build ran the fast
+# suite for more than 75 minutes on a 4 vCPU runner; the relassert build runs
+# it at Release speed. This workflow builds it on Linux, against the oldest
+# interpreter the abi3 wheel serves, and runs the suite the caller asks for.
+on:
+  workflow_dispatch:
+    inputs:
+      testsuite:
+        type: choice
+        description: Testsuite to run (none, fast, all)
+        required: true
+        default: fast
+        options:
+          - none
+          - fast
+          - all
+      git_ref:
+        type: string
+        description: Git ref of the DuckDB python package
+        required: false
+  workflow_call:
+    inputs:
+      testsuite:
+        type: string
+        description: Testsuite to run (none, fast, all)
+        required: true
+      git_ref:
+        type: string
+        description: Git ref of the DuckDB python package
+        required: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  assert_test:
+    name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}the full-API build with assertions
+    runs-on: ubuntu-24.04
+    # A hang would otherwise hold the required Summary check for the six hour default.
+    timeout-minutes: 90
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      # The editable override in pyproject.toml asks for Debug; the environment wins and makes it Release with
+      # assertions. cmake/duckdb_loader.cmake forwards FORCE_ASSERT to the engine and to the binding objects.
+      SKBUILD_CMAKE_BUILD_TYPE: Release
+      SKBUILD_CMAKE_DEFINE: FORCE_ASSERT=1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+          submodules: true
+
+      # Its own key: objects compiled with DUCKDB_FORCE_ASSERT and the full API share nothing with the Release
+      # wheel caches. A dispatch that builds another ref must not write the branch's cache.
+      - name: Setup Ccache
+        uses: ./.github/actions/ccache-action
+        with:
+          key: ubuntu-assert-editable
+          save: ${{ inputs.git_ref == '' && 'true' || 'false' }}
+
+      - name: Install Astral UV
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.12.23"
+          python-version: "3.12"
+          enable-cache: false
+
+      # Build deps first, because the editable install runs without build isolation. Only duckdb itself does:
+      # a global --no-build-isolation also hits pyspark, an sdist that needs setuptools in the environment.
+      - name: Build the editable install with assertions
+        run: |
+          set -eo pipefail
+          uv sync --only-group build --no-install-project -p 3.12
+          uv sync --no-build-isolation-package duckdb --reinstall -p 3.12
+
+      - name: Check the build is the full-API build with assertions
+        run: |
+          set -eo pipefail
+          grep -q 'CMAKE_BUILD_TYPE:STRING=Release' build/debug/CMakeCache.txt
+          grep -Eq 'FORCE_ASSERT:BOOL=(1|ON|TRUE)' build/debug/CMakeCache.txt
+          # The module file name tells the API: a stable ABI build is named _duckdb.abi3.so.
+          uv run --no-sync python - <<'EOF'
+          import _duckdb
+          print(_duckdb.__file__)
+          assert "abi3" not in _duckdb.__file__, "expected a full-API module, got " + _duckdb.__file__
+          EOF
+
+      - name: Run the tests
+        if: ${{ inputs.testsuite != 'none' }}
+        run: |
+          set -eo pipefail
+          uv run --no-sync pytest -n 4 ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}

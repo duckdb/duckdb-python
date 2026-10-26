@@ -5,7 +5,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
-#include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/types/uuid.hpp"
@@ -139,7 +139,7 @@ struct TimeConvert {
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
 		set_mask = true;
-		return nullptr;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -157,7 +157,7 @@ struct TimeNSConvert {
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
 		set_mask = true;
-		return nullptr;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -171,12 +171,8 @@ struct StringConvert {
 	}
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
-		if (PANDAS) {
-			set_mask = false;
-			Py_RETURN_NONE;
-		}
-		set_mask = true;
-		return nullptr;
+		set_mask = !PANDAS;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -190,12 +186,8 @@ struct NullConvert {
 	}
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
-		if (PANDAS) {
-			set_mask = false;
-			Py_RETURN_NONE;
-		}
-		set_mask = true;
-		return nullptr;
+		set_mask = !PANDAS;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -209,7 +201,7 @@ struct BlobConvert {
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
 		set_mask = true;
-		return nullptr;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -223,7 +215,7 @@ struct BitConvert {
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
 		set_mask = true;
-		return nullptr;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -239,7 +231,7 @@ struct UUIDConvert {
 	template <class NUMPY_T, bool PANDAS>
 	static NUMPY_T NullValue(bool &set_mask) {
 		set_mask = true;
-		return nullptr;
+		Py_RETURN_NONE;
 	}
 };
 
@@ -523,6 +515,7 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 			idx_t src_idx = idata.sel->get_index(i + source_offset);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = 0;
 				requires_mask = true;
 				target_mask[offset] = true;
 			} else {
