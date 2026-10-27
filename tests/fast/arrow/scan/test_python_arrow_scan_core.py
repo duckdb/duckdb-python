@@ -857,11 +857,14 @@ class TestStateAcrossExecutions:
             assert con.execute(query.format("t")).fetchall() == con.execute(query.format("native")).fetchall()
             assert con.execute(query.format("t")).fetchall() == [("y", "x"), ("z", "y")]
 
-    def test_a_prepared_statement_survives_unregister(self):
+    def test_a_prepared_statement_rebinds_after_unregister(self):
         with duckdb.connect() as con:
             con._register_arrow_source("t", TableSource(WIDE))
             con.execute("PREPARE p AS SELECT a FROM t WHERE c > 2")
             con.unregister("t")
+            with pytest.raises(duckdb.CatalogException):
+                con.execute("EXECUTE p")
+            con._register_arrow_source("t", TableSource(WIDE))
             assert con.execute("EXECUTE p").fetchall() == [(2,), (3,)]
 
     def test_the_schema_hook_is_asked_once_for_the_life_of_the_source(self):

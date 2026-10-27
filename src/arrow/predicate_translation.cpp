@@ -559,8 +559,9 @@ nb::list TranslatePredicateForTesting(DuckDBPyConnection &py_connection, const s
 	std::replace(uuid.begin(), uuid.end(), '-', '_');
 	const string table = "__duckdb_predicate_probe_" + uuid;
 	DropTable drop {connection, SQLIdentifier::ToString(table)};
-	auto statements = connection.ExtractStatements("SELECT " + select + " FROM temp.main." +
-	                                               SQLIdentifier::ToString(table) + " WHERE " + predicate);
+	// Only probing, so a predicate that fails to parse leaves an explicit transaction usable
+	auto statements = connection.ExtractStatements(
+	    "SELECT " + select + " FROM temp.main." + SQLIdentifier::ToString(table) + " WHERE " + predicate, false);
 	if (statements.size() != 1) {
 		throw InvalidInputException("The predicate must be one expression");
 	}

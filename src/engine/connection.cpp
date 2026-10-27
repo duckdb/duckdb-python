@@ -440,7 +440,7 @@ void Session::Run(unique_ptr<SQLStatement> statement, const ResolvedTables &tabl
 
 StatementGroup::StatementGroup(Session session_p, const string &sql, bool aborts_transaction_p)
     : session(std::move(session_p)), query(sql), aborts_transaction(aborts_transaction_p),
-      iterator(make_uniq<StatementIterator>(session.Context().IterateStatements(sql))) {
+      iterator(make_uniq<StatementIterator>(session.Context().IterateStatements(sql, aborts_transaction))) {
 }
 
 StatementGroup::StatementGroup(Session session_p, unique_ptr<SQLStatement> statement)
