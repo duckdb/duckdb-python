@@ -795,7 +795,9 @@ def _outcome(setup, use, frame):
         try:
             return ("result", use(con, frame))
         except duckdb.Error as error:
-            return (type(error), str(error))
+            # A debug build verifies every string and raises an internal error with the stack trace of where it
+            # looked, which differs between the two frames even when the error does not
+            return (type(error), re.sub(r"\n\nStack Trace:\n\n.*?\n\n", "\n\n", str(error), flags=re.DOTALL))
 
 
 @needs_arrow_chunk_export

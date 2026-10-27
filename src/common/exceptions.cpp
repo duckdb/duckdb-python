@@ -4,6 +4,7 @@
 #include "duckdb/common/exception/list.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "utf8proc_wrapper.hpp"
 #include "duckdb_python/nb/casters.hpp"
 
 namespace nb = nanobind;
@@ -243,12 +244,20 @@ public:
 //===--------------------------------------------------------------------===//
 // PyThrowException
 //===--------------------------------------------------------------------===//
+//! The message with every byte that is not part of a valid UTF-8 sequence replaced, as nanobind raises it with a
+//! strict decode: an error quoting a string value that is not UTF-8 would otherwise surface as a UnicodeDecodeError
+//! in place of the DuckDB error
+static string ValidUTF8(string message) {
+	Utf8Proc::MakeValid(&message[0], message.size());
+	return message;
+}
+
 void PyThrowException(ErrorData &error, PyObject *http_exception) {
+	auto message = ValidUTF8(error.Message());
 	switch (error.Type()) {
 	case ExceptionType::HTTP: {
 		// construct exception object
-		auto exc_msg = error.Message();
-		auto e = nb::handle(http_exception)(nb::str(exc_msg.c_str(), exc_msg.size()));
+		auto e = nb::handle(http_exception)(nb::str(message.c_str(), message.size()));
 
 		auto headers = nb::dict();
 		for (auto &entry : error.ExtraInfo()) {
@@ -270,53 +279,53 @@ void PyThrowException(ErrorData &error, PyObject *http_exception) {
 		break;
 	}
 	case ExceptionType::CATALOG:
-		throw PyCatalogException(error.Message());
+		throw PyCatalogException(message);
 	case ExceptionType::FATAL:
-		throw PyFatalException(error.Message());
+		throw PyFatalException(message);
 	case ExceptionType::INTERRUPT:
-		throw PyInterruptException(error.Message());
+		throw PyInterruptException(message);
 	case ExceptionType::PERMISSION:
-		throw PyPermissionException(error.Message());
+		throw PyPermissionException(message);
 	case ExceptionType::SEQUENCE:
-		throw PySequenceException(error.Message());
+		throw PySequenceException(message);
 	case ExceptionType::DEPENDENCY:
-		throw PyDependencyException(error.Message());
+		throw PyDependencyException(message);
 	case ExceptionType::OUT_OF_RANGE:
-		throw PyOutOfRangeException(error.Message());
+		throw PyOutOfRangeException(message);
 	case ExceptionType::CONVERSION:
-		throw PyConversionException(error.Message());
+		throw PyConversionException(message);
 	case ExceptionType::MISMATCH_TYPE:
-		throw PyTypeMismatchException(error.Message());
+		throw PyTypeMismatchException(message);
 	case ExceptionType::TRANSACTION:
-		throw PyTransactionException(error.Message());
+		throw PyTransactionException(message);
 	case ExceptionType::OUT_OF_MEMORY:
-		throw PyOutOfMemoryException(error.Message());
+		throw PyOutOfMemoryException(message);
 	case ExceptionType::CONNECTION:
-		throw PyConnectionException(error.Message());
+		throw PyConnectionException(message);
 	case ExceptionType::RESOURCE_IN_USE:
-		throw PyResourceInUseException(error.Message());
+		throw PyResourceInUseException(message);
 	case ExceptionType::SERIALIZATION:
-		throw PySerializationException(error.Message());
+		throw PySerializationException(message);
 	case ExceptionType::CONSTRAINT:
-		throw PyConstraintException(error.Message());
+		throw PyConstraintException(message);
 	case ExceptionType::INTERNAL:
-		throw PyInternalException(error.Message());
+		throw PyInternalException(message);
 	case ExceptionType::PARSER:
-		throw PyParserException(error.Message());
+		throw PyParserException(message);
 	case ExceptionType::SYNTAX:
-		throw PySyntaxException(error.Message());
+		throw PySyntaxException(message);
 	case ExceptionType::IO:
-		throw PyIOException(error.Message());
+		throw PyIOException(message);
 	case ExceptionType::BINDER:
-		throw PyBinderException(error.Message());
+		throw PyBinderException(message);
 	case ExceptionType::INVALID_INPUT:
-		throw PyInvalidInputException(error.Message());
+		throw PyInvalidInputException(message);
 	case ExceptionType::INVALID_TYPE:
-		throw PyInvalidTypeException(error.Message());
+		throw PyInvalidTypeException(message);
 	case ExceptionType::NOT_IMPLEMENTED:
-		throw PyNotImplementedException(error.Message());
+		throw PyNotImplementedException(message);
 	default:
-		throw PyError(error.RawMessage());
+		throw PyError(ValidUTF8(error.RawMessage()));
 	}
 }
 

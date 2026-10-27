@@ -153,3 +153,12 @@ class TestRuntimeError:
 
         with no_result_set():
             conn.fetch_df_chunk()
+
+    def test_an_error_quoting_invalid_utf8_keeps_its_type(self):
+        pa = pytest.importorskip("pyarrow")
+        compute = pytest.importorskip("pyarrow.compute")
+        # An Arrow string column is scanned without validating it, so its bytes reach the error message as they are
+        values = compute.cast(pa.array([b"A\xff"], type=pa.binary()), pa.string(), safe=False)
+        source = pa.table({"s": values})
+        with duckdb.connect() as con, pytest.raises(duckdb.InvalidInputException, match=r"^Invalid Input Error: A\?$"):
+            con.sql("SELECT error(s) FROM source").fetchall()
