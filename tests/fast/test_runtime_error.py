@@ -159,6 +159,7 @@ class TestRuntimeError:
         compute = pytest.importorskip("pyarrow.compute")
         # An Arrow string column is scanned without validating it, so its bytes reach the error message as they are
         values = compute.cast(pa.array([b"A\xff"], type=pa.binary()), pa.string(), safe=False)
-        source = pa.table({"s": values})
-        with duckdb.connect() as con, pytest.raises(duckdb.InvalidInputException, match=r"^Invalid Input Error: A\?$"):
-            con.sql("SELECT error(s) FROM source").fetchall()
+        with duckdb.connect() as con:
+            con.register("source", pa.table({"s": values}))
+            with pytest.raises(duckdb.InvalidInputException, match=r"^Invalid Input Error: A\?$"):
+                con.sql("SELECT error(s) FROM source").fetchall()
