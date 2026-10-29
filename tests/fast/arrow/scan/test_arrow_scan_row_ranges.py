@@ -469,6 +469,31 @@ def _sliced_table():
     return table, [(k,) for k in range(3, SPLIT_ROWS)]
 
 
+def _struct_of_struct_table(rows):
+    k = arange(rows)
+    inner = pa.StructArray.from_arrays([pa.array(k), pa.array(k * 2)], names=["x", "y"])
+    return pa.table({"k": k, "s": pa.StructArray.from_arrays([inner, pa.array(k)], names=["a", "z"])})
+
+
+def _differently_chunked_columns():
+    table = _struct_of_struct_table(10)
+    return pa.table(
+        {
+            "k": pa.chunked_array([table["k"].chunks[0].slice(0, 4), table["k"].chunks[0].slice(4)]),
+            "s": table["s"],
+        }
+    )
+
+
+def _struct_of_struct_source(make_table, wrap=None):
+    def build():
+        table = make_table()
+        expected = [(row["k"], row["s"]) for row in table.to_pylist()]
+        return (wrap(table) if wrap else table), expected
+
+    return build
+
+
 LAYOUTS = {
     "struct_of_struct_with_null_rows": _column_layout(_struct_of_struct),
     "sparse_union_of_struct": _column_layout(_sparse_union_of_struct),
@@ -487,37 +512,15 @@ LAYOUTS = {
     "plain_array_with_null_rows": _plain_array_source(0),
     "plain_array_with_null_rows_and_an_offset": _plain_array_source(5),
     "one_chunk_table_slice": _sliced_table,
-}
-
-STRUCT_OFFSET_REFUSAL = (
-    "an Arrow batch carried column 1 with a struct or union below an offset the conversion would drop, which would "
-    "read the wrong rows"
-)
-
-
-def _struct_of_struct_table(rows):
-    k = arange(rows)
-    inner = pa.StructArray.from_arrays([pa.array(k), pa.array(k * 2)], names=["x", "y"])
-    return pa.table({"k": k, "s": pa.StructArray.from_arrays([inner, pa.array(k)], names=["a", "z"])})
-
-
-def _differently_chunked_columns():
-    table = _struct_of_struct_table(10)
-    return pa.table(
-        {
-            "k": pa.chunked_array([table["k"].chunks[0].slice(0, 4), table["k"].chunks[0].slice(4)]),
-            "s": table["s"],
-        }
-    )
-
-
-REFUSED = {
-    "table_slice": lambda: _struct_of_struct_table(LARGE_BATCH).slice(3),
-    "table_slice_in_batches": lambda: pa.Table.from_batches(
-        _struct_of_struct_table(LARGE_BATCH).slice(3).to_batches(max_chunksize=65_536)
+    "struct_of_struct_table_slice": _struct_of_struct_source(lambda: _struct_of_struct_table(LARGE_BATCH).slice(3)),
+    "struct_of_struct_table_slice_in_batches": _struct_of_struct_source(
+        lambda: pa.Table.from_batches(_struct_of_struct_table(LARGE_BATCH).slice(3).to_batches(max_chunksize=65_536))
     ),
-    "dataset": lambda: pytest.importorskip("pyarrow.dataset").dataset(_struct_of_struct_table(LARGE_BATCH)),
-    "differently_chunked_columns": _differently_chunked_columns,
+    "struct_of_struct_dataset": _struct_of_struct_source(
+        lambda: _struct_of_struct_table(LARGE_BATCH),
+        lambda table: pytest.importorskip("pyarrow.dataset").dataset(table),
+    ),
+    "struct_of_struct_differently_chunked_columns": _struct_of_struct_source(_differently_chunked_columns),
 }
 
 
@@ -530,16 +533,6 @@ class TestLayouts:
         with duckdb.connect(config={"threads": threads}) as con:
             con.register("src", obj)
             assert con.execute("SELECT * FROM src").fetchall() == expected
-
-    @pytest.mark.timeout(60)
-    @pytest.mark.parametrize("threads", [1, THREADS])
-    @pytest.mark.parametrize("layout", list(REFUSED))
-    def test_a_refused_layout_is_refused_the_same_when_split(self, layout, threads):
-        obj = REFUSED[layout]()
-        with duckdb.connect(config={"threads": threads}) as con:
-            con.register("src", obj)
-            with pytest.raises(duckdb.InvalidInputException, match=re.escape(STRUCT_OFFSET_REFUSAL)):
-                con.execute("SELECT * FROM src").fetchall()
 
 
 RELEASE_TABLE_ROWS = 3 * LARGE_BATCH
@@ -899,7 +892,8 @@ STRUCT_VALUES = [{"i": 1, "s": "a"}, {"i": 2, "s": "b"}, {"i": 3, "s": "c"}]
 
 
 def _list_of_dictionary(empty, valued):
-    child = pa.DictionaryArray.from_arrays(pa.array([0, 1] * valued, pa.int32()), pa.array(["x", "y"]))
+    indices = pa.array(np.arange(2 * valued, dtype=np.int32) % 3)
+    child = pa.DictionaryArray.from_arrays(indices, pa.array(["x", "y", "z"]))
     offsets = [0] * (empty + 1) + [2 * (i + 1) for i in range(valued)]
     return pa.ListArray.from_arrays(pa.array(offsets, pa.int32()), child)
 
@@ -925,6 +919,10 @@ class TestEngineConversions:
     def test_a_list_of_dictionaries_after_a_vector_of_empty_lists_reads_its_lists(self, empty, valued, threads):
         column = _list_of_dictionary(empty, valued)
         expected = [(len(column), pc.sum(pc.list_value_length(column)).as_py())]
+        first_valued = [(value,) for value in column.slice(empty - 2, 5).to_pylist()]
+        last = [(value,) for value in column.slice(len(column) - 3).to_pylist()]
         with duckdb.connect(config={"threads": threads}) as con:
             con.register("src", pa.table({"l": column}))
             assert con.execute("SELECT count(*), sum(len(l)) FROM src").fetchall() == expected
+            assert con.execute(f"SELECT l FROM src LIMIT 5 OFFSET {empty - 2}").fetchall() == first_valued
+            assert con.execute(f"SELECT l FROM src OFFSET {len(column) - 3}").fetchall() == last
