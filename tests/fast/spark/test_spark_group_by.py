@@ -184,7 +184,6 @@ class TestDataFrameGroupBy:
     def test_group_by_first_and_last(self, spark):
         df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
 
-        df = df.orderBy(df.age)
         res = (
             df.groupBy("name")
             .agg(first("age").alias("first_age"), last("age").alias("last_age"))
@@ -192,7 +191,12 @@ class TestDataFrameGroupBy:
             .collect()
         )
 
-        assert res == [Row(name="Alice", first_age=None, last_age=2), Row(name="Bob", first_age=5, last_age=5)]
+        # A grouped first and last read the rows in no set order, in Spark as in DuckDB. With three rows both still
+        # come from different rows of Alice's, so the pair is her two values in either order.
+        alice, bob = res
+        assert alice.name == "Alice"
+        assert {alice.first_age, alice.last_age} == {None, 2}
+        assert bob == Row(name="Bob", first_age=5, last_age=5)
 
     def test_standard_deviations(self, spark):
         df = spark.createDataFrame(

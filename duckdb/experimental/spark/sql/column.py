@@ -420,7 +420,7 @@ def _truncate(value: Expression, target: DuckDBPyType) -> Expression:
     Spark in ANSI mode does.
     """
     source_type = FunctionExpression("typeof", value)
-    is_string = source_type == ConstantExpression("VARCHAR")
+    is_string = _is_string(value)
     text = value.cast(VARCHAR)
     is_number = FunctionExpression(
         "regexp_full_match", text, ConstantExpression(r"\s*[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)\s*")
@@ -451,10 +451,18 @@ def _truncate(value: Expression, target: DuckDBPyType) -> Expression:
     )
 
 
+def _is_string(value: Expression) -> Expression:
+    """Whether ``value`` is a string at run time; a collated string's type reads VARCHAR('NOCASE') on 2.1 engines."""
+    return FunctionExpression(
+        "regexp_full_match", FunctionExpression("typeof", value), ConstantExpression(r"VARCHAR(\(.*\))?")
+    )
+
+
 def _to_binary(value: Expression) -> Expression:
     """Cast to binary like Spark, which takes a string's UTF-8 bytes where DuckDB reads escape sequences."""
-    is_string = FunctionExpression("typeof", value) == ConstantExpression("VARCHAR")
-    return CaseExpression(is_string, FunctionExpression("encode", value.cast(VARCHAR))).otherwise(value.cast(BLOB))
+    return CaseExpression(_is_string(value), FunctionExpression("encode", value.cast(VARCHAR))).otherwise(
+        value.cast(BLOB)
+    )
 
 
 def _children(dtype: DuckDBPyType) -> list[DuckDBPyType]:

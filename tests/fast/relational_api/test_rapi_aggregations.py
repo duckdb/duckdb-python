@@ -36,10 +36,12 @@ class TestRAPIAggregations:
         expected = [(1,)]
         assert len(result) == len(expected)
         assert all(r == e for r, e in zip(result, expected, strict=False))
-        result = table.order("id, t").any_value("v", groups="id", projected_columns="id").order("id").fetchall()
-        expected = [(1, 1), (2, 11), (3, 5)]
-        assert len(result) == len(expected)
-        assert all(r == e for r, e in zip(result, expected, strict=False))
+        # A grouped aggregate reads its rows in no set order, so any non-NULL value of the group is an answer.
+        result = table.any_value("v", groups="id", projected_columns="id").order("id").fetchall()
+        assert [group for group, _ in result] == [1, 2, 3]
+        assert result[0][1] in {1, 2}
+        assert result[1][1] in {10, 11}
+        assert result[2][1] in {-1, 5}
 
     def test_arg_max(self, table):
         result = table.arg_max("t", "v").fetchall()

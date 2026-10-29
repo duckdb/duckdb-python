@@ -17,6 +17,7 @@ import weakref
 import _pushdown_helpers
 import pytest
 from _pushdown_helpers import eventually, scan_of
+from conftest import ENGINE_GE_2_1
 
 import duckdb
 
@@ -1109,13 +1110,16 @@ class TestTemporalAndBinaryTypes:
         assert rows(con, "SELECT 42") == [(42,)]
 
     @pytest.mark.xfail(
+        not ENGINE_GE_2_1,
         strict=True,
         raises=duckdb.InternalException,
-        reason="the engine's text form of a timestamp before its date range throws an internal error",
+        reason=(
+            "the 2.0 engine's text form of a timestamp before the first midnight of its range throws an internal error"
+        ),
     )
-    def test_a_timestamp_before_the_date_range_try_casts_to_null(self, con):
+    def test_a_timestamp_before_the_first_midnight_of_the_range_reads_as_text(self, con):
         con.register("early", pa.table({"t": pa.array([-106_751_991 * 86_400_000_000 - 1], pa.timestamp("us"))}))
-        assert rows(con, "SELECT TRY_CAST(t AS VARCHAR) FROM early") == [(None,)]
+        assert rows(con, "SELECT TRY_CAST(t AS VARCHAR) FROM early") == [("290309-12-21 (BC) 23:59:59.999999",)]
         assert rows(con, "SELECT 42") == [(42,)]
 
     def test_the_first_day_of_nanoseconds_reads_as_text(self, con):

@@ -518,6 +518,16 @@ class TestSparkCastSemantics:
             Row(s=b"a\\x41", b=None, a=[b"a\\x41"]),
         ]
 
+    @pytest.mark.skipif(USE_ACTUAL_SPARK, reason="COLLATE NOCASE is DuckDB's collation syntax")
+    def test_collated_string_casts_as_a_string(self, spark):
+        df = spark.sql(
+            "SELECT 'é' COLLATE NOCASE AS s, '9007199254740992.9' COLLATE NOCASE AS t, '1e2' COLLATE NOCASE AS u"
+        )
+        res = df.select(F.col("s").cast("binary"), F.col("t").cast("bigint"))
+        assert res.collect() == [Row(s=b"\xc3\xa9", t=9007199254740992)]
+        with pytest.raises(Exception, match="CAST_INVALID_INPUT"):
+            df.select(F.col("u").cast("bigint")).collect()
+
     def test_integral_to_binary(self, spark):
         df = spark.range(1)
         if USE_ACTUAL_SPARK and pyspark.__version__.startswith("3."):

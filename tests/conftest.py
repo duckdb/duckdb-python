@@ -31,6 +31,16 @@ def _get_pandas_ge_3():
 PANDAS_GE_3 = _get_pandas_ge_3()
 
 
+def _get_engine_ge_2_1():
+    from packaging.version import Version
+
+    return Version(duckdb.__version__) >= Version("2.1.0.dev0")
+
+
+# A client branch builds against the engine branch of its own version, so the version names the engine's behaviour.
+ENGINE_GE_2_1 = _get_engine_ge_2_1()
+
+
 def is_string_dtype(dtype):
     """Check if a dtype is a string dtype (works across Pandas 2.x and 3.0).
 

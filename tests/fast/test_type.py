@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+from conftest import ENGINE_GE_2_1
 
 import duckdb
 from duckdb.sqltypes import (
@@ -112,8 +113,7 @@ class TestType:
 
     def test_string_type_collation(self):
         type = duckdb.string_type("NOCASE")
-        # collation does not show up in the string representation..
-        assert str(type) == "VARCHAR"
+        assert str(type) == ("VARCHAR('NOCASE')" if ENGINE_GE_2_1 else "VARCHAR")
 
     def test_union_type(self):
         type = duckdb.union_type([BIGINT, VARCHAR, TINYINT])

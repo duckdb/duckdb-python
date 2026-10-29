@@ -3094,19 +3094,11 @@ def first(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
 
     Examples:
     --------
-    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
-    >>> df = df.orderBy(df.age)
+    The row a group's first value comes from is not set by the frame's order, so a group with a null and a value can
+    give either. ``ignorenulls`` is not supported here and raises.
+
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
     >>> df.groupby("name").agg(first("age")).orderBy("name").show()
-    +-----+----------+
-    | name|first(age)|
-    +-----+----------+
-    |Alice|      NULL|
-    |  Bob|         5|
-    +-----+----------+
-
-    Now, to ignore any nulls we needs to set ``ignorenulls`` to `True`
-
-    >>> df.groupby("name").agg(first("age", ignorenulls=True)).orderBy("name").show()
     +-----+----------+
     | name|first(age)|
     +-----+----------+
@@ -3149,19 +3141,11 @@ def last(col: "ColumnOrName", ignorenulls: bool = False) -> Column:
 
     Examples:
     --------
-    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5), ("Alice", None)], ("name", "age"))
-    >>> df = df.orderBy(df.age.desc())
+    The row a group's last value comes from is not set by the frame's order, so a group with a null and a value can
+    give either. ``ignorenulls`` is not supported here and raises.
+
+    >>> df = spark.createDataFrame([("Alice", 2), ("Bob", 5)], ("name", "age"))
     >>> df.groupby("name").agg(last("age")).orderBy("name").show()
-    +-----+---------+
-    | name|last(age)|
-    +-----+---------+
-    |Alice|     NULL|
-    |  Bob|        5|
-    +-----+---------+
-
-    Now, to ignore any nulls we needs to set ``ignorenulls`` to `True`
-
-    >>> df.groupby("name").agg(last("age", ignorenulls=True)).orderBy("name").show()
     +-----+---------+
     | name|last(age)|
     +-----+---------+

@@ -340,8 +340,8 @@ def _assemble(ctes: list[tuple[str, str]], body: str) -> str:
 def _stub(names: list[str], types: list[DuckDBPyType]) -> str | None:
     """An empty SELECT of typed NULLs standing in for these columns, or None where one has a type it cannot write.
 
-    A type's text leaves out its collation, which a column of its own carries as COLLATE; a collation on a type inside
-    a list or struct has no such spelling.
+    A 2.0 engine's type text leaves a collation out, so a column of its own carries it as COLLATE, and a collation on a
+    type inside a list or struct cannot be written from the type's text there.
     """
     columns: list[str] = []
     for name, type_ in zip(names, types, strict=True):

@@ -6,6 +6,7 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
+from conftest import ENGINE_GE_2_1
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.errors import AnalysisException, error_condition
 from spark_namespace.sql.types import Row
@@ -131,9 +132,12 @@ class TestJsonWithASchema:
         thousand, one = (Decimal("1000.00"), None) if USE_ACTUAL_SPARK else (None, Decimal("1.00"))
         expected = [Decimal("1.00"), Decimal("1.70"), Decimal("1.00"), thousand, one, None, None]
         assert _field(spark, tmp_path, "decimal(10,2)", *values) == expected
-        # Spark rounds the decimal text, DuckDB the double it reads.
+        # Spark and the 2.1 engine round the decimal text, the 2.0 engine the double it reads.
         values = _field(spark, tmp_path, "decimal(10,2)", "1.005", "true")
-        assert values == ([Decimal("1.01"), None] if USE_ACTUAL_SPARK else [Decimal("1.00"), Decimal("1.00")])
+        if USE_ACTUAL_SPARK:
+            assert values == [Decimal("1.01"), None]
+        else:
+            assert values == [Decimal("1.01") if ENGINE_GE_2_1 else Decimal("1.00"), Decimal("1.00")]
 
     def test_booleans(self, spark, tmp_path):
         assert _field(spark, tmp_path, "boolean", "true", "false") == [True, False]
