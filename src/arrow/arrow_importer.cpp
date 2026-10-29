@@ -6,6 +6,8 @@
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/function/table/arrow/arrow_type_info.hpp"
 
+#include <cstring>
+
 namespace duckdb {
 
 namespace {
@@ -33,12 +35,19 @@ bool ValidRange(int64_t offset, int64_t length) {
 	return offset >= 0 && length >= 0 && offset <= NumericLimits<int64_t>::Maximum() - length;
 }
 
-//! Checks the arrays below a requested column as the batch is checked, and refuses an offset the engine would drop: its
-//! struct conversion hands its children only the struct's own offset and its list conversion none, so an offset met
-//! further up would be lost there and the rows below read from the wrong places.
-//! `received` is the offset the engine passes the array as its parent's, and `in_list` whether a list above it makes
-//! the engine ignore parent offsets.
-void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, int64_t received, bool in_list) {
+// Arrow buffers need not be aligned to their value type, so a scalar is copied out instead of read through a pointer.
+template <class T>
+T LoadAt(const void *buffer, int64_t index) {
+	if (index < 0 || index > NumericLimits<int64_t>::Maximum() / static_cast<int64_t>(sizeof(T))) {
+		throw InvalidInputException("an Arrow batch addresses row %d of a buffer, beyond what a buffer can hold",
+		                            index);
+	}
+	T value;
+	memcpy(&value, static_cast<const char *>(buffer) + index * static_cast<int64_t>(sizeof(T)), sizeof(T));
+	return value;
+}
+
+void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column) {
 	if (!ValidRange(array.offset, array.length)) {
 		throw InvalidInputException("an Arrow batch carried column %d with a nested array of offset %d and length %d, "
 		                            "which do not describe a range of rows",
@@ -89,8 +98,7 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 			    "an Arrow batch carried column %d with a dictionary-encoded array whose dictionary is released already",
 			    column);
 		}
-		// The dictionary is converted on its own, from its start.
-		CheckNested(*array.dictionary, type.GetDictionary(), column, 0, false);
+		CheckNested(*array.dictionary, type.GetDictionary(), column);
 		return;
 	case ArrowArrayPhysicalType::RUN_END_ENCODED: {
 		auto &info = type.GetTypeInfo<ArrowStructInfo>();
@@ -101,9 +109,39 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 			                            "and %d values",
 			                            column, run_ends.length, values.length);
 		}
-		// The run ends and the values are converted on their own, from their start.
-		CheckNested(run_ends, info.GetChild(0), column, 0, false);
-		CheckNested(values, info.GetChild(1), column, 0, false);
+		CheckNested(run_ends, info.GetChild(0), column);
+		CheckNested(values, info.GetChild(1), column);
+		// The engine decodes runs until they are exhausted and leaves the rows after the last run end unwritten.
+		int64_t last_end = 0;
+		if (run_ends.length > 0) {
+			if (run_ends.n_buffers < 2 || !run_ends.buffers || !run_ends.buffers[1]) {
+				throw InvalidInputException(
+				    "an Arrow batch carried column %d with a run end encoded array whose run ends have no values",
+				    column);
+			}
+			const auto index = run_ends.offset + run_ends.length - 1;
+			switch (info.GetChild(0).GetDuckType().id()) {
+			case LogicalTypeId::SMALLINT:
+				last_end = LoadAt<int16_t>(run_ends.buffers[1], index);
+				break;
+			case LogicalTypeId::INTEGER:
+				last_end = LoadAt<int32_t>(run_ends.buffers[1], index);
+				break;
+			case LogicalTypeId::BIGINT:
+				last_end = LoadAt<int64_t>(run_ends.buffers[1], index);
+				break;
+			default:
+				throw InvalidInputException(
+				    "an Arrow batch carried column %d with a run end encoded array whose run ends "
+				    "are %s, not SMALLINT, INTEGER or BIGINT",
+				    column, info.GetChild(0).GetDuckType().ToString());
+			}
+		}
+		if (array.length > 0 && last_end < array.offset + array.length) {
+			throw InvalidInputException("an Arrow batch carried column %d with a run end encoded array whose runs end "
+			                            "at %d before its %d rows",
+			                            column, last_end, array.offset + array.length);
+		}
 		return;
 	}
 	default:
@@ -115,15 +153,6 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::UNION: {
-		const bool is_union = type.GetDuckType().id() == LogicalTypeId::UNION;
-		// A union adds its own offset to the one it received, a struct passes on only its own.
-		if ((in_list && array.offset != 0) || (!is_union && !in_list && received != 0)) {
-			throw InvalidInputException(
-			    "an Arrow batch carried column %d with a struct or union below an offset the conversion would drop, "
-			    "which would read the wrong rows",
-			    column);
-		}
-		const auto passed = is_union ? received + array.offset : array.offset;
 		auto &info = type.GetTypeInfo<ArrowStructInfo>();
 		// The engine converts every child the array has into vectors sized by the type.
 		if (array.n_children != NumericCast<int64_t>(info.ChildCount())) {
@@ -134,7 +163,7 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 		for (idx_t i = 0; i < info.ChildCount(); i++) {
 			auto &child = child_of(i);
 			check_covers(child, 1);
-			CheckNested(child, info.GetChild(i), column, passed, in_list);
+			CheckNested(child, info.GetChild(i), column);
 		}
 		return;
 	}
@@ -144,14 +173,12 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 		auto &child = child_of(0);
 		auto value_at = [&](idx_t buffer, int64_t index) -> int64_t {
 			if (info.GetSizeType() == ArrowVariableSizeType::SUPER_SIZE) {
-				return static_cast<const int64_t *>(array.buffers[buffer])[index];
+				return LoadAt<int64_t>(array.buffers[buffer], index);
 			}
-			return static_cast<const int32_t *>(array.buffers[buffer])[index];
+			return LoadAt<int32_t>(array.buffers[buffer], index);
 		};
-		// When the lists address no child values and start at offset 0, the engine reads the child as plain values,
-		// which a dictionary-encoded child is not; a list view counts as starting at 0 whenever its lists are empty.
-		const bool dictionary_child = info.GetChild().GetPhysicalType() == ArrowArrayPhysicalType::DICTIONARY_ENCODED;
-		bool only_empty_from_zero = false;
+		// The child's own range is checked first, so the offset checks below compare against a valid length.
+		CheckNested(child, info.GetChild(), column);
 		if (!info.IsView() && array.length > 0) {
 			if (array.n_buffers < 2 || !array.buffers || !array.buffers[1]) {
 				throw InvalidInputException("an Arrow batch carried column %d with a list that has no offsets", column);
@@ -165,36 +192,30 @@ void CheckNested(const ArrowArray &array, const ArrowType &type, idx_t column, i
 				    "fit its child of %d rows",
 				    column, first, last, child.length);
 			}
-			only_empty_from_zero = last == 0;
-		} else if (info.IsView() && array.length > 0 && dictionary_child) {
-			if (array.n_buffers < 3 || !array.buffers || !array.buffers[2]) {
-				throw InvalidInputException("an Arrow batch carried column %d with a list view that has no sizes",
-				                            column);
+		} else if (info.IsView() && array.length > 0) {
+			if (array.n_buffers < 3 || !array.buffers || !array.buffers[1] || !array.buffers[2]) {
+				throw InvalidInputException(
+				    "an Arrow batch carried column %d with a list view that has no offsets or sizes", column);
 			}
-			only_empty_from_zero = true;
-			for (int64_t row = array.offset; row < array.offset + array.length && only_empty_from_zero; row++) {
-				only_empty_from_zero = value_at(2, row) == 0;
+			// The engine reads the child from the lowest offset to the highest end of every list with a size.
+			for (int64_t row = array.offset; row < array.offset + array.length; row++) {
+				const auto size = value_at(2, row);
+				const auto start = value_at(1, row);
+				if (size != 0 && (size < 0 || start < 0 || start > child.length - size)) {
+					throw InvalidInputException(
+					    "an Arrow batch carried column %d with a list view whose list at row %d "
+					    "reaches past its child of %d rows",
+					    column, row - array.offset, child.length);
+				}
 			}
 		}
-		if (dictionary_child && only_empty_from_zero) {
-			throw InvalidInputException("an Arrow batch carried column %d with only empty lists over a "
-			                            "dictionary-encoded child, which the conversion cannot read",
-			                            column);
-		}
-		CheckNested(child, info.GetChild(), column, 0, true);
 		return;
 	}
 	case LogicalTypeId::ARRAY: {
 		auto &child = child_of(0);
 		auto &info = type.GetTypeInfo<ArrowArrayInfo>();
-		// The engine's fixed size list conversion reads a run end encoded child as plain values.
-		if (array.length > 0 && info.GetChild().GetPhysicalType() == ArrowArrayPhysicalType::RUN_END_ENCODED) {
-			throw InvalidInputException("an Arrow batch carried column %d with a run end encoded array inside a fixed "
-			                            "size list, which the conversion cannot read",
-			                            column);
-		}
+		CheckNested(child, info.GetChild(), column);
 		check_covers(child, info.FixedSize());
-		CheckNested(child, info.GetChild(), column, 0, true);
 		return;
 	}
 	default:
@@ -287,7 +308,7 @@ shared_ptr<ArrowArrayWrapper> ArrowBatchImporter::Adopt(ArrowArray &incoming) co
 		throw InvalidInputException("an Arrow batch has a non-zero null count but no validity bitmap");
 	}
 	for (auto column : columns) {
-		CheckNested(*incoming.children[column], *arrow_columns.at(column), column, 0, false);
+		CheckNested(*incoming.children[column], *arrow_columns.at(column), column);
 	}
 	auto owned = make_shared_ptr<ArrowArrayWrapper>();
 	owned->arrow_array = incoming;
@@ -336,8 +357,7 @@ bool ArrowBatchImporter::Next(DataChunk &output) {
 	D_ASSERT(output.ColumnCount() == columns.size());
 	auto &array = batch->arrow_array;
 	const auto rows = MinValue<idx_t>(STANDARD_VECTOR_SIZE, end - offset);
-	// The batch offset is folded into the row position, which the engine hands on to nested children, rather than
-	// passed as the parent offset, which its struct conversion does not hand on.
+	// A batch offset shifts the rows the way the start of a row range does, so both go into the row position.
 	const auto position = NumericCast<idx_t>(array.offset) + offset;
 	output.SetChildCardinality(rows);
 	auto batch_validity = BatchValidity(array, offset, rows);

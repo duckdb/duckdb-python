@@ -1698,10 +1698,21 @@ def _field(struct, name):
     return ctypes.addressof(struct) + getattr(type(struct), name).offset
 
 
+def _first_field(schema_address):
+    return _ArrowSchemaHead.from_address(_ArrowSchemaHead.from_address(schema_address).children[0])
+
+
 class PokingStream(CountingStream):
-    def __init__(self, schema, batches, poke) -> None:
+    def __init__(self, schema, batches, poke, poke_schema=None) -> None:
         self.pokes = _Pokes()
+        self.poke_schema = poke_schema
         super().__init__(schema, batches, poke and (lambda array: poke(array.children[0].contents, self.pokes)))
+
+    def _get_schema(self, stream, out):
+        code = super()._get_schema(stream, out)
+        if self.poke_schema:
+            self.poke_schema(_first_field(out))
+        return code
 
     def _release_one(self, pointer):
         self.pokes.undo()
@@ -1709,14 +1720,29 @@ class PokingStream(CountingStream):
 
 
 class PokingSource(PythonStreamSource):
-    """One batch, whose first column `poke(column, pokes)` changes after the export."""
+    """One batch, whose first column `poke(column, pokes)` changes after the export.
 
-    def __init__(self, table, poke) -> None:
+    `poke_schema(field)` changes the first field of every schema exported, for a type pyarrow cannot build.
+    """
+
+    def __init__(self, table, poke, poke_schema=None) -> None:
         super().__init__(table, max_chunksize=table.num_rows)
         self.poke = poke
+        self.poke_schema = poke_schema
+
+    def __arrow_c_schema__(self) -> object:
+        capsule = super().__arrow_c_schema__()
+        if self.poke_schema:
+            self.poke_schema(_first_field(_capsule_pointer(id(capsule), b"arrow_schema")))
+        return capsule
 
     def stream(self, columns, filters):
-        stream = PokingStream(self.table.schema, self.table.to_batches(max_chunksize=self.max_chunksize), self.poke)
+        stream = PokingStream(
+            self.table.schema,
+            self.table.to_batches(max_chunksize=self.max_chunksize),
+            self.poke,
+            self.poke_schema,
+        )
         self.streams.append(stream)
         return stream.capsule(), False
 
@@ -1743,8 +1769,8 @@ def _drop_the_validity_bitmap(column, pokes):
     pokes.set(ctypes.c_void_p, column.buffers, None)
 
 
-# One malformed or unreadable batch each: the table, the change to its first column after the export, and the text
-# the refusal must carry.
+# One malformed batch each: the table, the change to its first column after the export, the text the refusal must
+# carry, and for a type pyarrow cannot build, the change to the first field of each exported schema.
 MALFORMED_NESTED = {
     "short_struct_child": (
         _struct_table,
@@ -1791,15 +1817,42 @@ MALFORMED_NESTED = {
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "length"), 1_999),
         "column 0 with a list whose offsets 0 to 2000 do not fit its child of 1999 rows",
     ),
+    "list_view_without_sizes": (
+        lambda: pa.table({"l": pa.array([[1], [2, 3]] * 1_000, type=pa.list_view(pa.int64()))}),
+        lambda column, pokes: pokes.set(ctypes.c_void_p, column.buffers + 2 * ctypes.sizeof(ctypes.c_void_p), None),
+        "column 0 with a list view that has no offsets or sizes",
+    ),
+    "run_ends_stop_before_the_rows": (
+        lambda: pa.table({"l": pa.FixedSizeListArray.from_arrays(_run_end_array(6), 2).slice(1)}),
+        lambda column, pokes: [
+            pokes.set(ctypes.c_int64, _field(_child(_child(column, 0), index), "length"), 1) for index in (0, 1)
+        ],
+        "column 0 with a run end encoded array whose runs end at 3 before its 6 rows",
+    ),
+    "list_view_past_its_child": (
+        lambda: pa.table(
+            {
+                "l": pa.ListViewArray.from_arrays(
+                    pa.array([1], pa.int32()), pa.array([1], pa.int32()), pa.array([10, 99])
+                )
+            }
+        ),
+        lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "length"), 1),
+        "column 0 with a list view whose list at row 0 reaches past its child of 1 rows",
+    ),
+    "run_ends_of_tinyint": (
+        lambda: pa.table(
+            {"r": pa.RunEndEncodedArray.from_arrays(pa.array([4], pa.int16()), pa.array([7], pa.int64()))}
+        ),
+        None,
+        "column 0 with a run end encoded array whose run ends are TINYINT, not SMALLINT, INTEGER or BIGINT",
+        # The one int16 run end of 4 reads as the int8 run end 4 on a little endian machine.
+        lambda field: ctypes.memmove(_ArrowSchemaHead.from_address(field.children[0]).format, b"c", 1),
+    ),
     "null_count_without_bitmap": (
         lambda: pa.table({"i": pa.array([1, None] * 1_000)}),
         _drop_the_validity_bitmap,
         "column 0 with a non-zero null count but no validity bitmap",
-    ),
-    "run_end_encoded_in_a_fixed_size_list": (
-        lambda: pa.table({"l": pa.FixedSizeListArray.from_arrays(_run_end_array(4), 2)}),
-        None,
-        "column 0 with a run end encoded array inside a fixed size list",
     ),
     "struct_child_null_count_without_bitmap": (
         lambda: pa.table({"s": pa.StructArray.from_arrays([pa.array([1, None] * 1_000)], ["x"])}),
@@ -1810,29 +1863,6 @@ MALFORMED_NESTED = {
         lambda: pa.table({"l": pa.array([[1, None]] * 1_000)}),
         lambda column, pokes: _drop_the_validity_bitmap(_child(column, 0), pokes),
         "column 0 with a non-zero null count but no validity bitmap",
-    ),
-    "only_empty_lists_over_a_dictionary": (
-        lambda: pa.table({"l": pa.array([[], None, []], type=pa.list_(pa.dictionary(pa.int32(), pa.string())))}),
-        None,
-        "column 0 with only empty lists over a dictionary-encoded child",
-    ),
-    "only_empty_large_lists_over_a_dictionary": (
-        lambda: pa.table({"l": pa.array([[], None, []], type=pa.large_list(pa.dictionary(pa.int32(), pa.string())))}),
-        None,
-        "column 0 with only empty lists over a dictionary-encoded child",
-    ),
-    "only_empty_list_views_over_a_dictionary": (
-        lambda: pa.table(
-            {
-                "l": pa.ListViewArray.from_arrays(
-                    pa.array([5, 5], pa.int32()),
-                    pa.array([0, 0], pa.int32()),
-                    pa.array(list("abcde")).dictionary_encode(),
-                )
-            }
-        ),
-        None,
-        "column 0 with only empty lists over a dictionary-encoded child",
     ),
 }
 
@@ -1912,17 +1942,20 @@ class TestMalformedAndUnusualInput:
                 ),
                 id="struct_in_a_sliced_union",
             ),
-        ],
-    )
-    def test_an_offset_the_conversion_would_drop_is_refused(self, layout):
-        with duckdb.connect() as con:
-            con._register_arrow_source("s", ArraySource(layout(self._x())))
-            with pytest.raises(duckdb.InvalidInputException, match="an offset the conversion would drop"):
-                con.execute("SELECT * FROM s").fetchall()
-
-    @pytest.mark.parametrize(
-        "layout",
-        [
+            pytest.param(
+                lambda x: pa.StructArray.from_arrays(
+                    [
+                        pa.ListArray.from_arrays(
+                            pa.array([0, 2, 3], pa.int32()),
+                            pa.UnionArray.from_sparse(
+                                pa.array([0, 1, 0, 1, 0], pa.int8()), [x, pa.array(list("abcde"))], ["i", "s"]
+                            ).slice(1, 3),
+                        )
+                    ],
+                    ["l"],
+                ),
+                id="sliced_union_in_a_list",
+            ),
             pytest.param(
                 lambda x: pa.StructArray.from_arrays(
                     [pa.StructArray.from_arrays([pa.StructArray.from_arrays([x], ["x"]).slice(1, 4)], ["b"])], ["a"]
@@ -1973,8 +2006,7 @@ class TestMalformedAndUnusualInput:
             table = con.sql("SELECT {'v': x::VARIANT} AS s, x::VARIANT AS v, x FROM range(10) t(x)").to_arrow_table()
             con._register_arrow_source("t", TableSource(table.slice(2)))
             assert con.execute("SELECT v::BIGINT, x FROM t").fetchall() == [(x, x) for x in range(2, 10)]
-            with pytest.raises(duckdb.InvalidInputException, match="column 0 with a struct or union below an offset"):
-                con.execute("SELECT s FROM t").fetchall()
+            assert con.execute("SELECT s FROM t").fetchall() == [({"v": x},) for x in range(2, 10)]
 
     @pytest.mark.parametrize(
         ("make", "expected"),
@@ -1995,6 +2027,30 @@ class TestMalformedAndUnusualInput:
                 lambda: pa.array([[], None, []], type=pa.map_(pa.string(), pa.dictionary(pa.int32(), pa.string()))),
                 [({},), (None,), ({},)],
                 id="empty_maps",
+            ),
+            pytest.param(
+                lambda: pa.array([[], None, []], type=pa.list_(pa.dictionary(pa.int32(), pa.string()))),
+                [([],), (None,), ([],)],
+                id="only_empty_lists",
+            ),
+            pytest.param(
+                lambda: pa.array([[], None, []], type=pa.large_list(pa.dictionary(pa.int32(), pa.string()))),
+                [([],), (None,), ([],)],
+                id="only_empty_large_lists",
+            ),
+            pytest.param(
+                lambda: pa.ListViewArray.from_arrays(
+                    pa.array([5, 5], pa.int32()),
+                    pa.array([0, 0], pa.int32()),
+                    pa.array(list("abcde")).dictionary_encode(),
+                ),
+                [([],), ([],)],
+                id="only_empty_list_views_from_offset_five",
+            ),
+            pytest.param(
+                lambda: pa.array([[], None, []], type=pa.list_view(pa.dictionary(pa.int32(), pa.string()))),
+                [([],), (None,), ([],)],
+                id="only_empty_list_views",
             ),
         ],
     )
@@ -2036,6 +2092,21 @@ class TestMalformedAndUnusualInput:
                 [(({"r": 7}, {"r": 7}),), (({"r": 8}, {"r": 8}),)],
                 id="struct_in_a_fixed_size_list",
             ),
+            pytest.param(
+                lambda: pa.FixedSizeListArray.from_arrays(_run_end_array(4), 2),
+                [((7, 7),), ((8, 8),)],
+                id="fixed_size_list",
+            ),
+            pytest.param(
+                lambda: pa.FixedSizeListArray.from_arrays(_run_end_array(6), 2, mask=pa.array([False, True, False])),
+                [((7, 7),), (None,), ((8, 8),)],
+                id="fixed_size_list_with_a_null_row",
+            ),
+            pytest.param(
+                lambda: pa.FixedSizeListArray.from_arrays(_run_end_array(6), 2).slice(1),
+                [((7, 8),), ((8, 8),)],
+                id="sliced_fixed_size_list",
+            ),
         ],
     )
     def test_a_run_end_encoded_array_below_a_list_the_conversion_reads_is_read(self, make, expected):
@@ -2053,8 +2124,8 @@ spec = importlib.util.spec_from_file_location("scan_core", {str(Path(__file__))!
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 import duckdb
-make, poke, message = module.MALFORMED_NESTED[{case!r}]
-source = module.PokingSource(make(), poke)
+make, poke, message, *poke_schema = module.MALFORMED_NESTED[{case!r}]
+source = module.PokingSource(make(), poke, *poke_schema)
 con = duckdb.connect(config={{"threads": 4}})
 con._register_arrow_source("t", source)
 try:
