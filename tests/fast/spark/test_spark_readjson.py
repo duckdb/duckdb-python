@@ -131,9 +131,9 @@ class TestJsonWithASchema:
         thousand, one = (Decimal("1000.00"), None) if USE_ACTUAL_SPARK else (None, Decimal("1.00"))
         expected = [Decimal("1.00"), Decimal("1.70"), Decimal("1.00"), thousand, one, None, None]
         assert _field(spark, tmp_path, "decimal(10,2)", *values) == expected
-        # Spark rounds the decimal text, DuckDB the double it reads.
+        # Both round the decimal text, but only DuckDB reads a boolean as a number.
         values = _field(spark, tmp_path, "decimal(10,2)", "1.005", "true")
-        assert values == ([Decimal("1.01"), None] if USE_ACTUAL_SPARK else [Decimal("1.00"), Decimal("1.00")])
+        assert values == ([Decimal("1.01"), None] if USE_ACTUAL_SPARK else [Decimal("1.01"), Decimal("1.00")])
 
     def test_booleans(self, spark, tmp_path):
         assert _field(spark, tmp_path, "boolean", "true", "false") == [True, False]
