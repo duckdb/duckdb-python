@@ -476,9 +476,17 @@ class MemoryFileSystemWithoutModified(fsspec.implementations.memory.MemoryFileSy
     modified = fsspec.AbstractFileSystem.modified
 
 
-class RemoteMemoryFileSystemWithoutModified(MemoryFileSystemWithoutModified):
-    protocol = "gs"
-    _strip_protocol = classmethod(fsspec.AbstractFileSystem._strip_protocol.__func__)
+def remote(filesystem_class: type) -> type:
+    """The same filesystem under a remote protocol, which the engine reads through its caching file system."""
+
+    class Remote(filesystem_class):
+        protocol = "gs"
+        _strip_protocol = classmethod(fsspec.AbstractFileSystem._strip_protocol.__func__)
+
+    return Remote
+
+
+RemoteMemoryFileSystemWithoutModified = remote(MemoryFileSystemWithoutModified)
 
 
 class UnprintableNotImplementedError(NotImplementedError):
@@ -598,6 +606,14 @@ class TestFilesystemModificationTime:
         assert duckdb_cursor.sql(query).fetchall() == expected
 
     @pytest.mark.parametrize(
+        "filesystem_class",
+        [
+            pytest.param(RemoteMemoryFileSystemWithoutModified, id="fsspec-default"),
+            pytest.param(remote(memory_filesystem_whose_modified_raises(KeyError, "mtime")), id="key-error"),
+            pytest.param(remote(MemoryFileSystemWhoseModifiedIsNone), id="none"),
+        ],
+    )
+    @pytest.mark.parametrize(
         ("query", "expected"),
         [
             pytest.param(
@@ -615,9 +631,9 @@ class TestFilesystemModificationTime:
         ],
     )
     def test_last_modified_is_null_on_a_remote_protocol_when_the_filesystem_has_no_modified(
-        self, duckdb_cursor, query, expected
+        self, duckdb_cursor, filesystem_class, query, expected
     ):
-        duckdb_cursor.register_filesystem(filesystem_with_blobs(RemoteMemoryFileSystemWithoutModified))
+        duckdb_cursor.register_filesystem(filesystem_with_blobs(filesystem_class))
 
         assert duckdb_cursor.sql(query).fetchall() == expected
 
