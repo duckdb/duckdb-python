@@ -486,7 +486,6 @@ def remote(filesystem_class: type) -> type:
     return Remote
 
 
-
 class UnprintableNotImplementedError(NotImplementedError):
     def __str__(self) -> str:
         msg = "str() of this error fails"
