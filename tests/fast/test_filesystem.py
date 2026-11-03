@@ -516,7 +516,7 @@ class MemoryFileSystemWhoseModifiedIsNone(fsspec.implementations.memory.MemoryFi
 
 
 class MemoryFileSystemLikeGCS(fsspec.implementations.memory.MemoryFileSystem):
-    """Most objects carry an mtime, composite objects do not, and modified() reads it like gcsfs does."""
+    """Some objects have no mtime in their info, and modified() reads it like gcsfs does."""
 
     def info(self, path, **kwargs):
         out = dict(super().info(path, **kwargs))
