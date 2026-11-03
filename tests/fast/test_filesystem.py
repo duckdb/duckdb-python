@@ -486,8 +486,6 @@ def remote(filesystem_class: type) -> type:
     return Remote
 
 
-RemoteMemoryFileSystemWithoutModified = remote(MemoryFileSystemWithoutModified)
-
 
 class UnprintableNotImplementedError(NotImplementedError):
     def __str__(self) -> str:
@@ -605,14 +603,7 @@ class TestFilesystemModificationTime:
 
         assert duckdb_cursor.sql(query).fetchall() == expected
 
-    @pytest.mark.parametrize(
-        "filesystem_class",
-        [
-            pytest.param(RemoteMemoryFileSystemWithoutModified, id="fsspec-default"),
-            pytest.param(remote(memory_filesystem_whose_modified_raises(KeyError, "mtime")), id="key-error"),
-            pytest.param(remote(MemoryFileSystemWhoseModifiedIsNone), id="none"),
-        ],
-    )
+    @pytest.mark.parametrize("filesystem_class", WITHOUT_MODIFIED)
     @pytest.mark.parametrize(
         ("query", "expected"),
         [
@@ -620,20 +611,20 @@ class TestFilesystemModificationTime:
                 "SELECT filename, content, size, last_modified FROM read_blob('gs:///blobs/a')",
                 [("gs:///blobs/a", b"one", 3, None)],
                 id="with-content",
-                marks=pytest.mark.xfail(strict=True, reason=REMOTE),
+                marks=pytest.mark.xfail(strict=True, raises=duckdb.NotImplementedException, reason=REMOTE),
             ),
             pytest.param(
                 "SELECT size, last_modified FROM read_blob('gs:///blobs/a')",
                 [(3, None)],
                 id="metadata-only",
-                marks=pytest.mark.xfail(strict=True, reason=REMOTE),
+                marks=pytest.mark.xfail(strict=True, raises=duckdb.NotImplementedException, reason=REMOTE),
             ),
         ],
     )
     def test_last_modified_is_null_on_a_remote_protocol_when_the_filesystem_has_no_modified(
         self, duckdb_cursor, filesystem_class, query, expected
     ):
-        duckdb_cursor.register_filesystem(filesystem_with_blobs(filesystem_class))
+        duckdb_cursor.register_filesystem(filesystem_with_blobs(remote(filesystem_class)))
 
         assert duckdb_cursor.sql(query).fetchall() == expected
 

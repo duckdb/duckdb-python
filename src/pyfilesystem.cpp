@@ -247,8 +247,7 @@ timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 		try {
 			last_mod = filesystem.attr("modified")(handle.path);
 		} catch (nb::python_error &error) {
-			// a NotImplementedError or a KeyError of an entry without a time become the NotImplementedException that
-			// DirectFileReader reads as NULL
+			// an unsupported modification time, which DirectFileReader reads as NULL
 			string message;
 			if (error.matches(PyExc_NotImplementedError)) {
 				message = GetName() + ": modified() is not implemented";
