@@ -520,7 +520,7 @@ class MemoryFileSystemLikeGCS(fsspec.implementations.memory.MemoryFileSystem):
 
     def info(self, path, **kwargs):
         out = dict(super().info(path, **kwargs))
-        if out.get("type") == "file" and not path.endswith("-composite"):
+        if out.get("type") == "file" and not path.endswith("-without-mtime"):
             out["mtime"] = out["created"]
         return out
 
@@ -658,33 +658,25 @@ class TestFilesystemModificationTime:
 
     def test_an_entry_without_mtime_of_a_gcs_like_filesystem_has_no_last_modified(self, duckdb_cursor):
         fs = filesystem_with_blobs(MemoryFileSystemLikeGCS)
-        with fs.open("/blobs/d-composite", "wb") as f:
+        with fs.open("/blobs/d-without-mtime", "wb") as f:
             f.write(b"four")
         duckdb_cursor.register_filesystem(fs)
 
-        rows = duckdb_cursor.sql(
-            "SELECT filename, content, last_modified IS NULL FROM read_blob('memory:///blobs/*') ORDER BY filename"
-        ).fetchall()
+        rows = duckdb_cursor.sql(ALL_BLOBS_WITH_CONTENT).fetchall()
 
-        assert rows == [
+        assert [(filename, content, last_modified is None) for filename, content, last_modified in rows] == [
             ("memory:///blobs/a", b"one", False),
             ("memory:///blobs/b", b"two!", False),
             ("memory:///blobs/c", b"three", False),
-            ("memory:///blobs/d-composite", b"four", True),
+            ("memory:///blobs/d-without-mtime", b"four", True),
         ]
 
     @pytest.mark.parametrize("query", [ONE_BLOB_WITH_CONTENT, ONE_BLOB_METADATA_ONLY, ALL_BLOBS_WITH_CONTENT])
-    @pytest.mark.parametrize(
-        ("error_type", "message", "surfaced"),
-        [
-            (ValueError, "unreadable modification time", r"ValueError: unreadable modification time"),
-        ],
-    )
-    def test_other_errors_from_modified_surface_unchanged(self, duckdb_cursor, query, error_type, message, surfaced):
-        filesystem_class = memory_filesystem_whose_modified_raises(error_type, message)
+    def test_other_errors_from_modified_surface_unchanged(self, duckdb_cursor, query):
+        filesystem_class = memory_filesystem_whose_modified_raises(ValueError, "unreadable modification time")
         duckdb_cursor.register_filesystem(filesystem_with_blobs(filesystem_class))
 
-        with pytest.raises(duckdb.Error, match=surfaced) as raised:
+        with pytest.raises(duckdb.Error, match=r"ValueError: unreadable modification time") as raised:
             duckdb_cursor.sql(query).fetchall()
         assert not isinstance(raised.value, duckdb.NotImplementedException)
 
