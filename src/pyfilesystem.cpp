@@ -247,12 +247,17 @@ timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 		try {
 			last_mod = filesystem.attr("modified")(handle.path);
 		} catch (nb::python_error &error) {
-			// fsspec's default modified() raises NotImplementedError, and DirectFileReader turns a
-			// NotImplementedException from the metadata it reads into NULL for that column.
-			if (!error.matches(PyExc_NotImplementedError)) {
+			// fsspec's default modified() raises NotImplementedError, and gcsfs or adlfs raise KeyError for an entry
+			// without a modification time, such as a directory. DirectFileReader turns a NotImplementedException from
+			// the metadata it reads into NULL for that column.
+			string message;
+			if (error.matches(PyExc_NotImplementedError)) {
+				message = GetName() + ": modified() is not implemented";
+			} else if (error.matches(PyExc_KeyError)) {
+				message = GetName() + ": modified() has no modification time";
+			} else {
 				throw;
 			}
-			auto message = GetName() + ": modified() is not implemented";
 			// str() of the exception can itself raise, and the error is still a NotImplementedException without its
 			// text.
 			try {
@@ -264,6 +269,9 @@ timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 			} catch (nb::cast_error &) {
 			}
 			throw NotImplementedException(message);
+		}
+		if (last_mod.is_none()) {
+			throw NotImplementedException(GetName() + ": modified() returned None");
 		}
 
 		// datetime.timestamp() returns a float; truncate to int64 seconds (nb::cast<int64_t> would reject a float)

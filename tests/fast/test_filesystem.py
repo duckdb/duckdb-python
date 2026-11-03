@@ -510,10 +510,30 @@ def memory_filesystem_whose_modified_raises(error_type: type[Exception], message
     return FailingModified
 
 
+class MemoryFileSystemWhoseModifiedIsNone(fsspec.implementations.memory.MemoryFileSystem):
+    def modified(self, path):
+        return None
+
+
+class MemoryFileSystemLikeGCS(fsspec.implementations.memory.MemoryFileSystem):
+    """Most objects carry an mtime, composite objects do not, and modified() reads it like gcsfs does."""
+
+    def info(self, path, **kwargs):
+        out = dict(super().info(path, **kwargs))
+        if out.get("type") == "file" and not path.endswith("-composite"):
+            out["mtime"] = out["created"]
+        return out
+
+    def modified(self, path):
+        return self.info(path)["mtime"]
+
+
 WITHOUT_MODIFIED = [
     pytest.param(MemoryFileSystemWithoutModified, id="fsspec-default"),
     pytest.param(memory_filesystem_whose_modified_raises(NotImplementedError, "no times kept"), id="with-message"),
     pytest.param(memory_filesystem_whose_modified_raises(ModificationTimesUnsupportedError, "no times"), id="subclass"),
+    pytest.param(memory_filesystem_whose_modified_raises(KeyError, "mtime"), id="key-error"),
+    pytest.param(MemoryFileSystemWhoseModifiedIsNone, id="none"),
 ]
 
 METADATA_ONLY = "metadata only reads take the engine's file stats, which have no NULL fallback; see the engine issue"
@@ -620,6 +640,12 @@ class TestFilesystemModificationTime:
                 r"memory: modified\(\) is not implemented$",
                 id="unprintable-message",
             ),
+            pytest.param(
+                memory_filesystem_whose_modified_raises(KeyError, "mtime"),
+                r"memory: modified\(\) has no modification time: 'mtime'$",
+                id="key-error",
+            ),
+            pytest.param(MemoryFileSystemWhoseModifiedIsNone, r"memory: modified\(\) returned None$", id="none"),
         ],
     )
     def test_until_the_engine_fix_a_metadata_only_read_raises_not_implemented(
@@ -630,12 +656,28 @@ class TestFilesystemModificationTime:
         with pytest.raises(duckdb.NotImplementedException, match=surfaced):
             duckdb_cursor.sql(ONE_BLOB_METADATA_ONLY).fetchall()
 
+    def test_an_entry_without_mtime_of_a_gcs_like_filesystem_has_no_last_modified(self, duckdb_cursor):
+        fs = filesystem_with_blobs(MemoryFileSystemLikeGCS)
+        with fs.open("/blobs/d-composite", "wb") as f:
+            f.write(b"four")
+        duckdb_cursor.register_filesystem(fs)
+
+        rows = duckdb_cursor.sql(
+            "SELECT filename, content, last_modified IS NULL FROM read_blob('memory:///blobs/*') ORDER BY filename"
+        ).fetchall()
+
+        assert rows == [
+            ("memory:///blobs/a", b"one", False),
+            ("memory:///blobs/b", b"two!", False),
+            ("memory:///blobs/c", b"three", False),
+            ("memory:///blobs/d-composite", b"four", True),
+        ]
+
     @pytest.mark.parametrize("query", [ONE_BLOB_WITH_CONTENT, ONE_BLOB_METADATA_ONLY, ALL_BLOBS_WITH_CONTENT])
     @pytest.mark.parametrize(
         ("error_type", "message", "surfaced"),
         [
             (ValueError, "unreadable modification time", r"ValueError: unreadable modification time"),
-            (KeyError, "mtime", r"KeyError: 'mtime'"),
         ],
     )
     def test_other_errors_from_modified_surface_unchanged(self, duckdb_cursor, query, error_type, message, surfaced):
