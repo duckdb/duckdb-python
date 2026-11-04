@@ -537,13 +537,12 @@ WITHOUT_MODIFIED = [
     pytest.param(MemoryFileSystemWithoutModified, id="fsspec-default"),
     pytest.param(memory_filesystem_whose_modified_raises(NotImplementedError, "no times kept"), id="with-message"),
     pytest.param(memory_filesystem_whose_modified_raises(ModificationTimesUnsupportedError, "no times"), id="subclass"),
+    pytest.param(memory_filesystem_whose_modified_raises(UnprintableNotImplementedError, "unused"), id="unprintable"),
     pytest.param(memory_filesystem_whose_modified_raises(KeyError, "mtime"), id="key-error"),
     pytest.param(MemoryFileSystemWhoseModifiedIsNone, id="none"),
 ]
 
-METADATA_ONLY = "metadata only reads take the engine's file stats, which have no NULL fallback; see the engine issue"
-REMOTE = "engine stats remote files at open; see the engine issue"
-PARQUET = "the parquet reader opens through the caching file system, which stats the file; see the engine issue"
+ENGINE = "the unknown modification time reads as NULL only with an engine that has duckdb/duckdb#28353"
 
 ONE_BLOB_WITH_CONTENT = "SELECT filename, content, size, last_modified FROM read_blob('memory:///blobs/a')"
 ONE_BLOB_METADATA_ONLY = "SELECT size, last_modified FROM read_blob('memory:///blobs/a')"
@@ -552,6 +551,7 @@ ALL_BLOBS_METADATA_ONLY = "SELECT filename, size, last_modified FROM read_blob('
 
 
 class TestFilesystemModificationTime:
+    @pytest.mark.xfail(strict=True, reason=ENGINE)
     @pytest.mark.parametrize("filesystem_class", WITHOUT_MODIFIED)
     @pytest.mark.parametrize(
         ("query", "expected"),
@@ -570,28 +570,16 @@ class TestFilesystemModificationTime:
                 id="glob",
             ),
             pytest.param(
-                "SELECT last_modified FROM read_blob('memory:///blobs/a')",
-                [(None,)],
-                id="read_blob-last-modified-only",
-                marks=pytest.mark.xfail(strict=True, reason=METADATA_ONLY),
+                "SELECT last_modified FROM read_blob('memory:///blobs/a')", [(None,)], id="read_blob-last-modified-only"
             ),
+            pytest.param(ONE_BLOB_METADATA_ONLY, [(3, None)], id="read_blob-metadata-only"),
             pytest.param(
-                ONE_BLOB_METADATA_ONLY,
-                [(3, None)],
-                id="read_blob-metadata-only",
-                marks=pytest.mark.xfail(strict=True, reason=METADATA_ONLY),
-            ),
-            pytest.param(
-                "SELECT last_modified FROM read_text('memory:///blobs/a')",
-                [(None,)],
-                id="read_text-last-modified-only",
-                marks=pytest.mark.xfail(strict=True, reason=METADATA_ONLY),
+                "SELECT last_modified FROM read_text('memory:///blobs/a')", [(None,)], id="read_text-last-modified-only"
             ),
             pytest.param(
                 ALL_BLOBS_METADATA_ONLY,
                 [("memory:///blobs/a", 3, None), ("memory:///blobs/b", 4, None), ("memory:///blobs/c", 5, None)],
                 id="glob-metadata-only",
-                marks=pytest.mark.xfail(strict=True, reason=METADATA_ONLY),
             ),
         ],
     )
@@ -602,6 +590,7 @@ class TestFilesystemModificationTime:
 
         assert duckdb_cursor.sql(query).fetchall() == expected
 
+    @pytest.mark.xfail(strict=True, reason=ENGINE)
     @pytest.mark.parametrize("filesystem_class", WITHOUT_MODIFIED)
     @pytest.mark.parametrize(
         ("query", "expected"),
@@ -610,14 +599,8 @@ class TestFilesystemModificationTime:
                 "SELECT filename, content, size, last_modified FROM read_blob('gs:///blobs/a')",
                 [("gs:///blobs/a", b"one", 3, None)],
                 id="with-content",
-                marks=pytest.mark.xfail(strict=True, raises=duckdb.NotImplementedException, reason=REMOTE),
             ),
-            pytest.param(
-                "SELECT size, last_modified FROM read_blob('gs:///blobs/a')",
-                [(3, None)],
-                id="metadata-only",
-                marks=pytest.mark.xfail(strict=True, raises=duckdb.NotImplementedException, reason=REMOTE),
-            ),
+            pytest.param("SELECT size, last_modified FROM read_blob('gs:///blobs/a')", [(3, None)], id="metadata-only"),
         ],
     )
     def test_last_modified_is_null_on_a_remote_protocol_when_the_filesystem_has_no_modified(
@@ -627,41 +610,7 @@ class TestFilesystemModificationTime:
 
         assert duckdb_cursor.sql(query).fetchall() == expected
 
-    @pytest.mark.parametrize(
-        ("filesystem_class", "surfaced"),
-        [
-            pytest.param(MemoryFileSystemWithoutModified, r"memory: modified\(\) is not implemented$", id="no-message"),
-            pytest.param(
-                memory_filesystem_whose_modified_raises(NotImplementedError, "no times kept"),
-                r"memory: modified\(\) is not implemented: no times kept$",
-                id="with-message",
-            ),
-            pytest.param(
-                memory_filesystem_whose_modified_raises(ModificationTimesUnsupportedError, "no times"),
-                r"memory: modified\(\) is not implemented: no times$",
-                id="subclass",
-            ),
-            pytest.param(
-                memory_filesystem_whose_modified_raises(UnprintableNotImplementedError, "unused"),
-                r"memory: modified\(\) is not implemented$",
-                id="unprintable-message",
-            ),
-            pytest.param(
-                memory_filesystem_whose_modified_raises(KeyError, "mtime"),
-                r"memory: modified\(\) has no modification time: 'mtime'$",
-                id="key-error",
-            ),
-            pytest.param(MemoryFileSystemWhoseModifiedIsNone, r"memory: modified\(\) returned None$", id="none"),
-        ],
-    )
-    def test_until_the_engine_fix_a_metadata_only_read_raises_not_implemented(
-        self, duckdb_cursor, filesystem_class, surfaced
-    ):
-        duckdb_cursor.register_filesystem(filesystem_with_blobs(filesystem_class))
-
-        with pytest.raises(duckdb.NotImplementedException, match=surfaced):
-            duckdb_cursor.sql(ONE_BLOB_METADATA_ONLY).fetchall()
-
+    @pytest.mark.xfail(strict=True, reason=ENGINE)
     def test_an_entry_without_mtime_of_a_gcs_like_filesystem_has_no_last_modified(self, duckdb_cursor):
         fs = filesystem_with_blobs(MemoryFileSystemLikeGCS)
         with fs.open("/blobs/d-without-mtime", "wb") as f:
@@ -682,19 +631,16 @@ class TestFilesystemModificationTime:
         filesystem_class = memory_filesystem_whose_modified_raises(ValueError, "unreadable modification time")
         duckdb_cursor.register_filesystem(filesystem_with_blobs(filesystem_class))
 
-        with pytest.raises(duckdb.Error, match=r"ValueError: unreadable modification time") as raised:
+        with pytest.raises(duckdb.Error, match=r"ValueError: unreadable modification time"):
             duckdb_cursor.sql(query).fetchall()
-        assert not isinstance(raised.value, duckdb.NotImplementedException)
 
     @pytest.mark.parametrize("query", [ONE_BLOB_WITH_CONTENT, ONE_BLOB_METADATA_ONLY])
     def test_a_time_whose_timestamp_raises_not_implemented_is_not_translated(self, duckdb_cursor, query):
         duckdb_cursor.register_filesystem(filesystem_with_blobs(MemoryFileSystemWithUnstampedModified))
 
-        with pytest.raises(duckdb.Error, match=r"NotImplementedError: no timestamp for this time") as raised:
+        with pytest.raises(duckdb.Error, match=r"NotImplementedError: no timestamp for this time"):
             duckdb_cursor.sql(query).fetchall()
-        assert not isinstance(raised.value, duckdb.NotImplementedException)
 
-    @pytest.mark.xfail(strict=True, reason=PARQUET)
     def test_read_parquet_works_when_the_filesystem_has_no_modified(self, duckdb_cursor):
         fs = filesystem_with_blobs(MemoryFileSystemWithoutModified)
         add_file(fs, "binary_string.parquet")

@@ -247,29 +247,14 @@ timestamp_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 		try {
 			last_mod = filesystem.attr("modified")(handle.path);
 		} catch (nb::python_error &error) {
-			// an unsupported modification time, which DirectFileReader reads as NULL
-			string message;
-			if (error.matches(PyExc_NotImplementedError)) {
-				message = GetName() + ": modified() is not implemented";
-			} else if (error.matches(PyExc_KeyError)) {
-				message = GetName() + ": modified() has no modification time";
-			} else {
-				throw;
+			// a file system without modification times reports the unknown time, which the engine reads as NULL
+			if (error.matches(PyExc_NotImplementedError) || error.matches(PyExc_KeyError)) {
+				return timestamp_t::ninfinity();
 			}
-			// str() of the exception can itself raise, and the error is still a NotImplementedException without its
-			// text.
-			try {
-				auto detail = nb::cast<std::string>(nb::str(error.value()));
-				if (!detail.empty()) {
-					message += ": " + detail;
-				}
-			} catch (nb::python_error &) {
-			} catch (nb::cast_error &) {
-			}
-			throw NotImplementedException(message);
+			throw;
 		}
 		if (last_mod.is_none()) {
-			throw NotImplementedException(GetName() + ": modified() returned None");
+			return timestamp_t::ninfinity();
 		}
 
 		// datetime.timestamp() returns a float; truncate to int64 seconds (nb::cast<int64_t> would reject a float)
