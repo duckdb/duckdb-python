@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
@@ -758,7 +759,7 @@ static bool ReadOnce(const nb::handle &obj) {
 }
 
 std::shared_ptr<SourceHandle> DuckDBPySeam::RegisterSource(DuckDBPyConnection &self, const nb::object &obj,
-                                                           const string &subject) {
+                                                           const string &subject, vector<LogicalType> declared_types) {
 	auto &context = *OpenConnection(self).context;
 	if (!self.source_identity) {
 		self.source_identity = std::make_shared<SourceIdentity>();
@@ -777,7 +778,8 @@ std::shared_ptr<SourceHandle> DuckDBPySeam::RegisterSource(DuckDBPyConnection &s
 	{
 		// Classifying and adapting the object runs its own Python, which must not close or use this connection
 		engine::ConnectionClaim claim(context);
-		table = PythonReplacementScan::ReplacementObject(obj, subject.empty() ? "source" : subject, context, kind);
+		table = PythonReplacementScan::ReplacementObject(obj, subject.empty() ? "source" : subject, context, kind,
+		                                                 std::move(declared_types));
 	}
 	auto handle = RegisterTable(context, std::move(table), subject);
 	if (once) {
@@ -830,6 +832,31 @@ static string TableKind(DuckDBPyConnection &self, const nb::object &name) {
 		kind = entry->type == CatalogType::VIEW_ENTRY ? "view" : "table";
 	});
 	return kind;
+}
+
+vector<std::pair<string, LogicalType>> DuckDBPySeam::InsertableColumns(DuckDBPyConnection &self, const string &name) {
+	auto session = OpenSession(self);
+	auto &context = session.Context();
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	nb::gil_scoped_release release;
+	auto claim = session.Claim();
+	vector<std::pair<string, LogicalType>> columns;
+	// The same lookup an INSERT INTO binds through, so the temporary schema and the search path shadow as they do there
+	context.RunFunctionInTransaction([&]() {
+		CatalogEntryRetriever retriever(context);
+		EntryLookupInfo lookup(CatalogType::TABLE_ENTRY,
+		                       Binder::BindTableName(retriever, QualifiedName(Identifier(name))));
+		auto entry = Catalog::GetEntry(context, lookup, OnEntryNotFound::RETURN_NULL);
+		if (!entry || entry->type != CatalogType::TABLE_ENTRY) {
+			return;
+		}
+		for (auto &column : entry->Cast<TableCatalogEntry>().GetColumns().Logical()) {
+			if (!column.Generated()) {
+				columns.emplace_back(column.Name(), column.Type());
+			}
+		}
+	});
+	return columns;
 }
 
 //! Mirrors Binder::BindSchemaOrCatalog: a lone qualifier is a database's name when one has it, a schema otherwise

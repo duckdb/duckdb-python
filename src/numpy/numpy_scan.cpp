@@ -6,6 +6,8 @@
 #include "duckdb/common/swar.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
+#include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
@@ -17,6 +19,10 @@
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/numpy/numpy_array.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb_python/staged_rows.hpp"
 
 namespace duckdb {
 
@@ -214,21 +220,210 @@ static void VerifyMapConstraints(Vector &vec, idx_t count) {
 	}
 }
 
+//! A MAP's keys must be unique at every depth; a cast of a STRUCT into a MAP, as of a dict whose keys collapse into
+//! one key, does not check them
 void VerifyTypeConstraints(Vector &vec, idx_t count) {
-	switch (vec.GetType().id()) {
-	case LogicalTypeId::MAP: {
+	auto &type = vec.GetType();
+	if (type.id() == LogicalTypeId::MAP) {
 		VerifyMapConstraints(vec, count);
-		break;
 	}
+	switch (type.InternalType()) {
+	case PhysicalType::LIST:
+		VerifyTypeConstraints(ListVector::GetEntry(vec), ListVector::GetListSize(vec));
+		break;
+	case PhysicalType::ARRAY:
+		VerifyTypeConstraints(ArrayVector::GetEntry(vec), count * ArrayType::GetSize(type));
+		break;
+	case PhysicalType::STRUCT:
+		for (auto &child : StructVector::GetEntries(vec)) {
+			VerifyTypeConstraints(child, count);
+		}
+		break;
 	default:
-		return;
+		break;
 	}
 }
 
+//! The casts one declared column needs, looked up once per source type for the vector, since the lookup costs more
+//! than casting one value. The cache is bounded: dicts give a STRUCT type per key set, and past the bound a lookup
+//! per value beats a search through them.
+class DeclaredCasts {
+public:
+	DeclaredCasts(ClientContext &context, const LogicalType &target)
+	    : context(context), target(target), set(CastFunctionSet::Get(context)), get_input(context) {
+	}
+
+	Value Cast(const Value &value) {
+		if (value.type() == target) {
+			return value;
+		}
+		auto cast = For(value.type());
+		if (!cast) {
+			return CastToColumn(context, value, target);
+		}
+		Vector input(value, count_t(1));
+		Vector result(target, 1);
+		// Without an error string the cast raises its own exception, as the appender's cast does
+		CastParameters parameters(cast->function.GetCastData().get(), false, nullptr, cast->local_state.get());
+		cast->function.Cast(input, result, 1, parameters);
+		return result.GetValue(0);
+	}
+
+private:
+	static constexpr idx_t CACHED_SOURCE_TYPES = 16;
+
+	struct Entry {
+		LogicalType source;
+		BoundCastInfo function;
+		unique_ptr<FunctionLocalState> local_state;
+	};
+
+	optional_ptr<Entry> For(const LogicalType &source) {
+		for (auto &entry : casts) {
+			if (entry.source == source) {
+				return &entry;
+			}
+		}
+		if (casts.size() >= CACHED_SOURCE_TYPES) {
+			return nullptr;
+		}
+		Entry entry {source, set.GetCastFunction(source, target, get_input), nullptr};
+		if (entry.function.HasInitLocalState()) {
+			CastLocalStateParameters parameters(get_input.context, entry.function.GetCastData());
+			entry.local_state = entry.function.InitLocalState(parameters);
+		}
+		casts.push_back(std::move(entry));
+		return &casts.back();
+	}
+
+	ClientContext &context;
+	const LogicalType &target;
+	CastFunctionSet &set;
+	GetCastFunctionInput get_input;
+	vector<Entry> casts;
+};
+
+//! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
+//! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
+//! every depth, and a value without a DuckDB type of its own reads as its text in a text column
+//! A numpy scalar, or an array of no dimensions, reads as its Python value; a datetime64 or timedelta64 at
+//! nanoseconds would read as an integer, so those take the microsecond unit first, as the frame's own datetime
+//! columns do
+static bool IsNumpyScalar(nb::handle cell) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (nb::isinstance(cell, import_cache.numpy.generic())) {
+		return true;
+	}
+	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
+	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
+}
+
+static nb::object NumpyScalarValue(nb::handle scalar) {
+	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
+	if (kind == "M") {
+		return scalar.attr("astype")("datetime64[us]").attr("item")();
+	}
+	if (kind == "m") {
+		return scalar.attr("astype")("timedelta64[us]").attr("item")();
+	}
+	return scalar.attr("item")();
+}
+
+static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell) {
+	if (cell.ptr() == Py_None) {
+		return Value();
+	}
+	if (IsNumpyScalar(cell)) {
+		auto value = NumpyScalarValue(cell);
+		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
+		if (!IsNumpyScalar(value)) {
+			return DeclaredValue(context, target, value);
+		}
+	}
+	if (target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
+		return Value(TransformPythonString(nb::str(cell)));
+	}
+	return TransformPythonValue(context, cell, LogicalType::UNKNOWN, true);
+}
+
+//! The values of one vector of a declared column, written once the cells are read: a vector whose values share one
+//! type is cast by the engine in one call, which costs a fraction of a cast per value. Only the values present
+//! enter the cast and its result is copied into the output, so a NULL row never meets a cast that would give it a
+//! shape of its own (a UNION member that is NULL), and the output owns every string the cast produced.
+class DeclaredVector {
+public:
+	explicit DeclaredVector(idx_t count) : values(count), source(LogicalTypeId::SQLNULL) {
+	}
+
+	void Set(idx_t row, Value value) {
+		if (value.IsNull()) {
+			return;
+		}
+		if (source.id() == LogicalTypeId::SQLNULL) {
+			source = value.type();
+		} else if (uniform && value.type() != source) {
+			uniform = false;
+		}
+		values[row] = std::move(value);
+	}
+
+	void Write(ClientContext &context, Vector &out, idx_t count) {
+		auto &target = out.GetType();
+		if (uniform && source.id() != LogicalTypeId::SQLNULL && source != target) {
+			idx_t present = 0;
+			for (idx_t row = 0; row < count; row++) {
+				present += !values[row].IsNull();
+			}
+			Vector staged(source, present);
+			idx_t staged_row = 0;
+			for (idx_t row = 0; row < count; row++) {
+				if (!values[row].IsNull()) {
+					staged.SetValue(staged_row++, values[row]);
+				}
+			}
+			// A vector built with a capacity has no rows, and the fallback cast reads the row count to decide whether
+			// any value is present
+			FlatVector::SetSize(staged, present);
+			Vector casted(target, present);
+			// Without an error string the cast raises its own exception, as the appender's cast does
+			VectorOperations::TryCast(context, staged, casted, present, nullptr);
+			idx_t copied = 0;
+			for (idx_t row = 0; row < count;) {
+				if (values[row].IsNull()) {
+					FlatVector::SetNull(out, row, true);
+					row++;
+					continue;
+				}
+				idx_t run = 1;
+				while (row + run < count && !values[row + run].IsNull()) {
+					run++;
+				}
+				VectorOperations::Copy(casted, out, copied + run, copied, row);
+				copied += run;
+				row += run;
+			}
+			return;
+		}
+		DeclaredCasts casts(context, target);
+		for (idx_t row = 0; row < count; row++) {
+			if (values[row].IsNull()) {
+				FlatVector::SetNull(out, row, true);
+			} else {
+				out.SetValue(row, casts.Cast(values[row]));
+			}
+		}
+	}
+
+private:
+	vector<Value> values;
+	LogicalType source;
+	bool uniform = true;
+};
+
 // A column without a mask takes the instantiation that tests no mask bits, so it reads like the plain array
-template <bool HAS_MASK>
-static void ScanObjectRows(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked, idx_t count,
-                           idx_t offset, Vector &out) {
+template <bool HAS_MASK, class CONVERT>
+static void ScanObjectRows(PyObject **col, idx_t stride, const uint8_t *masked, idx_t count, idx_t offset, Vector &out,
+                           CONVERT &&convert) {
 	for (idx_t block_row = 0; block_row < count; block_row += MASK_BLOCK_ROWS) {
 		auto block_end = MinValue<idx_t>(block_row + MASK_BLOCK_ROWS, count);
 		// A masked cell can hold a value of another type, or no object at all
@@ -239,26 +434,43 @@ static void ScanObjectRows(ClientContext &context, PyObject **col, idx_t stride,
 			}
 			// Converting can run Python, which lets another thread replace the cell and free the object it held
 			auto cell = nb::borrow<nb::object>(col[stride / sizeof(PyObject *) * (i + offset)]);
-			ScanNumpyObject(context, cell.ptr(), i, out);
+			convert(cell, i);
 		}
 	}
 }
 
-void NumpyScan::ScanObjectColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
-                                 idx_t count, idx_t offset, Vector &out) {
+template <class CONVERT>
+static void ScanObjectCells(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked, idx_t count,
+                            idx_t offset, Vector &out, CONVERT &&convert) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
 	PyUtil::QueryGil gil(context); // We're creating python objects here, so we need the GIL
 
 	try {
 		if (masked) {
-			ScanObjectRows<true>(context, col, stride, masked, count, offset, out);
+			ScanObjectRows<true>(col, stride, masked, count, offset, out, convert);
 		} else {
-			ScanObjectRows<false>(context, col, stride, masked, count, offset, out);
+			ScanObjectRows<false>(col, stride, masked, count, offset, out, convert);
 		}
 	} catch (nb::python_error &error) {
 		throw AsDuckDBError(error);
 	}
+}
+
+void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
+                                   idx_t count, idx_t offset, Vector &out) {
+	DeclaredVector staged(count);
+	auto &target = out.GetType();
+	ScanObjectCells(context, col, stride, masked, count, offset, out,
+	                [&](nb::handle cell, idx_t row) { staged.Set(row, DeclaredValue(context, target, cell)); });
+	staged.Write(context, out, count);
+	VerifyTypeConstraints(out, count);
+}
+
+void NumpyScan::ScanObjectColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
+                                 idx_t count, idx_t offset, Vector &out) {
+	ScanObjectCells(context, col, stride, masked, count, offset, out,
+	                [&](nb::handle cell, idx_t row) { ScanNumpyObject(context, cell.ptr(), row, out); });
 	VerifyTypeConstraints(out, count);
 }
 
@@ -526,6 +738,10 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.Data(); // NOLINT
 		const bool is_object_col = bind_data.numpy_type.type == NumpyNullableType::OBJECT;
+		if (is_object_col && bind_data.declared) {
+			return NumpyScan::ScanDeclaredColumn(context, src_ptr, numpy_col.stride, MaskedRows(bind_data), count,
+			                                     offset, out);
+		}
 		if (is_object_col && out.GetType().id() != LogicalTypeId::VARCHAR) {
 			//! We have determined the underlying logical type of this object column
 			return NumpyScan::ScanObjectColumn(context, src_ptr, numpy_col.stride, MaskedRows(bind_data), count, offset,

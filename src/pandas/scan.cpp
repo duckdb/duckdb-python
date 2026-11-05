@@ -113,7 +113,7 @@ unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &conte
 	if (nb::isinstance<nb::dict>(df)) {
 		row_count = NumpyBind::Bind(context, df, pandas_bind_data, return_types, names);
 	} else {
-		row_count = Pandas::Bind(context, df, pandas_bind_data, return_types, names);
+		row_count = Pandas::Bind(context, df, pandas_bind_data, return_types, names, info->declared_types);
 	}
 	return make_uniq<PandasScanFunctionData>(std::move(info), row_count, std::move(pandas_bind_data), return_types);
 }

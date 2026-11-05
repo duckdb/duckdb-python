@@ -82,6 +82,8 @@ P2 = datetime.timezone(datetime.timedelta(hours=2))
 NAIVE = datetime.datetime(2024, 5, 7, 7, 8, 9)
 AWARE = NAIVE.replace(tzinfo=P2)
 PATH = pathlib.PurePosixPath("/x")
+LABEL = "a label longer than a string the engine keeps inline"
+ENUM_VALUE = duckdb.Value(LABEL, f"ENUM('{LABEL}')")
 
 
 class _Color(enum.Enum):
@@ -109,10 +111,6 @@ def _append_rows(con, table, values):
             appender.append_row(value)
 
 
-NOT_YET_DECLARED = "the object column is typed from its sample, not from the table column"
-CONVERTED_BY_THE_SCAN = "a value of an object column converts by the scan's own rules, not as the appender converts it"
-
-
 class TestAppendObjectColumnsToDeclaredTypes:
     @pytest.mark.parametrize(
         ("target", "column", "expected_first", "expected_last"),
@@ -123,7 +121,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1.0,
                 2.5,
                 id="int_sample_float_into_double",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "DECIMAL(10,2)",
@@ -131,7 +128,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 Decimal("1.50"),
                 Decimal("1.25"),
                 id="narrow_decimal_sample_into_wider_decimal",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "TIMESTAMP",
@@ -139,7 +135,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 datetime.datetime(2024, 5, 6),
                 NAIVE,
                 id="date_sample_datetime_into_timestamp",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR",
@@ -147,7 +142,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "1",
                 "2.5",
                 id="int_sample_float_into_varchar",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR",
@@ -155,7 +149,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "1",
                 "x",
                 id="int_sample_str_into_varchar",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR",
@@ -163,7 +156,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "1",
                 "2.5",
                 id="fully_sampled_int_and_float_into_varchar",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR",
@@ -171,7 +163,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "a",
                 "ab",
                 id="str_sample_bytes_into_varchar",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR", _outside_the_sample("a", PATH), "a", str(PATH), id="path_into_varchar_reads_as_its_text"
@@ -203,7 +194,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1,
                 2**40,
                 id="small_int_sample_large_int_into_bigint",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "UBIGINT",
@@ -211,7 +201,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1,
                 2**63,
                 id="int_past_the_signed_range_into_ubigint",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "HUGEINT",
@@ -219,7 +208,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1,
                 2**70,
                 id="int_past_64_bits_into_hugeint",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "DOUBLE",
@@ -227,7 +215,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1.0,
                 float(2**70),
                 id="int_past_64_bits_into_double",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "UNION(i INTEGER, s VARCHAR)",
@@ -235,7 +222,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1,
                 "x",
                 id="int_sample_str_into_union",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "MAP(VARCHAR, INTEGER)",
@@ -243,7 +229,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 {"a": 1},
                 {"b": 2},
                 id="dict_with_other_key_into_map",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "JSON",
@@ -251,7 +236,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "1",
                 '{"a":1}',
                 id="int_sample_dict_into_json",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "INTEGER",
@@ -259,7 +243,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1,
                 1,
                 id="int_sample_bool_into_integer",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param(
                 "DOUBLE",
@@ -267,7 +250,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 1.0,
                 1.0,
                 id="int_sample_bool_into_double",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param("BOOLEAN", _outside_the_sample(True, 1), True, True, id="bool_sample_int_into_boolean"),
             pytest.param(
@@ -278,6 +260,56 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 id="lists_into_array",
             ),
             pytest.param("DOUBLE", _outside_the_sample(1.5, float("nan")), 1.5, None, id="nan_into_double_is_null"),
+            pytest.param("DOUBLE", _outside_the_sample(1.5, None), 1.5, None, id="none_into_double_is_null"),
+            pytest.param("DOUBLE", _outside_the_sample(1.5, np.ma.masked), 1.5, None, id="masked_into_double_is_null"),
+            pytest.param(
+                "DOUBLE",
+                _outside_the_sample(1.5, np.ma.array(42.0, mask=True)),
+                1.5,
+                None,
+                id="masked_zero_dimensional_array_into_double_is_null",
+            ),
+            pytest.param("INTEGER", _outside_the_sample(1, np.int64(2)), 1, 2, id="numpy_int_into_integer"),
+            pytest.param("DOUBLE", _outside_the_sample(1.5, np.float32(2.5)), 1.5, 2.5, id="numpy_float_into_double"),
+            pytest.param(
+                "BOOLEAN", _outside_the_sample(True, np.bool_(False)), True, False, id="numpy_bool_into_boolean"
+            ),
+            pytest.param(
+                "TIMESTAMP",
+                _outside_the_sample(NAIVE, np.datetime64("2024-05-08T01:02:03.123456789", "ns")),
+                NAIVE,
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                id="numpy_datetime_into_timestamp",
+            ),
+            pytest.param(
+                "TIMESTAMP",
+                _outside_the_sample(NAIVE, np.array("2024-05-08T01:02:03.123456789", dtype="datetime64[ns]")),
+                NAIVE,
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                id="numpy_zero_dimensional_datetime_into_timestamp",
+            ),
+            pytest.param(
+                "STRUCT(x VARCHAR)",
+                _outside_the_sample({"x": "abc"}, None),
+                {"x": "abc"},
+                None,
+                id="none_into_struct_of_text_is_null",
+            ),
+            pytest.param(
+                "STRUCT(x UNION(i INTEGER, s VARCHAR))",
+                _outside_the_sample({"x": 1}, None),
+                {"x": 1},
+                None,
+                id="none_into_struct_of_union_is_null",
+            ),
+            pytest.param(
+                "VARCHAR",
+                pd.Series([ENUM_VALUE] * ROWS, dtype=object),
+                LABEL,
+                LABEL,
+                id="enum_values_into_varchar_keep_their_text",
+            ),
+            pytest.param("DOUBLE", _outside_the_sample(1.5, pd.NA), 1.5, None, id="pandas_na_into_double_is_null"),
             pytest.param("VARCHAR", _outside_the_sample("a", float("nan")), "a", None, id="nan_into_varchar_is_null"),
             pytest.param("INTEGER", _outside_the_sample(1, float("nan")), 1, None, id="nan_into_integer_is_null"),
             pytest.param(
@@ -314,7 +346,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "a",
                 None,
                 id="datetime64_nat_into_varchar_is_null",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
         ],
     )
@@ -334,47 +365,42 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 _outside_the_sample(1, "x"),
                 "Malformed JSON",
                 id="text_that_is_not_json",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "INTEGER",
                 _outside_the_sample(1, "x"),
                 "'x'",
                 id="text_into_integer",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param(
                 "INTEGER",
                 _outside_the_sample(1, 2**40),
                 "1099511627776",
                 id="int_out_of_range",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param(
                 "FLOAT",
                 _outside_the_sample(1, 1e300),
                 "out of range",
                 id="float_out_of_range",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "STRUCT(x INTEGER)",
                 _outside_the_sample({"x": 1}, (2,)),
                 "STRUCT",
                 id="tuple_into_struct",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param(
                 "TIME",
                 _outside_the_sample(datetime.time(1, 2, 3), AWARE),
                 "TIME",
                 id="aware_datetime_into_time",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param("ENUM('a', 'b')", _outside_the_sample("a", "c"), "'c'", id="text_outside_the_enum"),
             pytest.param("INTEGER", pd.Series(["duck", "db"], dtype=object), "'duck'", id="text_column_into_integer"),
             pytest.param("UTINYINT", _outside_the_sample(1, -1), "out of range", id="negative_int_into_utinyint"),
             pytest.param("TINYINT", _outside_the_sample(1, 200), "out of range", id="int_out_of_tinyint_range"),
+            pytest.param("DATE", _outside_the_sample(1, 2), "DATE", id="int_column_into_date"),
         ],
     )
     def test_object_value_the_table_column_type_refuses(self, duckdb_cursor, target, column, match):
@@ -383,6 +409,51 @@ class TestAppendObjectColumnsToDeclaredTypes:
         with pytest.raises(duckdb.ConversionException, match=match):
             duckdb_cursor.append("t", frame)
 
+    def test_numpy_long_double_is_refused_like_the_appender(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a DOUBLE)")
+        frame = pd.DataFrame({"a": _outside_the_sample(1.5, np.longdouble("2.5"))})
+        with pytest.raises(duckdb.NotImplementedException, match="longdouble"):
+            duckdb_cursor.append("t", frame)
+
+    def test_keys_that_collapse_in_a_nested_map_are_refused(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a STRUCT(m MAP(INTEGER, INTEGER)))")
+        # The same key set in every row, so one cast runs over the whole vector
+        frame = pd.DataFrame({"a": _outside_the_sample({"m": {"01": 1, "1": 2}}, {"m": {"01": 10, "1": 20}})})
+        with pytest.raises(duckdb.InvalidInputException, match=r"(?i)duplicat|unique"):
+            duckdb_cursor.append("t", frame)
+
+    def test_text_with_a_lone_surrogate_names_it(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
+        frame = pd.DataFrame({"a": _outside_the_sample("a", pathlib.PurePosixPath("/\udcff"))})
+        with pytest.raises(duckdb.InvalidInputException, match="surrogate"):
+            duckdb_cursor.append("t", frame)
+
+    def test_null_row_among_struct_values_the_cast_converts(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a STRUCT(x INTEGER))")
+        # Text fields cast into INTEGER, so the whole vector goes through one cast with the NULL row inside it
+        values = [{"x": "1"}] * 1000 + [None] + [{"x": "2"}] * 1000
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(values, dtype=object)}))
+        rows = duckdb_cursor.execute("SELECT a FROM t ORDER BY rowid OFFSET 999 LIMIT 3").fetchall()
+        assert rows == [({"x": 1},), (None,), ({"x": 2},)]
+        stats = duckdb_cursor.execute("SELECT stats(a) FROM t LIMIT 1").fetchall()[0][0]
+        assert stats["child_stats"]["x"]["has_null"] is True
+
+    def test_null_row_of_a_union_column_is_null(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a UNION(i INTEGER, s VARCHAR))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": _outside_the_sample(1, None)}))
+        rows = duckdb_cursor.execute("SELECT a IS NULL, union_tag(a) FROM t ORDER BY rowid OFFSET 2998").fetchall()
+        assert rows == [(False, "i"), (True, None)]
+
+    def test_null_row_of_an_array_column_has_null_elements(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a INTEGER[3])")
+        # A vector of rows before the NULL, so the NULL row's element slots hold values from an earlier chunk
+        values = [[777, 777, 777]] * 2048 + [None] + [[5, 5, 5]] * 100
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(values, dtype=object)}))
+        rows = duckdb_cursor.execute("SELECT a FROM t ORDER BY rowid OFFSET 2047 LIMIT 3").fetchall()
+        assert rows == [((777, 777, 777),), (None,), ((5, 5, 5),)]
+        stats = duckdb_cursor.execute("SELECT stats(a) FROM t LIMIT 1").fetchall()[0][0]
+        assert stats["child_stats"]["has_null"] is True
+
     @pytest.mark.parametrize(
         ("zone", "expected"),
         [
@@ -390,14 +461,12 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 "UTC",
                 datetime.datetime(2024, 5, 7, 5, 8, 9),
                 id="UTC",
-                marks=pytest.mark.xfail(strict=True, reason="an aware datetime outside the sample keeps its wall time"),
             ),
             pytest.param("Europe/Amsterdam", datetime.datetime(2024, 5, 7, 7, 8, 9), id="Europe_Amsterdam"),
             pytest.param(
                 "America/New_York",
                 datetime.datetime(2024, 5, 7, 1, 8, 9),
                 id="America_New_York",
-                marks=pytest.mark.xfail(strict=True, reason="an aware datetime outside the sample keeps its wall time"),
             ),
         ],
     )
@@ -410,7 +479,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
 
     @pytest.mark.parametrize("zone", ["UTC", "Europe/Amsterdam"], ids=["UTC", "Europe_Amsterdam"])
     @pytest.mark.parametrize("naive", [NAIVE, pd.Timestamp(NAIVE)], ids=["datetime", "Timestamp"])
-    @pytest.mark.xfail(strict=True, reason="a naive datetime outside an aware sample is refused")
     def test_naive_datetime_into_timestamptz_reads_in_the_session_time_zone(self, duckdb_cursor, zone, naive):
         duckdb_cursor.execute(f"SET TimeZone = '{zone}'")
         duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMPTZ)")
@@ -425,12 +493,10 @@ class TestAppendObjectColumnsToDeclaredTypes:
             pytest.param(
                 "Europe/Amsterdam",
                 id="Europe_Amsterdam",
-                marks=pytest.mark.xfail(strict=True, reason="a date outside an aware sample reads as midnight UTC"),
             ),
             pytest.param(
                 "America/New_York",
                 id="America_New_York",
-                marks=pytest.mark.xfail(strict=True, reason="a date outside an aware sample reads as midnight UTC"),
             ),
         ],
     )
@@ -441,21 +507,18 @@ class TestAppendObjectColumnsToDeclaredTypes:
         values = _column(duckdb_cursor)
         assert (values[0], values[-1]) == (AWARE, datetime.datetime(2024, 5, 6, tzinfo=zoneinfo.ZoneInfo(zone)))
 
-    @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_by_name_declares_each_column_from_its_name(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a DOUBLE, b VARCHAR)")
         frame = pd.DataFrame({"b": _outside_the_sample(1, "x"), "A": _outside_the_sample(1, 2.5)})
         duckdb_cursor.append("t", frame, by_name=True)
         assert duckdb_cursor.execute("SELECT a, b FROM t ORDER BY rowid OFFSET 2999").fetchall() == [(2.5, "x")]
 
-    @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_by_position_skips_generated_columns(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a DOUBLE, g DOUBLE AS (a * 2), b VARCHAR)")
         frame = pd.DataFrame({"x": _outside_the_sample(1, 2.5), "y": _outside_the_sample(1, "x")})
         duckdb_cursor.append("t", frame)
         assert duckdb_cursor.execute("SELECT a, g, b FROM t ORDER BY rowid OFFSET 2999").fetchall() == [(2.5, 5.0, "x")]
 
-    @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_temporary_table_shadows_the_table_of_the_same_name(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a INTEGER)")
         duckdb_cursor.execute("CREATE TEMPORARY TABLE t (a DOUBLE)")
@@ -465,7 +528,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
         untouched = duckdb_cursor.execute("SELECT count(*) FROM memory.main.t").fetchall()
         assert (written, untouched) == ([(2.5,)], [(0,)])
 
-    @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_table_is_found_through_the_search_path(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE SCHEMA s")
         duckdb_cursor.execute("CREATE TABLE s.t (a DOUBLE)")
@@ -476,7 +538,6 @@ class TestAppendObjectColumnsToDeclaredTypes:
         untouched = duckdb_cursor.execute("SELECT count(*) FROM memory.main.t").fetchall()
         assert (written, untouched) == ([(2.5,)], [(0,)])
 
-    @pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED)
     def test_table_name_with_a_dot_is_one_identifier(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE SCHEMA s")
         duckdb_cursor.execute('CREATE TABLE "s.t" (a DOUBLE)')
@@ -508,43 +569,36 @@ class TestAppendMatchesTheAppender:
                 "DOUBLE",
                 _outside_the_sample(1, 2.5),
                 id="int_sample_float_into_double",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "DECIMAL(10,2)",
                 _outside_the_sample(Decimal("1.5"), Decimal("1.25")),
                 id="decimals",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "VARCHAR",
                 _outside_the_sample(1, 2.5),
                 id="numbers_into_varchar",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "TIMESTAMP",
                 _outside_the_sample(NAIVE, AWARE),
                 id="aware_datetime_into_timestamp",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "TIMESTAMPTZ",
                 _outside_the_sample(AWARE, NAIVE),
                 id="naive_datetime_into_timestamptz",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "UNION(i INTEGER, s VARCHAR)",
                 _outside_the_sample(1, "x"),
                 id="union",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "INTEGER",
                 _outside_the_sample(1, True),
                 id="bool_into_integer",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param("BOOLEAN", _outside_the_sample(True, 1), id="int_into_boolean"),
             pytest.param("INTEGER[3]", _outside_the_sample([1, 2, 3], [4, 5, 6]), id="lists_into_array"),
@@ -568,19 +622,16 @@ class TestAppendMatchesTheAppender:
                 "JSON",
                 _outside_the_sample(1, "x"),
                 id="text_that_is_not_json",
-                marks=pytest.mark.xfail(strict=True, reason=NOT_YET_DECLARED),
             ),
             pytest.param(
                 "INTEGER",
                 _outside_the_sample(1, 2**40),
                 id="int_out_of_range",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param(
                 "STRUCT(x INTEGER)",
                 _outside_the_sample({"x": 1}, (2,)),
                 id="tuple_into_struct",
-                marks=pytest.mark.xfail(strict=True, reason=CONVERTED_BY_THE_SCAN),
             ),
             pytest.param("ENUM('a', 'b')", _outside_the_sample("a", "c"), id="text_outside_the_enum"),
         ],
@@ -593,3 +644,17 @@ class TestAppendMatchesTheAppender:
         frame = pd.DataFrame({"a": column})
         with pytest.raises(type(refused.value)):
             duckdb_cursor.append("t", frame)
+
+
+class TestRegisterDeclared:
+    def test_declared_type_replaces_the_sampled_type(self, duckdb_cursor):
+        frame = pd.DataFrame({"a": _outside_the_sample(1, 2.5), "b": _outside_the_sample("x", "y")})
+        duckdb_cursor._register_declared("declared", frame, [duckdb.sqltypes.DOUBLE, None])
+        rel = duckdb_cursor.sql("SELECT a, b FROM declared WHERE a = 2.5")
+        assert rel.types == [duckdb.sqltypes.DOUBLE, duckdb.sqltypes.VARCHAR]
+        assert rel.fetchall() == [(2.5, "y")]
+
+    def test_one_type_per_column_or_refused(self, duckdb_cursor):
+        frame = pd.DataFrame({"a": [1], "b": [2]})
+        with pytest.raises(duckdb.InvalidInputException, match="1 types given for a DataFrame of 2 columns"):
+            duckdb_cursor._register_declared("declared", frame, [duckdb.sqltypes.DOUBLE])

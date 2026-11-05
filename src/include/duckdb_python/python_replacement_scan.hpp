@@ -22,10 +22,13 @@ public:
 	//! from_arrow (NAMELESS) reads a pyarrow MessageReader
 	static unique_ptr<TableRef> TryReplacementObject(const nb::object &entry, const string &name,
 	                                                 ClientContext &context,
-	                                                 ArrowSourceKind kind = ArrowSourceKind::REGISTERED);
-	//! Perform a replacement or throw if it failed
+	                                                 ArrowSourceKind kind = ArrowSourceKind::REGISTERED,
+	                                                 vector<LogicalType> declared_types = {});
+	//! Perform a replacement or throw if it failed; declared_types, one per column of a pandas DataFrame, make
+	//! its object columns convert into those types instead of a type sampled from their values
 	static unique_ptr<TableRef> ReplacementObject(const nb::object &entry, const string &name, ClientContext &context,
-	                                              ArrowSourceKind kind = ArrowSourceKind::REGISTERED);
+	                                              ArrowSourceKind kind = ArrowSourceKind::REGISTERED,
+	                                              vector<LogicalType> declared_types = {});
 };
 
 } // namespace duckdb

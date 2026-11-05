@@ -30,6 +30,7 @@ from .types import (
     FractionalType,
     IntegralType,
     MapType,
+    StringType,
     StructField,
     StructType,
     TimestampMillisecondNTZType,
@@ -45,6 +46,7 @@ from .types import (
     _parse_datatype_string,
     _python_to_duckdb,
     _replace_types,
+    _to_string,
 )
 from .udf import UDFRegistration
 
@@ -85,13 +87,23 @@ def _is_missing(value: Any) -> bool:  # noqa: ANN401
     return value is None or type(value).__name__ in ("NAType", "NaTType")
 
 
+def _numpy_value(value: Any) -> Any:  # noqa: ANN401
+    """The Python value of a NumPy value; a datetime64 or timedelta64 at nanoseconds would list as an int."""
+    kind = getattr(getattr(value, "dtype", None), "kind", "")
+    if kind == "M":
+        return value.astype("datetime64[us]").tolist()
+    if kind == "m":
+        return value.astype("timedelta64[us]").tolist()
+    return value.tolist()
+
+
 def _python_value(value: Any) -> Any:  # noqa: ANN401
     """A value of a pandas column as the Python value DuckDB reads, at any depth, which Spark's verifier can check.
 
     A pandas missing value is None, and NumPy values and pandas timestamps and durations are Python values.
     """
     if _is_numpy(value):
-        value = value.tolist()
+        value = _numpy_value(value)
     if _is_missing(value):
         return None
     if isinstance(value, datetime.datetime) and hasattr(value, "to_pydatetime"):
@@ -103,6 +115,111 @@ def _python_value(value: Any) -> Any:  # noqa: ANN401
     if type(value) in (list, tuple):
         return type(value)(map(_python_value, value))
     return value
+
+
+_WALL_TIME_TIMESTAMPS = (
+    TimestampNTZType,
+    TimestampSecondNTZType,
+    TimestampMillisecondNTZType,
+    TimestampNanosecondNTZType,
+)
+
+
+def _reads_through_the_schema(data_type: DataType) -> bool:
+    """Whether a value of an object column takes a form from ``data_type`` before DuckDB reads it."""
+    # A map always does: a dict whose keys are not text would otherwise read as a struct of the keys' text
+    if isinstance(data_type, (StringType, StructType, MapType, *_WALL_TIME_TIMESTAMPS)):
+        return True
+    if isinstance(data_type, ArrayType):
+        return _reads_through_the_schema(data_type.elementType)
+    return False
+
+
+def _value_through_the_schema(value: Any, data_type: DataType) -> Any:  # noqa: ANN401
+    """The value of an object column as pyspark hands it to a field of ``data_type``.
+
+    A string field takes the text of any value, a timestamp field without a zone takes the wall time of an aware
+    datetime, and a struct field takes a tuple, a Row or an object with attributes as a dict in field order; the same
+    applies inside arrays and map values. A missing value is None.
+    """
+    if _is_numpy(value):
+        value = _numpy_value(value)
+    if _is_missing(value):
+        return None
+    if isinstance(data_type, StringType):
+        return _to_string(value)
+    if isinstance(data_type, _WALL_TIME_TIMESTAMPS):
+        if isinstance(value, datetime.datetime) and value.tzinfo is not None:
+            return value.replace(tzinfo=None)
+        return value
+    if isinstance(data_type, StructType):
+        if isinstance(value, dict):
+            items = value
+        elif hasattr(value, "__fields__"):
+            items = dict(zip(value.__fields__, value, strict=False))
+        elif isinstance(value, (tuple, list)):
+            items = dict(zip((field.name for field in data_type.fields), value, strict=False))
+        elif hasattr(value, "__dict__"):
+            items = vars(value)
+        else:
+            return value
+        return {
+            field.name: _value_through_the_schema(items.get(field.name), field.dataType) for field in data_type.fields
+        }
+    if isinstance(data_type, ArrayType) and isinstance(value, (list, tuple)):
+        return [_value_through_the_schema(element, data_type.elementType) for element in value]
+    if isinstance(data_type, MapType) and isinstance(value, dict):
+        # DuckDB's own map form, a list of keys beside a list of values: a converted key may be a dict or a list, which
+        # no dict can hold as a key, and two keys that collapse into one stay two for DuckDB's uniqueness check
+        return {
+            "key": [_value_through_the_schema(key, data_type.keyType) for key in value],
+            "value": [_value_through_the_schema(element, data_type.valueType) for element in value.values()],
+        }
+    return value
+
+
+def _holds_numpy(value: Any) -> bool:  # noqa: ANN401
+    """Whether ``value`` is a NumPy value or holds one at any depth of its dicts, lists and tuples."""
+    if _is_numpy(value):
+        return True
+    if isinstance(value, dict):
+        return any(_holds_numpy(key) or _holds_numpy(element) for key, element in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_holds_numpy(element) for element in value)
+    return False
+
+
+def _column_conforms(series: Any, data_type: DataType) -> bool:  # noqa: ANN401
+    """Whether every value of an object column already has the form its field takes, so the column stays as it is.
+
+    Only a string field can be settled from the values' types alone; a struct field's dicts need their keys and
+    nested values looked at, which is the conversion itself.
+    """
+    if isinstance(data_type, StringType):
+        return bool(series.map(type).isin([str, type(None)]).all())
+    return False
+
+
+def _is_pyarrow_backed(data: "PandasDataFrame") -> bool:
+    """Whether any column of ``data`` has a pyarrow dtype, which makes DuckDB read the whole frame through Arrow."""
+    import pandas
+
+    return any(isinstance(dtype, pandas.ArrowDtype) for dtype in data.dtypes)
+
+
+def _frame_through_the_schema(data: "PandasDataFrame", schema: StructType) -> "PandasDataFrame":
+    """A shallow copy of ``data`` whose object columns hold their values as the fields of ``schema`` read them."""
+    frame = data.copy(deep=False)
+    for position, ((name, series), field) in enumerate(zip(data.items(), schema.fields, strict=True)):
+        if series.dtype != object:
+            continue
+        if not _reads_through_the_schema(field.dataType) and not series.map(_holds_numpy).any():
+            continue
+        if _column_conforms(series, field.dataType):
+            continue
+        values = [_value_through_the_schema(value, field.dataType) for value in series]
+        frame.isetitem(position, type(series)(values, index=series.index, dtype=object, name=name))
+    return frame
 
 
 def _verify_pandas_values(data: "PandasDataFrame", schema: StructType) -> None:
@@ -191,10 +308,19 @@ class SparkSession:  # noqa: D101
         return schema
 
     def _createDataFrameFromPandas(
-        self, data: "PandasDataFrame", types: list[str] | None, names: list[str] | None
+        self, data: "PandasDataFrame", schema: StructType | None, names: list[str] | None
     ) -> DataFrame:
         unique_name = f"pyspark_pandas_df_{uuid.uuid1()}"
-        self.conn.register(unique_name, data)
+        types = None
+        if schema is not None:
+            types, names = schema.extract_types_and_names()
+        # A frame with a pyarrow backed column is read through Arrow, which takes no declared types, so it keeps
+        # the path it had: register as it is and cast below
+        if schema is not None and len(schema.fields) == len(data.columns) and not _is_pyarrow_backed(data):
+            frame = _frame_through_the_schema(data, schema)
+            self.conn._register_declared(unique_name, frame, [field.dataType.duckdb_type for field in schema.fields])
+        else:
+            self.conn.register(unique_name, data)
         df = DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
 
         # Cast to types
@@ -243,8 +369,7 @@ class SparkSession:  # noqa: D101
             if isinstance(schema, StructType):
                 if verifySchema:
                     _verify_pandas_values(data, schema)
-                types, names = schema.extract_types_and_names()
-                return self._createDataFrameFromPandas(data, types, names)
+                return self._createDataFrameFromPandas(data, schema, None)
             if isinstance(schema, DataType):
                 msg = "A pandas DataFrame with a schema that is not a StructType is not supported"
                 raise ContributionsAcceptedError(msg)

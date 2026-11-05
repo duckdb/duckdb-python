@@ -120,7 +120,7 @@ std::unique_ptr<RegisteredArray> RegisterMask(nb::handle mask) {
 }
 
 static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p, PandasColumnBindData &bind_data,
-                              idx_t row_count) {
+                              idx_t row_count, const LogicalType &declared_type) {
 	const string counted_from = "the frame";
 	LogicalType column_type;
 	auto &column = column_p.handle;
@@ -206,11 +206,15 @@ static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p
 	}
 	CheckColumnArray(bind_data.name, data, row_count, counted_from);
 	auto numpy_column = std::make_unique<PandasNumpyColumn>(NumpyArray(std::move(data)));
-	// Analyze the inner data type of the 'object' column
 	if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
-		PandasAnalyzer analyzer(context);
-		if (analyzer.Analyze(*numpy_column, row_count, bind_data.mask.get())) {
-			column_type = analyzer.AnalyzedType();
+		if (declared_type.id() != LogicalTypeId::INVALID) {
+			bind_data.declared = true;
+			column_type = declared_type;
+		} else {
+			PandasAnalyzer analyzer(context);
+			if (analyzer.Analyze(*numpy_column, row_count, bind_data.mask.get())) {
+				column_type = analyzer.AnalyzedType();
+			}
 		}
 	}
 	bind_data.pandas_col = std::move(numpy_column);
@@ -218,12 +222,17 @@ static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p
 }
 
 idx_t Pandas::Bind(ClientContext &context, nb::handle df_p, vector<PandasColumnBindData> &bind_columns,
-                   vector<LogicalType> &return_types, vector<Identifier> &names) {
+                   vector<LogicalType> &return_types, vector<Identifier> &names,
+                   const vector<LogicalType> &declared_types) {
 
 	PandasDataFrameBind df(df_p);
 	idx_t column_count = nb::len(df.names);
 	if (column_count == 0) {
 		throw InvalidInputException("Need a DataFrame with at least one column");
+	}
+	if (!declared_types.empty() && declared_types.size() != column_count) {
+		throw InternalException("declared types: %d types for a DataFrame of %d columns", declared_types.size(),
+		                        column_count);
 	}
 	idx_t row_count = nb::len(nb::object(df_p.attr("index")));
 	auto column_names = ColumnNamesFromLabels(df.names);
@@ -247,7 +256,8 @@ idx_t Pandas::Bind(ClientContext &context, nb::handle df_p, vector<PandasColumnB
 		bind_data.name = column_names[col_idx];
 		names.emplace_back(bind_data.name);
 		auto column = df[col_idx];
-		auto column_type = BindColumn(context, column, bind_data, row_count);
+		auto column_type = BindColumn(context, column, bind_data, row_count,
+		                              declared_types.empty() ? LogicalType::INVALID : declared_types[col_idx]);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));

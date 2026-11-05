@@ -38,12 +38,15 @@ struct PandasColumnBindData {
 	string internal_categorical_type;
 	//! Hold ownership of objects created during scanning
 	PythonObjectContainer object_str_val;
+	//! The caller declared the column's type: each value converts into it as the appender converts a row
+	bool declared = false;
 };
 
 struct Pandas {
-	//! Returns the frame's row count
+	//! Returns the frame's row count; declared_types, when given, hold one type per column, INVALID where none
 	static idx_t Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
-	                  vector<LogicalType> &return_types, vector<Identifier> &names);
+	                  vector<LogicalType> &return_types, vector<Identifier> &names,
+	                  const vector<LogicalType> &declared_types = {});
 };
 
 } // namespace duckdb
