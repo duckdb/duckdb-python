@@ -257,3 +257,109 @@ class TestNonFiniteFloatLiteralPushdown:
             [sys.executable, "-I", "-O", "-c", script], capture_output=True, text=True, timeout=60, check=False
         )
         assert result.returncode == 0, result.stderr
+
+
+class TestColumnCastPushdown:
+    # A cast of the column, whether the user wrote it or polars inserted it to reconcile types, truncates, turns an
+    # overflow into NULL or changes the type the comparison runs in; the bare column carries none of that, so the
+    # predicate stays with polars and the source must say so.
+    ROWS = """
+        INSERT INTO t VALUES
+            ('2024-01-01 12:00:00+00'), ('2024-01-01 12:00:00.0005+00'), ('2024-01-01 12:00:00.001+00'),
+            ('2024-01-01 12:00:00.000999+00'), (NULL)
+    """
+
+    @pytest.mark.parametrize("session_zone", ["UTC", "America/New_York"])
+    @pytest.mark.parametrize("zone", [None, "UTC", "Asia/Tokyo"])
+    def test_column_cast_to_coarser_unit_matches_polars(self, zone, session_zone, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute(f"SET TimeZone = '{session_zone}'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a {'TIMESTAMP' if zone is None else 'TIMESTAMPTZ'})")
+        duckdb_cursor.execute(self.ROWS)
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        noon = datetime.datetime(2024, 1, 1, 12, tzinfo=datetime.timezone.utc)
+        value = noon.replace(tzinfo=None) if zone is None else noon.astimezone(ZoneInfo(zone))
+        literal = pl.lit(value, dtype=pl.Datetime("ms", zone))
+        for compare in ORDERINGS:
+            predicate = compare(pl.col("a").cast(pl.Datetime("ms", zone)), literal)
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+
+    @pytest.mark.parametrize("unit", POLARS_UNITS)
+    def test_column_cast_to_other_units_matches_polars(self, unit, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("SET TimeZone = 'UTC'")
+        duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMPTZ)")
+        duckdb_cursor.execute(self.ROWS)
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        literal = pl.lit(
+            datetime.datetime(2024, 1, 1, 12, 0, 0, 500, tzinfo=datetime.timezone.utc), dtype=pl.Datetime(unit, "UTC")
+        )
+        for compare in ORDERINGS:
+            predicate = compare(pl.col("a").cast(pl.Datetime(unit, "UTC")), literal)
+            # polars drops a cast to the column's own unit and zone before the source sees the predicate
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=unit == "us")
+
+    def test_numeric_column_cast_matches_polars(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (127), (200), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        # A non strict cast of 200 into Int8 is NULL for polars, where the engine's cast would raise
+        for compare in ORDERINGS:
+            predicate = compare(pl.col("i").cast(pl.Int8, strict=False), pl.lit(127, dtype=pl.Int8))
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+
+    def test_two_column_comparisons(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER, j BIGINT, d20 DECIMAL(20,0), d38 DECIMAL(38,0))")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1, 2, 1, 2), (3, 1, 3, 1), (2, 2, 2, 2), (NULL, 1, NULL, 1)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            # polars widens the narrower column with a NonStrict cast, which the source does not push
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("i"), pl.col("j")), pushed=False)
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("d20"), pl.col("d38")), pushed=True)
+
+    def test_cast_of_an_expression_matches_polars(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (127), (200), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        predicate = (pl.col("i") % 256).cast(pl.Int8, strict=False).is_null()
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert lazy_df.filter(predicate).collect()["i"].to_list() == [200, None]
+
+    def test_fallback_filters_every_batch(self, duckdb_cursor, pushdowns):
+        # The source hands polars Arrow batches of about 120 thousand rows: a match in the first, none in the second,
+        # one in the third, so a read that stopped at an empty batch would lose the last match
+        duckdb_cursor.execute(
+            "CREATE TABLE t AS SELECT range AS id, CASE WHEN range IN (100, 250000) THEN 100 ELSE 200 END AS i "
+            "FROM range(300000)"
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        predicate = pl.col("i").cast(pl.Int8, strict=False).is_between(100, 127)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert lazy_df.filter(predicate).collect()["id"].to_list() == [100, 250000]
+
+    def test_float_column_against_a_double_literal_matches_polars(self, duckdb_cursor, pushdowns):
+        # polars widens the FLOAT column with a cast; pushed bare, the engine compared 0.1 as a FLOAT and dropped a row
+        duckdb_cursor.execute("CREATE TABLE t (f FLOAT)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (0.1), (1), (127), (200), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            predicate = compare(pl.col("f"), pl.lit(0.1, dtype=pl.Float64))
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+
+    def test_date_column_against_a_zoned_literal_matches_polars(self, duckdb_cursor, pushdowns):
+        # polars casts the DATE column to the literal's zoned datetime; pushed bare, the engine read the date in the
+        # session zone and kept a day polars drops
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute("CREATE TABLE t (d DATE)")
+        duckdb_cursor.execute("INSERT INTO t VALUES ('2023-12-31'), ('2024-01-01'), ('2024-01-02'), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        literal = pl.lit(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc), dtype=pl.Datetime("us", "UTC"))
+        for compare in ORDERINGS:
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("d"), literal), pushed=False)
+
+    def test_decimal_column_against_a_literal_is_still_pushed(self, duckdb_cursor, pushdowns):
+        # polars folds the literal into the column's decimal type before the source sees it, so no Cast node arrives
+        duckdb_cursor.execute("CREATE TABLE t (a DECIMAL(20,0))")
+        duckdb_cursor.execute("INSERT INTO t VALUES (1), (10), (100), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            tree = assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("a"), pl.lit(10)), pushed=True)
+            assert "Cast" not in json.dumps(tree)

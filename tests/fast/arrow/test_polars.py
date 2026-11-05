@@ -776,25 +776,20 @@ class TestPolars:
         """
         assert _pl_tree_to_sql(json.loads(scalar_decimal_scale)) == "1"
 
-    def test_cast_node_unwraps_inner_expression(self):
-        """Cast nodes should be unwrapped to process the inner expression."""
-        # A Cast wrapping a Column reference
+    def test_cast_node_unwraps_a_literal_and_refuses_a_column(self):
+        """A cast of a literal goes, the literal renders with its own type; a cast of a column keeps its semantics."""
+        cast_literal = json.loads(
+            '{"Cast": {"expr": {"Literal": {"Int": 1}}, "dtype": {"Decimal": [20, 0]}, "options": "NonStrict"}}'
+        )
+        assert _pl_tree_to_sql(cast_literal) == "1"
+
+        # A cast polars inserted to reconcile types, or one that cannot fail, arrives NonStrict; it can still truncate,
+        # turn an overflow into NULL or change the type the comparison runs in, so the predicate stays with polars
         cast_column = json.loads(
             '{"Cast": {"expr": {"Column": "a"}, "dtype": {"Decimal": [20, 0]}, "options": "NonStrict"}}'
         )
-        assert _pl_tree_to_sql(cast_column) == '"a"'
-
-        # A Cast wrapping a full binary expression
-        cast_expr = json.loads("""
-        {
-            "BinaryExpr": {
-                "left": {"Cast": {"expr": {"Column": "a"}, "dtype": {"Decimal": [20, 0]}, "options": "NonStrict"}},
-                "op": "Eq",
-                "right": {"Literal": {"Int": 1}}
-            }
-        }
-        """)
-        assert _pl_tree_to_sql(cast_expr) == '("a" = 1)'
+        with pytest.raises(NotImplementedError, match="cast of a column"):
+            _pl_tree_to_sql(cast_column)
 
     def test_cast_node_predicate_pushdown(self):
         """Predicates with Cast nodes should be successfully pushed down."""

@@ -251,19 +251,16 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         cast_tree = tree[node_type]
         assert isinstance(cast_tree, dict), f"A {node_type} should be a dict but got {type(cast_tree)}"
         options = cast_tree.get("options")
-        if options == "Strict":
-            # Strict casts on literals (e.g. pl.lit(1, dtype=pl.Int8)) are safe to unwrap —
-            # the value is known at expression creation time. Strict casts on columns
-            # (e.g. pl.col("a").cast(pl.Int64)) are semantically meaningful and must not be dropped.
-            cast_expr = cast_tree.get("expr", {})
-            if not isinstance(cast_expr, dict) or "Literal" not in cast_expr:
-                msg = "Strict cast on non-literal expression cannot be pushed down"
-                raise NotImplementedError(msg)
-        elif options != "NonStrict":
+        if options not in ("Strict", "NonStrict"):
             msg = f"Only NonStrict/Strict casts can be safely unwrapped, got {options!r}"
             raise NotImplementedError(msg)
         cast_expr = cast_tree["expr"]
         assert isinstance(cast_expr, dict), f"A {node_type} should be a dict but got {type(cast_expr)}"
+        # polars folds a cast of a literal before the source sees it; a cast of a column can truncate, turn an
+        # overflow into NULL or change the type the comparison runs in, and the bare column carries none of that
+        if "Literal" not in cast_expr:
+            msg = "A cast of a column or an expression cannot be pushed down"
+            raise NotImplementedError(msg)
         return _pl_tree_to_sql(cast_expr)
 
     if node_type == "Scalar":
