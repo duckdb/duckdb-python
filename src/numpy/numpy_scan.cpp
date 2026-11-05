@@ -305,45 +305,18 @@ private:
 
 //! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
 //! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
-//! every depth, and a value without a DuckDB type of its own reads as its text in a text column
-//! A numpy scalar, or an array of no dimensions, reads as its Python value; a datetime64 or timedelta64 at
-//! nanoseconds would read as an integer, so those take the microsecond unit first, as the frame's own datetime
-//! columns do
-static bool IsNumpyScalar(nb::handle cell) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (nb::isinstance(cell, import_cache.numpy.generic())) {
-		return true;
-	}
-	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
-	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
-}
-
-static nb::object NumpyScalarValue(nb::handle scalar) {
-	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
-	if (kind == "M") {
-		return scalar.attr("astype")("datetime64[us]").attr("item")();
-	}
-	if (kind == "m") {
-		return scalar.attr("astype")("timedelta64[us]").attr("item")();
-	}
-	return scalar.attr("item")();
-}
-
+//! every depth, a numpy scalar reads as its Python value, and a value without a DuckDB type of its own reads as its
+//! text in a text column
 static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell) {
-	if (cell.ptr() == Py_None) {
+	auto plain = PythonValueOfNumpyScalar(cell);
+	nb::handle value = plain;
+	if (value.ptr() == Py_None) {
 		return Value();
 	}
-	if (IsNumpyScalar(cell)) {
-		auto value = NumpyScalarValue(cell);
-		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
-		if (!IsNumpyScalar(value)) {
-			return DeclaredValue(context, target, value);
-		}
+	if (target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(value) == PythonObjectType::Other) {
+		return Value(TransformPythonString(nb::str(value)));
 	}
-	if (target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
-		return Value(TransformPythonString(nb::str(cell)));
-	}
-	return TransformPythonValue(context, cell, LogicalType::UNKNOWN, true);
+	return TransformPythonValue(context, value, LogicalType::UNKNOWN, true);
 }
 
 //! The values of one vector of a declared column, written once the cells are read: a vector whose values share one

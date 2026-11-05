@@ -1,5 +1,9 @@
 import datetime as dt
 import decimal
+import os
+import subprocess
+import sys
+import textwrap
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -241,13 +245,35 @@ def cells(column_type):
     return VALUES
 
 
+def python_value_of_numpy_scalar(value):
+    """The value the appender converts: a numpy scalar, or an array of no dimensions, as its Python value."""
+    if not (isinstance(value, np.generic) or (type(value) is np.ndarray and value.ndim == 0)):
+        return value
+    kind = value.dtype.kind
+    if kind == "M":
+        item = value.astype("datetime64[us]").tolist()
+    elif kind == "m":
+        item = value.astype("timedelta64[us]").tolist()
+    else:
+        item = value.item()
+    return value if isinstance(item, np.generic) else item
+
+
 def reference_failures(con, values):
     cursors = [con.cursor() for _ in range(REFERENCE_THREADS)]
 
     def share(thread):
         cursor = cursors[thread]
+        # The appender reads a numpy scalar as its Python value and converts that as executemany converts it, so the
+        # reference takes the value the appender reads; for a datetime64 that differs from executemany's own reading
+        # (its integer), for an int64 or bool executemany refuses the scalar
         return [
-            (i, failure(cursor.executemany, "INSERT INTO ref VALUES (?, ?)", [[i, value]]))
+            (
+                i,
+                failure(
+                    cursor.executemany, "INSERT INTO ref VALUES (?, ?)", [[i, python_value_of_numpy_scalar(value)]]
+                ),
+            )
             for i, (_, value) in enumerate(values)
             if i % REFERENCE_THREADS == thread
         ]
@@ -307,3 +333,117 @@ def test_strings_past_the_inline_length_survive_several_flushes(con, column_type
             app.flush()
 
     assert outcomes(con, "tgt", column_type, values, appended) == expected
+
+
+class TestNumpyScalars:
+    # The appender reads a numpy scalar as con.append reads one in a declared object column: its Python value, a
+    # datetime64 or timedelta64 at the microsecond unit.
+
+    @pytest.mark.parametrize(
+        ("column_type", "value", "expected"),
+        [
+            pytest.param("INTEGER", np.int64(2), 2, id="int64_into_integer"),
+            pytest.param("DOUBLE", np.float32(2.5), 2.5, id="float32_into_double"),
+            pytest.param("BOOLEAN", np.bool_(False), False, id="bool_into_boolean"),
+            pytest.param(
+                "TIMESTAMP",
+                np.datetime64("2024-05-08T01:02:03.123456789", "ns"),
+                dt.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                id="datetime64_ns_into_timestamp",
+            ),
+            pytest.param("INTERVAL", np.timedelta64(1500, "us"), dt.timedelta(microseconds=1500), id="timedelta64_us"),
+            pytest.param("INTERVAL", np.timedelta64(1501, "ns"), dt.timedelta(microseconds=1), id="timedelta64_ns"),
+            pytest.param("INTERVAL", np.timedelta64("NaT", "ns"), None, id="timedelta64_nat_is_null"),
+            pytest.param("VARCHAR", np.str_("a\x00b"), "a\x00b", id="str_scalar_into_varchar"),
+            pytest.param("BLOB", np.bytes_(b"\x00\xff"), b"\x00\xff", id="bytes_scalar_into_blob"),
+            pytest.param(
+                "STRUCT(a INTEGER)",
+                np.array({"a": 1}, dtype=object),
+                {"a": 1},
+                id="zero_dimensional_object_array_into_struct",
+            ),
+            pytest.param("INTEGER", np.array(2), 2, id="zero_dimensional_array_into_integer"),
+            pytest.param("DOUBLE", np.float64("nan"), float("nan"), id="float64_nan_stays_a_value"),
+            pytest.param("DOUBLE", np.ma.masked, None, id="masked_singleton_is_null"),
+            pytest.param("TIMESTAMP", np.datetime64("NaT", "ns"), None, id="datetime64_nat_is_null"),
+        ],
+    )
+    def test_numpy_scalars_append_as_their_python_values(self, con, column_type, value, expected):
+        con.execute(f"CREATE OR REPLACE TABLE t (x {column_type})")
+        with con.appender("t") as appender:
+            appender.append_row(value)
+        (stored,) = con.execute("SELECT x FROM t").fetchall()[0]
+        if isinstance(expected, float) and expected != expected:
+            assert stored != stored
+        else:
+            assert stored == expected
+
+    def test_datetime64_reads_as_a_datetime_not_its_integer(self, con):
+        # The appender used to hand a datetime64 to the conversion, which read a nanosecond one as its integer
+        con.execute("CREATE OR REPLACE TABLE t (b BIGINT, v VARCHAR)")
+        stamp = np.datetime64("2024-05-08T01:02:03.123456789", "ns")
+        with con.appender("t") as appender:
+            appender.append_row(None, stamp)
+        assert con.execute("SELECT v FROM t").fetchall() == [("2024-05-08 01:02:03.123456",)]
+        with pytest.raises(duckdb.ConversionException), con.appender("t") as appender:
+            appender.append_row(stamp, None)
+
+    def test_rows_of_a_two_dimensional_array_append(self, con):
+        con.execute("CREATE OR REPLACE TABLE t (x INTEGER, y DOUBLE)")
+        with con.appender("t") as appender:
+            appender.append_rows(np.array([[1, 1.5], [2, 2.5]]))
+        assert con.execute("SELECT x, y FROM t ORDER BY x").fetchall() == [(1, 1.5), (2, 2.5)]
+
+    def test_nested_numpy_values_keep_their_existing_conversion(self, con):
+        # A numpy value inside a list keeps the conversion it had, in the appender, executemany and con.append alike:
+        # a nested int64 is refused, a nested float64 is read as a float
+        con.execute("CREATE OR REPLACE TABLE t (x DOUBLE[])")
+        with con.appender("t") as appender:
+            appender.append_row([np.float64(1.5)])
+        assert con.execute("SELECT x FROM t").fetchall() == [([1.5],)]
+        with pytest.raises(duckdb.NotImplementedException, match=r"numpy\.int64"), con.appender("t") as appender:
+            appender.append_row([np.int64(1)])
+
+    def test_an_ordinary_append_imports_no_numpy(self):
+        # With numpy installed but not imported, an ordinary append must not import it (40 ms) or, without numpy,
+        # retry the failed import for every value
+        script = textwrap.dedent(
+            """
+            import sys
+            import duckdb
+            con = duckdb.connect()
+            con.execute("CREATE TABLE t (x INTEGER, s VARCHAR)")
+            with con.appender("t") as appender:
+                appender.append_row(1, "a")
+            print("numpy" in sys.modules, con.execute("SELECT x, s FROM t").fetchall())
+            """
+        )
+        env = {**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"}
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120, env=env)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "False [(1, 'a')]"
+
+    def test_ordinary_values_append_without_numpy(self):
+        # numpy is optional; the scalar reading must not touch its types when it cannot be imported
+        script = textwrap.dedent(
+            """
+            import sys
+            sys.modules["numpy"] = None
+            import duckdb
+            con = duckdb.connect()
+            con.execute("CREATE TABLE t (x INTEGER, s VARCHAR)")
+            with con.appender("t") as appender:
+                appender.append_row(1, "a")
+            print(con.execute("SELECT x, s FROM t").fetchall())
+            """
+        )
+        # An editable install that rebuilds on import otherwise prints its cmake command into the child's stdout
+        env = {**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"}
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120, env=env)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "[(1, 'a')]"
+
+    def test_numpy_long_double_is_refused(self, con):
+        con.execute("CREATE OR REPLACE TABLE t (x DOUBLE)")
+        with pytest.raises(duckdb.NotImplementedException, match="longdouble"), con.appender("t") as appender:
+            appender.append_row(np.longdouble("2.5"))

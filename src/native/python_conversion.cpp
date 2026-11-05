@@ -71,6 +71,58 @@ void ThrowUnencodableStr(nb::handle str) {
 	throw UnencodableStrError(PyUnicode_ReadChar(str.ptr(), start), NumericCast<idx_t>(start));
 }
 
+//! Whether numpy is imported, asked of the module dict without importing it: a numpy scalar cannot exist before
+static bool NumpyIsImported(PythonImportCache &import_cache) {
+	if (import_cache.numpy.LoadSucceeded()) {
+		return true;
+	}
+	static PyObject *const name = PyUnicode_InternFromString("numpy");
+	if (!name) {
+		PyErr_Clear();
+		return false;
+	}
+	auto module = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
+	if (!module && PyErr_Occurred()) {
+		PyErr_Clear();
+	}
+	return module && module != Py_None;
+}
+
+//! Decided from the object's type, which runs no code of the object's; numpy is optional and loaded by nothing here,
+//! so an ordinary value costs no import and no retried import of a missing numpy
+static bool IsNumpyScalar(nb::handle cell) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!NumpyIsImported(import_cache)) {
+		return false;
+	}
+	auto generic = import_cache.numpy.generic();
+	auto type = Py_TYPE(cell.ptr());
+	if (generic.ptr() != nullptr && PyType_IsSubtype(type, reinterpret_cast<PyTypeObject *>(generic.ptr()))) {
+		return true;
+	}
+	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
+	auto ndarray = import_cache.numpy.ndarray();
+	return ndarray.ptr() != nullptr && reinterpret_cast<PyObject *>(type) == ndarray.ptr() &&
+	       nb::cast<idx_t>(cell.attr("ndim")) == 0;
+}
+
+nb::object PythonValueOfNumpyScalar(nb::handle cell) {
+	if (!IsNumpyScalar(cell)) {
+		return nb::borrow(cell);
+	}
+	auto kind = nb::cast<string>(cell.attr("dtype").attr("kind"));
+	nb::object value;
+	if (kind == "M") {
+		// A nanosecond datetime64 lists as an integer; the microsecond unit lists as a datetime, NaT as None
+		value = cell.attr("astype")("datetime64[us]").attr("item")();
+	} else if (kind == "m") {
+		value = cell.attr("astype")("timedelta64[us]").attr("item")();
+	} else {
+		value = cell.attr("item")();
+	}
+	return IsNumpyScalar(value) ? nb::borrow(cell) : value;
+}
+
 string TransformPythonString(nb::handle str) {
 	Py_ssize_t size;
 	const char *data = PyUnicode_AsUTF8AndSize(str.ptr(), &size);
