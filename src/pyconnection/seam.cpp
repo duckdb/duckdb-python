@@ -629,15 +629,72 @@ bool DuckDBPySeam::IsRegisteredView(ClientContext &context, const string &name) 
 	return registered;
 }
 
+//! The FROM of the first SELECT a query reaches, through its CTEs and set operations
+static unique_ptr<TableRef> &FirstFrom(QueryNode &node) {
+	switch (node.type) {
+	case QueryNodeType::SELECT_NODE:
+		return node.Cast<SelectNode>().from_table;
+	case QueryNodeType::CTE_NODE:
+		return FirstFrom(*node.Cast<CTENode>().child);
+	case QueryNodeType::RECURSIVE_CTE_NODE:
+		return FirstFrom(*node.Cast<RecursiveCTENode>().left);
+	case QueryNodeType::SET_OPERATION_NODE:
+		return FirstFrom(*node.Cast<SetOperationNode>().children[0]);
+	default:
+		throw InternalException("a view body renders as a SELECT, which carries its sources on its FROM");
+	}
+}
+
+//! The reference of a FROM whose copy keeps its dependency: a join's or a pivot's copy drops it, so the leftmost
+//! leaf under them carries it, and a copy of the view (its rename) keeps owning its sources
+static unique_ptr<TableRef> &OwningReference(unique_ptr<TableRef> &ref) {
+	switch (ref->type) {
+	case TableReferenceType::JOIN:
+		return OwningReference(ref->Cast<JoinRef>().left);
+	case TableReferenceType::PIVOT:
+		return OwningReference(ref->Cast<PivotRef>().source);
+	default:
+		return ref;
+	}
+}
+
+//! The view's query keeps the handles on a FROM: the catalog entry owns the query and a bound copy shares the
+//! dependency, so an object store entry the query names by its path lives as long as the view
+static void OwnSourcesInView(SQLStatement &statement, shared_ptr<DependencyItem> sources) {
+	auto &info = statement.Cast<CreateStatement>().info->Cast<CreateViewInfo>();
+	auto &first = FirstFrom(*info.query->node);
+	if (!first) {
+		throw InternalException("a view body renders as a SELECT with a FROM, which carries its sources");
+	}
+	auto &from = OwningReference(first);
+	// A FROM the inliner copied out of the registry shares its dependency with the registry's entry, which must not
+	// come to hold the handles; the view's own reference gets a dependency of its own with the entry's items
+	auto owned = make_shared_ptr<ExternalDependency>();
+	if (from->external_dependency) {
+		from->external_dependency->ScanDependencies(
+		    [&](const string &name, shared_ptr<DependencyItem> item) { owned->AddDependency(name, std::move(item)); });
+	}
+	owned->AddDependency("sources", std::move(sources));
+	from->external_dependency = std::move(owned);
+}
+
 static void CreateView(DuckDBPyConnection &self, const nb::object &name, const string &sql, bool temporary,
-                       bool replace) {
+                       bool replace, const nb::list &sources) {
 	auto qualified = NameFromParts(name);
 	auto session = OpenSession(self);
 	DUCKDB_PY_ASSERT_GIL_HELD();
+	// Built while the GIL is held: the item keeps a reference to the Python list of handles
+	shared_ptr<DependencyItem> owned;
+	if (nb::len(sources) > 0) {
+		owned = PythonDependencyItem::Create(sources);
+	}
 	nb::gil_scoped_release release;
 	// One claim from reading the registry to creating the view, so no other call changes either in between
 	auto claim = session.Claim();
 	auto statement = DuckDBPySeam::ViewStatement(session.Context(), qualified, sql, temporary, replace, false);
+	if (owned) {
+		OwnSourcesInView(*statement, std::move(owned));
+	}
 	session.RunClaimed(std::move(statement), DuckDBPyConnection::CheckSignals);
 }
 
@@ -1451,7 +1508,8 @@ void DuckDBPySeam::InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m
 	m.def("_create_view", &CreateView,
 	      "Create a view of the SELECT in sql, the Python objects it reads held by the view itself, so the view "
 	      "reads them for as long as it exists and its transaction decides when they go",
-	      nb::arg("name"), nb::arg("sql"), nb::kw_only(), nb::arg("temporary") = false, nb::arg("replace") = false);
+	      nb::arg("name"), nb::arg("sql"), nb::kw_only(), nb::arg("temporary") = false, nb::arg("replace") = false,
+	      nb::arg("sources") = nb::list());
 	m.def("_catalog_version", &CatalogVersion,
 	      "How many statements that can change what a name binds to have run on this connection's database");
 	m.def("_own_sources", &OwnSources,

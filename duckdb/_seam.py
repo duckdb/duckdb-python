@@ -184,9 +184,15 @@ def register_filelike(con: _duckdb.DuckDBPyConnection, obj: object) -> SourceHan
     return con._register_filelike(obj)
 
 
-def create_view(con: _duckdb.DuckDBPyConnection, name: str, sql: str, *, replace: bool) -> None:
-    """Create the persistent view `name` over the SELECT in `sql`, the view owning what the registry names it reads."""
-    con._create_view(name, sql, replace=replace)
+def create_view(
+    con: _duckdb.DuckDBPyConnection, name: str, sql: str, *, replace: bool, sources: Sequence[SourceHandle] = ()
+) -> None:
+    """Create the persistent view `name` over the SELECT in `sql`.
+
+    The view owns what the registry names it reads and the `sources` handles of the relation it was made from, among
+    them the file-like objects the SELECT reads by their object store path, for as long as it exists.
+    """
+    con._create_view(name, sql, replace=replace, sources=list(sources))
 
 
 def check_text(con: _duckdb.DuckDBPyConnection, text: str, shape: str) -> int:
