@@ -12,6 +12,9 @@ struct NumpyScan {
 	//! masked holds one numpy bool per row of the whole column, read as a byte, or is null when the column has no mask
 	static void ScanObjectColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
 	                             idx_t count, idx_t offset, Vector &out);
+	//! Converts each cell into the declared type of the column as the appender converts a value
+	static void ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
+	                               idx_t count, idx_t offset, Vector &out);
 };
 
 } // namespace duckdb

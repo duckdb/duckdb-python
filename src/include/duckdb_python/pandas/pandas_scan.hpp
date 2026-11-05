@@ -19,9 +19,12 @@ namespace duckdb {
 
 //! Carried through the bind input so that SQL text can never name the dataframe
 struct PandasScanInfo : public TableFunctionInfo {
-	explicit PandasScanInfo(nb::object df_p) : df(std::move(df_p)) {
+	explicit PandasScanInfo(nb::object df_p, vector<LogicalType> declared_types_p = {})
+	    : df(std::move(df_p)), declared_types(std::move(declared_types_p)) {
 	}
 	PyObjectHolder df;
+	//! One type per frame column the caller declared, read by every bind of a copy of the reference, so never changed
+	const vector<LogicalType> declared_types;
 };
 
 struct PandasScanFunction : public TableFunction {

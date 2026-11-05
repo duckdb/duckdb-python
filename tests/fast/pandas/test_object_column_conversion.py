@@ -27,8 +27,9 @@ AWARE_TIME = datetime.time(4, 5, 6, tzinfo=TWO_HOURS)
 JAN_FIRST = datetime.datetime(2024, 1, 1)
 
 
-def not_yet(reason):
-    return pytest.mark.xfail(strict=True, reason=reason)
+def not_built(reason):
+    # Exact conversion of a value outside the sample is not built (Evert, 2026-11-05); these pin what it would do
+    return pytest.mark.xfail(strict=True, reason=f"not built: {reason}")
 
 
 def quiet_child_env():
@@ -116,7 +117,7 @@ INTEGER_BOUNDS = [
 ]
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 @pytest.mark.parametrize(
     "value",
     [
@@ -135,7 +136,7 @@ def test_fractional_value_outside_the_sample_raises(duckdb_cursor, value):
     assert_names(message, "amount", UNSAMPLED, python_type_name(value), "INTEGER")
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 @pytest.mark.parametrize(
     ("rows", "at", "sample"),
     [
@@ -150,7 +151,7 @@ def test_fractional_value_outside_a_small_sample_raises(duckdb_cursor, rows, at,
     assert_names(message, "amount", at, "float", "INTEGER")
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_fractional_values_deep_in_a_long_column_raise(duckdb_cursor):
     values = [1] * 100000
     values[77777] = 2.5
@@ -161,7 +162,7 @@ def test_fractional_values_deep_in_a_long_column_raise(duckdb_cursor):
     assert re.search(r"(?<!\w)(77777|88888)(?!\w)", message), message
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_money_column_with_integral_sample_raises(duckdb_cursor):
     # Every sampled row is a multiple of 100 cents, so the sample binds a scale of zero.
     cents = [Decimal(i) / 100 for i in range(100000)]
@@ -203,7 +204,7 @@ def test_integral_value_past_64_bits_converts(duckdb_cursor, base, value, bound)
     assert read_row(duckdb_cursor) == [(bound, int(value))]
 
 
-@not_yet(MISMATCH_NOT_NAMED)
+@not_built(MISMATCH_NOT_NAMED)
 @pytest.mark.parametrize(
     ("base", "value", "bound"),
     [
@@ -232,14 +233,14 @@ def test_integer_outside_the_bound_width_raises(duckdb_cursor, base, value, boun
             Decimal("1.25"),
             None,
             id="extra_scale",
-            marks=not_yet("a decimal with more scale than the bound type is rounded instead of failing"),
+            marks=not_built("a decimal with more scale than the bound type is rounded instead of failing"),
         ),
         pytest.param(
             Decimal("1"),
             2.5,
             None,
             id="fractional_float_into_scale_zero",
-            marks=not_yet("a float that needs more scale than the bound type is rounded instead of failing"),
+            marks=not_built("a float that needs more scale than the bound type is rounded instead of failing"),
         ),
     ],
 )
@@ -259,7 +260,7 @@ def test_decimal_value_must_fit_the_bound_scale(duckdb_cursor, base, value, expe
             0.1,
             None,
             id="needs_double",
-            marks=not_yet("a double that a FLOAT cannot hold exactly is narrowed instead of failing"),
+            marks=not_built("a double that a FLOAT cannot hold exactly is narrowed instead of failing"),
         ),
     ],
 )
@@ -292,14 +293,14 @@ def test_float_column_from_decimal_nan_takes_only_exact_values(duckdb_cursor, va
             NAIVE,
             None,
             id="datetime_with_a_time_of_day",
-            marks=not_yet("a datetime with a time of day outside a DATE sample loses its time instead of failing"),
+            marks=not_built("a datetime with a time of day outside a DATE sample loses its time instead of failing"),
         ),
         pytest.param(
             datetime.date(2024, 1, 1),
             pd.Timestamp("2024-05-06 07:08"),
             None,
             id="pandas_timestamp_with_a_time_of_day",
-            marks=not_yet("a timestamp with a time of day outside a DATE sample loses its time instead of failing"),
+            marks=not_built("a timestamp with a time of day outside a DATE sample loses its time instead of failing"),
         ),
     ],
 )
@@ -390,7 +391,7 @@ def test_value_in_a_column_short_enough_to_sample_fully_keeps_its_value(duckdb_c
     assert read_row(duckdb_cursor, at=1500) == [("DOUBLE", 2.5)]
 
 
-@not_yet("text outside the sample is parsed into the bound type instead of failing")
+@not_built("text outside the sample is parsed into the bound type instead of failing")
 @pytest.mark.parametrize(
     ("base", "value", "bound"),
     [
@@ -415,7 +416,7 @@ def test_text_is_never_parsed_outside_blob_and_uuid(duckdb_cursor, base, value, 
     assert_names(message, "amount", UNSAMPLED, python_type_name(value), bound)
 
 
-@not_yet("a value outside a BOOLEAN sample is cast to a bool instead of failing")
+@not_built("a value outside a BOOLEAN sample is cast to a bool instead of failing")
 @pytest.mark.parametrize(
     "value",
     [
@@ -433,7 +434,7 @@ def test_boolean_column_takes_only_bools(duckdb_cursor, value):
     assert_names(message, "amount", UNSAMPLED, python_type_name(value), "BOOLEAN")
 
 
-@not_yet("a number outside a BOOLEAN leaf sample is cast to a bool instead of failing")
+@not_built("a number outside a BOOLEAN leaf sample is cast to a bool instead of failing")
 @pytest.mark.parametrize(
     ("base", "value", "alternate"),
     [
@@ -448,7 +449,7 @@ def test_boolean_leaf_takes_only_bools(duckdb_cursor, base, value, alternate):
     assert_names(message, "amount", UNSAMPLED)
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 @pytest.mark.parametrize(
     ("base", "value", "bound"),
     [
@@ -499,21 +500,21 @@ def test_value_of_another_kind_raises(duckdb_cursor, base, value, bound):
             np.datetime64("2024-05-06T07:08:09", "us"),
             "DATE",
             id="microseconds_with_a_time_of_day_into_date",
-            marks=not_yet("a datetime64 with a time of day outside a DATE sample loses its time instead of failing"),
+            marks=not_built("a datetime64 with a time of day outside a DATE sample loses its time instead of failing"),
         ),
         pytest.param(
             JAN_FIRST,
             np.datetime64("2024-05-06T07:08:09", "ns"),
             "TIMESTAMP",
             id="nanoseconds_into_timestamp",
-            marks=not_yet(MISMATCH_NOT_NAMED),
+            marks=not_built(MISMATCH_NOT_NAMED),
         ),
         pytest.param(
             datetime.date(2024, 1, 1),
             np.datetime64("2024-05-06", "ns"),
             "DATE",
             id="nanoseconds_into_date",
-            marks=not_yet(MISMATCH_NOT_NAMED),
+            marks=not_built(MISMATCH_NOT_NAMED),
         ),
     ],
 )
@@ -525,7 +526,7 @@ def test_datetime64_follows_its_unit(duckdb_cursor, base, value, expected):
         assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED, expected)
 
 
-@not_yet("a time zone outside the sample is dropped or assumed instead of failing")
+@not_built("a time zone outside the sample is dropped or assumed instead of failing")
 @pytest.mark.parametrize(
     ("base", "value", "bound"),
     [
@@ -554,7 +555,7 @@ def test_time_zone_is_never_assumed_or_dropped(duckdb_cursor, base, value, bound
     assert_names(message, "amount", UNSAMPLED, python_type_name(value), bound)
 
 
-@not_yet("a time zone outside the sample of a nested leaf is dropped instead of failing")
+@not_built("a time zone outside the sample of a nested leaf is dropped instead of failing")
 @pytest.mark.parametrize(
     ("base", "value"),
     [
@@ -567,7 +568,7 @@ def test_time_zone_is_never_dropped_in_a_nested_leaf(duckdb_cursor, base, value)
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED)
 
 
-@not_yet("a fully sampled mix of naive and zoned values binds a zoned or naive type instead of VARCHAR")
+@not_built("a fully sampled mix of naive and zoned values binds a zoned or naive type instead of VARCHAR")
 @pytest.mark.parametrize(
     "values",
     [
@@ -636,7 +637,7 @@ def test_null_markers_stay_null_in_nested_leaves(duckdb_cursor, marker):
     assert row == [tuple(expected for _, _, expected in cells.values())]
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 @pytest.mark.parametrize(
     ("base", "value", "alternate"),
     [
@@ -686,7 +687,7 @@ STRUCT_LEAF_REFUSES = "a STRUCT or MAP leaf refuses a value that the same LIST l
             (),
             ("STRUCT(x DECIMAL(2,1))", {"x": Decimal("3.7")}),
             id="float_in_a_decimal_struct_leaf",
-            marks=not_yet(STRUCT_LEAF_REFUSES),
+            marks=not_built(STRUCT_LEAF_REFUSES),
         ),
         pytest.param(
             {"a": Decimal("1.5")},
@@ -694,7 +695,7 @@ STRUCT_LEAF_REFUSES = "a STRUCT or MAP leaf refuses a value that the same LIST l
             ({"b": Decimal("2.5")},),
             ("MAP(VARCHAR, DECIMAL(2,1))", {"k": Decimal("3.7")}),
             id="float_in_a_decimal_map_value",
-            marks=not_yet(STRUCT_LEAF_REFUSES),
+            marks=not_built(STRUCT_LEAF_REFUSES),
         ),
         pytest.param(
             [datetime.date(2024, 1, 1)],
@@ -709,7 +710,7 @@ STRUCT_LEAF_REFUSES = "a STRUCT or MAP leaf refuses a value that the same LIST l
             (),
             ("STRUCT(x DATE)", {"x": datetime.date(2024, 5, 7)}),
             id="midnight_in_a_date_struct_leaf",
-            marks=not_yet(STRUCT_LEAF_REFUSES),
+            marks=not_built(STRUCT_LEAF_REFUSES),
         ),
     ],
 )
@@ -725,10 +726,12 @@ def test_struct_and_list_leaves_agree(duckdb_cursor, base, value, alternate, exp
             {"x": "a"},
             {"x": [1]},
             id="list_in_a_struct_text_leaf",
-            marks=not_yet("a list in a text leaf is stringified"),
+            marks=not_built("a list in a text leaf is stringified"),
         ),
-        pytest.param(["a"], [b"ab"], id="bytes_in_a_list_text_leaf", marks=not_yet("bytes in a text leaf are decoded")),
-        pytest.param({"x": "a"}, {"x": b"ab"}, id="bytes_in_a_struct_text_leaf", marks=not_yet(MISMATCH_NOT_NAMED)),
+        pytest.param(
+            ["a"], [b"ab"], id="bytes_in_a_list_text_leaf", marks=not_built("bytes in a text leaf are decoded")
+        ),
+        pytest.param({"x": "a"}, {"x": b"ab"}, id="bytes_in_a_struct_text_leaf", marks=not_built(MISMATCH_NOT_NAMED)),
     ],
 )
 def test_nested_text_leaves_follow_the_same_rule(duckdb_cursor, base, value):
@@ -746,7 +749,7 @@ def test_bool_outside_a_struct_text_leaf_sample_reads_as_text(duckdb_cursor):
     assert read_row(duckdb_cursor) == [("STRUCT(x VARCHAR)", {"x": "true"})]
 
 
-@not_yet("a bool in a text list leaf fails without naming its column and row")
+@not_built("a bool in a text list leaf fails without naming its column and row")
 def test_bool_outside_a_list_text_leaf_sample_names_column_and_row(duckdb_cursor):
     duckdb_cursor.register("frame", column(["a"], [True]))
     with pytest.raises(duckdb.TypeMismatchException) as error:
@@ -754,7 +757,7 @@ def test_bool_outside_a_list_text_leaf_sample_names_column_and_row(duckdb_cursor
     assert_names(str(error.value), "amount", UNSAMPLED)
 
 
-@not_yet(MISMATCH_NOT_NAMED)
+@not_built(MISMATCH_NOT_NAMED)
 @pytest.mark.parametrize(
     ("base", "value"),
     [
@@ -768,7 +771,7 @@ def test_value_outside_a_sample_of_null_children_raises(duckdb_cursor, base, val
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED)
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 @pytest.mark.parametrize(
     ("label", "query"),
     [
@@ -782,13 +785,13 @@ def test_error_names_column_row_and_types(duckdb_cursor, label, query):
     assert_names(message, label, UNSAMPLED, "float", "INTEGER")
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_error_row_counts_across_batches(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, 2.5, rows=300000, at=250001))
     assert_names(invalid_input_message(duckdb_cursor), "amount", 250001)
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_error_names_one_of_several_rows_across_partitions(duckdb_cursor):
     frame = column(1, 2.5, rows=300000, at=102001)
     frame.loc[204801, "amount"] = 3.5
@@ -797,7 +800,7 @@ def test_error_names_one_of_several_rows_across_partitions(duckdb_cursor):
     assert re.search(r"(?<!\w)(102001|204801)(?!\w)", message), message
 
 
-@not_yet(MISMATCH_NOT_NAMED)
+@not_built(MISMATCH_NOT_NAMED)
 @pytest.mark.parametrize(
     ("later", "bound"),
     [
@@ -814,7 +817,7 @@ def test_error_for_a_fully_sampled_column_names_column_row_and_types(duckdb_curs
     assert_names(message, "amount", 1234, "int", bound)
 
 
-@not_yet("an error raised while converting one value does not name its column and row yet")
+@not_built("an error raised while converting one value does not name its column and row yet")
 def test_other_conversion_errors_keep_their_type_with_column_and_row(duckdb_cursor):
     entries = {"key": ["a", "b"], "value": [1, 2]}
     duckdb_cursor.register("frame", column(entries, {"key": ["a", "a"], "value": [1, 2]}, at=2500))
@@ -823,7 +826,7 @@ def test_other_conversion_errors_keep_their_type_with_column_and_row(duckdb_curs
     assert "Map keys must be unique" in message
 
 
-@not_yet("a value the conversion cannot handle outside the sample does not name its column and row yet")
+@not_built("a value the conversion cannot handle outside the sample does not name its column and row yet")
 @pytest.mark.parametrize(
     "value",
     [
@@ -887,7 +890,7 @@ def test_text_column_stringifies_numpy_not_a_time_and_float32_nan(duckdb_cursor,
     assert read_row(duckdb_cursor, at=at) == [("VARCHAR", str(value))]
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_all_null_sample_still_checks_later_values(duckdb_cursor):
     frame = column(None, 5, at=1001)
     frame.loc[2002, "amount"] = 2.5
@@ -902,17 +905,20 @@ BOOL_REFUSED = "a bool in a number column is refused instead of reading as 0 or 
 @pytest.mark.parametrize(
     ("frame", "expected"),
     [
-        pytest.param(column(1, True), [("INTEGER", 1)], id="integer", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(2**40, False), [("BIGINT", 0)], id="bigint", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(2**63, True), [("UBIGINT", 1)], id="ubigint", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(-(2**64), False), [("HUGEINT", 0)], id="hugeint", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(2**127, True), [("UHUGEINT", 1)], id="uhugeint", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(0.5, True), [("DOUBLE", 1.0)], id="double", marks=not_yet(BOOL_REFUSED)),
-        pytest.param(column(Decimal("NaN"), True), [("FLOAT", 1.0)], id="float", marks=not_yet(BOOL_REFUSED)),
+        pytest.param(column(1, True), [("INTEGER", 1)], id="integer", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(2**40, False), [("BIGINT", 0)], id="bigint", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(2**63, True), [("UBIGINT", 1)], id="ubigint", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(-(2**64), False), [("HUGEINT", 0)], id="hugeint", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(2**127, True), [("UHUGEINT", 1)], id="uhugeint", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(0.5, True), [("DOUBLE", 1.0)], id="double", marks=not_built(BOOL_REFUSED)),
+        pytest.param(column(Decimal("NaN"), True), [("FLOAT", 1.0)], id="float", marks=not_built(BOOL_REFUSED)),
         pytest.param(
-            column(Decimal("1.5"), True), [("DECIMAL(2,1)", Decimal("1.0"))], id="decimal", marks=not_yet(BOOL_REFUSED)
+            column(Decimal("1.5"), True),
+            [("DECIMAL(2,1)", Decimal("1.0"))],
+            id="decimal",
+            marks=not_built(BOOL_REFUSED),
         ),
-        pytest.param(column([1], [True]), [("INTEGER[]", [1])], id="list_leaf", marks=not_yet(BOOL_REFUSED)),
+        pytest.param(column([1], [True]), [("INTEGER[]", [1])], id="list_leaf", marks=not_built(BOOL_REFUSED)),
         pytest.param(column({"x": 1}, {"x": True}), [("STRUCT(x INTEGER)", {"x": 1})], id="struct_leaf"),
         pytest.param(
             column({"key": ["a"], "value": [1]}, {"key": ["k"], "value": [True]}),
@@ -926,7 +932,7 @@ def test_bool_outside_the_sample_of_a_number_column(duckdb_cursor, frame, expect
     assert read_row(duckdb_cursor) == expected
 
 
-@not_yet(BOOL_REFUSED)
+@not_built(BOOL_REFUSED)
 @pytest.mark.parametrize(
     ("values", "expected"),
     [
@@ -1296,14 +1302,14 @@ def test_value_element_whose_type_is_not_a_duckdb_type_raises(duckdb_cursor):
     assert_connection_answers(duckdb_cursor)
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_double_value_element_outside_an_integer_sample_raises(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, duckdb.DoubleValue(2.5)))
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED, "INTEGER")
     assert_connection_answers(duckdb_cursor)
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_array_value_element_outside_a_list_sample_raises(duckdb_cursor):
     duckdb_cursor.register("frame", column([1], array_value()))
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED)
@@ -1426,7 +1432,7 @@ def test_bool_refused_by_a_number_type_names_the_expected_type(duckdb_cursor):
     assert "Expected a value of type INTEGER, but got a value of type boolean" in message
 
 
-@not_yet("the error for a long string outside the sample repeats the whole string")
+@not_built("the error for a long string outside the sample repeats the whole string")
 def test_error_preview_of_a_long_string_is_bounded(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, "é" * 100000, at=2000))
     message = invalid_input_message(duckdb_cursor)
@@ -1437,7 +1443,7 @@ def test_error_preview_of_a_long_string_is_bounded(duckdb_cursor):
     assert_connection_answers(duckdb_cursor)
 
 
-@not_yet("the error for a large dict outside the sample spells out a STRUCT of every key")
+@not_built("the error for a large dict outside the sample spells out a STRUCT of every key")
 def test_error_for_a_large_dict_previews_only_its_length(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, {i: i for i in range(100000)}))
     message = invalid_input_message(duckdb_cursor)
@@ -1446,7 +1452,7 @@ def test_error_for_a_large_dict_previews_only_its_length(duckdb_cursor):
     assert_connection_answers(duckdb_cursor)
 
 
-@not_yet("a str outside the sample that cannot be encoded fails without naming its column and row")
+@not_built("a str outside the sample that cannot be encoded fails without naming its column and row")
 def test_error_for_an_unencodable_string_names_column_row_and_types(duckdb_cursor):
     duckdb_cursor.register("frame", column(1, "\ud800"))
     message = invalid_input_message(duckdb_cursor)
@@ -1454,7 +1460,7 @@ def test_error_for_an_unencodable_string_names_column_row_and_types(duckdb_curso
     assert_connection_answers(duckdb_cursor)
 
 
-@not_yet(MISMATCH_NOT_NAMED)
+@not_built(MISMATCH_NOT_NAMED)
 def test_error_names_a_module_qualified_type(duckdb_cursor):
     duckdb_cursor.register("frame", column(2**40, uuid.UUID(int=2)))
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED, "uuid.UUID", "BIGINT")
@@ -1723,7 +1729,7 @@ def test_numpy_object_array_converts_an_exact_value(duckdb_cursor):
     assert read_row(duckdb_cursor) == [("INTEGER", 3)]
 
 
-@not_yet(MISMATCH_NOT_RAISED)
+@not_built(MISMATCH_NOT_RAISED)
 def test_numpy_object_array_refuses_a_fractional_value(duckdb_cursor):
     duckdb_cursor.register("frame", object_array_with(2.5))
     assert_names(invalid_input_message(duckdb_cursor), "amount", UNSAMPLED, "float", "INTEGER")

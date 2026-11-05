@@ -328,6 +328,10 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	      "Synchronizes data in the write-ahead log (WAL) to the database data file (no-op for in-memory connections)");
 	m.def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
 	      nb::arg("table_name"), nb::arg("df"), nb::kw_only(), nb::arg("by_name") = false);
+	m.def("_register_declared", &DuckDBPyConnection::RegisterDeclared,
+	      "Register a DataFrame as a view whose object columns take the given types instead of types sampled from the "
+	      "values",
+	      nb::arg("view_name"), nb::arg("df"), nb::arg("types"));
 	m.def(
 	    "appender", &DuckDBPyConnection::CreateAppender,
 	    "Create an appender that buffers rows and inserts, upserts, updates or deletes them in the named table at each "
@@ -923,16 +927,45 @@ std::unique_ptr<DuckDBPyAppender> DuckDBPyConnection::CreateQueryAppender(const 
 	return DuckDBPyAppender::ForQuery(shared_from_this(), dml, columns, source);
 }
 
+//! The table column each frame column is inserted into: by position over the insertable columns, or by the name
+//! the INSERT matches, as an identifier; a frame column without a table column stays undeclared and the INSERT
+//! reports the mismatch
+static vector<LogicalType> AppendTargetTypes(const vector<std::pair<string, LogicalType>> &table_columns,
+                                             const vector<string> &frame_columns, bool by_name) {
+	vector<LogicalType> types(frame_columns.size(), LogicalType::INVALID);
+	for (idx_t i = 0; i < frame_columns.size(); i++) {
+		if (!by_name) {
+			if (i < table_columns.size()) {
+				types[i] = table_columns[i].second;
+			}
+			continue;
+		}
+		for (auto &column : table_columns) {
+			if (Identifier(column.first) == Identifier(frame_columns[i])) {
+				types[i] = column.second;
+				break;
+			}
+		}
+	}
+	return types;
+}
+
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value,
                                                                bool by_name) {
-	RegisterPythonObject("__append_df", value);
+	vector<string> column_names;
+	for (auto column : value.attr("columns")) {
+		column_names.push_back(nb::cast<std::string>(nb::str(column)));
+	}
+	vector<LogicalType> declared_types;
+	auto table_columns = DuckDBPySeam::InsertableColumns(*this, name);
+	if (!table_columns.empty()) {
+		declared_types = AppendTargetTypes(table_columns, column_names, by_name);
+	}
+	con.GetConnection();
+	auto source = DuckDBPySeam::RegisterSource(*this, value, "__append_df", std::move(declared_types));
+	RegisterSourceView("__append_df", *source);
 	string columns = "";
 	if (by_name) {
-		auto df_columns = value.attr("columns");
-		vector<string> column_names;
-		for (auto column : df_columns) {
-			column_names.push_back(nb::cast<std::string>(nb::str(column)));
-		}
 		columns += "(";
 		for (idx_t i = 0; i < column_names.size(); i++) {
 			auto &column = column_names[i];
@@ -986,6 +1019,27 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(con
                                                                              const nb::object &python_object) {
 	con.GetConnection();
 	auto source = DuckDBPySeam::RegisterSource(*this, python_object, name);
+	RegisterSourceView(name, *source);
+	return shared_from_this();
+}
+
+std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterDeclared(const string &name, const PandasDataFrame &df,
+                                                                         const nb::list &types) {
+	nb::object columns = df.attr("columns");
+	if (nb::len(types) != nb::len(columns)) {
+		throw InvalidInputException("declared types: %d types given for a DataFrame of %d columns", nb::len(types),
+		                            nb::len(columns));
+	}
+	vector<LogicalType> declared_types;
+	for (auto type : types) {
+		if (type.is_none()) {
+			declared_types.push_back(LogicalType::INVALID);
+		} else {
+			declared_types.push_back(nb::cast<const DuckDBPyType &>(type).Type());
+		}
+	}
+	con.GetConnection();
+	auto source = DuckDBPySeam::RegisterSource(*this, df, name, std::move(declared_types));
 	RegisterSourceView(name, *source);
 	return shared_from_this();
 }

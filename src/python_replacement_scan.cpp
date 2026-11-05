@@ -221,8 +221,9 @@ static unique_ptr<TableRef> PythonRelationRef(ClientContext &context, const nb::
 }
 
 unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const nb::object &entry, const string &name,
-                                                              ClientContext &context, ArrowSourceKind kind) {
-	auto replacement = TryReplacementObject(entry, name, context, kind);
+                                                              ClientContext &context, ArrowSourceKind kind,
+                                                              vector<LogicalType> declared_types) {
+	auto replacement = TryReplacementObject(entry, name, context, kind, std::move(declared_types));
 	if (!replacement) {
 		ThrowScanFailureError(entry, name);
 	}
@@ -230,7 +231,7 @@ unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const nb::object &
 }
 
 static unique_ptr<TableRef> ReplacementFor(const nb::object &entry, const string &name, ClientContext &context,
-                                           ArrowSourceKind kind) {
+                                           ArrowSourceKind kind, vector<LogicalType> declared_types = {}) {
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	NumpyObjectType numpytype;
@@ -241,7 +242,7 @@ static unique_ptr<TableRef> ReplacementFor(const nb::object &entry, const string
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
 			table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
-			table_function->bind_info = make_shared_ptr<PandasScanInfo>(std::move(new_df));
+			table_function->bind_info = make_shared_ptr<PandasScanInfo>(std::move(new_df), std::move(declared_types));
 			auto dependency = make_uniq<ExternalDependency>();
 			dependency->AddDependency("replacement_cache", PythonDependencyItem::Create(entry));
 			table_function->external_dependency = std::move(dependency);
@@ -315,8 +316,9 @@ static unique_ptr<TableRef> ReplacementFor(const nb::object &entry, const string
 }
 
 unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const nb::object &entry, const string &name,
-                                                                 ClientContext &context, ArrowSourceKind kind) {
-	return ReplacementFor(entry, name, context, kind);
+                                                                 ClientContext &context, ArrowSourceKind kind,
+                                                                 vector<LogicalType> declared_types) {
+	return ReplacementFor(entry, name, context, kind, std::move(declared_types));
 }
 
 static bool IsBuiltinFunction(const nb::object &object) {

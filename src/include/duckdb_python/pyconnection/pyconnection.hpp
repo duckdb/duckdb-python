@@ -388,6 +388,10 @@ public:
 	                                                      const std::optional<string> &source);
 
 	std::shared_ptr<DuckDBPyConnection> RegisterPythonObject(const string &name, const nb::object &python_object);
+	//! Registers a pandas DataFrame whose object columns take the given types, one per column in frame order, in place
+	//! of a type sampled from the values; None declares no type for that column
+	std::shared_ptr<DuckDBPyConnection> RegisterDeclared(const string &name, const PandasDataFrame &df,
+	                                                     const nb::list &types);
 	std::shared_ptr<DuckDBPyConnection> RegisterArrowSource(const string &name, const nb::object &source);
 
 	void InstallExtension(const string &extension, bool force_install = false,

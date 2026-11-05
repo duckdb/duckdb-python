@@ -72,7 +72,10 @@ struct DuckDBPySeam {
 	static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &connection);
 	//! Registers obj under a generated name; subject names the object in errors, an empty one makes it nameless
 	static std::shared_ptr<SourceHandle> RegisterSource(DuckDBPyConnection &connection, const nb::object &obj,
-	                                                    const string &subject);
+	                                                    const string &subject, vector<LogicalType> declared_types = {});
+	//! The name and type of each column a value can be inserted into, of the table the name resolves to as one
+	//! identifier; empty when no table has the name
+	static vector<std::pair<string, LogicalType>> InsertableColumns(DuckDBPyConnection &connection, const string &name);
 	//! Registers a table reference built in C++ under a generated name
 	static std::shared_ptr<SourceHandle> RegisterTableRef(ClientContext &context, unique_ptr<TableRef> table,
 	                                                      const string &subject);

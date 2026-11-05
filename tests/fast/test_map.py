@@ -394,7 +394,7 @@ MAP_SCHEMAS = pytest.mark.parametrize(
 
 @MAP_SCHEMAS
 @pytest.mark.xfail(
-    strict=True, reason="a fractional value outside the chunk's sample is converted with loss into INTEGER"
+    strict=True, reason="not built: a fractional value outside the chunk's sample is converted with loss into INTEGER"
 )
 def test_map_fractional_value_outside_the_chunk_sample_raises(duckdb_cursor, schema):
     duckdb_cursor.execute("set threads = 1")
