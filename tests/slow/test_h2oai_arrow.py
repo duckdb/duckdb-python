@@ -1,5 +1,4 @@
 import math
-from pathlib import Path
 
 import pytest
 
@@ -196,32 +195,38 @@ class TestH2OAIArrow:
 
 
 @pytest.fixture(scope="module")
-def arrow_dataset_register():
+def arrow_dataset_register(tmp_path_factory):
     """Single fixture to download files and register them on the given connection."""
     session = requests.Session()
     retries = urllib3_util.Retry(
         allowed_methods={"GET"},  # only retry on GETs (all we do)
         total=None,  # disable to make the below take effect
         redirect=10,  # Don't follow more than 10 redirects in a row
-        connect=3,  # try 3 times before giving up on connection errors
-        read=3,  # try 3 times before giving up on read errors
-        status=3,  # try 3 times before giving up on status errors (see forcelist below)
+        connect=6,  # try 6 times before giving up on connection errors
+        read=6,  # try 6 times before giving up on read errors
+        status=6,  # try 6 times before giving up on status errors (see forcelist below)
         status_forcelist=[429, *list(range(500, 512))],
         other=0,  # whatever else may cause an error should break
-        backoff_factor=0.1,  # [0.0s, 0.2s, 0.4s]
+        backoff_factor=2,  # [0s, 4s, 8s, 16s, 32s, 64s] outlasts a CI runner losing DNS for a minute
         raise_on_redirect=True,  # raise exception when redirect error retries are exhausted
         raise_on_status=True,  # raise exception when status error retries are exhausted
         respect_retry_after_header=True,  # respect Retry-After headers
     )
     session.mount("https://", requests_adapters.HTTPAdapter(max_retries=retries))
+    # Per worker under xdist, so parallel workers never read each other's partial downloads.
+    data_dir = tmp_path_factory.mktemp("h2oai")
     saved_filepaths = set()
 
     def _register(url, filename, con, tablename) -> None:
-        r = session.get(url)
-        filepath = Path(filename)
-        filepath.write_bytes(r.content)
-        con.register(tablename, read_csv(filename))
-        saved_filepaths.add(filepath)
+        filepath = data_dir / filename
+        with session.get(url, stream=True, timeout=(30, 60)) as r:
+            r.raise_for_status()
+            # Recorded before the body streams, so a download that breaks halfway is still removed at teardown.
+            saved_filepaths.add(filepath)
+            with filepath.open("wb") as f:
+                for chunk in r.iter_content(chunk_size=1 << 20):
+                    f.write(chunk)
+        con.register(tablename, read_csv(filepath))
 
     yield _register
 
