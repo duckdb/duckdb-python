@@ -91,7 +91,7 @@ static vector<Identifier> TransformStructKeys(nb::handle keys, idx_t size) {
 	for (idx_t i = 0; i < size; i++) {
 		// str() accepts non-string keys, such as the integer keys of a MAP that DuckDB returns as a plain {1: 10}
 		// dict, which nanobind's nb::cast<std::string> rejects.
-		res.emplace_back(Identifier(nb::cast<std::string>(nb::str(keys.attr("__getitem__")(i)))));
+		res.emplace_back(Identifier(TransformPythonString(nb::str(keys.attr("__getitem__")(i)))));
 	}
 	return res;
 }

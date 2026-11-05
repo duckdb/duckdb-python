@@ -40,8 +40,8 @@ public:
 	//! Convert a Python object (an existing DuckDBPyType, a type string, a Python type object such as `int`, or a
 	//! dict describing a struct) into an owned DuckDBPyType. An existing DuckDBPyType is copied (value semantics);
 	//! anything else is routed through the registered Python constructor, which drives the same factories as the
-	//! registered implicit conversions. Returns false (clearing any pending Python error) when the object can't be
-	//! converted, so a caller can raise a context-specific message.
+	//! registered implicit conversions. Returns false, with no Python error left set, when converting raises an
+	//! Exception, so a caller can raise a context-specific message; any other BaseException propagates.
 	static bool TryConvert(const nb::object &object, std::unique_ptr<DuckDBPyType> &result);
 	//! Converts any form TryConvert accepts, resolving type names against the connection, or the default connection
 	//! when it is null. Raises the conversion's own error instead of returning false.

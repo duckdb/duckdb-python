@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/python_conversion.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -132,15 +133,65 @@ static LogicalType FromString(const string &type_str, std::shared_ptr<DuckDBPyCo
 	return DuckDBPyType::ParseTypeName(*pycon->con.GetConnection().context, type_str);
 }
 
+static bool IsAbstractNumpyScalar(const nb::handle &type, NumpyCacheItem &numpy) {
+	for (auto *base : {&numpy.generic, &numpy.number, &numpy.integer, &numpy.signedinteger, &numpy.unsignedinteger,
+	                   &numpy.inexact, &numpy.floating, &numpy.complexfloating, &numpy.flexible, &numpy.character}) {
+		if (type.is((*base)())) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//! Whether the numpy class a type is or derives from first is concrete; numpy 1.x gives an abstract base, and a class
+//! derived from one, a dtype with a DeprecationWarning, so numpy.dtype must never see them
+static bool DerivesFromConcreteNumpyScalar(const nb::handle &type, NumpyCacheItem &numpy) {
+	nb::tuple mro = type.attr("__mro__");
+	auto numpy_module = nb::str("numpy");
+	for (auto ancestor : mro) {
+		if (nb::getattr(ancestor, "__module__", nb::none()).equal(numpy_module)) {
+			return !IsAbstractNumpyScalar(ancestor, numpy);
+		}
+	}
+	return false;
+}
+
+static bool IsSubclass(const nb::handle &type, const nb::handle &base) {
+	auto is_subclass = PyObject_IsSubclass(type.ptr(), base.ptr());
+	if (is_subclass < 0) {
+		throw nb::python_error();
+	}
+	return is_subclass != 0;
+}
+
 static bool FromNumpyType(const nb::object &type, LogicalType &result) {
-	// Since this is a type, we have to create an instance from it first.
-	auto obj = type();
-	// We convert these to string because the underlying physical
-	// types of a numpy type aren't consistent on every platform
-	if (!nb::hasattr(obj, "dtype")) {
+	// Only a concrete numpy scalar type is read, through numpy.dtype, so converting a class never calls it.
+	if (!ModuleIsLoaded<NumpyCacheItem>()) {
 		return false;
 	}
-	string type_str = nb::cast<std::string>(nb::str(nb::object(obj.attr("dtype"))));
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto generic = import_cache.numpy.generic();
+	if (!generic || !IsSubclass(type, generic) || !DerivesFromConcreteNumpyScalar(type, import_cache.numpy)) {
+		return false;
+	}
+	nb::object dtype;
+	try {
+		dtype = import_cache.numpy().attr("dtype")(type);
+	} catch (nb::python_error &error) {
+		// A scalar class numpy refuses a dtype for is no type either.
+		if (!error.matches(PyExc_Exception)) {
+			throw;
+		}
+		return false;
+	}
+	// numpy maps a class onto the dtype of the scalar type it derives from, and only such a class is that type
+	nb::object dtype_type = dtype.attr("type");
+	if (!IsSubclass(type, dtype_type)) {
+		return false;
+	}
+	// We convert these to string because the underlying physical
+	// types of a numpy type aren't consistent on every platform
+	string type_str = nb::cast<std::string>(nb::str(dtype));
 	if (type_str == "bool") {
 		result = LogicalType::BOOLEAN;
 	} else if (type_str == "int8") {
@@ -311,7 +362,7 @@ static LogicalType FromObject(const nb::object &object, const std::shared_ptr<Du
 		return FromUnionType(object, connection);
 	}
 	case PythonTypeObject::STRING: {
-		auto string_value = nb::cast<std::string>(nb::str(object));
+		auto string_value = TransformPythonString(nb::str(object));
 		return FromString(string_value, connection);
 	}
 	case PythonTypeObject::TYPE: {
@@ -365,10 +416,11 @@ bool DuckDBPyType::TryConvert(const nb::object &object, std::unique_ptr<DuckDBPy
 		nb::object converted = nb::type<DuckDBPyType>()(object);
 		result = MakeType(nb::cast<const DuckDBPyType &>(converted).Type());
 		return true;
-	} catch (...) {
-		// A failed construction (e.g. an unannotated parameter) leaves the Python error indicator set; clear it
-		// so the caller's subsequent Python operations don't trip on a stale error.
-		PyErr_Clear();
+	} catch (nb::python_error &error) {
+		// Only an Exception says the object is no type; an interrupt or exit raised meanwhile belongs to the caller.
+		if (!error.matches(PyExc_Exception)) {
+			throw;
+		}
 		return false;
 	}
 }

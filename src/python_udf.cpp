@@ -563,6 +563,12 @@ public:
 			}
 			PyErr_Clear();
 			return false;
+		} catch (nb::python_error &error) {
+			// An interrupt or exit raised while the annotation converted belongs to the caller.
+			if (!error.matches(PyExc_Exception)) {
+				throw;
+			}
+			return false;
 		} catch (...) {
 			PyErr_Clear();
 			return false;

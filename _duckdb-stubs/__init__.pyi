@@ -233,7 +233,13 @@ class DuckDBPyConnection:
     def from_arrow(self, arrow_object: object) -> DuckDBPyRelation: ...
     def from_csv_auto(
         self,
-        path_or_buffer: str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str],
+        path_or_buffer: str
+        | bytes
+        | os.PathLike[str]
+        | os.PathLike[bytes]
+        | typing.IO[bytes]
+        | typing.IO[str]
+        | Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str]],
         header: bool | int | None = None,
         compression: CsvCompression | None = None,
         sep: str | None = None,
@@ -320,7 +326,13 @@ class DuckDBPyConnection:
     def query_progress(self) -> float: ...
     def read_csv(
         self,
-        path_or_buffer: str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str],
+        path_or_buffer: str
+        | bytes
+        | os.PathLike[str]
+        | os.PathLike[bytes]
+        | typing.IO[bytes]
+        | typing.IO[str]
+        | Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str]],
         header: bool | int | None = None,
         compression: CsvCompression | None = None,
         sep: str | None = None,
@@ -365,7 +377,13 @@ class DuckDBPyConnection:
     ) -> DuckDBPyRelation: ...
     def read_json(
         self,
-        path_or_buffer: str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str],
+        path_or_buffer: str
+        | bytes
+        | os.PathLike[str]
+        | os.PathLike[bytes]
+        | typing.IO[bytes]
+        | typing.IO[str]
+        | Sequence[str | bytes | os.PathLike[str] | os.PathLike[bytes] | typing.IO[bytes] | typing.IO[str]],
         *,
         columns: ColumnsTypes | None = None,
         sample_size: int | None = None,

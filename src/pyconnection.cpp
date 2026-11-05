@@ -841,7 +841,7 @@ engine::StatementGroup DuckDBPyConnection::GetStatements(const nb::object &query
 		return engine::StatementGroup(EngineSession(), statement_obj.GetStatement());
 	}
 	if (nb::isinstance<nb::str>(query)) {
-		auto sql_query = nb::cast<std::string>(nb::str(query));
+		auto sql_query = TransformPythonString(nb::str(query));
 		return engine::StatementGroup(EngineSession(), sql_query);
 	}
 	throw InvalidInputException("Please provide either a DuckDBPyStatement or a string representing the query");

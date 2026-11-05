@@ -1,4 +1,7 @@
 import re
+import subprocess
+import sys
+import traceback
 
 import pytest
 
@@ -98,6 +101,25 @@ class TestRelationsKeepNoResult:
         pattern = rf"no longer have {method}\(\).*{re.escape(replacement)}"
         with pytest.raises(AttributeError, match=pattern):
             getattr(rel, method)
+
+    @pytest.mark.parametrize("method", ["fetchone", "fetchmany", "fetch_df_chunk", "execute"])
+    def test_a_removed_method_message_reads_on_with_the_suggestion_python_adds(self, con, method):
+        # Python appends ". Did you mean: 'fetchall'?" when it shows this error and a close name exists.
+        rel = con.sql("SELECT 1 AS a")
+        with pytest.raises(AttributeError) as raised:
+            getattr(rel, method)
+        assert not str(raised.value).endswith(".")
+        assert ".." not in "".join(traceback.format_exception_only(raised.value))
+
+    def test_the_interpreter_shows_the_suggestion_after_one_period(self, tmp_path):
+        # The interpreter's own display adds the suggestion on every version, traceback formatting only from 3.12.
+        script = "import duckdb\nduckdb.connect().sql('SELECT 1 AS a').fetchone\n"
+        # Run outside the checkout, so the child imports the duckdb this process imported.
+        shown = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120, check=False, cwd=tmp_path
+        )
+        assert shown.returncode == 1, shown.stdout + shown.stderr
+        assert "Use rel.limit(1).fetchall() instead. Did you mean: 'fetchall'?" in shown.stderr, shown.stderr
 
     def test_a_column_named_like_a_removed_method_is_still_reachable(self, con):
         rel = con.sql("SELECT 1 AS execute, 2 AS fetchone")

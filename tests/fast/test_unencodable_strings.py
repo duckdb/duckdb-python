@@ -11,7 +11,7 @@ import pytest
 import duckdb
 import numpy as np
 import pandas as pd
-from duckdb.sqltypes import BIGINT, VARCHAR
+from duckdb.sqltypes import BIGINT, VARCHAR, DuckDBPyType
 
 
 def execute_positional(con, text):
@@ -149,7 +149,7 @@ CSV_OPTIONS = [read_csv_na_values, read_csv_na_values_list, read_csv_delimiter, 
 
 
 def refusal(escaped_char, position):
-    return re.escape(f"cannot encode str as UTF-8, surrogate '{escaped_char}' at position {position}")
+    return re.escape(f"cannot encode str as UTF-8, surrogate '{escaped_char}' at position {position}") + r"(?!\d)"
 
 
 # A value converted as a Python value, which is every reader option, every parameter and every frame column, reports
@@ -267,3 +267,76 @@ def test_object_column_round_trips_inline_and_heap_lengths(kind, encoded_bytes):
 
 def test_value_construction_does_not_check():
     assert duckdb.Value("\ud800", VARCHAR).object == "\ud800"
+
+
+# Names and SQL text reach the engine as text of their own rather than as a value, and report the offset inside the
+# string the caller gave: the SQL text, the key, the parameter name or the table name.
+SQL_TEXT_PREFIX = len("SELECT '")
+
+
+def table_with_a_column(con):
+    con.execute("CREATE TABLE named (x INTEGER)")
+    return "named"
+
+
+def name_or_text(convert, position, name, *, refused_on="connection"):
+    return pytest.param(convert, position, refused_on, id=name)
+
+
+#: The connection a conversion runs on, which must stay usable after it refuses; the module runs on the default one.
+REFUSED_ON = {"connection": lambda con: con, "cursor": lambda con: con.cursor(), "default": lambda con: duckdb}
+
+
+def execute_text(con, text):
+    return con.execute(f"SELECT '{text}'")
+
+
+NAME_AND_TEXT_REFUSALS = [
+    name_or_text(execute_text, SQL_TEXT_PREFIX, "execute_text"),
+    name_or_text(lambda con, text: con.executemany(f"SELECT '{text}'", [[]]), SQL_TEXT_PREFIX, "executemany_text"),
+    name_or_text(execute_text, SQL_TEXT_PREFIX, "cursor_text", refused_on="cursor"),
+    name_or_text(
+        lambda con, text: duckdb.execute(f"SELECT '{text}'", connection=con), SQL_TEXT_PREFIX, "module_execute_text"
+    ),
+    name_or_text(lambda con, text: con.sql(f"SELECT '{text}'"), SQL_TEXT_PREFIX, "sql_text"),
+    name_or_text(lambda con, text: con.execute("SELECT ?", [{text: 1}]), 0, "struct_key"),
+    name_or_text(lambda con, text: con.execute("SELECT ?", [[{"a": {text: 1}}]]), 0, "nested_struct_key"),
+    name_or_text(lambda con, text: con.executemany("SELECT ?", [[{text: 1}]]), 0, "executemany_struct_key"),
+    name_or_text(lambda con, text: con.sql("SELECT ?", params=[{text: 1}]).fetchall(), 0, "sql_params_struct_key"),
+    name_or_text(lambda con, text: con.execute("SELECT $x", {text: 1}), 0, "execute_parameter_name"),
+    name_or_text(lambda con, text: con.executemany("SELECT $x", [{text: 1}]), 0, "executemany_parameter_name"),
+    name_or_text(lambda con, text: con.struct_type({text: BIGINT}), 0, "struct_type_field_name"),
+    name_or_text(
+        lambda con, text: con.create_function("f", lambda x: x, [{text: int}], int), 0, "type_from_dict_field_name"
+    ),
+    name_or_text(lambda con, text: con.create_function("f", lambda x: x, [text], int), 0, "type_name"),
+    name_or_text(
+        lambda con, text: con.create_function("f", lambda x: x, [{"a": text}], int), 0, "type_name_of_a_field"
+    ),
+    name_or_text(lambda con, text: DuckDBPyType(text), 0, "type_name_on_the_default_connection", refused_on="default"),
+    name_or_text(lambda con, text: con.appender(table_with_a_column(con), columns=[text]), 0, "appender_column_name"),
+    name_or_text(lambda con, text: con.table(text), 0, "table_name"),
+    name_or_text(lambda con, text: con.view(text), 0, "view_name"),
+    name_or_text(lambda con, text: con.table(f"main.{text}"), len("main."), "qualified_table_name"),
+    name_or_text(lambda con, text: con.view(f"main.{text}"), len("main."), "qualified_view_name"),
+]
+
+
+@pytest.mark.parametrize(("convert", "position", "refused_on"), NAME_AND_TEXT_REFUSALS)
+def test_surrogate_in_a_name_or_sql_text_is_refused(convert, position, refused_on):
+    con = duckdb.connect()
+    connection = REFUSED_ON[refused_on](con)
+    with pytest.raises(duckdb.InvalidInputException, match=refusal("\\ud800", position)):
+        convert(connection, "\ud800")
+    assert connection.execute("SELECT 42").fetchone() == (42,)
+
+
+@pytest.mark.parametrize("text", ["\u00e9", "\U0001f600"], ids=["two_byte_utf8", "four_byte_utf8"])
+def test_encodable_names_and_sql_text_round_trip(text):
+    con = duckdb.connect()
+    assert con.execute(f"SELECT '{text}'").fetchone() == (text,)
+    assert list(con.execute("SELECT ?", [{text: 1}]).fetchone()[0]) == [text]
+    assert con.execute(f"SELECT ${text}", {text: 1}).fetchone() == (1,)
+    assert con.struct_type({text: BIGINT}).children == [(text, BIGINT)]
+    con.execute(f'CREATE TABLE "{text}" AS SELECT 1 AS x')
+    assert con.table(text).fetchall() == [(1,)]
