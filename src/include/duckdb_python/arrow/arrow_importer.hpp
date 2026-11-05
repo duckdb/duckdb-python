@@ -22,7 +22,7 @@ void ReadArrowColumn(Vector &vector, ArrowArray &array, const ArrowType &arrow_t
 //! share a batch by reading different ranges of it.
 class ArrowBatchImporter {
 public:
-	//! Output column i is read from batch column columns[i]
+	//! Output column i is read from batch column columns[i]; a refusal names a batch column by its name in `schema`
 	ArrowBatchImporter(ClientContext &context, shared_ptr<ArrowTableSchema> schema, vector<idx_t> columns);
 
 	//! Checks the batch's shape against the schema and takes it over, clearing its release; a refused batch keeps it

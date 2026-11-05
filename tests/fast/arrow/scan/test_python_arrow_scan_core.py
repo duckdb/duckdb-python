@@ -1775,59 +1775,59 @@ MALFORMED_NESTED = {
     "short_struct_child": (
         _struct_table,
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "length"), 1),
-        "column 0 holds a nested array of 1 rows where 2000 were expected",
+        "column 's' holds a nested array of 1 rows where 2000 were expected",
     ),
     "nested_offset_overflow": (
         _struct_table,
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "offset"), 2**63 - 1),
-        "column 0 with a nested array of offset 9223372036854775807 and length 2000",
+        "column 's' with a nested array of offset 9223372036854775807 and length 2000",
     ),
     "missing_child": (
         _struct_table,
         lambda column, pokes: pokes.set(ctypes.c_void_p, ctypes.cast(column.children, ctypes.c_void_p).value, None),
-        "column 0 with a nested array missing its child 0",
+        "column 's' with a nested array missing its child 0",
     ),
     "extra_child": (
         _struct_table,
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(column, "n_children"), 2),
-        "column 0 with a struct or union of 2 child arrays where its type has 1",
+        "column 's' with a struct or union of 2 child arrays where its type has 1",
     ),
     "released_child": (
         _struct_table,
         lambda column, pokes: pokes.set(ctypes.c_void_p, _field(_child(column, 0), "release"), None),
-        "column 0 with a nested array whose child 0 is released already",
+        "column 's' with a nested array whose child 0 is released already",
     ),
     "released_dictionary": (
         lambda: pa.table({"d": pa.array(["a", "b"] * 1_000).dictionary_encode()}),
         lambda column, pokes: pokes.set(ctypes.c_void_p, column.dictionary + _ArrowArray.release.offset, None),
-        "column 0 with a dictionary-encoded array whose dictionary is released already",
+        "column 'd' with a dictionary-encoded array whose dictionary is released already",
     ),
     "run_ends_out_of_range": (
         _run_end_table,
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "offset"), -1),
-        "column 0 with a nested array of offset -1 and length 2",
+        "column 'r' with a nested array of offset -1 and length 2",
     ),
     "run_ends_and_values_unequal": (
         _run_end_table,
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 1), "length"), 1),
-        "column 0 with a run end encoded array of 2 run ends and 1 values",
+        "column 'r' with a run end encoded array of 2 run ends and 1 values",
     ),
     "list_offsets_beyond_child": (
         lambda: pa.table({"l": pa.array([[i] for i in range(2_000)])}),
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "length"), 1_999),
-        "column 0 with a list whose offsets 0 to 2000 do not fit its child of 1999 rows",
+        "column 'l' with a list whose offsets 0 to 2000 do not fit its child of 1999 rows",
     ),
     "list_view_without_sizes": (
         lambda: pa.table({"l": pa.array([[1], [2, 3]] * 1_000, type=pa.list_view(pa.int64()))}),
         lambda column, pokes: pokes.set(ctypes.c_void_p, column.buffers + 2 * ctypes.sizeof(ctypes.c_void_p), None),
-        "column 0 with a list view that has no offsets or sizes",
+        "column 'l' with a list view that has no offsets or sizes",
     ),
     "run_ends_stop_before_the_rows": (
         lambda: pa.table({"l": pa.FixedSizeListArray.from_arrays(_run_end_array(6), 2).slice(1)}),
         lambda column, pokes: [
             pokes.set(ctypes.c_int64, _field(_child(_child(column, 0), index), "length"), 1) for index in (0, 1)
         ],
-        "column 0 with a run end encoded array whose runs end at 3 before its 6 rows",
+        "column 'l' with a run end encoded array whose runs end at 3 before its 6 rows",
     ),
     "list_view_past_its_child": (
         lambda: pa.table(
@@ -1838,33 +1838,116 @@ MALFORMED_NESTED = {
             }
         ),
         lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "length"), 1),
-        "column 0 with a list view whose list at row 0 reaches past its child of 1 rows",
+        "column 'l' with a list view whose list at row 0 reaches past its child of 1 rows",
     ),
     "run_ends_of_tinyint": (
         lambda: pa.table(
             {"r": pa.RunEndEncodedArray.from_arrays(pa.array([4], pa.int16()), pa.array([7], pa.int64()))}
         ),
         None,
-        "column 0 with a run end encoded array whose run ends are TINYINT, not SMALLINT, INTEGER or BIGINT",
+        "column 'r' with a run end encoded array whose run ends are TINYINT, not SMALLINT, INTEGER or BIGINT",
         # The one int16 run end of 4 reads as the int8 run end 4 on a little endian machine.
         lambda field: ctypes.memmove(_ArrowSchemaHead.from_address(field.children[0]).format, b"c", 1),
     ),
     "null_count_without_bitmap": (
         lambda: pa.table({"i": pa.array([1, None] * 1_000)}),
         _drop_the_validity_bitmap,
-        "column 0 with a non-zero null count but no validity bitmap",
+        "column 'i' with a non-zero null count but no validity bitmap",
     ),
     "struct_child_null_count_without_bitmap": (
         lambda: pa.table({"s": pa.StructArray.from_arrays([pa.array([1, None] * 1_000)], ["x"])}),
         lambda column, pokes: _drop_the_validity_bitmap(_child(column, 0), pokes),
-        "column 0 with a non-zero null count but no validity bitmap",
+        "column 's' with a non-zero null count but no validity bitmap",
     ),
     "list_child_null_count_without_bitmap": (
         lambda: pa.table({"l": pa.array([[1, None]] * 1_000)}),
         lambda column, pokes: _drop_the_validity_bitmap(_child(column, 0), pokes),
-        "column 0 with a non-zero null count but no validity bitmap",
+        "column 'l' with a non-zero null count but no validity bitmap",
     ),
 }
+
+
+class NarrowingPokingSource(PythonStreamSource):
+    """One batch of the requested columns, narrowed as a projecting source does, whose column `name` `poke` changes."""
+
+    def __init__(self, table, name, poke) -> None:
+        super().__init__(table, max_chunksize=table.num_rows)
+        self.name = name
+        self.poke = poke
+
+    def stream(self, columns, filters):
+        table = self.table if columns is None else self.table.select(list(columns))
+        stream = PokingStream(table.schema, table.to_batches(max_chunksize=table.num_rows), None)
+        index = table.schema.get_field_index(self.name)
+        stream.corrupt = lambda array: self.poke(array.children[index].contents, stream.pokes)
+        self.streams.append(stream)
+        return stream.capsule(), columns is not None
+
+
+class PlainArrayPokingSource(PythonStreamSource):
+    """A stream of one plain array, which the scan reads as a column of its own, changed by `poke` after the export."""
+
+    def __init__(self, array, poke) -> None:
+        super().__init__(pa.table({"unused": array}))
+        self.array = array
+        self.poke = poke
+
+    def __arrow_c_schema__(self) -> object:
+        return self.array.type.__arrow_c_schema__()
+
+    def stream(self, columns, filters):
+        stream = PokingStream(self.array.type, [self.array], None)
+        stream.corrupt = lambda array: self.poke(array, stream.pokes)
+        self.streams.append(stream)
+        return stream.capsule(), False
+
+
+def _one_field_struct():
+    return pa.StructArray.from_arrays([pa.array(range(2_000))], ["i"])
+
+
+# The column s of a table k, x, s, the change to it after the export, and the refusal text that follows its name.
+REFUSALS_BY_COLUMN = {
+    "released_struct_child": (
+        _one_field_struct,
+        lambda column, pokes: pokes.set(ctypes.c_void_p, _field(_child(column, 0), "release"), None),
+        "with a nested array whose child 0 is released already",
+    ),
+    "overflowing_column_offset": (
+        _one_field_struct,
+        lambda column, pokes: pokes.set(ctypes.c_int64, _field(column, "offset"), 2**63 - 1),
+        "with offset 9223372036854775807 and length 2000",
+    ),
+    "run_ends_beyond_a_buffer": (
+        lambda: _run_end_array(2_000),
+        lambda column, pokes: pokes.set(ctypes.c_int64, _field(_child(column, 0), "offset"), 2**62),
+        f"that addresses row {2**62 + 1} of a buffer, beyond what a buffer can hold",
+    ),
+}
+
+
+class TestRefusalsNameTheColumn:
+    @pytest.mark.timeout(60)
+    @pytest.mark.parametrize("query", ["SELECT s FROM t", "SELECT x, s FROM t", "SELECT * FROM t"])
+    @pytest.mark.parametrize("case", list(REFUSALS_BY_COLUMN))
+    def test_a_refusal_names_the_column_the_query_reads(self, case, query):
+        make, poke, message = REFUSALS_BY_COLUMN[case]
+        table = pa.table({"k": range(2_000), "x": range(2_000), "s": make()})
+        source = NarrowingPokingSource(table, "s", poke)
+        with duckdb.connect() as con:
+            con._register_arrow_source("t", source)
+            with pytest.raises(duckdb.InvalidInputException, match=re.escape(f"column 's' {message}")):
+                con.execute(query).fetchall()
+
+    @pytest.mark.timeout(60)
+    def test_a_refusal_names_a_plain_array_by_its_column_name(self):
+        source = PlainArrayPokingSource(pa.array([1, None] * 1_000), _drop_the_validity_bitmap)
+        with duckdb.connect() as con:
+            con._register_arrow_source("t", source)
+            assert [name for name, *_ in con.execute("SELECT * FROM t LIMIT 0").description] == ["value"]
+            message = "column 'value' with a non-zero null count but no validity bitmap"
+            with pytest.raises(duckdb.InvalidInputException, match=re.escape(message)):
+                con.execute("SELECT value FROM t").fetchall()
 
 
 class TestMalformedAndUnusualInput:
@@ -1884,7 +1967,7 @@ class TestMalformedAndUnusualInput:
             ),
             pytest.param(
                 _overflowing_column_offset,
-                "an Arrow batch carried column 0 with offset 9223372036854775807 and length 1000",
+                "an Arrow batch carried column 'i' with offset 9223372036854775807 and length 1000",
                 id="column_offset_overflow",
             ),
         ],
@@ -2332,7 +2415,7 @@ class TestReleases:
             (
                 _shorten_first_column,
                 "Arrow array child length does not match the array length:"
-                " column 0 holds 1 rows where 1000 were expected",
+                " column 'i' holds 1 rows where 1000 were expected",
             ),
             (_wrong_column_count, "an Arrow batch carried 1 columns where 2 were expected"),
         ],
@@ -2357,7 +2440,7 @@ class TestReleases:
             (
                 400_000,
                 "Arrow array child length does not match the array length:"
-                " column 0 holds 300000 rows where 400000 were expected",
+                " column 'a' holds 300000 rows where 400000 were expected",
             ),
         ],
         ids=["minus_one", "minus_several_ranges", "longer_than_its_column"],

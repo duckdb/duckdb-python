@@ -616,12 +616,12 @@ class TestImporter:
         ("mangle", "message"),
         [
             pytest.param("child_count", "carried 3 columns where 2 were expected", id="child_count"),
-            pytest.param("null_child", "carried column 0 missing or released already", id="null_child_pointer"),
-            pytest.param("released_child", "carried column 0 missing or released already", id="released_child"),
+            pytest.param("null_child", "carried column 'i' missing or released already", id="null_child_pointer"),
+            pytest.param("released_child", "carried column 'i' missing or released already", id="released_child"),
             pytest.param("negative_length", "which do not describe a range of rows", id="negative_length"),
             pytest.param(
                 "longer_than_children",
-                "column 0 holds 1000 rows where 10000 were expected",
+                "column 'i' holds 1000 rows where 10000 were expected",
                 id="longer_than_children",
             ),
         ],

@@ -1,8 +1,9 @@
 """A predicate tree as a pyarrow compute expression that a Dataset scanner evaluates exactly as the engine would.
 
-A constant becomes a scalar of its own engine type, never of the column's Arrow type, so a value between two points
-of a coarser column keeps its meaning; a zoned scalar is labelled with the column's zone, since pyarrow compares
-across units but not across zones.
+A constant becomes a scalar of its own engine type, except a zoned timestamp or time constant, which is compared as a
+scalar of the column's own type, the form pyarrow tests against Parquet row group statistics; one between two points
+of a coarser column is compared with the point below it, under the operator that keeps its meaning, since no row of
+the column equals it.
 """
 
 from __future__ import annotations
@@ -76,7 +77,7 @@ def _translate(node: Node, schema: pa.Schema) -> pc.Expression:
             return _column(schema, parts)[0].is_valid()
         case Binary(op=op, left=Col(parts=parts), right=Lit() as constant) if op in _COMPARISONS:
             field, kind = _column(schema, parts)
-            compared = _COMPARISONS[op](field, _scalar(constant, kind))
+            compared = _compare(op, field, kind, _scalar(constant, kind))
             if op in (">", ">=") and pa.types.is_floating(kind):
                 # The engine orders NaN above every number; NaN alone is unequal to itself, also in a dictionary,
                 # where pyarrow has no is_nan kernel.
@@ -236,6 +237,24 @@ def _scalar(constant: Lit, kind: pa.DataType) -> pa.Scalar:
     return pa.scalar(constant.value, own)
 
 
+def _compare(op: str, field: pc.Expression, kind: pa.DataType, scalar: pa.Scalar) -> pc.Expression:
+    """`field op scalar`, with a zoned timestamp or time constant in the column's own unit."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+
+    if not _in_column_unit(kind):
+        return _COMPARISONS[op](field, scalar)
+    point, exact = _point_below(scalar.value, kind.unit)
+    below = pa.scalar(point, kind)
+    if exact:
+        return _COMPARISONS[op](field, below)
+    if op in (">", ">="):
+        return field > below
+    if op in ("<", "<="):
+        return field <= below
+    return pc.if_else(field.is_valid(), pa.scalar(op == "!="), pa.scalar(None, pa.bool_()))
+
+
 def _membership(field: pc.Expression, kind: pa.DataType, values: Sequence[Node]) -> pc.Expression:
     """Membership of `field` in the constants, each converted exactly to the column's own type."""
     import pyarrow as pa
@@ -264,17 +283,23 @@ def _held(scalar: pa.Scalar, kind: pa.DataType) -> object:
     """The scalar's value as a value of the column's type, or None when no row of the column can hold it."""
     import pyarrow as pa
 
-    if pa.types.is_timestamp(kind) and kind.tz is not None:
-        return _on_grid(scalar.value, kind.unit)
-    if pa.types.is_time(kind):
-        return _on_grid(scalar.value, kind.unit)
+    if _in_column_unit(kind):
+        point, exact = _point_below(scalar.value, kind.unit)
+        return point if exact else None
     value = scalar.as_py()
     if pa.types.is_fixed_size_binary(kind) and len(value) != kind.byte_width:
         return None
     return value
 
 
-def _on_grid(count: int, unit: str) -> int | None:
-    """A count of microseconds as a count of `unit`, or None when it lies between two of them."""
-    step = 1_000_000 // _PER_SECOND[unit]
-    return count // step if count % step == 0 else None
+def _in_column_unit(kind: pa.DataType) -> bool:
+    """Whether a constant arrives in microseconds and is converted into the column's unit: a zoned timestamp or time."""
+    import pyarrow as pa
+
+    return pa.types.is_time(kind) or (pa.types.is_timestamp(kind) and kind.tz is not None)
+
+
+def _point_below(count: int, unit: str) -> tuple[int, bool]:
+    """A count of microseconds as the count of `unit` at or below it, and whether it is exactly that point."""
+    point, rest = divmod(count, 1_000_000 // _PER_SECOND[unit])
+    return point, rest == 0

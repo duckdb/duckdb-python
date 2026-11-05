@@ -551,6 +551,112 @@ class TestArrowTemporal:
         refused_by_arrow(arrow_table([0], kind).schema, cmp(">", "c", HALF, "TIMESTAMP WITH TIME ZONE"))
 
 
+# The points base to base + 999 of the column's unit in ten Parquet row groups of 100, then one of NULLs. The constant
+# is the point base + 299, or a third of a point past it. Parquet stores a column of seconds in milliseconds, so the
+# millisecond kinds stand for both.
+PRUNING_KINDS = [
+    pytest.param(pa.timestamp("ms", tz="UTC"), 0, id="timestamp-ms-utc"),
+    pytest.param(pa.timestamp("ms", tz="UTC"), -500, id="timestamp-ms-utc-before-1970"),
+    pytest.param(pa.timestamp("ms", tz=NEW_YORK), 0, id="timestamp-ms-new-york"),
+    pytest.param(pa.time32("ms"), 0, id="time-ms"),
+]
+# Whether a row at `point` microseconds satisfies the predicate on the constant `at` microseconds, `step` one point.
+PRUNING_PREDICATES = {
+    "gt": lambda point, at, step: point > at,
+    "ge": lambda point, at, step: point >= at,
+    "lt": lambda point, at, step: point < at,
+    "le": lambda point, at, step: point <= at,
+    "eq": lambda point, at, step: point == at,
+    "ne": lambda point, at, step: point != at,
+    "not_gt": lambda point, at, step: not point > at,
+    "not_eq": lambda point, at, step: point != at,
+    "not_ne": lambda point, at, step: point == at,
+    "between": lambda point, at, step: at <= point <= at + 100 * step,
+}
+PRUNED = {
+    "on_grid": {
+        "gt": 7,
+        "ge": 8,
+        "lt": 3,
+        "le": 3,
+        "eq": 1,
+        "ne": 10,
+        "not_gt": 3,
+        "not_eq": 10,
+        "not_ne": 1,
+        "between": 2,
+    },
+    "off_grid": {
+        "gt": 7,
+        "ge": 7,
+        "lt": 3,
+        "le": 3,
+        "eq": 0,
+        "ne": 10,
+        "not_gt": 3,
+        "not_eq": 10,
+        "not_ne": 0,
+        "between": 1,
+    },
+}
+PRUNING_OPS = {"gt": ">", "ge": ">=", "lt": "<", "le": "<=", "eq": "=", "ne": "!="}
+
+
+def _pruning_constant(kind, micros):
+    if pa.types.is_time(kind):
+        whole, rest = divmod(micros, 1_000_000)
+        return Lit(datetime.time(whole // 3600, whole // 60 % 60, whole % 60, rest), "TIME")
+    return Lit(micros, "TIMESTAMP WITH TIME ZONE")
+
+
+def _pruning_node(op, kind, at, step):
+    constant = _pruning_constant(kind, at)
+    if op in ("not_gt", "not_eq", "not_ne"):
+        return negate(Binary(PRUNING_OPS[op[4:]], col("c"), constant))
+    if op == "between":
+        upper = _pruning_constant(kind, at + 100 * step)
+        return both(Binary(">=", col("c"), constant), Binary("<=", col("c"), upper))
+    return Binary(PRUNING_OPS[op], col("c"), constant)
+
+
+class TestArrowRowGroupPruning:
+    """A constant prunes the Parquet row groups its rows rule out, also between two points of a coarser column."""
+
+    @pytest.mark.parametrize("offset", list(PRUNED))
+    @pytest.mark.parametrize("op", list(PRUNING_PREDICATES))
+    @pytest.mark.parametrize(("kind", "base"), PRUNING_KINDS)
+    def test_row_groups_kept_and_rows(self, tmp_path, kind, base, op, offset):
+        from duckdb._sources.to_arrow import to_arrow
+
+        pq = pytest.importorskip("pyarrow.parquet")
+        step = 1_000
+        points = [base + index for index in range(1000)]
+        storage = pa.int64() if pa.types.is_timestamp(kind) else pa.int32()
+        column = pa.array([*points, *[None] * 100], storage).cast(kind)
+        path = tmp_path / "points.parquet"
+        pq.write_table(pa.table({"id": list(range(1100)), "c": column}), path, row_group_size=100)
+        dataset = ds.dataset(path)
+        at = (base + 299) * step + (step // 3 if offset == "off_grid" else 0)
+        expression = to_arrow(_pruning_node(op, kind, at, step), dataset.schema)
+        holds = PRUNING_PREDICATES[op]
+        assert sorted(dataset.to_table(filter=expression).column("id").to_pylist()) == [
+            index for index, point in enumerate(points) if holds(point * step, at, step)
+        ]
+        assert next(iter(dataset.get_fragments())).subset(expression).num_row_groups == PRUNED[offset][op]
+
+    @pytest.mark.parametrize(("op", "valid_row"), [("eq", False), ("ne", True), ("not_eq", True), ("not_ne", False)])
+    @pytest.mark.parametrize("kind", [pa.timestamp("ms", tz=NEW_YORK), pa.time32("ms")], ids=["zoned", "time"])
+    def test_an_equality_between_two_points_is_null_on_a_null_row(self, kind, op, valid_row):
+        from duckdb._sources.to_arrow import to_arrow
+
+        table = pa.table(
+            {"c": pa.array([299, None], pa.int64() if pa.types.is_timestamp(kind) else pa.int32()).cast(kind)}
+        )
+        expression = to_arrow(_pruning_node(op, kind, 299_333, 1_000), table.schema)
+        evaluated = ds.dataset(table).to_table(columns={"holds": expression}).column("holds").to_pylist()
+        assert evaluated == [valid_row, None]
+
+
 class TestArrowDecimals:
     VALUES = (D("1.25"), D("2.50"), None)
 
