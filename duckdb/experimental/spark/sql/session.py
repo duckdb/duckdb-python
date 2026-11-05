@@ -127,12 +127,11 @@ _WALL_TIME_TIMESTAMPS = (
 
 def _reads_through_the_schema(data_type: DataType) -> bool:
     """Whether a value of an object column takes a form from ``data_type`` before DuckDB reads it."""
-    if isinstance(data_type, (StringType, StructType, *_WALL_TIME_TIMESTAMPS)):
+    # A map always does: a dict whose keys are not text would otherwise read as a struct of the keys' text
+    if isinstance(data_type, (StringType, StructType, MapType, *_WALL_TIME_TIMESTAMPS)):
         return True
     if isinstance(data_type, ArrayType):
         return _reads_through_the_schema(data_type.elementType)
-    if isinstance(data_type, MapType):
-        return _reads_through_the_schema(data_type.valueType)
     return False
 
 
@@ -170,8 +169,24 @@ def _value_through_the_schema(value: Any, data_type: DataType) -> Any:  # noqa: 
     if isinstance(data_type, ArrayType) and isinstance(value, (list, tuple)):
         return [_value_through_the_schema(element, data_type.elementType) for element in value]
     if isinstance(data_type, MapType) and isinstance(value, dict):
-        return {key: _value_through_the_schema(element, data_type.valueType) for key, element in value.items()}
+        # DuckDB's own map form, a list of keys beside a list of values: a converted key may be a dict or a list, which
+        # no dict can hold as a key, and two keys that collapse into one stay two for DuckDB's uniqueness check
+        return {
+            "key": [_value_through_the_schema(key, data_type.keyType) for key in value],
+            "value": [_value_through_the_schema(element, data_type.valueType) for element in value.values()],
+        }
     return value
+
+
+def _holds_numpy(value: Any) -> bool:  # noqa: ANN401
+    """Whether ``value`` is a NumPy value or holds one at any depth of its dicts, lists and tuples."""
+    if _is_numpy(value):
+        return True
+    if isinstance(value, dict):
+        return any(_holds_numpy(key) or _holds_numpy(element) for key, element in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(_holds_numpy(element) for element in value)
+    return False
 
 
 def _column_conforms(series: Any, data_type: DataType) -> bool:  # noqa: ANN401
@@ -185,11 +200,20 @@ def _column_conforms(series: Any, data_type: DataType) -> bool:  # noqa: ANN401
     return False
 
 
+def _is_pyarrow_backed(data: "PandasDataFrame") -> bool:
+    """Whether any column of ``data`` has a pyarrow dtype, which makes DuckDB read the whole frame through Arrow."""
+    import pandas
+
+    return any(isinstance(dtype, pandas.ArrowDtype) for dtype in data.dtypes)
+
+
 def _frame_through_the_schema(data: "PandasDataFrame", schema: StructType) -> "PandasDataFrame":
     """A shallow copy of ``data`` whose object columns hold their values as the fields of ``schema`` read them."""
     frame = data.copy(deep=False)
     for position, ((name, series), field) in enumerate(zip(data.items(), schema.fields, strict=True)):
-        if series.dtype != object or not _reads_through_the_schema(field.dataType):
+        if series.dtype != object:
+            continue
+        if not _reads_through_the_schema(field.dataType) and not series.map(_holds_numpy).any():
             continue
         if _column_conforms(series, field.dataType):
             continue
@@ -290,7 +314,9 @@ class SparkSession:  # noqa: D101
         types = None
         if schema is not None:
             types, names = schema.extract_types_and_names()
-        if schema is not None and len(schema.fields) == len(data.columns):
+        # A frame with a pyarrow backed column is read through Arrow, which takes no declared types, so it keeps
+        # the path it had: register as it is and cast below
+        if schema is not None and len(schema.fields) == len(data.columns) and not _is_pyarrow_backed(data):
             frame = _frame_through_the_schema(data, schema)
             self.conn._register_declared(unique_name, frame, [field.dataType.duckdb_type for field in schema.fields])
         else:

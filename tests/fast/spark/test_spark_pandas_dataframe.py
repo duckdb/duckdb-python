@@ -330,6 +330,30 @@ class TestPandasObjectColumnsWithASchema:
                 id="fully_sampled_bytes_into_string_read_as_their_text",
             ),
             pytest.param(_outside_the_sample([1, 2], (3, 4)), "a array<int>", [1, 2], [3, 4], id="tuple_into_array"),
+            pytest.param(
+                _outside_the_sample([1], [np.int64(2)]), "a array<int>", [1], [2], id="numpy_int_in_a_list_into_array"
+            ),
+            pytest.param(
+                _outside_the_sample({1: 10}, {np.int64(2): 20}),
+                "a map<int,int>",
+                {1: 10},
+                {2: 20},
+                id="numpy_int_as_a_map_key",
+            ),
+            pytest.param(
+                _outside_the_sample({"x": 1}, {True: 2}),
+                "a map<string,int>",
+                {"x": 1},
+                {"true": 2},
+                id="bool_as_a_text_map_key_reads_as_spark_text",
+            ),
+            pytest.param(
+                _outside_the_sample({(1,): 10}, {Row(a=2): 20}),
+                "a map<struct<a:int>,int>",
+                {Row(a=1): 10},
+                {Row(a=2): 20},
+                id="tuple_and_row_as_struct_map_keys",
+            ),
             pytest.param(_outside_the_sample(1, np.int64(2)), "a int", 1, 2, id="numpy_int_into_int"),
             pytest.param(_outside_the_sample(1.5, np.float32(2.5)), "a double", 1.5, 2.5, id="numpy_float_into_double"),
             pytest.param(
@@ -341,6 +365,13 @@ class TestPandasObjectColumnsWithASchema:
                 NAIVE,
                 datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
                 id="numpy_datetime_into_timestamp_ntz",
+            ),
+            pytest.param(
+                _outside_the_sample(1, np.array(2, dtype="int64")),
+                "a int",
+                1,
+                2,
+                id="numpy_zero_dimensional_int_into_int",
             ),
             pytest.param(
                 _outside_the_sample("a", True), "a string", "a", "true", id="bool_into_string_reads_as_spark_text"
@@ -439,6 +470,25 @@ class TestPandasObjectColumnsWithASchema:
         df = spark.createDataFrame(pd.DataFrame({"a": column}), schema)
         rows = df.collect()
         assert (rows[0].a, rows[-1].a) == (expected_first, expected_last)
+
+    def test_map_keys_that_collapse_are_refused(self, spark):
+        frame = pd.DataFrame({"m": _outside_the_sample({"x": 1}, {True: 1, "true": 2})})
+        with pytest.raises(duckdb.InvalidInputException, match=r"(?i)unique|duplicat"):
+            spark.createDataFrame(frame, "m map<string,int>").collect()
+
+    def test_array_keys_of_a_map_reach_the_engine(self, spark):
+        # A dict cannot hold a list as a key, so the keys and values are read apart instead of the map
+        frame = pd.DataFrame({"m": _outside_the_sample({("a",): 1}, {("b", "c"): 2})})
+        df = spark.createDataFrame(frame, "m map<array<string>,int>")
+        rows = df.relation.project("map_keys(m), map_values(m)").fetchall()
+        assert (rows[0], rows[-1]) == (([["a"]], [1]), ([["b", "c"]], [2]))
+
+    def test_frame_with_a_pyarrow_column_keeps_the_arrow_path(self, spark):
+        pytest.importorskip("pyarrow")
+        maps = pd.Series([{"a": 1}, {"a": 2}], dtype=object)
+        frame = pd.DataFrame({"m": maps, "n": pd.Series([1, 2], dtype="int64[pyarrow]")})
+        rows = spark.createDataFrame(frame, "m map<string,int>, n long").collect()
+        assert [(row.m, row.n) for row in rows] == [({"a": 1}, 1), ({"a": 2}, 2)]
 
     def test_struct_values_of_the_frame_stay_as_given(self, spark):
         frame = pd.DataFrame({"a": _outside_the_sample({"y": 2, "x": 1}, (3, 4))})

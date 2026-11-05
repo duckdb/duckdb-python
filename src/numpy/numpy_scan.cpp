@@ -306,8 +306,18 @@ private:
 //! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
 //! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
 //! every depth, and a value without a DuckDB type of its own reads as its text in a text column
-//! A numpy scalar reads as its Python value; a datetime64 or timedelta64 at nanoseconds would read as an integer,
-//! so those take the microsecond unit first, as the frame's own datetime columns do
+//! A numpy scalar, or an array of no dimensions, reads as its Python value; a datetime64 or timedelta64 at
+//! nanoseconds would read as an integer, so those take the microsecond unit first, as the frame's own datetime
+//! columns do
+static bool IsNumpyScalar(nb::handle cell) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (nb::isinstance(cell, import_cache.numpy.generic())) {
+		return true;
+	}
+	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
+	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
+}
+
 static nb::object NumpyScalarValue(nb::handle scalar) {
 	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
 	if (kind == "M") {
@@ -323,10 +333,12 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (nb::isinstance(cell, import_cache.numpy.generic())) {
+	if (IsNumpyScalar(cell)) {
 		auto value = NumpyScalarValue(cell);
-		return DeclaredValue(context, target, value);
+		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
+		if (!IsNumpyScalar(value)) {
+			return DeclaredValue(context, target, value);
+		}
 	}
 	if (target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
 		return Value(TransformPythonString(nb::str(cell)));

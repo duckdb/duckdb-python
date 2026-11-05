@@ -261,6 +261,14 @@ class TestAppendObjectColumnsToDeclaredTypes:
             ),
             pytest.param("DOUBLE", _outside_the_sample(1.5, float("nan")), 1.5, None, id="nan_into_double_is_null"),
             pytest.param("DOUBLE", _outside_the_sample(1.5, None), 1.5, None, id="none_into_double_is_null"),
+            pytest.param("DOUBLE", _outside_the_sample(1.5, np.ma.masked), 1.5, None, id="masked_into_double_is_null"),
+            pytest.param(
+                "DOUBLE",
+                _outside_the_sample(1.5, np.ma.array(42.0, mask=True)),
+                1.5,
+                None,
+                id="masked_zero_dimensional_array_into_double_is_null",
+            ),
             pytest.param("INTEGER", _outside_the_sample(1, np.int64(2)), 1, 2, id="numpy_int_into_integer"),
             pytest.param("DOUBLE", _outside_the_sample(1.5, np.float32(2.5)), 1.5, 2.5, id="numpy_float_into_double"),
             pytest.param(
@@ -272,6 +280,13 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 NAIVE,
                 datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
                 id="numpy_datetime_into_timestamp",
+            ),
+            pytest.param(
+                "TIMESTAMP",
+                _outside_the_sample(NAIVE, np.array("2024-05-08T01:02:03.123456789", dtype="datetime64[ns]")),
+                NAIVE,
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                id="numpy_zero_dimensional_datetime_into_timestamp",
             ),
             pytest.param(
                 "STRUCT(x VARCHAR)",
@@ -392,6 +407,12 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
         frame = pd.DataFrame({"a": column})
         with pytest.raises(duckdb.ConversionException, match=match):
+            duckdb_cursor.append("t", frame)
+
+    def test_numpy_long_double_is_refused_like_the_appender(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a DOUBLE)")
+        frame = pd.DataFrame({"a": _outside_the_sample(1.5, np.longdouble("2.5"))})
+        with pytest.raises(duckdb.NotImplementedException, match="longdouble"):
             duckdb_cursor.append("t", frame)
 
     def test_keys_that_collapse_in_a_nested_map_are_refused(self, duckdb_cursor):
