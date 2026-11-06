@@ -293,17 +293,16 @@ def _decimal_digits(tree: _ExpressionTree, schema: Mapping[str, pl.DataType]) ->
 
 
 def _operand_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType]) -> str:
-    """An operand of a comparison, a text column compared by its bytes as polars compares it.
+    """An operand of a comparison, a text column compared as its text and by its bytes, as polars compares it.
 
-    The engine applies the column's collation or the session's default collation to a text comparison, and an ENUM
-    compares as its text; binary collation keeps the scan filter and its pruning.
+    polars reads a UUID, a JSON and an ENUM column as their text, which the cast gives; the engine applies the column's
+    collation or the session's default collation to a text comparison. On a VARCHAR the engine drops the cast and the
+    binary collation, so the scan filter and its pruning stay.
     """
     sql = _pl_tree_to_sql(tree, schema)
     column = tree.get("Column")
     dtype = schema.get(column) if isinstance(column, str) else None
-    if dtype == pl.String:
-        return f"({sql} COLLATE C)"
-    if isinstance(dtype, pl.Categorical):
+    if dtype == pl.String or isinstance(dtype, pl.Categorical):
         return f"(CAST({sql} AS VARCHAR) COLLATE C)"
     return sql
 
@@ -539,6 +538,9 @@ def _pl_tree_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | N
                 # JSON has no inf/nan, polars serializes them as null
                 msg = f"Non-finite {dtype} literals cannot be pushed down"
                 raise NotImplementedError(msg)
+            if dtype == "Float32":
+                # The engine reads a number with an exponent as a DOUBLE, which would compare a FLOAT column in DOUBLE
+                return f"CAST('{value[dtype]}' AS FLOAT)"
             return str(value[dtype])
 
         # Time type
@@ -597,7 +599,7 @@ _ENGINE_TYPES = {
     "UInt64": ("UBIGINT",),
     "Float32": ("FLOAT",),
     "Float64": ("DOUBLE",),
-    "String": ("VARCHAR",),
+    "String": ("VARCHAR", "UUID", "JSON"),
     "Binary": ("BLOB",),
     "Date": ("DATE",),
     "Time": ("TIME",),
@@ -608,8 +610,9 @@ _DATETIME_ENGINE_TYPES = {"ms": ("TIMESTAMP_S", "TIMESTAMP_MS"), "us": ("TIMESTA
 def _stands_for(dtype: pl.DataType, engine_type: str) -> bool:
     """Whether the polars dtype of a column stands for the column's engine type, so both compare it alike.
 
-    UUID and JSON reach polars as a String, BIT as a Binary, TIME_NS and TIME WITH TIME ZONE as a Time, and HUGEINT
-    and UHUGEINT, which hold 39 digits, as a Decimal(38, 0); the engine compares each by its own type.
+    A UUID or JSON column reaches polars as its text, a String, which a comparison casts it to. BIT reaches polars as a
+    Binary, TIME_NS and TIME WITH TIME ZONE as a Time, and HUGEINT and UHUGEINT, which hold 39 digits, as a
+    Decimal(38, 0); the engine compares each of those by its own type.
     """
     if isinstance(dtype, pl.Decimal):
         return engine_type == f"DECIMAL({dtype.precision},{dtype.scale})"

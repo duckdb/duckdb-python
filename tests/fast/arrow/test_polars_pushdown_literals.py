@@ -342,6 +342,24 @@ class TestTimeLiteralPushdown:
             assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("t"), microsecond), pushed=True)
 
 
+class TestFloat32LiteralPushdown:
+    def test_literal_in_exponent_form_compares_as_a_float(self, duckdb_cursor, pushdowns):
+        # The engine reads a number with an exponent as a DOUBLE; bare, 1.2345679e-05 compared the FLOAT column in
+        # DOUBLE, where the FLOAT value is not the literal, and dropped the row polars keeps
+        duckdb_cursor.execute("CREATE TABLE t (g FLOAT, s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?)",
+            [(1.2345679e-05, "x"), (1e20, "x"), (0.5, "x"), (-3.5e-08, "x"), (1e20, "y"), (None, "x")],
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for value in (1.2345679e-05, 1e20):
+            for compare in ORDERINGS:
+                predicate = compare(pl.col("g"), value)
+                assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+                partly = predicate & pl.col("s").str.contains("x")
+                assert_pushdown_matches_polars(lazy_df, pushdowns, partly, pushed="partly")
+
+
 class TestColumnCastPushdown:
     # A cast of the column, whether the user wrote it or polars inserted it to reconcile types, can truncate, turn an
     # overflow into NULL or change the type the comparison runs in, and the bare column carries none of that, so the
@@ -965,25 +983,12 @@ class TestDecimalLiteralPushdown:
 
 
 class TestColumnTypePushdown:
-    # UUID and JSON reach polars as a String, BIT as a Binary, TIME_NS and TIME WITH TIME ZONE as a Time, and HUGEINT
-    # and UHUGEINT, which hold 39 digits, as a Decimal(38, 0); the engine compares each by its own type and raises or
-    # keeps other rows than polars
+    # BIT reaches polars as a Binary, TIME_NS and TIME WITH TIME ZONE as a Time, and HUGEINT and UHUGEINT, which hold
+    # 39 digits, as a Decimal(38, 0); the engine compares each by its own type and raises or keeps other rows than
+    # polars
     @pytest.mark.parametrize(
         ("data_type", "values", "predicate"),
         [
-            pytest.param(
-                "UUID",
-                ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "10eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
-                pl.col("a") > "B0000000-0000-0000-0000-000000000000",
-                id="UUID in text order",
-            ),
-            pytest.param(
-                "UUID",
-                ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "10eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
-                pl.col("a") == "abc",
-                id="UUID against text that is no UUID",
-            ),
-            pytest.param("JSON", ['{"a": 1}', "[1]"], pl.col("a") == "abc", id="JSON"),
             pytest.param("BIT", ["0101", "1"], pl.col("a") == b"\x01", id="BIT"),
             pytest.param("TIMETZ", ["12:00:00+05", "03:00:00+00"], pl.col("a") == datetime.time(12), id="TIMETZ"),
             pytest.param("TIME_NS", ["12:00:00.000001", "11:00:00"], pl.col("a") > datetime.time(12), id="TIME_NS"),
@@ -1002,6 +1007,37 @@ class TestColumnTypePushdown:
         assert_pushdown_matches_polars(lazy_df, pushdowns, predicate & pl.col("s").str.contains("x"), pushed=False)
         # A NULL test reads the same whatever the type
         assert_pushdown_matches_polars(lazy_df, pushdowns, pl.col("a").is_null(), pushed=True)
+
+    def test_uuid_and_json_compare_as_their_text(self, duckdb_cursor, pushdowns):
+        # polars reads both as their text; compared as a UUID or JSON, the engine raised on text that is neither and
+        # ordered and matched a UUID apart from its text
+        duckdb_cursor.execute("CREATE TABLE t (u UUID, j JSON, v VARCHAR, s VARCHAR)")
+        duckdb_cursor.execute(
+            """
+            INSERT INTO t VALUES
+                ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '{"a": 1}', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'x'),
+                ('10eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '[1]', 'zzz', 'x'),
+                ('ffffffff-ffff-ffff-ffff-ffffffffffff', '{"b": [1, 2]}', '1', 'y'),
+                (NULL, NULL, NULL, 'x')
+            """
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        uuid, upper = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "B0000000-0000-0000-0000-000000000000"
+        for predicate in (
+            pl.col("u") == uuid,
+            pl.col("u") == uuid.upper(),
+            pl.col("u") == "abc",
+            pl.col("u") < upper,
+            pl.col("u") > upper,
+            pl.col("u") == pl.col("v"),
+            pl.col("u") < pl.col("v"),
+            pl.col("j") == '{"a": 1}',
+            pl.col("j") == "abc",
+            pl.col("j") < "[2",
+        ):
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+            partly = predicate & pl.col("s").str.contains("x")
+            assert_pushdown_matches_polars(lazy_df, pushdowns, partly, pushed="partly")
 
     def test_hugeint_against_a_decimal_column_is_not_pushed(self, duckdb_cursor, pushdowns):
         # Compared with a DECIMAL(20,0), the engine casts 2**127 - 1, a 39 digit HUGEINT, to DECIMAL(38,0) and raises
