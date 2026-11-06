@@ -1,6 +1,9 @@
 import datetime
 import decimal
+import functools
+import itertools
 import json
+import math
 import operator
 import subprocess
 import sys
@@ -33,6 +36,7 @@ INTEGER_RANGES = {
     "INTEGER": (-(2**31), 2**31 - 1),
     "BIGINT": (-(2**63), 2**63 - 1),
     "UTINYINT": (0, 2**8 - 1),
+    "USMALLINT": (0, 2**16 - 1),
     "UINTEGER": (0, 2**32 - 1),
     "UBIGINT": (0, 2**64 - 1),
 }
@@ -43,39 +47,64 @@ ZONE_MISMATCH_ROWS = """
 """
 
 
+class Pushdowns(list):
+    """One entry per conjunct the source translated or refused, and the rows of each batch it handed polars."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows = []
+
+
 @pytest.fixture
 def pushdowns(monkeypatch):
     # The rows alone cannot tell a pushed filter from one polars applied after the source declined it.
-    seen = []
+    seen = Pushdowns()
     to_sql_expression = polars_io._tree_to_sql_expression
+    from_arrow = pl.from_arrow
 
     def recording(tree, *schema):
         expression = to_sql_expression(tree, *schema)
         try:
-            polars_io._pl_tree_to_sql(tree, *schema)
+            polars_io._predicate_to_sql(tree, *schema)
         except Exception as error:
             seen.append((tree, expression, type(error)))
         else:
             seen.append((tree, expression, None))
         return expression
 
+    def counting(batch, *args, **kwargs):
+        seen.rows.append(batch.num_rows)
+        return from_arrow(batch, *args, **kwargs)
+
     monkeypatch.setattr(polars_io, "_tree_to_sql_expression", recording)
+    monkeypatch.setattr(pl, "from_arrow", counting)
     return seen
 
 
 def assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, *, pushed, polars_predicate=None):
     """`pushed` holds for every conjunct of a top level AND, or is "partly" when some reached the engine."""
     pushdowns.clear()
+    pushdowns.rows.clear()
     actual = lazy_df.filter(predicate).collect()
-    expected = lazy_df.collect().filter(predicate if polars_predicate is None else polars_predicate)
+    arrived = sum(pushdowns.rows)
+    everything = lazy_df.collect()
+    expected = everything.filter(predicate if polars_predicate is None else polars_predicate)
     pl_testing.assert_frame_equal(actual, expected)
     assert pushdowns, predicate
     states = [expression is not None for _, expression, _ in pushdowns]
+    # A conjunct that translated proves nothing until the engine filters by it, so count the rows reaching polars
     if pushed == "partly":
         assert any(states), (predicate, pushdowns)
         assert not all(states), (predicate, pushdowns)
+        translated = [
+            polars_io._expression_from_tree(tree) for tree, expression, _ in pushdowns if expression is not None
+        ]
+        # The engine kept exactly the rows its conjuncts keep in polars, no more and no fewer
+        assert arrived == everything.filter(functools.reduce(operator.and_, translated)).height, (predicate, arrived)
+        assert arrived < everything.height, (predicate, arrived)
     else:
         assert all(state == pushed for state in states), (predicate, pushdowns)
+        assert arrived == (actual.height if pushed else everything.height), (predicate, arrived)
     for tree, expression, error in pushdowns:
         if expression is None:
             assert error is NotImplementedError, (predicate, tree, error)
@@ -294,6 +323,25 @@ class TestNonFiniteFloatLiteralPushdown:
         assert result.returncode == 0, result.stderr
 
 
+class TestTimeLiteralPushdown:
+    def test_literal_finer_than_a_microsecond_is_not_pushed(self, duckdb_cursor, pushdowns):
+        # A TIME holds microseconds, and truncated to them the literal reads as 12:00:00: as the whole predicate ==
+        # keeps that row, which polars drops, and beside a refused conjunct < drops it, which polars keeps
+        duckdb_cursor.execute("CREATE TABLE t (t TIME, s VARCHAR)")
+        duckdb_cursor.execute(
+            "INSERT INTO t VALUES ('12:00:00', 'x'), ('12:00:00.000001', 'x'), ('11:59:59.999999', 'x'), (NULL, 'x')"
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        nanosecond = pl.lit(12 * 3600 * 10**9 + 500, dtype=pl.Int64).cast(pl.Time)
+        for compare in ORDERINGS:
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("t"), nanosecond), pushed=False)
+            predicate = compare(pl.col("t"), nanosecond) & pl.col("s").str.contains("x")
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        microsecond = pl.lit(datetime.time(12, 0, 0, 1))
+        for compare in ORDERINGS:
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("t"), microsecond), pushed=True)
+
+
 class TestColumnCastPushdown:
     # A cast of the column, whether the user wrote it or polars inserted it to reconcile types, can truncate, turn an
     # overflow into NULL or change the type the comparison runs in, and the bare column carries none of that, so the
@@ -330,8 +378,8 @@ class TestColumnCastPushdown:
         )
         for compare in ORDERINGS:
             predicate = compare(pl.col("a").cast(pl.Datetime(unit, "UTC")), literal)
-            # polars drops a cast to the column's own unit and zone before the source sees the predicate
-            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=unit == "us")
+            # polars 2 drops a cast to the column's own unit and zone before the source sees the predicate
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=unit == "us" and POLARS_2)
 
     def test_numeric_column_cast_matches_polars(self, duckdb_cursor, pushdowns):
         duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
@@ -359,7 +407,7 @@ class TestColumnCastPushdown:
         assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
         assert lazy_df.filter(predicate).collect()["i"].to_list() == [200, None]
 
-    def test_fallback_filters_every_batch(self, duckdb_cursor, pushdowns, monkeypatch):
+    def test_fallback_filters_every_batch(self, duckdb_cursor, pushdowns):
         # One match in the first batch and one past it with empty batches between, so a read that stopped after the
         # first batch or at an empty one would lose the last match
         duckdb_cursor.execute(
@@ -367,21 +415,13 @@ class TestColumnCastPushdown:
             "FROM range(300000)"
         )
         lazy_df = duckdb_cursor.table("t").pl(lazy=True)
-        batches = []
-        from_arrow = pl.from_arrow
-
-        def counting(batch, *args, **kwargs):
-            batches.append(batch.num_rows)
-            return from_arrow(batch, *args, **kwargs)
-
-        monkeypatch.setattr(pl, "from_arrow", counting)
         # Pushed bare, the predicate kept every row; the non strict cast turns 200 into NULL
         predicate = pl.col("i").cast(pl.Int8, strict=False).is_not_null()
         assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
-        batches.clear()
+        pushdowns.rows.clear()
         assert lazy_df.filter(predicate).collect()["id"].to_list() == [100, 250000]
-        assert len(batches) > 1, batches
-        assert batches[0] <= 250000, batches
+        assert len(pushdowns.rows) > 1, pushdowns.rows
+        assert pushdowns.rows[0] <= 250000, pushdowns.rows
 
     def test_float_column_against_a_double_literal_matches_polars(self, duckdb_cursor, pushdowns):
         # polars widens the FLOAT column with a cast; pushed bare, the engine compared 0.1 as a FLOAT and dropped a row
@@ -560,7 +600,13 @@ class TestColumnCastPushdown:
             pytest.param(pl.Date, '{"Datetime": ["Microseconds", null]}', False, id="Date to Datetime(Microseconds)"),
             pytest.param(pl.Date, '{"Datetime": ["Milliseconds", null]}', False, id="Date to Datetime(Milliseconds)"),
             pytest.param(pl.Float32, '"Float64"', False, id="Float32 to Float64"),
-            pytest.param(pl.Int32, '"Float64"', False, id="Int32 to Float64"),
+            pytest.param(pl.Int32, '"Float64"', True, id="Int32 to Float64"),
+            pytest.param(pl.UInt32, '"Float64"', True, id="UInt32 to Float64"),
+            pytest.param(pl.Int64, '"Float64"', False, id="Int64 to Float64"),
+            pytest.param(pl.Decimal(15, 2), '"Float64"', True, id="Decimal(15,2) to Float64"),
+            pytest.param(pl.Decimal(16, 2), '"Float64"', False, id="Decimal(16,2) to Float64"),
+            pytest.param(pl.Int16, '{"Unknown": "Float"}', True, id="Int16 to the dynamic float"),
+            pytest.param(pl.Int32, '"Float32"', False, id="Int32 to Float32"),
         ],
     )
     def test_cast_rule_on_hand_built_trees(self, source, target, pushed):
@@ -580,12 +626,61 @@ class TestColumnCastPushdown:
             with pytest.raises(NotImplementedError):
                 _pl_tree_to_sql(tree, pl.Schema({"b": source}))
 
+    @pytest.mark.parametrize(
+        ("data_type", "value", "unit"),
+        [
+            ("DECIMAL(15,2)", "9999999999999.98", "0.01"),
+            ("DECIMAL(15,0)", "-999999999999998", "1"),
+            ("DECIMAL(15,15)", "0.123456789012345", "0.000000000000001"),
+            ("DECIMAL(9,4)", "-12345.6789", "0.0001"),
+            ("TINYINT", "-127", "1"),
+            ("SMALLINT", "32766", "1"),
+            ("INTEGER", "-2147483647", "1"),
+            ("UTINYINT", "254", "1"),
+            ("USMALLINT", "65534", "1"),
+            ("UINTEGER", "4294967294", "1"),
+        ],
+    )
+    def test_float_against_a_round_tripping_column_is_pushed(self, data_type, value, unit, duckdb_cursor, pushdowns):
+        # Such a value converts to a double no other value of its type shares, so the bare column compares with a
+        # double's shortest text, which the engine reads as an exact decimal, or with a DOUBLE column as polars' Float64
+        # cast of it does
+        value, unit = decimal.Decimal(value), decimal.Decimal(unit)
+        double = float(value)
+        doubles = [double, math.nextafter(double, math.inf), math.nextafter(double, -math.inf)]
+        duckdb_cursor.execute(f"CREATE TABLE t (a {data_type}, x DOUBLE)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?)",
+            [
+                (None if a is None else str(a), x)
+                for a, x in itertools.product(
+                    [value - unit, value, value + unit, None], [*doubles, math.nan, math.inf, -math.inf, None]
+                )
+            ],
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            for literal in doubles:
+                assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("a"), literal), pushed=True)
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("a"), pl.col("x")), pushed=True)
+
+    def test_float_against_a_sixteen_digit_decimal_is_not_pushed(self, duckdb_cursor, pushdowns):
+        # 99999999999999.99 and .98 share a double; pushed bare, the engine compares .99 with the double's shortest
+        # text, .98, and drops the row polars keeps
+        duckdb_cursor.execute("CREATE TABLE t (a DECIMAL(16,2))")
+        duckdb_cursor.execute("INSERT INTO t VALUES (99999999999999.99), (99999999999999.98), (1), (NULL)")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            predicate = compare(pl.col("a"), float(decimal.Decimal("99999999999999.99")))
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+
 
 class TestConjunctPushdown:
     # The source pushes the conjuncts of a top level AND that translate and, when one stays behind, applies the whole
     # predicate in polars to every batch; a row the predicate keeps has every conjunct TRUE, which the engine keeps.
-    def test_tpch_q6_shape_pushes_the_translatable_conjuncts(self, duckdb_cursor, pushdowns):
-        duckdb_cursor.execute("CREATE TABLE t (id INTEGER, ship DATE, disc DECIMAL(15,2), qty DECIMAL(15,2))")
+    @pytest.mark.parametrize(("disc_type", "pushed"), [("DECIMAL(15,2)", True), ("DECIMAL(16,2)", "partly")])
+    def test_tpch_q6_shape_pushes_the_translatable_conjuncts(self, disc_type, pushed, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute(f"CREATE TABLE t (id INTEGER, ship DATE, disc {disc_type}, qty DECIMAL(15,2))")
         # Rows the pushed date and quantity bounds keep but a discount bound or a NULL discount removes, so only the
         # polars pass over the batch can drop them
         duckdb_cursor.execute(
@@ -605,10 +700,13 @@ class TestConjunctPushdown:
             & (pl.col("disc") <= 0.07)
             & (pl.col("qty") < 24)
         )
-        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
-        # polars compares a DECIMAL with a Python float through a Float64 cast of the column, which is refused
-        assert refused_columns(pushdowns) == ["disc", "disc"]
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=pushed)
+        # polars compares a DECIMAL with a Python float through a Float64 cast of the column, pushed up to 15 digits
+        assert refused_columns(pushdowns) == ([] if pushed is True else ["disc", "disc"])
+        pushdowns.rows.clear()
         assert lazy_df.filter(predicate).collect()["id"].to_list() == [1, 5, 6, 12]
+        # Partly pushed, the seven rows inside the date and quantity bounds reach polars
+        assert sum(pushdowns.rows) == (4 if pushed is True else 7)
 
     def test_refused_conjunct_inside_or_keeps_the_rest_pushed(self, duckdb_cursor, pushdowns):
         duckdb_cursor.execute("CREATE TABLE t (id INTEGER, a INTEGER, b INTEGER, f FLOAT)")
@@ -640,3 +738,304 @@ class TestConjunctPushdown:
             eager.sort("id", descending=True).head(3),
         )
         pl_testing.assert_frame_equal(lazy_df.filter(predicate).select("i").collect(), eager.select("i"))
+
+
+class TestModulusPushdown:
+    # polars' integer modulus takes the divisor's sign, the engine's % the dividend's
+    @pytest.mark.parametrize("divisor", [3, -3, -1, 2**40])
+    @pytest.mark.parametrize("data_type", list(INTEGER_RANGES))
+    def test_modulus_takes_the_divisors_sign(self, data_type, divisor, duckdb_cursor, pushdowns):
+        low, high = INTEGER_RANGES[data_type]
+        values = sorted({low, high, *(value for value in (-7, -1, 0, 1, 7) if low <= value <= high)})
+        duckdb_cursor.execute(f"CREATE TABLE t (a {data_type})")
+        duckdb_cursor.executemany("INSERT INTO t VALUES (?)", [(value,) for value in [*values, None]])
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        floored = {value % divisor for value in values}
+        truncated = {abs(value) % abs(divisor) * (-1 if value < 0 else 1) for value in values}
+        # polars computes an unsigned 64 bit column against a negative divisor in Int64, through a narrowing cast
+        pushed = data_type != "UBIGINT" or divisor > 0
+        for remainder in sorted(floored | truncated):
+            assert_pushdown_matches_polars(lazy_df, pushdowns, (pl.col("a") % divisor) == remainder, pushed=pushed)
+
+    def test_modulus_with_a_negative_dividend(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (a INTEGER, s VARCHAR)")
+        duckdb_cursor.execute(
+            "INSERT INTO t VALUES (-1, 'x'), (2, 'x'), (-4, 'y'), (-7, 'x'), (5, 'x'), (3, 'x'), (NULL, 'x')"
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        # The engine's % gives -1 for -1 % 3 and for -1 % 2, which would drop the row
+        assert_pushdown_matches_polars(lazy_df, pushdowns, (pl.col("a") % 3) == 2, pushed=True)
+        predicate = ((pl.col("a") % 3) == 2) & pl.col("s").str.contains("x")
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
+        assert lazy_df.filter(predicate).collect()["a"].to_list() == [-1, 2, -7, 5]
+        predicate = (pl.col("a").cast(pl.Int64) % 2) == 1
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+        assert lazy_df.filter(predicate).collect()["a"].to_list() == [-1, -7, 5, 3]
+
+    @pytest.mark.parametrize(
+        ("columns", "rows", "predicate"),
+        [
+            pytest.param("a INTEGER", [(5,), (-5,), (None,)], (pl.col("a") % 0).is_null(), id="zero divisor"),
+            pytest.param(
+                "a INTEGER, b INTEGER",
+                [(5, 0), (-5, 3), (7, -3), (None, 1)],
+                (pl.col("a") % pl.col("b")) == 1,
+                id="column divisor",
+            ),
+            pytest.param("a DOUBLE", [(-1.5,), (1.5,), (None,)], (pl.col("a") % 1.0) == 0.5, id="DOUBLE"),
+            pytest.param(
+                "a DECIMAL(10,2)",
+                [("-1.50",), ("1.50",), (None,)],
+                (pl.col("a") % 1) == decimal.Decimal("0.5"),
+                id="DECIMAL",
+                marks=pytest.mark.skipif(not POLARS_2, reason="polars 1 has no decimal modulus"),
+            ),
+            pytest.param(
+                "a UBIGINT",
+                [(2**64 - 1,), (5,), (None,)],
+                (pl.col("a") % -3).is_null(),
+                id="UBIGINT by a negative divisor",
+            ),
+        ],
+    )
+    def test_modulus_that_differs_is_not_pushed(self, columns, rows, predicate, duckdb_cursor, pushdowns):
+        # Pushed as the engine's %, each raises on a zero divisor or keeps rows polars drops
+        duckdb_cursor.execute(f"CREATE TABLE t ({columns})")
+        duckdb_cursor.executemany(f"INSERT INTO t VALUES ({', '.join('?' * len(rows[0]))})", rows)
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert "Modulus" in json.dumps(tree)
+
+    @pytest.mark.parametrize(
+        ("dtype", "pushed"),
+        [(pl.Int32, True), (pl.UInt8, True), (pl.Float64, False), (pl.Decimal(10, 2), False), (pl.Boolean, False)],
+    )
+    def test_modulus_dividend_type_on_hand_built_trees(self, dtype, pushed):
+        # polars pairs a float or decimal dividend with a divisor of its own type, so only a built tree reaches this
+        tree = {
+            "BinaryExpr": {"left": {"Column": "a"}, "op": "Modulus", "right": {"Literal": {"Scalar": {"Int32": 3}}}}
+        }
+        if pushed:
+            assert _pl_tree_to_sql(tree, {"a": dtype}).startswith('(CASE WHEN ("a" % 3) < 0')
+        else:
+            with pytest.raises(NotImplementedError):
+                _pl_tree_to_sql(tree, {"a": dtype})
+
+    def test_modulus_without_the_schema_is_not_pushed(self):
+        # Without the source schema an integer column cannot be told from a float or decimal one
+        assert _predicate_to_expression((pl.col("a") % 3) == 2) is None
+
+
+class TestBooleanOperatorPushdown:
+    # polars applies & and | bitwise to integers and types them Boolean only between Booleans, where they are AND and
+    # OR, so they reach the engine only at the level of the predicate
+    def test_bitwise_and_or_is_not_pushed(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (a INTEGER, b INTEGER, s VARCHAR)")
+        duckdb_cursor.execute("INSERT INTO t VALUES (6, 3, 'x'), (4, 3, 'x'), (5, 2, 'y'), (8, 1, 'x'), (NULL, 1, 'x')")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        # Pushed as AND and OR, the engine reads the integers as Booleans
+        for predicate in (
+            (pl.col("a") & pl.col("b")) == 0,
+            ((pl.col("a") & pl.col("b")) == 0) & pl.col("s").str.contains("x"),
+            (pl.col("a") | pl.col("b")) == 7,
+        ):
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        predicate = ((pl.col("a") & pl.col("b")) == 0) & (pl.col("a") > 4)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
+        assert lazy_df.filter(predicate).collect().rows() == [(5, 2, "y"), (8, 1, "x")]
+        assert _predicate_to_expression((pl.col("a") & pl.col("b")) == 0) is None
+
+    def test_logical_and_or_is_pushed(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (p BOOLEAN, q BOOLEAN, i INTEGER, s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?, ?, ?)",
+            [
+                (p, q, i, "x" if i % 2 else "y")
+                for i, (p, q) in enumerate(itertools.product([True, False, None], repeat=2))
+            ],
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        # Both sides use three valued logic: TRUE OR NULL keeps a row, FALSE OR NULL drops it
+        assert_pushdown_matches_polars(lazy_df, pushdowns, pl.col("p") | pl.col("q"), pushed=True)
+        for predicate in (
+            (pl.col("p") | pl.col("q")) & pl.col("s").str.contains("x"),
+            (pl.col("p") | (pl.col("q") & (pl.col("i") > 2))) & pl.col("s").str.contains("x"),
+        ):
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
+
+
+class TestDecimalLiteralPushdown:
+    @pytest.mark.parametrize(
+        ("unscaled", "scale"),
+        [
+            (12345678901234567890123456789, 29),
+            (11111111111111111111111111111111111111, 38),
+            (10**37 + 1, 0),
+            (-1, 30),
+            (-5, 2),
+            (150, 2),
+            (0, 3),
+        ],
+    )
+    def test_decimal_literal_renders_its_exact_value(self, unscaled, scale):
+        # Decimal arithmetic under the default context rounds past 28 digits and writes small and large values in
+        # exponent form, which the engine reads as a DOUBLE
+        sql = _pl_tree_to_sql({"Scalar": {"Decimal": [unscaled, 38, scale]}})
+        value, data_type = duckdb.execute(f"SELECT {sql}, typeof({sql})").fetchone()
+        assert value == decimal.Decimal(f"{unscaled}E-{scale}")
+        assert data_type.startswith("DECIMAL" if scale else ("INTEGER", "BIGINT", "HUGEINT")), data_type
+
+    @pytest.mark.parametrize(
+        ("data_type", "value", "neighbour"),
+        [
+            ("DECIMAL(30,29)", "0.12345678901234567890123456789", "0.12345678901234567890123456788"),
+            # Untyped, the engine reads this literal, 39 digits with the zero before the point, as a DOUBLE
+            ("DECIMAL(38,38)", "0." + "1" * 38, "0." + "1" * 37 + "2"),
+            ("DECIMAL(38,0)", str(10**37 + 1), str(10**37)),
+            ("DECIMAL(38,30)", "-0." + "0" * 29 + "1", "-0." + "0" * 29 + "2"),
+            ("DECIMAL(15,2)", "1.5", "1.51"),
+        ],
+    )
+    def test_decimal_literal_is_exact(self, data_type, value, neighbour, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute(f"CREATE TABLE t (a {data_type}, s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?)", [(value, "x"), (neighbour, "x"), (value, "y"), (None, "x")]
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        literal = decimal.Decimal(value)
+        for compare in ORDERINGS:
+            assert_pushdown_matches_polars(lazy_df, pushdowns, compare(pl.col("a"), literal), pushed=True)
+        predicate = (pl.col("a") == literal) & pl.col("s").str.starts_with("x")
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
+        assert lazy_df.filter(predicate).collect()["s"].to_list() == ["x"]
+
+    @pytest.mark.parametrize(
+        ("columns", "rows", "predicate"),
+        [
+            pytest.param(
+                "a DECIMAL(38,0)", [(str(10**38 - 1),), ("1",)], pl.col("a") < decimal.Decimal("0.5"), id="38,0 < 0.5"
+            ),
+            pytest.param(
+                "a DECIMAL(38,38)", [("0." + "9" * 38,), ("0.5",)], pl.col("a") < decimal.Decimal("1"), id="38,38 < 1"
+            ),
+            pytest.param(
+                "a DECIMAL(37,0)", [(str(10**37 - 1),), ("1",)], pl.col("a") < decimal.Decimal("0.05"), id="37,0 < 0.05"
+            ),
+            pytest.param(
+                "a DECIMAL(30,10)",
+                [("9" * 20 + "." + "9" * 10,), ("0",)],
+                pl.col("a") < decimal.Decimal("1E-19"),
+                id="30,10 < 1E-19",
+            ),
+            pytest.param("a HUGEINT", [(2**127 - 1,), (-5,)], pl.col("a") < decimal.Decimal("0.5"), id="HUGEINT < 0.5"),
+            pytest.param(
+                "a DECIMAL(10,2), b DECIMAL(38,0)",
+                [("1.50", str(10**37)), ("2.00", "1")],
+                pl.col("a") < pl.col("b"),
+                id="10,2 < 38,0 column",
+            ),
+            pytest.param(
+                "a DECIMAL(20,0), b DECIMAL(38,20)",
+                [(str(10**19), "1"), ("0", "1")],
+                pl.col("a").cast(pl.Decimal(38, 1)) > pl.col("b"),
+                id="20,0 raised to scale 1 > 38,20 column",
+            ),
+        ],
+    )
+    def test_decimal_comparison_past_38_digits_is_not_pushed(self, columns, rows, predicate, duckdb_cursor, pushdowns):
+        # Refused until the engine compares such decimals: it clamps their common type to 38 digits and raises for a
+        # value that does not fit, where polars compares
+        duckdb_cursor.execute(f"CREATE TABLE t ({columns}, s VARCHAR)")
+        duckdb_cursor.executemany(
+            f"INSERT INTO t VALUES ({', '.join('?' * (len(rows[0]) + 1))})",
+            [(*row, "x") for row in [*rows, (None,) * len(rows[0])]],
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate & pl.col("s").str.contains("x"), pushed=False)
+
+    def test_decimal_comparison_at_38_digits_is_pushed(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (a DECIMAL(37,0), s VARCHAR)")
+        duckdb_cursor.execute(f"INSERT INTO t VALUES ({10**37 - 1}, 'x'), (0, 'x'), (NULL, 'x')")
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for compare in ORDERINGS:
+            assert_pushdown_matches_polars(
+                lazy_df, pushdowns, compare(pl.col("a"), decimal.Decimal("0.5")), pushed=True
+            )
+
+
+class TestColumnTypePushdown:
+    # UUID and JSON reach polars as a String, BIT as a Binary, TIME_NS and TIME WITH TIME ZONE as a Time, and HUGEINT
+    # and UHUGEINT, which hold 39 digits, as a Decimal(38, 0); the engine compares each by its own type and raises or
+    # keeps other rows than polars
+    @pytest.mark.parametrize(
+        ("data_type", "values", "predicate"),
+        [
+            pytest.param(
+                "UUID",
+                ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "10eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
+                pl.col("a") > "B0000000-0000-0000-0000-000000000000",
+                id="UUID in text order",
+            ),
+            pytest.param(
+                "UUID",
+                ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "10eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
+                pl.col("a") == "abc",
+                id="UUID against text that is no UUID",
+            ),
+            pytest.param("JSON", ['{"a": 1}', "[1]"], pl.col("a") == "abc", id="JSON"),
+            pytest.param("BIT", ["0101", "1"], pl.col("a") == b"\x01", id="BIT"),
+            pytest.param("TIMETZ", ["12:00:00+05", "03:00:00+00"], pl.col("a") == datetime.time(12), id="TIMETZ"),
+            pytest.param("TIME_NS", ["12:00:00.000001", "11:00:00"], pl.col("a") > datetime.time(12), id="TIME_NS"),
+            pytest.param("UHUGEINT", [2**128 - 1, 5], pl.col("a") < 0, id="UHUGEINT"),
+            pytest.param("HUGEINT", [2**127 - 1, 5], pl.col("a") == 5, id="HUGEINT"),
+        ],
+    )
+    def test_comparison_on_a_column_polars_reads_as_another_type_is_not_pushed(
+        self, data_type, values, predicate, duckdb_cursor, pushdowns
+    ):
+        duckdb_cursor.execute("SET TimeZone = 'UTC'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a {data_type}, s VARCHAR)")
+        duckdb_cursor.executemany("INSERT INTO t VALUES (?, 'x')", [(value,) for value in [*values, None]])
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate & pl.col("s").str.contains("x"), pushed=False)
+        # A NULL test reads the same whatever the type
+        assert_pushdown_matches_polars(lazy_df, pushdowns, pl.col("a").is_null(), pushed=True)
+
+    def test_hugeint_against_a_decimal_column_is_not_pushed(self, duckdb_cursor, pushdowns):
+        # Compared with a DECIMAL(20,0), the engine casts 2**127 - 1, a 39 digit HUGEINT, to DECIMAL(38,0) and raises
+        duckdb_cursor.execute("CREATE TABLE t (h HUGEINT, d DECIMAL(20,0), s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?, 'x')", [(2**127 - 1, "1"), (5, "6"), (None, "1"), (1, None)]
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        predicate = pl.col("h") > pl.col("d")
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate & pl.col("s").str.contains("x"), pushed=False)
+
+
+class TestCollationPushdown:
+    # polars compares text by its bytes, the engine by the column's or the session's collation unless told otherwise
+    @pytest.mark.parametrize(
+        ("column_type", "default_collation"),
+        [
+            ("VARCHAR COLLATE NOCASE", None),
+            ("VARCHAR COLLATE NOACCENT", None),
+            ("VARCHAR", "nocase"),
+            ("mood", "nocase"),
+        ],
+    )
+    def test_text_compares_by_its_bytes(self, column_type, default_collation, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TYPE mood AS ENUM ('x', 'X', 'e', 'é', 'Y')")
+        if default_collation is not None:
+            duckdb_cursor.execute(f"SET default_collation = '{default_collation}'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a {column_type}, s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?)", [("x", "x"), ("X", "x"), ("e", "x"), ("é", "x"), (None, "x"), ("x", "y")]
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        for predicate in (pl.col("a") == "x", pl.col("a") == "e", pl.col("a") < "Y", pl.col("a") > "e"):
+            assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+            partly = predicate & pl.col("s").str.contains("x")
+            assert_pushdown_matches_polars(lazy_df, pushdowns, partly, pushed="partly")
