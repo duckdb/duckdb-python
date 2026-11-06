@@ -140,8 +140,9 @@ public:
 	}
 
 public:
-	//! Read and written with the GIL held, which is what serialises the connections of a database here
-	std::shared_ptr<ModifiedMemoryFileSystem> filesystem;
+	//! The one owner of the Python file system's reference. Read and written with the GIL held, which is what
+	//! serialises the connections of a database here
+	unique_ptr<ModifiedMemoryFileSystem> filesystem;
 };
 
 } // namespace duckdb

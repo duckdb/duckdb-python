@@ -13,6 +13,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -290,6 +291,25 @@ static unique_ptr<TableRef> WithColumnAliases(unique_ptr<TableRef> copy, const v
 	return std::move(subquery);
 }
 
+//! Whether a table function's arguments name a file on the object store, which lives in this process's memory
+static bool ReadsTheObjectStore(const ParsedExpression &function) {
+	const auto prefix = string(PathLike::OBJECT_STORE_PROTOCOL) + "://";
+	vector<const ParsedExpression *> pending {&function};
+	while (!pending.empty()) {
+		auto &expression = *pending.back();
+		pending.pop_back();
+		if (expression.GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &literal = expression.Cast<ConstantExpression>().GetLiteral();
+			if (literal.kind == LiteralKind::STRING && StringUtil::StartsWith(literal.text, prefix)) {
+				return true;
+			}
+		}
+		ParsedExpressionIterator::EnumerateChildren(expression,
+		                                            [&](const ParsedExpression &child) { pending.push_back(&child); });
+	}
+	return false;
+}
+
 class SourceInliner {
 public:
 	SourceInliner(ClientContext &context_p, engine::SourceRegistry &registry_p)
@@ -322,7 +342,8 @@ public:
 		}
 	}
 
-	//! Whether something written in holds a Python object, which no database file can store
+	//! Whether the query reads a Python object or a file on the object store, which live only in this process and
+	//! which no database file can store
 	bool HoldsProcessLocalInput() const {
 		return process_local;
 	}
@@ -512,9 +533,14 @@ private:
 			}
 			break;
 		}
-		case TableReferenceType::TABLE_FUNCTION:
-			steps.push_back(Task::OfExpression(ref->Cast<TableFunctionRef>().function));
+		case TableReferenceType::TABLE_FUNCTION: {
+			auto &function = ref->Cast<TableFunctionRef>().function;
+			if (function && ReadsTheObjectStore(*function)) {
+				process_local = true;
+			}
+			steps.push_back(Task::OfExpression(function));
 			break;
+		}
 		case TableReferenceType::EXPRESSION_LIST:
 			for (auto &row : ref->Cast<ExpressionListRef>().values) {
 				for (auto &value : row) {
@@ -629,53 +655,19 @@ bool DuckDBPySeam::IsRegisteredView(ClientContext &context, const string &name) 
 	return registered;
 }
 
-//! The FROM of the first SELECT a query reaches, through its CTEs and set operations
-static unique_ptr<TableRef> &FirstFrom(QueryNode &node) {
-	switch (node.type) {
-	case QueryNodeType::SELECT_NODE:
-		return node.Cast<SelectNode>().from_table;
-	case QueryNodeType::CTE_NODE:
-		return FirstFrom(*node.Cast<CTENode>().child);
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		return FirstFrom(*node.Cast<RecursiveCTENode>().left);
-	case QueryNodeType::SET_OPERATION_NODE:
-		return FirstFrom(*node.Cast<SetOperationNode>().children[0]);
-	default:
-		throw InternalException("a view body renders as a SELECT, which carries its sources on its FROM");
-	}
-}
-
-//! The reference of a FROM whose copy keeps its dependency: a join's or a pivot's copy drops it, so the leftmost
-//! leaf under them carries it, and a copy of the view (its rename) keeps owning its sources
-static unique_ptr<TableRef> &OwningReference(unique_ptr<TableRef> &ref) {
-	switch (ref->type) {
-	case TableReferenceType::JOIN:
-		return OwningReference(ref->Cast<JoinRef>().left);
-	case TableReferenceType::PIVOT:
-		return OwningReference(ref->Cast<PivotRef>().source);
-	default:
-		return ref;
-	}
-}
-
-//! The view's query keeps the handles on a FROM: the catalog entry owns the query and a bound copy shares the
-//! dependency, so an object store entry the query names by its path lives as long as the view
+//! The view reads its query through a subquery that holds the handles: the catalog entry owns the query, and every
+//! copy the engine makes of a subquery reference (a bind, a rename) keeps its dependency, whatever the query reads
 static void OwnSourcesInView(SQLStatement &statement, shared_ptr<DependencyItem> sources) {
 	auto &info = statement.Cast<CreateStatement>().info->Cast<CreateViewInfo>();
-	auto &first = FirstFrom(*info.query->node);
-	if (!first) {
-		throw InternalException("a view body renders as a SELECT with a FROM, which carries its sources");
-	}
-	auto &from = OwningReference(first);
-	// A FROM the inliner copied out of the registry shares its dependency with the registry's entry, which must not
-	// come to hold the handles; the view's own reference gets a dependency of its own with the entry's items
-	auto owned = make_shared_ptr<ExternalDependency>();
-	if (from->external_dependency) {
-		from->external_dependency->ScanDependencies(
-		    [&](const string &name, shared_ptr<DependencyItem> item) { owned->AddDependency(name, std::move(item)); });
-	}
-	owned->AddDependency("sources", std::move(sources));
-	from->external_dependency = std::move(owned);
+	auto subquery = make_uniq<SubqueryRef>(std::move(info.query));
+	auto dependency = make_shared_ptr<ExternalDependency>();
+	dependency->AddDependency("sources", std::move(sources));
+	subquery->external_dependency = std::move(dependency);
+	auto select = make_uniq<SelectNode>();
+	select->select_list.push_back(make_uniq<StarExpression>());
+	select->from_table = std::move(subquery);
+	info.query = make_uniq<SelectStatement>();
+	info.query->node = std::move(select);
 }
 
 static void CreateView(DuckDBPyConnection &self, const nb::object &name, const string &sql, bool temporary,

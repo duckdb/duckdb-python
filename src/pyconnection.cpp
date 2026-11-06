@@ -1739,17 +1739,23 @@ nb::object DuckDBPyConnection::ArrowSourcesNodes() {
 }
 
 ObjectStore::~ObjectStore() {
-	// The Python file system dies with the database, on whatever thread drops the last connection, so the reference
-	// goes under the guard; during interpreter teardown it is left to the interpreter, as every held Python object is
-	if (nb::detail::cleanup_guard guard {}) {
-		filesystem.reset();
-	} else if (filesystem) {
-		filesystem->release();
+	if (!filesystem) {
+		return;
 	}
+	// The store dies with the database, on whatever thread drops the last connection, so the reference goes through
+	// the shutdown gate as the PythonFilesystem over the same object does
+	try {
+		PyUtil::QueryGil gil(nullptr);
+		filesystem->dec_ref();
+	} catch (...) { // NOLINT
+	}
+	// Leaked when the gate refused, as the reference can then no longer be dropped
+	filesystem->release();
 }
 
 ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
-	if (!internal_object_filesystem) {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	if (!object_store) {
 		auto &context = *con.GetConnection().context;
 		auto store = ObjectCache::GetObjectCache(context).GetOrCreate<ObjectStore>(ObjectStore::ObjectType());
 		// The GIL is the lock here: a mutex held while the Python file system is built would deadlock against a
@@ -1763,17 +1769,17 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 				throw InvalidInputException(
 				    "This operation could not be completed because required module 'fsspec' is not installed");
 			}
-			auto built = std::make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
+			auto built = make_uniq<ModifiedMemoryFileSystem>(modified_memory_fs());
 			auto wrapped = WrapFilesystem(*built);
 			if (!store->filesystem) {
-				D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
+				D_ASSERT(!FileSystemIsRegistered(PathLike::OBJECT_STORE_PROTOCOL));
 				con.GetDatabase().GetFileSystem().RegisterSubSystem(std::move(wrapped));
 				store->filesystem = std::move(built);
 			}
 		}
-		internal_object_filesystem = store->filesystem;
+		object_store = std::move(store);
 	}
-	return *internal_object_filesystem;
+	return *object_store->filesystem;
 }
 
 bool DuckDBPyConnection::IsInteractive() {

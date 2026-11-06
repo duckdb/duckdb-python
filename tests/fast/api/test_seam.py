@@ -1751,6 +1751,17 @@ class TestCreateView:
         assert connection.execute("SELECT * FROM p").fetchall() == [(1,)]
         connection.close()
 
+    def test_a_renamed_view_keeps_its_sources_when_its_first_select_reads_no_table(self, con):
+        _ = pytest.importorskip("fsspec")
+        handle = con._register_filelike(io.StringIO("c1\n2"))
+        sql = f"SELECT 1 AS c1 UNION ALL SELECT * FROM read_csv('{handle.name}') ORDER BY c1"
+        con._create_view("w", sql, sources=[handle])
+        del handle
+        gc.collect()
+        con.execute("ALTER VIEW w RENAME TO renamed")
+        gc.collect()
+        assert con.execute("SELECT * FROM renamed").fetchall() == [(1,), (2,)]
+
     def test_in_memory_a_persistent_view_of_a_python_object_is_created(self, con):
         handle = con._register_source(pd.DataFrame({"a": [1]}))
         con._create_view("p", f'SELECT * FROM "{handle.name}"')
