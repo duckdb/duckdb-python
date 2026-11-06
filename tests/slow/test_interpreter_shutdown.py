@@ -456,6 +456,49 @@ ORDINARY_SHUTDOWN = [
     ),
     pytest.param(
         """
+        import duckdb
+
+        con = duckdb.connect()
+        rel = con.sql("select 1 as a").map(lambda df: df)
+        assert rel.fetchall() == [(1,)]
+        print("BODY_DONE", flush=True)
+        """,
+        (),
+        True,
+        id="mapped_relation_alive_at_exit",
+        marks=_needs("pandas"),
+    ),
+    pytest.param(
+        """
+        import duckdb
+
+        con = duckdb.connect()
+        con.create_function("plus_one", lambda x: x + 1, ["BIGINT"], "BIGINT")
+        assert con.sql("select plus_one(1)").fetchall() == [(2,)]
+        print("BODY_DONE", flush=True)
+        """,
+        (),
+        True,
+        id="function_of_a_connection_alive_at_exit",
+        marks=_needs("numpy"),
+    ),
+    pytest.param(
+        """
+        import duckdb
+
+        con = duckdb.connect()
+        cur = con.cursor()
+        con.create_function("plus_one", lambda x: x + 1, ["BIGINT"], "BIGINT")
+        assert cur.sql("select plus_one(1)").fetchall() == [(2,)]
+        print("BODY_DONE", flush=True)
+        """,
+        (),
+        True,
+        id="function_of_a_connection_and_its_cursor_alive_at_exit",
+        marks=_needs("numpy"),
+    ),
+    pytest.param(
+        """
         import threading
         import time
         import duckdb
@@ -710,6 +753,25 @@ ORDINARY_SHUTDOWN = [
 @pytest.mark.parametrize(("script", "expected_lines", "leak_free"), ORDINARY_SHUTDOWN)
 def test_ordinary_shutdown(script: str, expected_lines: tuple[str, ...], *, leak_free: bool) -> None:
     _assert_clean_exit(_run(script), expected_lines, leak_free=leak_free)
+
+
+@_needs("numpy")
+def test_function_of_a_file_database_alive_at_exit(tmp_path) -> None:
+    # connect() reaches a file database by its name, so its callables are never reported to the cycle collector: the
+    # connection alive at exit leaves the callable to the end of the process, where nanobind reports it as leaked, even
+    # once the connection that registered it is gone.
+    script = """
+        import sys
+        import duckdb
+
+        first = duckdb.connect(sys.argv[1])
+        first.create_function("plus_one", lambda x: x + 1, ["BIGINT"], "BIGINT")
+        second = duckdb.connect(sys.argv[1])
+        del first
+        print(second.sql("select plus_one(41)").fetchall(), flush=True)
+        print("BODY_DONE", flush=True)
+    """
+    _assert_clean_exit(_run(script, str(tmp_path / "functions.db")), ("[(42,)]",), leak_free=False)
 
 
 def test_ordinary_shutdown_checkpoints_default_connection(tmp_path) -> None:

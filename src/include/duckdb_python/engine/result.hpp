@@ -52,6 +52,19 @@ private:
 class ConnectionState;
 class ConnectionClaim;
 
+//! How many results of a database there are whose statements can still run engine tasks, which the cycle collector
+//! reads: a DB-API result, a relation's result, a script's kept rows or an Arrow stream over one, while its statement
+//! has rows left to produce, since engine workers keep running it between fetches and a stream can run it without a
+//! connection. Shared, since one can outlive the database.
+//! It goes up only under the GIL. While the collector runs, that happens only in a finalizer or callback it runs,
+//! after it found the unreachable set; the resurrection check that follows recounts from fresh reference counts, where
+//! reporting less keeps more. It goes down without the GIL on whatever thread lets go, an engine thread scanning a
+//! stream too: a drop during a pass can only make the DatabaseFunctions object report from a later traversal of the
+//! pass on, and the collector keeps reachable what it is shown without having subtracted it.
+struct ResultCount {
+	atomic<idx_t> results {0};
+};
+
 //! A submitted statement. Retention is settled by the first consumer: a fetch opens a stream, Retain and the
 //! Take calls keep every row. Every call that drives the query claims the connection, takes the client context
 //! lock and may wait for running tasks, so callers must not hold a lock those tasks need.
@@ -131,6 +144,10 @@ public:
 	//! Renders the rows of a retained result
 	string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 
+	//! Counts the result on its database while engine tasks of its statement can still run, until its statement has
+	//! produced its last row or ends; nothing for a statement that already completed, or on a connection that never
+	//! attached to a record. Call with the GIL held, once.
+	void CountWhileRunning();
 	//! Ends the query if it is still running. Idempotent, and safe while another thread is fetching.
 	void Close();
 	void EndIfRunning();
@@ -158,6 +175,8 @@ private:
 	template <class FORMAT>
 	unique_ptr<typename FORMAT::T> FetchStreamUnit(const InterruptCheck &check);
 	void EndStream();
+	//! At every state from which no engine task of the statement runs again; any thread, once
+	void StopCounting() noexcept;
 
 private:
 	unique_ptr<QueryResult> handle;
@@ -185,6 +204,9 @@ private:
 	//! An Arrow result never defers its metadata, so the copy happens at submission, while the producing
 	//! transaction is live
 	ArrowSchemaWrapper arrow_schema;
+	//! Set once, before counted_running is; counted_running says whether the result is still counted on it
+	std::shared_ptr<ResultCount> running_count;
+	atomic<bool> counted_running {false};
 };
 
 //! Runs a result to its end and keeps every row, as a blocking call

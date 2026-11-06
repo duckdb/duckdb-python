@@ -87,6 +87,10 @@ public:
 		return admitted_during_exit;
 	}
 
+	//! The count of the database's results that can still run, which a result submitted here counts on; set once,
+	//! under the GIL, when the connection attaches to its database's record, so a statement finds it without a lookup
+	std::shared_ptr<ResultCount> results;
+
 private:
 	friend class ConnectionClaim;
 
@@ -250,6 +254,9 @@ public:
 	StatementGroup(StatementGroup &&) = default;
 
 public:
+	ClientContext &Context() const {
+		return session.Context();
+	}
 	//! The first statement, parsed but not run; null for a group without statements. Only before Next. Inside an
 	//! explicit transaction, an error parsing it aborts the transaction, as in the engine.
 	optional_ptr<const SQLStatement> First();

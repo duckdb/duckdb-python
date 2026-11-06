@@ -82,12 +82,8 @@ class TestRemoveFunction:
         def other_func(x):
             return x
 
-        with pytest.raises(
-            duckdb.NotImplementedException,
-            match="A function by the name of 'func' is already created, creating multiple functions with the "
-            "same name is not supported yet, please remove it first",
-        ):
-            con.create_function("func", other_func, [VARCHAR], VARCHAR)
+        con.create_function("func", other_func, [VARCHAR], VARCHAR)
+        assert con.sql("select func('test'), func(3)").fetchall() == [("test", 3)]
 
         con.remove_function("func")
 

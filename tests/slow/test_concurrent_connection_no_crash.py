@@ -168,9 +168,10 @@ def test_435_concurrent_execute_fetchall_multi_connection():
 # Reporter sees hard crashes on Windows + Python 3.12 under heavy executemany
 # workloads with Python primitives flowing into the result graph. The fix
 # removes the unconditional `py::gil_scoped_release` from
-# `DuckDBPyResult::~DuckDBPyResult` (and tightens the same scope in
-# `DuckDBPyConnection::Close` so the `case_insensitive_map_t<unique_ptr<ExternalDependency>>`
-# is destroyed with the GIL held).
+# `DuckDBPyResult::~DuckDBPyResult`. `DuckDBPyConnection::Close` runs the
+# engine teardown without the GIL; the engine's copies of a Python function
+# only borrow its callable, and the database's record of callables takes
+# the GIL itself when that teardown releases them.
 #
 # These tests are skipped off-Windows. We verified empirically by
 # temp-reverting the fix and rebuilding that the workloads below do NOT
@@ -246,11 +247,10 @@ _REPRO_456_UDF_DESTRUCTOR = textwrap.dedent(
 
 _REPRO_456_CLOSE_REGISTERED = textwrap.dedent(
     """
-    # Stress the Close() path that destroys `registered_functions`. Each
-    # connection has a UDF registered, so closing it tears down the
-    # `case_insensitive_map_t<unique_ptr<ExternalDependency>>` which
-    # transitively owns the Python callable. This must happen with the GIL
-    # held — see duckdb-python#456.
+    # Stress the Close() path that destroys the database. Each connection
+    # has a UDF registered, so closing the only connection destroys the
+    # database during an engine teardown that runs without the GIL, and the
+    # release of the callable must take the GIL itself.
     import duckdb
     from duckdb.sqltypes import INTEGER
 
@@ -263,7 +263,7 @@ _REPRO_456_CLOSE_REGISTERED = textwrap.dedent(
         conn.create_function('identity', identity, [INTEGER], INTEGER)
         # Make sure the UDF actually got bound to the connection.
         ok = conn.execute('SELECT identity(7)').fetchone()[0] == 7
-        conn.close()  # triggers registered_functions.clear()
+        conn.close()  # destroys the database, which releases the callable
         if ok:
             successes += 1
 
@@ -286,12 +286,12 @@ def test_456_destructor_with_python_refs_in_result_graph():
 
 
 @_skip_456_off_windows
-def test_456_close_clears_registered_functions_with_gil():
-    """``close()`` must hold the GIL while clearing ``registered_functions``.
+def test_456_close_with_a_registered_function_does_not_crash():
+    """``close()`` must not crash when the database it destroys holds a Python function.
 
-    Destroying those ``ExternalDependency`` entries transitively
-    decrements pybind-owned Python references; doing so without the GIL
-    is undefined behaviour.
+    Closing the only connection destroys the database without the GIL, so
+    the database's release of its Python callables must take the GIL
+    itself.
     """
     result = _run(_REPRO_456_CLOSE_REGISTERED, timeout=60.0)
     _assert_no_crash_and_min_successes(result, min_successes=500)

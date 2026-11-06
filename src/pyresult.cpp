@@ -701,10 +701,14 @@ nb::object DuckDBPyResult::FetchArrowCapsule(const idx_t rows_per_batch) {
 		throw InvalidInputException("There is no query result");
 	}
 	CheckBatchSize(rows_per_batch);
-	auto inner_stream = FetchArrowArrayStream(rows_per_batch);
-	auto arrow_stream = new ArrowArrayStream();
-	*arrow_stream = inner_stream;
-	return nb::capsule(arrow_stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
+	auto arrow_stream = make_uniq<ArrowArrayStream>();
+	ArrowArrayStreamGuard guard {FetchArrowArrayStream(rows_per_batch)};
+	// Made while the guard owns the stream: nanobind never calls the destructor of a capsule it fails to make
+	nb::object capsule = nb::capsule(arrow_stream.get(), "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);
+	auto owned_by_capsule = arrow_stream.release();
+	*owned_by_capsule = guard.stream;
+	guard.stream.release = nullptr;
+	return capsule;
 }
 
 nb::list DuckDBPyResult::GetDescription(const vector<string> &names, const vector<LogicalType> &types) {

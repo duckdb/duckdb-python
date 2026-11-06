@@ -165,9 +165,12 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    return conn->RegisterScalarUDF(name, udf, arguments, return_type, type, null_handling, exception_handling,
 		                                   side_effects);
 	    },
-	    "Create a DuckDB function out of the passing in Python function so it can be used in queries", nb::arg("name"),
-	    nb::arg("function"), nb::arg("parameters") = nb::none(), nb::arg("return_type").none() = nb::none(),
-	    nb::kw_only(), nb::arg("type") = PythonUDFType::NATIVE,
+	    "Create a DuckDB function out of the passed Python function so it can be used in queries. The function "
+	    "belongs to the connection's database, so every connection of that database can call it. A new signature "
+	    "under an existing name adds an overload, and a signature the name already has raises CatalogException. A "
+	    "native function converts its arguments with the settings of the connection the query runs on.",
+	    nb::arg("name"), nb::arg("function"), nb::arg("parameters") = nb::none(),
+	    nb::arg("return_type").none() = nb::none(), nb::kw_only(), nb::arg("type") = PythonUDFType::NATIVE,
 	    nb::arg("null_handling") = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	    nb::arg("exception_handling") = PythonExceptionHandling::FORWARD_ERROR, nb::arg("side_effects") = false,
 	    nb::arg("connection").none() = nb::none());
@@ -179,8 +182,9 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    }
 		    return conn->UnregisterUDF(name);
 	    },
-	    "Remove a previously created function", nb::arg("name"), nb::kw_only(),
-	    nb::arg("connection").none() = nb::none());
+	    "Remove the functions created from Python under the given name, for every connection of the database. "
+	    "Overloads of the name that were not created from Python, such as those of a built in function, stay.",
+	    nb::arg("name"), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "sqltype",
 	    [](const string &type_str, std::shared_ptr<DuckDBPyConnection> conn = nullptr) {
