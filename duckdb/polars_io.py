@@ -1,8 +1,10 @@
 from __future__ import annotations  # noqa: D100
 
 import datetime
+import functools
 import io
 import json
+import operator
 import typing
 from decimal import Decimal
 
@@ -12,7 +14,7 @@ from polars.io.plugins import register_io_source
 import duckdb
 
 if typing.TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Mapping
 
     import typing_extensions
 
@@ -38,13 +40,16 @@ def _predicate_to_expression(predicate: pl.Expr) -> duckdb.Expression | None:
     return _tree_to_sql_expression(tree)
 
 
-def _tree_to_sql_expression(tree: _ExpressionTree) -> duckdb.Expression | None:
+def _tree_to_sql_expression(
+    tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | None = None
+) -> duckdb.Expression | None:
     """Convert an already-parsed Polars expression tree to a DuckDB expression.
 
+    ``schema`` is the polars schema of the scanned relation; without it no cast of a column translates.
     Returns None if the tree contains a node we cannot translate to SQL.
     """
     try:
-        return duckdb.SQLExpression(_pl_tree_to_sql(tree))
+        return duckdb.SQLExpression(_pl_tree_to_sql(tree, schema))
     except Exception:
         # If the conversion fails, we return None
         return None
@@ -119,6 +124,16 @@ def _strip_dynamic_predicates(tree: typing.Any) -> tuple[_ExpressionTree | None,
     return tree, False
 
 
+def _conjuncts(tree: _ExpressionTree) -> list[_ExpressionTree]:
+    """The operands of a top level AND chain, nested on either side, or the tree itself."""
+    bin_expr = tree.get("BinaryExpr")
+    if isinstance(bin_expr, dict) and bin_expr.get("op") == "And":
+        left, right = bin_expr.get("left"), bin_expr.get("right")
+        if isinstance(left, dict) and isinstance(right, dict):
+            return [*_conjuncts(left), *_conjuncts(right)]
+    return [tree]
+
+
 def _expression_from_tree(tree: _ExpressionTree) -> pl.Expr:
     """Rebuild a polars expression from a serialized tree (inverse of meta.serialize)."""
     return pl.Expr.deserialize(io.BytesIO(json.dumps(tree).encode()), format="json")
@@ -157,11 +172,43 @@ def _escape_sql_identifier(identifier: str) -> str:
     return f'"{escaped}"'
 
 
-def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
+_INTEGER_RANGES = {
+    f"{prefix}Int{bits}": (0, 2**bits - 1) if prefix else (-(2 ** (bits - 1)), 2 ** (bits - 1) - 1)
+    for prefix in ("", "U")
+    for bits in (8, 16, 32, 64, 128)
+}
+
+
+def _widens_exactly(column: pl.DataType | None, target: object) -> bool:
+    """Whether a cast of a column of dtype ``column`` to the serialized dtype ``target`` keeps every value.
+
+    Only integer to integer and decimal to decimal count: the engine compares those bare columns exactly. An integer
+    to a decimal keeps every value too, but the engine raises where the common decimal type of a comparison needs more
+    than 38 digits, and polars casts a Date past 294247 or DATE 'infinity' to a NULL Datetime.
+    """
+    kind = target.get("Literal") if isinstance(target, dict) else None
+    if isinstance(kind, str) and kind in _INTEGER_RANGES and str(column) in _INTEGER_RANGES:
+        low, high = _INTEGER_RANGES[str(column)]
+        target_low, target_high = _INTEGER_RANGES[kind]
+        return target_low <= low and high <= target_high
+    if isinstance(kind, dict) and isinstance(column, pl.Decimal) and column.precision is not None:
+        precision_scale = kind.get("Decimal")
+        if not (isinstance(precision_scale, list) and len(precision_scale) == 2):
+            return False
+        precision, scale = precision_scale
+        if not (isinstance(precision, int) and isinstance(scale, int)):
+            return False
+        return scale >= column.scale and precision - scale >= column.precision - column.scale
+    return False
+
+
+def _pl_tree_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | None = None) -> str:
     """Recursively convert a Polars expression tree (as JSON) to a SQL string.
 
     Parameters:
         tree (dict): JSON-deserialized expression tree from Polars
+        schema (Mapping): the polars schema of the scanned relation, which decides whether a cast of a column widens
+            exactly; without it no cast of a column translates
 
     Returns:
         str: SQL expression string
@@ -187,7 +234,7 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         assert isinstance(lhs, dict), f"LHS of a {node_type} should be a dict but got {type(lhs)}"
         assert isinstance(op, str), f"The op of a {node_type} should be a str but got {type(op)}"
         assert isinstance(rhs, dict), f"RHS of a {node_type} should be a dict but got {type(rhs)}"
-        return f"({_pl_tree_to_sql(lhs)} {_pl_operation_to_sql(op)} {_pl_tree_to_sql(rhs)})"
+        return f"({_pl_tree_to_sql(lhs, schema)} {_pl_operation_to_sql(op)} {_pl_tree_to_sql(rhs, schema)})"
     if node_type == "Column":
         # A reference to a column name
         # Wrap in quotes to handle special characters
@@ -199,7 +246,7 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
         # Recursively process dynamic or literal values
         val_tree = tree[node_type]
         assert isinstance(val_tree, dict), f"A {node_type} should be a dict but got {type(val_tree)}"
-        return _pl_tree_to_sql(val_tree)
+        return _pl_tree_to_sql(val_tree, schema)
 
     if node_type == "Int":
         # Direct integer literals
@@ -235,7 +282,7 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
 
         if "Boolean" in func_dict:
             func = func_dict["Boolean"]
-            arg_sql = _pl_tree_to_sql(inputs[0])
+            arg_sql = _pl_tree_to_sql(inputs[0], schema)
 
             if func == "IsNull":
                 return f"({arg_sql} IS NULL)"
@@ -250,18 +297,28 @@ def _pl_tree_to_sql(tree: _ExpressionTree) -> str:
     if node_type == "Cast":
         cast_tree = tree[node_type]
         assert isinstance(cast_tree, dict), f"A {node_type} should be a dict but got {type(cast_tree)}"
+        cast_expr = cast_tree["expr"]
+        assert isinstance(cast_expr, dict), f"A {node_type} should be a dict but got {type(cast_expr)}"
+        column = cast_expr.get("Column")
+        if (
+            schema is not None
+            and isinstance(column, str)
+            and _widens_exactly(schema.get(column), cast_tree.get("dtype"))
+        ):
+            # No cast option changes a value the target type holds, so the bare column compares the same
+            return _pl_tree_to_sql(cast_expr, schema)
+        # Any other cast of a column can truncate, turn an overflow into NULL or change the type the comparison runs
+        # in, and the bare column carries none of that
+        if "Literal" not in cast_expr:
+            msg = "A cast of a column or an expression cannot be pushed down"
+            raise NotImplementedError(msg)
         options = cast_tree.get("options")
         if options not in ("Strict", "NonStrict"):
             msg = f"Only NonStrict/Strict casts can be safely unwrapped, got {options!r}"
             raise NotImplementedError(msg)
-        cast_expr = cast_tree["expr"]
-        assert isinstance(cast_expr, dict), f"A {node_type} should be a dict but got {type(cast_expr)}"
-        # polars folds a cast of a literal before the source sees it; a cast of a column can truncate, turn an
-        # overflow into NULL or change the type the comparison runs in, and the bare column carries none of that
-        if "Literal" not in cast_expr:
-            msg = "A cast of a column or an expression cannot be pushed down"
-            raise NotImplementedError(msg)
-        return _pl_tree_to_sql(cast_expr)
+        # polars folds a cast of a literal before a scan sees it, so only unoptimized trees such as those
+        # _predicate_to_expression builds reach this, and the literal renders without the cast's target type
+        return _pl_tree_to_sql(cast_expr, schema)
 
     if node_type == "Scalar":
         # Detect format: old style (dtype/value) or new style (direct type key)
@@ -395,12 +452,19 @@ def duckdb_source(relation: duckdb.DuckDBPyRelation, schema: pl.schema.Schema) -
             tree = json.loads(predicate.meta.serialize(format="json"))
             real_tree, had_dynamic = _strip_dynamic_predicates(tree)
             if real_tree is not None:
-                # We have a real predicate; if possible, push it down to DuckDB.
-                duck_predicate = _tree_to_sql_expression(real_tree)
-                if duck_predicate is None:
-                    # Could not push it down: re-apply it polars-side. Rebuild the
-                    # expression from the stripped tree so we never hand polars the
-                    # dynamic node it cannot lower.
+                # A row the predicate keeps satisfies every conjunct, so the engine may filter by the conjuncts that
+                # translate as long as polars applies the whole predicate when one does not.
+                conjuncts = _conjuncts(real_tree)
+                pushed = [
+                    expression
+                    for expression in (_tree_to_sql_expression(conjunct, schema) for conjunct in conjuncts)
+                    if expression is not None
+                ]
+                if pushed:
+                    duck_predicate = functools.reduce(operator.and_, pushed)
+                if len(pushed) < len(conjuncts):
+                    # Rebuild the expression from the stripped tree so we never hand polars the dynamic node it
+                    # cannot lower.
                     fallback_predicate = _expression_from_tree(real_tree) if had_dynamic else predicate
         # Try to pushdown filter, if one exists
         if duck_predicate is not None:
