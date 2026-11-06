@@ -19,40 +19,6 @@
 
 namespace duckdb {
 
-//! Counts one result or stream on its database for as long as it lives
-class CountedResult {
-public:
-	CountedResult() = default;
-	explicit CountedResult(std::shared_ptr<engine::ResultCount> count_p) : count(std::move(count_p)) {
-		DUCKDB_PY_ASSERT_GIL_HELD();
-		if (count) {
-			count->results.fetch_add(1);
-		}
-	}
-	CountedResult(CountedResult &&other) noexcept : count(std::move(other.count)) {
-	}
-	CountedResult &operator=(CountedResult &&other) noexcept {
-		Release();
-		count = std::move(other.count);
-		return *this;
-	}
-	CountedResult(const CountedResult &) = delete;
-	CountedResult &operator=(const CountedResult &) = delete;
-	~CountedResult() {
-		Release();
-	}
-
-private:
-	void Release() noexcept {
-		if (count) {
-			count->results.fetch_sub(1);
-			count = nullptr;
-		}
-	}
-
-	std::shared_ptr<engine::ResultCount> count;
-};
-
 struct DuckDBPyResult {
 public:
 	static constexpr idx_t DEFAULT_ARROW_BATCH_SIZE = 131072;
@@ -66,10 +32,6 @@ public:
 public:
 	const shared_ptr<engine::Result> &EngineResult() const {
 		return result;
-	}
-	//! Counts the result on its database, for a result that does not belong to a connection; call with the GIL held
-	void CountOn(std::shared_ptr<engine::ResultCount> count) {
-		counted = CountedResult(std::move(count));
 	}
 	//! Pins the result for one call of the relational surface and refuses a second call that overlaps it, as the
 	//! connection refuses a second call of its own. The DB-API surface is serialised by the connection lock instead.
@@ -166,8 +128,6 @@ private:
 
 private:
 	shared_ptr<engine::Result> result;
-	//! Moved to the Arrow stream that takes the result over
-	CountedResult counted;
 	//! Set while a call of the relational surface runs on this result
 	atomic<bool> in_use {false};
 	int64_t rowcount_override = -1;

@@ -139,12 +139,12 @@ Result::~Result() {
 	StopCounting();
 }
 
-void Result::CountWhileRunning(std::shared_ptr<ResultCount> count) {
+void Result::CountWhileRunning() {
 	DUCKDB_PY_ASSERT_GIL_HELD();
-	if (state != State::PENDING || counted_running || !count) {
+	if (state != State::PENDING || counted_running || !connection_state->results) {
 		return;
 	}
-	running_count = std::move(count);
+	running_count = connection_state->results;
 	running_count->results.fetch_add(1);
 	counted_running = true;
 	// Registered at submission, the result can meanwhile have been ended on another thread, the exit hook's: every

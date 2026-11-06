@@ -99,14 +99,37 @@ void KeptCallables::Detach(DuckDBPyConnection &connection) {
 	auto held = std::move(connection.functions);
 }
 
-list<PyObjectHolder>::iterator KeptCallables::Keep(list<PyObjectHolder> &pending) noexcept {
+list<KeptCallables::Kept>::iterator KeptCallables::Keep(list<Kept> &pending) noexcept {
 	auto kept = pending.begin();
 	callables.splice(callables.end(), pending, kept);
 	return kept;
 }
 
-void KeptCallables::TakeBack(list<PyObjectHolder>::iterator kept, list<PyObjectHolder> &pending) noexcept {
+void KeptCallables::TakeBack(list<Kept>::iterator kept, list<Kept> &pending) noexcept {
 	pending.splice(pending.end(), callables, kept);
+}
+
+void KeptCallables::ReleaseUnused() {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	if (!releases->pending) {
+		return;
+	}
+	list<idx_t> ids;
+	{
+		lock_guard<mutex> guard(releases->lock);
+		ids.splice(ids.end(), releases->released);
+		releases->pending = false;
+	}
+	// Moved out before any is released: a finalizer can register or remove a function, which changes callables
+	list<Kept> unused;
+	for (auto id : ids) {
+		for (auto kept = callables.begin(); kept != callables.end(); ++kept) {
+			if (kept->id == id) {
+				unused.splice(unused.end(), callables, kept);
+				break;
+			}
+		}
+	}
 }
 
 void KeptCallables::List(MapFunctionInfo &map) {
@@ -163,8 +186,8 @@ int DatabaseFunctions::Traverse(visitproc visit, void *arg) const {
 	if (!record || !record->Reports()) {
 		return 0;
 	}
-	for (auto &callable : record->callables) {
-		Py_VISIT(callable.obj.ptr());
+	for (auto &kept : record->callables) {
+		Py_VISIT(kept.callable.obj.ptr());
 	}
 	for (auto map : record->maps) {
 		Py_VISIT(map->function.obj.ptr());
@@ -190,13 +213,29 @@ unique_ptr<ReplacementScanData> DuckDBPyConnection::CreateCallableRecord(bool ca
 
 void DuckDBPyConnection::AttachFunctions() {
 	DUCKDB_PY_ASSERT_GIL_HELD();
-	KeptCallables::Of(*con.GetDatabase().instance).Attach(*this);
+	auto &record = KeptCallables::Of(*con.GetDatabase().instance);
+	record.Attach(*this);
+	engine::ConnectionState::Get(*con.GetConnection().context)->results = record.results;
 }
 
 void DuckDBPyConnection::DetachFunctions() {
 	if (functions_record) {
 		functions_record->Detach(*this);
 	}
+}
+
+void DuckDBPyConnection::ReleaseUnusedCallables() {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	if (!functions_record || !functions_record->releases->pending) {
+		return;
+	}
+	auto record = functions_record;
+	// Held while the callables go, since a finalizer they run can close this connection and with it the database that
+	// owns the record
+	auto database = con.ShareDatabase();
+	record->ReleaseUnused();
+	nb::gil_scoped_release release;
+	database.reset();
 }
 
 DuckDBPyConnection::~DuckDBPyConnection() {
@@ -432,12 +471,17 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	m.def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
 	      "Check if a filesystem with the provided name is currently registered", nb::arg("name"));
 	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
-	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
+	      "Create a DuckDB function out of the passed Python function so it can be used in queries. The function "
+	      "belongs to the connection's database, so every connection of that database can call it. A new signature "
+	      "under an existing name adds an overload, and a signature the name already has raises CatalogException. A "
+	      "native function converts its arguments with the settings of the connection the query runs on.",
 	      nb::arg("name"), nb::arg("function"), nb::arg("parameters") = nb::none(),
 	      nb::arg("return_type").none() = nb::none(), nb::kw_only(), nb::arg("type") = PythonUDFType::NATIVE,
 	      nb::arg("null_handling") = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	      nb::arg("exception_handling") = PythonExceptionHandling::FORWARD_ERROR, nb::arg("side_effects") = false);
-	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
+	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF,
+	      "Remove the functions created from Python under the given name, for every connection of the database. "
+	      "Overloads of the name that were not created from Python, such as those of a built in function, stay.",
 	      nb::arg("name"));
 	m.def("sqltype", &DuckDBPyConnection::Type, "Create a type object by parsing the 'type_str' string",
 	      nb::arg("type_str"));
@@ -633,14 +677,6 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
-//! A DB-API result belongs to its connection, but engine workers keep running a streaming statement between fetches,
-//! so the result counts on its database while its statement can still run
-static void CountDbapiResult(engine::Result &result) {
-	if (auto database = result.TryGetDatabase()) {
-		result.CountWhileRunning(KeptCallables::Of(*database).results);
-	}
-}
-
 //! Python functions are registered in the system catalog's main schema
 static optional_ptr<CatalogEntry> GetSystemFunction(ClientContext &context, const string &name) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
@@ -651,36 +687,60 @@ static optional_ptr<CatalogEntry> GetSystemFunction(ClientContext &context, cons
 }
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
-	// Held from here on, as close() takes it too: the check below releases the GIL while it uses the context
-	ConnectionLockGuard conn_lock(*this);
-	auto &connection = con.GetConnection();
-	auto &context = *connection.context;
-	// Held from the check to the change, so no result can open in between and be ended by it
-	engine::ConnectionClaim claim(context);
-	engine::VerifyNoOpenResult(context);
+	{
+		// Held from here on, as close() takes it too: the check below releases the GIL while it uses the context
+		ConnectionLockGuard conn_lock(*this);
+		auto &connection = con.GetConnection();
+		auto &context = *connection.context;
+		// Held from the check to the change, so no result can open in between and be ended by it
+		engine::ConnectionClaim claim(context);
+		engine::VerifyNoOpenResult(context);
 
-	bool removed = false;
-	context.RunFunctionInTransaction([&]() {
-		auto entry = GetSystemFunction(context, name);
-		// A built in function is an internal entry too, so only the marker keeps the drop below off it
-		if (!entry || !IsPythonFunction(*entry)) {
-			return;
+		bool removed = false;
+		context.RunFunctionInTransaction([&]() {
+			auto entry = GetSystemFunction(context, name);
+			if (!entry || entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+				return;
+			}
+			auto &existing = entry->Cast<ScalarFunctionCatalogEntry>();
+			// A built in function is an internal entry too, so only the marker tells the overloads apart
+			ScalarFunctionSet others {existing.name};
+			for (auto &overload : existing.functions.functions) {
+				if (!IsPythonOverload(*overload)) {
+					others.AddFunction(*overload);
+				}
+			}
+			if (others.Size() == existing.functions.Size()) {
+				return;
+			}
+			auto &catalog = Catalog::GetSystemCatalog(context);
+			if (others.Size() > 0) {
+				// The engine drops whole entries only, so the other overloads take the entry's place, with what
+				// the entry says about them, as its own overload alter keeps it
+				CreateScalarFunctionInfo info(std::move(others));
+				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+				info.descriptions = existing.descriptions;
+				info.alias_of = existing.alias_of;
+				info.extension_name = existing.extension_name;
+				catalog.CreateFunction(context, info);
+			} else {
+				DropInfo info;
+				info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+				info.SetName(Identifier(name));
+				info.allow_drop_internal = true;
+				info.cascade = false;
+				info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+				catalog.DropEntry(context, info);
+			}
+			removed = true;
+		});
+		// Thrown after the transaction, since an error inside it would invalidate a transaction the user has open
+		if (!removed) {
+			throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
+			                            name);
 		}
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		DropInfo info;
-		info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
-		info.SetName(Identifier(name));
-		info.allow_drop_internal = true;
-		info.cascade = false;
-		info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
-		catalog.DropEntry(context, info);
-		removed = true;
-	});
-	// Thrown after the transaction, since an error inside it would invalidate a transaction the user has open
-	if (!removed) {
-		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
-		                            name);
 	}
+	ReleaseUnusedCallables();
 	return shared_from_this();
 }
 
@@ -698,6 +758,13 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
 	// Converted before the claim, because a type name is parsed on this connection, which refuses while claimed
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
 	                                       null_handling, exception_handling, side_effects);
+	PublishScalarUDF(name, udf, scalar_function);
+	ReleaseUnusedCallables();
+	return shared_from_this();
+}
+
+void DuckDBPyConnection::PublishScalarUDF(const string &name, const nb::callable &udf,
+                                          ScalarFunction &scalar_function) {
 	ConnectionLockGuard conn_lock(*this);
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
@@ -710,8 +777,10 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
 		context.CancelTransaction();
 	}
 	auto &record = KeptCallables::Of(*context.db);
-	list<PyObjectHolder> pending;
-	pending.emplace_back(nb::borrow<nb::object>(udf));
+	auto id = record.next_id++;
+	list<KeptCallables::Kept> pending;
+	pending.emplace_back(id, nb::borrow<nb::object>(udf));
+	ReleaseWhenUnused(scalar_function, record, id);
 	record.GiveFunctionsToConnections();
 	CreateScalarFunctionInfo info(scalar_function);
 	ErrorData refusal;
@@ -742,6 +811,12 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
 				}
 				if (info.functions.MergeFunctionSet(existing.functions)) {
 					info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+					// So a built in entry keeps its name and what it says about its overloads with a Python overload
+					// added, as it does after the overload goes
+					info.SetFunctionName(existing.name);
+					info.descriptions = existing.descriptions;
+					info.alias_of = existing.alias_of;
+					info.extension_name = existing.extension_name;
 				}
 			}
 			Catalog::GetSystemCatalog(context).CreateFunction(context, info);
@@ -758,7 +833,6 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
 		record.TakeBack(kept, pending);
 		refusal.Throw();
 	}
-	return shared_from_this();
 }
 
 static int ConnectionTraverse(PyObject *self, visitproc visit, void *arg) {
@@ -875,6 +949,9 @@ void DuckDBPyConnection::SupersedeResult(bool cancel) {
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::object &query, nb::object params_p) {
 	nb::gil_scoped_acquire gil;
+	// Before the statements, so a finalizer of a released callable that uses this connection cannot replace their
+	// result
+	ReleaseUnusedCallables();
 	ConnectionLockGuard conn_lock(*this);
 	if (params_p.is_none()) {
 		params_p = nb::list();
@@ -931,7 +1008,8 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::ob
 		// TODO: should we throw?
 		return nullptr;
 	}
-	CountDbapiResult(*result);
+	// A DB-API result belongs to its connection, but engine workers keep running a streaming statement between fetches
+	result->CountWhileRunning();
 	auto py_result = std::make_shared<DuckDBPyResult>(std::move(result));
 	// The rowcount counts what the parameterized statement changed, whichever statement's rows the result holds
 	if (query_result) {
@@ -1124,6 +1202,9 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
 	nb::gil_scoped_acquire gil;
+	// Before the statements, so a finalizer of a released callable that uses this connection cannot replace their
+	// result
+	ReleaseUnusedCallables();
 	ConnectionLockGuard conn_lock(*this);
 
 	auto statements = GetStatements(query);
@@ -1161,7 +1242,8 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 		// TODO: should we throw?
 		return nullptr;
 	}
-	CountDbapiResult(*res);
+	// A DB-API result belongs to its connection, but engine workers keep running a streaming statement between fetches
+	res->CountWhileRunning();
 	auto py_result = std::make_shared<DuckDBPyResult>(std::move(res));
 	con.SetResult(std::make_unique<DbapiResult>(std::move(py_result)));
 	return shared_from_this();
@@ -1326,10 +1408,8 @@ nb::tuple DuckDBPyConnection::PrepareScript(const nb::object &query, const nb::o
 	nb::object kept_result = nb::none();
 	// A kept result that returns no rows only stands in for a last statement that returns none, which the caller runs
 	if (kept && kept->Properties().return_type == StatementReturnType::QUERY_RESULT) {
-		auto kept_rows = std::make_shared<DuckDBPyResult>(std::move(kept));
-		// Found from the statements' own context, since the connection may have closed while they ran without the GIL
-		kept_rows->CountOn(KeptCallables::Of(*statements.Context().db).results);
-		kept_result = nb::cast(std::move(kept_rows));
+		kept->CountWhileRunning();
+		kept_result = nb::cast(std::make_shared<DuckDBPyResult>(std::move(kept)));
 	}
 	if (!last_statement) {
 		if (with_statement) {
@@ -1822,8 +1902,8 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 			arrow->Retain(DuckDBPyConnection::CheckSignals);
 		}
 	}
+	arrow->CountWhileRunning();
 	DuckDBPyResult converted(std::move(arrow), std::move(names));
-	converted.CountOn(KeptCallables::Of(*session.Context().db).results);
 	if (reader) {
 		return nb::cast(converted.FetchRecordBatchReader(batch_size));
 	}

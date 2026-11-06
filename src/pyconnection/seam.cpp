@@ -731,6 +731,8 @@ static std::shared_ptr<DuckDBPyResult> Submit(DuckDBPyConnection &self, const st
 	} else if (format_name != "rows") {
 		throw InvalidInputException("format must be 'rows', 'arrow' or 'stream', not '%s'", format_name);
 	}
+	// Before the statement, so a finalizer of a released callable that uses this connection runs before it
+	self.ReleaseUnusedCallables();
 	auto session = OpenSession(self);
 	identifier_map_t<BoundParameterData> named_values;
 	if (!values.is_none()) {
@@ -751,10 +753,9 @@ static std::shared_ptr<DuckDBPyResult> Submit(DuckDBPyConnection &self, const st
 			result->SettleClaimed(DuckDBPyConnection::CheckSignals);
 		}
 	}
-	auto submitted = std::make_shared<DuckDBPyResult>(std::move(result));
-	// Found from the session's context, since the connection may have closed once the claim ended
-	submitted->CountOn(KeptCallables::Of(*session.Context().db).results);
-	return submitted;
+	// On the result's own connection state, since the connection may have closed once the claim ended
+	result->CountWhileRunning();
+	return std::make_shared<DuckDBPyResult>(std::move(result));
 }
 
 //! Whether reading the object uses it up: an Arrow stream, or a reader of batches or of IPC messages

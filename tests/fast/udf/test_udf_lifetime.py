@@ -489,18 +489,22 @@ OWNS_ITS_CALLABLE = [
             def f(x):
                 if not entered.is_set():
                     entered.set()
-                    closed.wait(10)
+                    assert closed.wait(10)
                 return f"got:{x}"
 
             return f
 
 
         register(cur, waits_for_the_close)
+        closer_errors = []
 
 
         def closer():
-            entered.wait(10)
-            cur.close()
+            try:
+                assert entered.wait(10)
+                cur.close()
+            except Exception as error:
+                closer_errors.append(repr(error))
             closed.set()
 
 
@@ -508,8 +512,9 @@ OWNS_ITS_CALLABLE = [
         t.start()
         step(lambda: len(con.sql("SELECT myf(range::VARCHAR) FROM range(3)").fetchall()))
         t.join()
+        step(lambda: closer_errors)
         """,
-        [ok(3)],
+        [ok(3), ok([])],
     ),
     case(
         "an_open_result_survives_destroying_its_connection",
@@ -637,27 +642,16 @@ OWNS_ITS_CALLABLE = [
     case(
         "a_close_while_a_registration_converts_its_types_closes_and_the_registration_fails_as_closed",
         """
-        import time
-
         con = duckdb.connect()
         converting = threading.Event()
-        registering = threading.Event()
         closed = threading.Event()
         outcomes = []
 
 
-        class Parameter:
-            @property
-            def __class__(self):
-                converting.set()
-                registering.wait(10)
-                raise ValueError("parameter conversion failed")
-
-
         def slow_type():
-            registering.set()
+            converting.set()
             # The registration converts its types outside the connection's lock, so the close finishes meanwhile
-            closed.wait(10)
+            assert closed.wait(10)
             return int
 
 
@@ -665,33 +659,27 @@ OWNS_ITS_CALLABLE = [
             return x
 
 
-        def attempt(name, call):
+        def registers():
             try:
-                call()
-                outcomes.append((name, "returned"))
+                con.create_function("myf", f, ["BIGINT"], "BIGINT")
+                outcomes.append("returned")
             except Exception as e:
-                outcomes.append((name, type(e).__name__))
-            if name == "close":
-                closed.set()
+                outcomes.append(type(e).__name__)
 
 
-        executes = threading.Thread(target=attempt, args=("execute", lambda: con.execute("SELECT ?", [Parameter()])))
-        executes.start()
-        converting.wait(10)
-        closes = threading.Thread(target=attempt, args=("close", con.close))
-        closes.start()
-        time.sleep(0.3)
-        registers = threading.Thread(
-            target=attempt, args=("create_function", lambda: con.create_function("myf", f, ["BIGINT"], "BIGINT"))
-        )
-        registers.start()
-        for thread in (registers, closes, executes):
-            thread.join(20)
-        step(lambda: sorted(outcomes))
+        registration = threading.Thread(target=registers)
+        registration.start()
+        step(lambda: converting.wait(10))
+        step(con.close)
+        closed.set()
+        registration.join(20)
+        step(lambda: outcomes)
         step(lambda: con.sql("SELECT myf(41)").fetchall())
         """,
         [
-            ok([("close", "returned"), ("create_function", "ConnectionException"), ("execute", "ValueError")]),
+            ok(True),
+            ok(None),
+            ok(["ConnectionException"]),
             raised("ConnectionException", "Connection Error: Connection has already been closed"),
         ],
     ),
@@ -723,7 +711,7 @@ OWNS_ITS_CALLABLE = [
         [ok(True), ok(False)],
     ),
     case(
-        "a_removed_callable_is_finalized_when_the_database_closes",
+        "a_removed_callable_is_finalized_once_its_function_is_gone",
         """
         con1 = duckdb.connect(DB)
         con2 = duckdb.connect(DB)
@@ -753,7 +741,7 @@ OWNS_ITS_CALLABLE = [
         gc.collect()
         step(lambda: list(finalized))
         """,
-        [GOT_B, ok([]), ok([]), ok([]), ok([True])],
+        [GOT_B, ok([True]), ok([True]), ok([True]), ok([True])],
     ),
     case(
         "exit_with_a_function_on_the_default_connection",
@@ -937,7 +925,7 @@ REMOVES_FOR_EVERY_CONNECTION = [
         [not_registered("host"), ok(None), ok([(1,)])],
     ),
     case(
-        "a_removed_callable_stays_alive_after_a_transaction_that_used_it_ends",
+        "a_removed_callable_stays_alive_until_a_transaction_that_used_it_ends",
         """
         con = duckdb.connect()
         other_con = con.cursor()
@@ -947,9 +935,10 @@ REMOVES_FOR_EVERY_CONNECTION = [
         step(lambda: con.remove_function("myf"))
         step(lambda: alive(ref))
         other_con.commit()
+        con.execute("SELECT 1")
         step(lambda: alive(ref))
         """,
-        [GOT_B, ok(None), ok(True), ok(True)],
+        [GOT_B, ok(None), ok(True), ok(False)],
     ),
     case(
         "a_relation_rebinds_after_remove_function",
@@ -999,17 +988,18 @@ REMOVES_FOR_EVERY_CONNECTION = [
         [ok(None), GOT_B, MISSING],
     ),
     case(
-        "remove_function_keeps_the_callable_alive",
+        "remove_function_releases_the_callable",
         """
         con = duckdb.connect()
         ref = weakly_registered(con)
+        step(lambda: con.sql(CALL).fetchall())
         con.remove_function("myf")
         step(lambda: alive(ref))
         """,
-        [ok(True)],
+        [GOT_B, ok(False)],
     ),
     case(
-        "removal_by_another_connection_keeps_the_callable_alive",
+        "removal_by_another_connection_releases_the_callable",
         """
         con = duckdb.connect()
         cur = con.cursor()
@@ -1017,10 +1007,10 @@ REMOVES_FOR_EVERY_CONNECTION = [
         step(lambda: con.remove_function("myf"))
         step(lambda: alive(ref))
         """,
-        [ok(None), ok(True)],
+        [ok(None), ok(False)],
     ),
     case(
-        "a_callable_replaced_under_its_name_stays_alive",
+        "a_callable_replaced_under_its_name_is_released",
         """
         con = duckdb.connect()
         ref = weakly_registered(con)
@@ -1029,20 +1019,76 @@ REMOVES_FOR_EVERY_CONNECTION = [
         step(lambda: con.sql(CALL).fetchall())
         step(lambda: alive(ref))
         """,
-        [ok([("other:b",)]), ok(True)],
+        [ok([("other:b",)]), ok(False)],
     ),
     case(
-        "a_removed_callable_stays_alive_after_its_prepared_statement_is_deallocated",
+        "a_removed_callable_stays_alive_until_its_prepared_statement_is_deallocated",
         """
         con = duckdb.connect()
         ref = weakly_registered(con)
         con.execute("PREPARE p AS SELECT myf($1)")
         con.remove_function("myf")
         step(lambda: alive(ref))
+        step(lambda: con.execute("EXECUTE p('b')").fetchall())
         con.execute("DEALLOCATE p")
+        # Released at the start of the next statement on the database, outside the one that dropped the last copy
+        con.execute("SELECT 1")
         step(lambda: alive(ref))
         """,
-        [ok(True), ok(True)],
+        [ok(True), GOT_B, ok(False)],
+    ),
+    case(
+        "a_removed_callable_stays_alive_while_a_reader_still_runs_it",
+        """
+        con = duckdb.connect()
+        cur = con.cursor()
+        ref = weakly_registered(con)
+        reader = con.sql("SELECT myf(range::VARCHAR) AS s FROM range(5000)").to_arrow_reader(100)
+        first = reader.read_next_batch()
+        cur.remove_function("myf")
+        step(lambda: alive(ref))
+        step(lambda: first.num_rows + sum(batch.num_rows for batch in reader))
+        del reader, first
+        # Released at the next statement on the database, the first point outside engine locks after the reader goes
+        con.sql("SELECT 1").fetchall()
+        step(lambda: alive(ref))
+        """,
+        [ok(True), ok(5000), ok(False)],
+        NEEDS_PYARROW,
+    ),
+    case(
+        "a_removed_callable_stays_alive_while_an_index_expression_holds_its_function",
+        """
+        con = duckdb.connect()
+        ref = weakly_registered(con)
+        con.execute("CREATE TABLE t (x VARCHAR)")
+        con.execute("INSERT INTO t VALUES ('1')")
+        con.execute("CREATE INDEX i ON t (myf(x))")
+        con.remove_function("myf")
+        con.execute("SELECT 1")
+        step(lambda: alive(ref))
+        step(lambda: con.execute("INSERT INTO t VALUES (NULL)").fetchall())
+        con.execute("DROP INDEX i")
+        con.execute("SELECT 1")
+        step(lambda: alive(ref))
+        """,
+        [ok(True), ok([(1,)]), ok(False)],
+    ),
+    case(
+        "a_removed_callable_stays_alive_while_another_connection_still_runs_it",
+        """
+        con = duckdb.connect()
+        cur = con.cursor()
+        ref = weakly_registered(con)
+        res = con.execute("SELECT myf(range::VARCHAR) FROM range(5000)")
+        step(res.fetchone)
+        step(lambda: cur.remove_function("myf"))
+        step(lambda: alive(ref))
+        step(lambda: len(res.fetchall()))
+        con.execute("SELECT 1")
+        step(lambda: alive(ref))
+        """,
+        [ok(("got:0",)), ok(None), ok(True), ok(4999), ok(False)],
     ),
     case(
         "a_rolled_back_remove_function_restores_the_function",
@@ -1062,6 +1108,22 @@ REMOVES_FOR_EVERY_CONNECTION = [
 
 # create_function adds an overload to an existing scalar function, from any connection, and refuses a signature it has.
 ADDS_AN_OVERLOAD = [
+    case(
+        "a_built_in_keeps_its_description_and_alias_through_a_python_overload_and_its_removal",
+        """
+        con = duckdb.connect()
+        DESCRIBE = "SELECT description, examples, alias_of FROM duckdb_functions() WHERE function_name = 'split'"
+        before = con.sql(DESCRIBE).fetchall()
+        step(lambda: before)
+        register(con, name="split")
+        con.remove_function("split")
+        step(lambda: con.sql(DESCRIBE).fetchall() == before)
+        """,
+        [
+            ok([("Splits the `string` along the `separator`.", ["split('hello-world', '-')"], "string_split")]),
+            ok(True),
+        ],
+    ),
     case(
         "the_same_connection_adds_an_overload",
         """
@@ -1159,15 +1221,34 @@ ADDS_AN_OVERLOAD = [
         [BUILT_IN_TAKEN, ok([("a",)])],
     ),
     case(
-        "a_function_with_a_built_in_overload_cannot_be_removed",
+        "removing_the_python_overload_of_a_built_in_name_keeps_the_built_in",
         """
         con = duckdb.connect()
         cur = con.cursor()
-        register(con, three, params=("BOOLEAN", "BOOLEAN", "BOOLEAN"), name="lower")
-        step(lambda: con.remove_function("lower"))
+        register(con, three, params=("BOOLEAN", "BOOLEAN", "BOOLEAN"), name="LOWER")
         step(lambda: cur.sql("SELECT lower('A'), lower(true, true, true)").fetchall())
+        step(lambda: con.remove_function("Lower"))
+        step(lambda: cur.sql("SELECT lower('A')").fetchall())
+        step(lambda: cur.sql("SELECT lower(true, true, true)").fetchall())
+        step(lambda: con.remove_function("lower"))
+        register(con, three, params=("BOOLEAN", "BOOLEAN", "BOOLEAN"), name="LOWER")
+        step(lambda: cur.sql("SELECT lower('A'), lower(true, true, true)").fetchall())
+        ENTRY = "SELECT DISTINCT function_name FROM duckdb_functions() WHERE lower(function_name) = 'lower'"
+        step(lambda: cur.sql(ENTRY).fetchall())
         """,
-        [not_registered("lower"), ok([("a", "three:True")])],
+        [
+            ok([("a", "three:True")]),
+            ok(None),
+            ok([("a",)]),
+            raised(
+                "BinderException",
+                "Binder Error: No function matches the given name and argument types 'lower(BOOLEAN, BOOLEAN, "
+                "BOOLEAN)'. You might need to add explicit type casts.",
+            ),
+            not_registered("lower"),
+            ok([("a", "three:True")]),
+            ok([("lower",)]),
+        ],
     ),
     case(
         "removing_a_function_of_python_overloads_from_several_connections_frees_its_name",
@@ -1284,9 +1365,107 @@ ADDS_AN_OVERLOAD = [
 ]
 
 # Removing a function must run no Python code of its callable, such as a finalizer that uses the engine, because
-# the engine drops a removed function while it holds its catalog locks; the callable is released when its database
-# closes, where such a finalizer must be free to use the engine and every connection.
+# the engine drops a removed function while it holds its catalog locks; the callable is released outside them, after
+# a removal or before the next statement, or when its database closes, where such a finalizer must be free to use the
+# engine and every connection.
 RELEASES_OUTSIDE_ENGINE_LOCKS = [
+    case(
+        "a_finalizer_that_uses_the_connection_runs_before_a_statement_and_leaves_it_its_result",
+        """
+        con = duckdb.connect()
+        cur = con.cursor()
+        con.execute("CREATE TABLE log (s VARCHAR)")
+
+
+        class Logger:
+            def __call__(self, x):
+                return x
+
+            def __del__(self):
+                con.execute("INSERT INTO log VALUES ('finalized')")
+
+
+        cur.create_function("myf", Logger(), ["VARCHAR"], "VARCHAR")
+        cur.execute("PREPARE p AS SELECT myf($1)")
+        cur.remove_function("myf")
+        # The close drops the prepared statement, the function's last copy, where nothing is released
+        cur.close()
+        step(lambda: con.execute("SELECT 42").fetchall())
+        step(lambda: con.sql("SELECT * FROM log").fetchall())
+        """,
+        [ok([(42,)]), ok([("finalized",)])],
+    ),
+    case(
+        "a_finalizer_that_uses_the_connection_runs_before_executemany_and_leaves_it_its_result",
+        """
+        con = duckdb.connect()
+        cur = con.cursor()
+        con.execute("CREATE TABLE log (s VARCHAR)")
+
+
+        class Logger:
+            def __call__(self, x):
+                return x
+
+            def __del__(self):
+                con.execute("INSERT INTO log VALUES ('finalized')")
+
+
+        cur.create_function("myf", Logger(), ["VARCHAR"], "VARCHAR")
+        cur.execute("PREPARE p AS SELECT myf($1)")
+        cur.remove_function("myf")
+        cur.close()
+        con.executemany("SELECT ?::INTEGER", [[42]])
+        step(con.fetchall)
+        step(lambda: con.sql("SELECT * FROM log").fetchall())
+        """,
+        [ok([(42,)]), ok([("finalized",)])],
+    ),
+    case(
+        "a_finalizer_that_closes_the_releasing_connection_ends_its_call_cleanly",
+        """
+        class Closer:
+            def __init__(self, targets):
+                self.targets = targets
+
+            def __call__(self, x):
+                return f"got:{x}"
+
+            def __del__(self):
+                for target in self.targets:
+                    target.close()
+
+
+        # Released inside remove_function
+        con = duckdb.connect()
+        con.create_function("myf", Closer([con]), ["VARCHAR"], "VARCHAR")
+        step(lambda: con.sql(CALL).fetchall())
+        step(lambda: con.remove_function("myf"))
+        step(lambda: con.sql("SELECT 1").fetchall())
+        # Released before execute() runs its statement
+        con = duckdb.connect()
+        con.create_function("myf", Closer([con]), ["VARCHAR"], "VARCHAR")
+        con.execute("PREPARE p AS SELECT myf($1)")
+        con.remove_function("myf")
+        con.execute("DEALLOCATE p")
+        step(lambda: con.execute("SELECT 1"))
+        # Released before a relation submits its statement
+        con = duckdb.connect()
+        con.create_function("myf", Closer([con]), ["VARCHAR"], "VARCHAR")
+        con.execute("PREPARE p AS SELECT myf($1)")
+        con.remove_function("myf")
+        con.execute("DEALLOCATE p")
+        rel = con.sql("SELECT 1")
+        step(rel.fetchall)
+        """,
+        [
+            ok([("got:b",)]),
+            ok(None),
+            raised("ConnectionException", "Connection Error: Connection has already been closed"),
+            CURSOR_CLOSED,
+            raised("ConnectionException", "Connection Error: Connection has already been closed"),
+        ],
+    ),
     case(
         "a_finalizer_at_the_database_close_can_close_the_parent_that_is_closing",
         """
@@ -1414,7 +1593,7 @@ RELEASES_OUTSIDE_ENGINE_LOCKS = [
         [GOT_B, ok(None), ok([[("got:b",)]])],
     ),
     case(
-        "a_removed_callable_is_finalized_at_the_database_close_where_it_can_use_a_cursor",
+        "a_removed_callable_is_finalized_after_the_removal_where_it_can_use_a_cursor",
         """
         con = duckdb.connect()
         cur = con.cursor()
@@ -1433,10 +1612,10 @@ RELEASES_OUTSIDE_ENGINE_LOCKS = [
         step(lambda: "removed")
         step(con.close)
         """,
-        [ok(None), ok("removed"), CURSOR_CLOSED, ok(None)],
+        [ok(None), ok(None), ok("removed"), ok(None)],
     ),
     case(
-        "a_removed_callable_finalized_at_the_database_close_can_wait_for_a_thread_using_a_cursor",
+        "a_removed_callable_finalized_after_the_removal_can_wait_for_a_thread_using_a_cursor",
         """
         con = duckdb.connect()
         cur = con.cursor()
@@ -1453,7 +1632,7 @@ RELEASES_OUTSIDE_ENGINE_LOCKS = [
 
 
         def registers():
-            entered.wait()
+            assert entered.wait(10)
             step(lambda: cur.create_function("g", native(), ["VARCHAR"], "VARCHAR"))
 
 
@@ -1464,7 +1643,7 @@ RELEASES_OUTSIDE_ENGINE_LOCKS = [
         step(entered.is_set)
         step(con.close)
         """,
-        [ok(None), ok(False), CURSOR_CLOSED, ok(None)],
+        [ok(None), ok(None), ok(True), ok(None)],
     ),
 ]
 

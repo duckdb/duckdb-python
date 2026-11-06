@@ -1,12 +1,12 @@
 """A cycle through a Python callable that a database keeps is reclaimed once nothing of that database is reachable.
 
 A create_function() callable and a map() function belong to their database, which only C++ references, so the cycle
-collector cannot see them on its own. Every open connection of the database holds one object that reports them, so
-they become garbage together with the last of those, and never while any of them, a result or stream of the database,
-or a DB-API result whose statement engine workers can still run, is still reachable. A database that connect() reaches
-by its name, a file or a named in-memory database, never has them reported: a connection to such a database that is
-alive at exit leaves the cycle to the end of the process, where nanobind reports its objects as leaked, even once the
-connection that registered the function is gone, since the callable belongs to the database.
+collector cannot see them on its own. Every open connection of the database holds one object that reports them, so they
+become garbage together with the last of those, and never while any of them, or a result or stream of the database whose
+statement engine tasks can still run, is still reachable. A database that connect() reaches by its name, a file or a
+named in-memory database, never has them reported: a connection to such a database that is alive at exit leaves the
+cycle to the end of the process, where nanobind reports its objects as leaked, even once the connection that registered
+the function is gone, since the callable belongs to the database.
 """
 
 import ctypes
@@ -280,11 +280,15 @@ if sys.platform != "win32":
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
+calls = [0]
+
+
 def make():
     connections = []
 
     def plus_one(x):
         assert connections
+        calls[0] += 1
         return x + 1
 
     con = duckdb.connect()
@@ -295,18 +299,34 @@ def make():
     return plus_one
 
 
+FIRST_CHUNK = 2048
+
+
+def workers_parked():
+    # Parked once the workers ran past the first chunk and no call is counted for a while: they filled the result's
+    # buffer, and no frame of theirs holds the function any more. Five rounds of this fit in the parent's timeout.
+    deadline = time.monotonic() + 15
+    seen = -1
+    while time.monotonic() < deadline:
+        if calls[0] == seen and seen > FIRST_CHUNK:
+            return True
+        seen = calls[0]
+        time.sleep(0.25)
+    return False
+
+
 gc.disable()
 outcomes = set()
 for _ in range(5):
+    calls[0] = 0
     ref = weakref.ref(make())
-    # The workers fill the result's buffer and park, and no frame of theirs holds the function any more
-    time.sleep(0.5)
+    parked = workers_parked()
     gc.collect()
     alive = ref() is not None
     if alive:
         ref().con.execute("create table released (a bigint)")
     gc.collect()
-    outcomes.add((alive, ref() is None))
+    outcomes.add((parked, alive, ref() is None))
 print(sorted(outcomes), flush=True)
 """
 
@@ -322,8 +342,9 @@ def test_engine_workers_running_a_fetched_statement_keep_its_function():
     )
     report = f"exit status {proc.returncode}\nstdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
     assert proc.returncode == 0, report
-    # Alive while the workers can run the statement, collected once it ended; an editable build may print first
-    assert proc.stdout.splitlines()[-1:] == ["[(True, True)]"], report
+    # Parked after running past the first chunk, alive while the workers can run the statement again, collected once
+    # it ended; an editable build may print first
+    assert proc.stdout.splitlines()[-1:] == ["[(True, True, True)]"], report
 
 
 def test_closing_the_connection_frees_the_owner_of_a_mapped_relation_without_the_collector(
@@ -436,17 +457,16 @@ def test_a_reader_opened_before_the_first_function_keeps_it_while_it_streams():
     assert ref() is None
 
 
-def test_rows_a_script_kept_keep_its_function_until_they_are_released():
+def test_rows_a_script_kept_do_not_keep_its_function_and_stay_readable(without_automatic_collection):
     owner = FunctionOwner()
     kept, _, _ = owner.con._prepare_script("select plus_one(range) as a from range(3); select 1", None)
     ref = weakref.ref(owner)
     del owner
     gc.collect()
-    assert ref() is not None
+    # Retained before the next statement ran, so no task of their statement can run the function any more
+    collected = ref() is None
+    assert collected
     assert kept.fetchall() == [(1,), (2,), (3,)]
-    del kept
-    gc.collect()
-    assert ref() is None
 
 
 @needs_pyarrow

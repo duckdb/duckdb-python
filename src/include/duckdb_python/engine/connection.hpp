@@ -87,6 +87,10 @@ public:
 		return admitted_during_exit;
 	}
 
+	//! The count of the database's results that can still run, which a result submitted here counts on; set once,
+	//! under the GIL, when the connection attaches to its database's record, so a statement finds it without a lookup
+	std::shared_ptr<ResultCount> results;
+
 private:
 	friend class ConnectionClaim;
 

@@ -541,8 +541,6 @@ auto WithoutGil(FUN &&fun) -> decltype(fun()) {
 //! because get_schema cannot read the catalog again.
 struct ArrowStreamState {
 	shared_ptr<engine::Result> result;
-	//! The result's count on its database, kept for as long as the stream can still run the statement
-	CountedResult counted;
 	ArrowSchema cached_schema {};
 	ErrorData last_error;
 
@@ -663,7 +661,6 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 		result->BuildArrowSchema(IdentifiersToStrings(names_override), state->cached_schema);
 	}
 	state->result = std::move(result);
-	state->counted = std::move(counted);
 	current_chunk.reset();
 	chunk_offset = 0;
 

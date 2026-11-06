@@ -26,24 +26,34 @@ namespace duckdb {
 
 namespace {
 
-//! Marks every copy of a function the engine makes (its catalog entry, every bound plan) as one registered from Python.
-//! The callable belongs to the database's KeptCallables, because the engine destroys a dropped function under its
-//! catalog locks, where releasing a reference could run Python code that needs those locks.
-struct PythonUDFInfo : public ScalarFunctionInfo {};
+//! Shared by every copy of a function the engine makes (its catalog entry, every bound plan, a prepared statement, an
+//! index expression), so it is destroyed with the last of them. The callable belongs to the database's KeptCallables,
+//! because the engine destroys a dropped function under its catalog locks, where releasing a reference could run
+//! Python code that needs those locks: the destructor only reports the callable's id, for a GIL holder to release it.
+struct PythonUDFInfo : public ScalarFunctionInfo {
+	~PythonUDFInfo() override {
+		if (releases) {
+			lock_guard<mutex> guard(releases->lock);
+			releases->released.splice(releases->released.end(), id);
+			releases->pending = true;
+		}
+	}
+
+	std::shared_ptr<CallableReleases> releases;
+	//! One node, made when the function is registered, so the destructor allocates nothing
+	list<idx_t> id;
+};
 
 } // namespace
 
-bool DuckDBPyConnection::IsPythonFunction(CatalogEntry &entry) {
-	if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
-		return false;
-	}
-	for (auto &function : entry.Cast<ScalarFunctionCatalogEntry>().functions.functions) {
-		if (!function->HasExtraFunctionInfo() ||
-		    !dynamic_cast<const PythonUDFInfo *>(&function->GetExtraFunctionInfo())) {
-			return false;
-		}
-	}
-	return true;
+bool DuckDBPyConnection::IsPythonOverload(const ScalarFunction &function) {
+	return function.HasExtraFunctionInfo() && dynamic_cast<const PythonUDFInfo *>(&function.GetExtraFunctionInfo());
+}
+
+void DuckDBPyConnection::ReleaseWhenUnused(ScalarFunction &function, KeptCallables &record, idx_t id) {
+	auto &info = function.GetExtraFunctionInfo().Cast<PythonUDFInfo>();
+	info.id.push_back(id);
+	info.releases = record.releases;
 }
 
 //! A lone surrogate has no UTF-8 encoding, so it is escaped the way Python prints it in a traceback.

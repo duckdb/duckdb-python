@@ -253,11 +253,22 @@ private:
 	std::unique_ptr<DbapiResult> result;
 };
 
-//! The callables of the Python functions registered on one database, owned for as long as the database lives: the
-//! engine's copies of a function only borrow them. It is the data of the replacement scan every database of the
-//! binding carries, so it is destroyed with the database's config, the first member of DatabaseInstance and so the last
-//! one destroyed, after the database released its instance cache entry: a finalizer of a callable may reopen the file.
-//! Guarded by the GIL, all but the count of results.
+//! Where the engine's copies of a registered function report that the last of them is gone: the PythonUDFInfo they
+//! share puts the id of its callable here when it is destroyed, which can happen on any thread and under engine locks,
+//! so it holds no Python object and takes no lock but its own. Shared, since an info can outlive the record.
+struct CallableReleases {
+	mutex lock;
+	list<idx_t> released;
+	//! Whether released holds an id, read without the lock
+	atomic<bool> pending {false};
+};
+
+//! The callables of the Python functions registered on one database, each owned until the engine has no copy of its
+//! function left, or until the database closes: the engine's copies of a function only borrow it. It is the data of the
+//! replacement scan every database of the binding carries, so it is destroyed with the database's config, the first
+//! member of DatabaseInstance and so the last one destroyed, after the database released its instance cache entry: a
+//! finalizer of a callable may reopen the file. Guarded by the GIL, all but the count of results and the release
+//! queue, which guard themselves.
 struct KeptCallables : public ReplacementScanData {
 	explicit KeptCallables(bool cached_p) : cached(cached_p) {
 	}
@@ -273,18 +284,30 @@ struct KeptCallables : public ReplacementScanData {
 	//! Gives every open connection the DatabaseFunctions object, making it at the first registration of a function on
 	//! the database, so a database that never had one holds no Python object that could outlive the interpreter
 	void GiveFunctionsToConnections();
+	struct Kept {
+		Kept(idx_t id_p, nb::object callable_p) : id(id_p), callable(std::move(callable_p)) {
+		}
+		//! What the function's PythonUDFInfo reports to releases once the engine has no copy of the function left
+		idx_t id;
+		PyObjectHolder callable;
+	};
 	//! Takes over the callable of a function about to be published, which the engine borrows from then on; allocates
 	//! nothing. Returns where it is kept, for TakeBack.
-	list<PyObjectHolder>::iterator Keep(list<PyObjectHolder> &pending) noexcept;
+	list<Kept>::iterator Keep(list<Kept> &pending) noexcept;
 	//! Gives a kept callable back to pending, for a registration that certainly published nothing
-	void TakeBack(list<PyObjectHolder>::iterator kept, list<PyObjectHolder> &pending) noexcept;
+	void TakeBack(list<Kept>::iterator kept, list<Kept> &pending) noexcept;
+	//! Releases the callables whose functions the engine no longer has. Call with the GIL held, outside engine locks
+	//! and claims, while something keeps the database alive: releasing a callable runs Python code.
+	void ReleaseUnused();
 	//! A map() function, owned by its registry entry, which unlists it before it goes
 	void List(MapFunctionInfo &map);
 	void Unlist(MapFunctionInfo &map);
 	//! Whether the DatabaseFunctions object reports the callables and map() functions to the cycle collector
 	bool Reports() const;
 
-	list<PyObjectHolder> callables;
+	list<Kept> callables;
+	idx_t next_id = 0;
+	std::shared_ptr<CallableReleases> releases = std::make_shared<CallableReleases>();
 	unordered_set<MapFunctionInfo *> maps;
 	std::shared_ptr<engine::ResultCount> results = std::make_shared<engine::ResultCount>();
 	//! Borrowed, each until it detaches
@@ -383,6 +406,9 @@ public:
 	KeptCallables *functions_record = nullptr;
 	//! Lets go of the DatabaseFunctions object, before the connection lets go of its database; call with the GIL held
 	void DetachFunctions();
+	//! Releases the callables of the database whose functions the engine no longer has; call with the GIL held, outside
+	//! the connection's lock and claims
+	void ReleaseUnusedCallables();
 
 public:
 	explicit DuckDBPyConnection() {
@@ -572,12 +598,18 @@ private:
 	ScalarFunction CreateScalarUDF(const string &name, const nb::callable &udf, const nb::object &parameters,
 	                               const nb::object &return_type, bool vectorized, FunctionNullHandling null_handling,
 	                               PythonExceptionHandling exception_handling, bool side_effects);
+	//! Keeps the callable on the database's record and puts the function in the catalog, under the connection's lock
+	//! and claim
+	void PublishScalarUDF(const string &name, const nb::callable &udf, ScalarFunction &scalar_function);
 	engine::StatementGroup GetStatements(const nb::object &query);
 	//! Runs every statement of the group but the last, after making way for them first when supersede, and returns
 	//! the last, unrun; null when none is left. Releases the GIL for the engine work.
 	unique_ptr<SQLStatement> RunAllButLast(engine::StatementGroup &statements, bool supersede);
-	//! Whether every overload of the entry was registered from Python
-	static bool IsPythonFunction(CatalogEntry &entry);
+	//! Whether the overload was registered from Python
+	static bool IsPythonOverload(const ScalarFunction &function);
+	//! Has the function's PythonUDFInfo, which every engine copy shares, report the id to the record's releases once
+	//! the last copy is gone; allocates, so it runs before the function is published
+	static void ReleaseWhenUnused(ScalarFunction &function, KeptCallables &record, idx_t id);
 
 	static void DetectEnvironment();
 };

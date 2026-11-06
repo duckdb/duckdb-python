@@ -52,9 +52,10 @@ private:
 class ConnectionState;
 class ConnectionClaim;
 
-//! How many results of a database there are that can still run its statements without a connection of it, which the
-//! cycle collector reads: a result or Arrow stream the client holds, and a DB-API result whose statement still has
-//! rows to produce, since engine workers keep running it between fetches. Shared, since one can outlive the database.
+//! How many results of a database there are whose statements can still run engine tasks, which the cycle collector
+//! reads: a DB-API result, a relation's result, a script's kept rows or an Arrow stream over one, while its statement
+//! has rows left to produce, since engine workers keep running it between fetches and a stream can run it without a
+//! connection. Shared, since one can outlive the database.
 //! It goes up only under the GIL. While the collector runs, that happens only in a finalizer or callback it runs,
 //! after it found the unreachable set; the resurrection check that follows recounts from fresh reference counts, where
 //! reporting less keeps more. It goes down without the GIL on whatever thread lets go, an engine thread scanning a
@@ -144,8 +145,9 @@ public:
 	string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 
 	//! Counts the result on its database while engine tasks of its statement can still run, until its statement has
-	//! produced its last row or ends; nothing for a statement that already completed. Call with the GIL held, once.
-	void CountWhileRunning(std::shared_ptr<ResultCount> count);
+	//! produced its last row or ends; nothing for a statement that already completed, or on a connection that never
+	//! attached to a record. Call with the GIL held, once.
+	void CountWhileRunning();
 	//! Ends the query if it is still running. Idempotent, and safe while another thread is fetching.
 	void Close();
 	void EndIfRunning();
