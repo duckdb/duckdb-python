@@ -192,6 +192,8 @@ constexpr const char *CONNECTED_REFUSAL =
 //! Throws CONNECTED_REFUSAL when the connection is CONNECT-ed, unless the statement is a DISCONNECT; call it under the
 //! connection's claim, the only place the flag is read.
 void RefuseWhileConnected(ClientContext &context, StatementType type = StatementType::INVALID_STATEMENT);
+//! The same refusal with a message of the caller's, for work outside the relational API
+void RefuseWhileConnected(ClientContext &context, const char *refusal);
 //! Names the refusal in an error from engine work that runs outside a Session, as ConnectionState::NameRefusal does
 void NameRefusal(ClientContext &context, const std::exception &error);
 
@@ -221,19 +223,15 @@ public:
 	//! Scans a collection, for example to read rows a result already holds in another format
 	shared_ptr<Result> Submit(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
 	                          const Format &format);
-	//! Binds a statement without running it, keeping the tables its replacement scans resolved in tables
-	StatementSignature Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables);
-	//! Binds a statement with values for its parameters, as the engine rebinds a prepared statement for the values it
-	//! runs with, so the names and types are those of the statement that runs; nothing runs
-	StatementSignature Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
-	                        const identifier_map_t<BoundParameterData> &values);
-	//! The two Binds for a caller that already holds the connection's claim
+	//! Binds a statement without running it, keeping the tables its replacement scans resolved in tables, for a caller
+	//! that already holds the connection's claim
 	StatementSignature BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables);
+	//! Binds a statement with values for its parameters, as the engine rebinds a prepared statement for the values it
+	//! runs with, so the names and types are those of the statement that runs; nothing runs. For a caller that already
+	//! holds the connection's claim.
 	StatementSignature BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
 	                               const identifier_map_t<BoundParameterData> &values);
-	//! Runs a statement to its end and drops its rows
-	void Run(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
-	//! Run for a caller that already holds the connection's claim
+	//! Runs a statement to its end and drops its rows, for a caller that already holds the connection's claim
 	void RunClaimed(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
 	//! Runs a statement to its end and drops its rows, its replacement scans answered from tables and nothing else, for
 	//! a caller that already holds the connection's claim

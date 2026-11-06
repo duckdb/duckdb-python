@@ -2,7 +2,9 @@ name: CONNECT tests with quack
 # Only an extension catalog supports CONNECT, and quack, with the httpfs its client needs, is the one there is. No
 # published build of either loads into a development build, so this workflow builds both from the engine checkout the
 # package builds from, and runs the tests that CONNECT. With DUCKDB_PYTHON_TEST_EXTENSION_PATH set, a missing
-# extension fails those tests instead of skipping them.
+# extension fails those tests instead of skipping them. GitHub runs the schedule from the default branch alone and
+# checks that branch out, so a scheduled run builds and tests main and the release branch v2.0-cyanoptera, each at its
+# own engine pin; a dispatch with git_ref builds that ref alone.
 on:
   schedule:
     - cron: "37 4 * * *"
@@ -19,8 +21,12 @@ defaults:
 
 jobs:
   connect_test:
-    name: Build quack and httpfs at the engine pin and run the CONNECT tests
+    name: Build quack and httpfs at the engine pin of ${{ matrix.ref }} and run the CONNECT tests
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        ref: ${{ fromJSON(inputs.git_ref && format('[{0}]', toJSON(inputs.git_ref)) || '["main", "v2.0-cyanoptera"]') }}
     # The engine's static library, which both loadable extensions link, is a full engine build.
     timeout-minutes: 150
     env:
@@ -30,21 +36,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ matrix.ref }}
           fetch-depth: 0
           submodules: true
 
       - name: Setup Ccache
         uses: ./.github/actions/ccache-action
         with:
-          key: ubuntu-connect-extensions
+          # Per branch: a saved cache keeps only the objects its job used, so with one key each branch would restore the
+          # other's. A dispatch that builds another ref must not write the branch's cache.
+          key: ubuntu-connect-extensions-${{ matrix.ref }}
           save: ${{ inputs.git_ref == '' && 'true' || 'false' }}
 
       - name: Install ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
       # quack and httpfs take OpenSSL and curl from vcpkg. The release target only configures here: the two loadable
-      # extensions and the static library they link are all that is built.
+      # extensions and the static library they link are all that is built, into build/release/extension/<name>/.
       - name: Build httpfs and quack at the engine pin
         working-directory: external/duckdb
         env:
@@ -58,9 +66,6 @@ jobs:
           cd build/release
           cmake -DBUILD_SHELL=0 -DBUILD_UNITTESTS=0 . > /dev/null
           ninja quack_loadable_extension httpfs_loadable_extension
-          mkdir -p "$GITHUB_WORKSPACE/connect-extensions"
-          cp extension/quack/quack.duckdb_extension extension/httpfs/httpfs.duckdb_extension \
-            "$GITHUB_WORKSPACE/connect-extensions/"
 
       - name: Install Astral UV
         uses: astral-sh/setup-uv@v10.3.0
@@ -77,5 +82,5 @@ jobs:
 
       - name: Run the CONNECT tests
         env:
-          DUCKDB_PYTHON_TEST_EXTENSION_PATH: ${{ github.workspace }}/connect-extensions
+          DUCKDB_PYTHON_TEST_EXTENSION_PATH: ${{ github.workspace }}/external/duckdb/build/release/extension
         run: uv run --no-sync pytest -n 4 -rs tests/fast/relational_api/test_rapi_connect.py

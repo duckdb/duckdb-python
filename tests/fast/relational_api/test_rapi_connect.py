@@ -15,10 +15,18 @@ pa = pytest.importorskip("pyarrow")
 
 
 def _extensions():
+    """None when the variable is not set, else each extension's file, or None for one that is not found."""
     root = os.environ.get("DUCKDB_PYTHON_TEST_EXTENSION_PATH")
     if not root:
         return None
-    return [Path(root) / f"{name}.duckdb_extension" for name in ("httpfs", "quack")]
+    found = {}
+    # httpfs first: the quack client refuses to start without it
+    for name in ("httpfs", "quack"):
+        file = f"{name}.duckdb_extension"
+        # The two layouts the require fixture in tests/conftest.py accepts for the same variable
+        candidates = [Path(root) / file, *sorted(Path(root).glob(f"*/{file}"))]
+        found[name] = next((path for path in candidates if path.is_file()), None)
+    return found
 
 
 EXTENSIONS = _extensions()
@@ -27,6 +35,11 @@ REFUSAL = (
     "Invalid Input Error: The relational API, register(), append() and unregister() are not available while "
     "CONNECT-ed, since the engine sends every statement but DISCONNECT to the connected database; use "
     "con.execute(query) with fetchall(), fetchdf() or fetchnumpy() for queries, or DISCONNECT first"
+)
+APPENDER_REFUSAL = (
+    "Invalid Input Error: An appender cannot be created or flushed while CONNECT-ed, since a flush is a statement over "
+    "rows held on this connection and the engine sends every statement but DISCONNECT to the connected database; "
+    "DISCONNECT first"
 )
 ARROW_REFUSAL = (
     "Invalid Input Error: Arrow output on a DB-API result is not available while CONNECT-ed; use fetchall(), "
@@ -61,7 +74,7 @@ def error_of(call):
 
 def _open():
     connection = duckdb.connect(config={"allow_unsigned_extensions": True})
-    for path in EXTENSIONS:
+    for path in EXTENSIONS.values():
         connection.execute(f"LOAD '{path}'")
     return connection
 
@@ -72,9 +85,11 @@ def server():
     # requires, built for this engine, since no published build loads into a development build.
     if EXTENSIONS is None:
         pytest.skip("needs httpfs and quack built for this engine in DUCKDB_PYTHON_TEST_EXTENSION_PATH")
-    missing = [str(path) for path in EXTENSIONS if not path.is_file()]
+    missing = [f"{name}.duckdb_extension" for name, path in EXTENSIONS.items() if path is None]
     if missing:
-        pytest.fail(f"DUCKDB_PYTHON_TEST_EXTENSION_PATH is set, but {', '.join(missing)} is missing")
+        pytest.fail(
+            f"DUCKDB_PYTHON_TEST_EXTENSION_PATH is set, but neither it nor a folder in it holds {' or '.join(missing)}"
+        )
     connection = _open()
     uri, _, token = connection.execute("CALL quack_serve('quack:127.0.0.1:0', token = 'connect-relations')").fetchone()
     connection.execute("CREATE TABLE t AS SELECT 'remote' AS side, 1 AS i")
@@ -356,13 +371,50 @@ class TestUnregister:
 
 
 class TestAppender:
+    @pytest.mark.parametrize(
+        "create",
+        [
+            lambda con: con.appender("t"),
+            # Type names, which parse with the connected database's grammar once CONNECT-ed
+            lambda con: con.query_appender("INSERT INTO t FROM appender_data", {"side": "VARCHAR", "i": "INTEGER"}),
+        ],
+        ids=["table", "query"],
+    )
+    def test_creating_refuses_and_an_appender_created_after_disconnect_appends_locally(self, local, server, create):
+        local.execute("CONNECT remote")
+        assert_refused(lambda: create(local), APPENDER_REFUSAL)
+        local.execute("DISCONNECT")
+        appender = create(local)
+        appender.append_row("appended", 2)
+        appender.flush()
+        assert local.execute("SELECT side, i FROM t ORDER BY i").fetchall() == [("local", 1), ("appended", 2)]
+        assert remote_rows(server) == [("remote", 1)]
+
+    @pytest.mark.parametrize(
+        "create",
+        [
+            lambda con, name: con.appender("t", columns=[name]),
+            lambda con, name: con.query_appender("INSERT INTO t (side) FROM appender_data", {name: str}),
+        ],
+        ids=["table", "query"],
+    )
+    def test_a_column_name_that_connects_while_it_is_converted_refuses(self, local, server, create):
+        class ConnectingName:
+            def __str__(self) -> str:
+                local.execute("CONNECT remote")
+                return "side"
+
+        assert_refused(lambda: create(local, ConnectingName()), APPENDER_REFUSAL)
+        assert side(local) == [("remote",)]
+        assert remote_rows(server) == [("remote", 1)]
+
     def test_a_flush_refuses_and_keeps_its_rows_for_a_flush_after_disconnect(self, local, server):
         appender = local.appender("t")
         appender.append_row("buffered", 2)
         local.execute("CONNECT remote")
         error = error_of(appender.flush)
         assert remote_rows(server) == [("remote", 1)]
-        assert error == REFUSAL
+        assert error == APPENDER_REFUSAL
         local.execute("DISCONNECT")
         appender.flush()
         assert local.execute("SELECT side, i FROM t ORDER BY i").fetchall() == [("local", 1), ("buffered", 2)]
