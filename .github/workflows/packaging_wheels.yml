@@ -253,3 +253,45 @@ jobs:
           cd "$testrun"
           uv run --no-project --python "$venv" python -c "import duckdb, sys, os; print(duckdb.__version__, sys.version, os.getcwd())"
           uv run --no-project --python "$venv" pytest --confcutdir=. --rootdir . -c pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
+
+  test_pandas_2:
+    name: 'Test pandas 2: py3.12-manylinux_x86_64'
+    # The test dependency group installs pandas 3, which decodes a dictionary when it builds a string column, so the
+    # dictionary backed string columns of pandas 2 are read only here. The package itself accepts any pandas.
+    if: ${{ !cancelled() && inputs.testsuite != 'none' }}
+    needs: seed_wheels
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout DuckDB Python
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.duckdb-python-sha }}
+
+      - name: Fetch the wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel-cp312-manylinux_x86_64
+          path: wheelhouse
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          version: "0.12.23"
+          enable-cache: false
+
+      # pandas 2.2 converts a dictionary backed string column with to_numpy only from pyarrow 25 on.
+      - name: Install the wheel with pandas 2.2 and run the pandas string tests
+        shell: bash
+        run: |
+          set -eo pipefail
+          uv venv --python 3.12 .venv-pandas-2
+          uv pip install --python .venv-pandas-2 wheelhouse/*.whl "pandas==2.2.3" "pyarrow==18.1.0" pytest pytest-timeout packaging
+          venv="$PWD/.venv-pandas-2"
+          testrun=$(uv run --no-project --python "$venv" python -c 'import tempfile; print(tempfile.mkdtemp(prefix="duckdb-testrun-"))')
+          cp -r tests pyproject.toml "$testrun"
+          cd "$testrun"
+          uv run --no-project --python "$venv" python -c "import duckdb, pandas, pyarrow; print(duckdb.__version__, pandas.__version__, pyarrow.__version__)"
+          uv run --no-project --python "$venv" pytest --confcutdir=. --rootdir . -c pyproject.toml ./tests/fast/pandas/test_pandas_string.py

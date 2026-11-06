@@ -242,10 +242,6 @@ def _params(cases, ops, marks_for, shapes=SHAPES):
     return params
 
 
-def _xfail(reason, raises):
-    return [pytest.mark.xfail(strict=True, raises=raises, reason=reason)]
-
-
 def _no_marks(case, op):
     return []
 

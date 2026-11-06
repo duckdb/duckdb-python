@@ -707,6 +707,8 @@ DICTIONARY_LAYOUTS = {
     "below_the_chunk_length_threshold": [["x", None, "y"]],
     "many_short_chunks": [["v", None]] * 30,
     "many_one_row_chunks": [[("a", None, "b")[index % 3]] for index in range(100)],
+    # More distinct values than an int8 index addresses, in chunks too short to be read one by one.
+    "distinct_values_beyond_an_int8_index": [[f"v{index}"] for index in range(200)],
     "an_empty_chunk_between_two": [["a", None] * 50, [], ["b"] * 50],
     "only_nulls": [[None] * 100],
     "chunks_longer_than_a_vector": [

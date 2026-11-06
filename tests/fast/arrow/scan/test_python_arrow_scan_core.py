@@ -1868,17 +1868,17 @@ MALFORMED_NESTED = {
 
 
 class NarrowingPokingSource(PythonStreamSource):
-    """One batch of the requested columns, narrowed as a projecting source does, whose column `name` `poke` changes."""
+    """One batch of the requested columns, narrowed as a projecting source does; `poke` changes declared `position`."""
 
-    def __init__(self, table, name, poke) -> None:
+    def __init__(self, table, position, poke) -> None:
         super().__init__(table, max_chunksize=table.num_rows)
-        self.name = name
+        self.position = position
         self.poke = poke
 
     def stream(self, columns, filters):
         table = self.table if columns is None else self.table.select(list(columns))
         stream = PokingStream(table.schema, table.to_batches(max_chunksize=table.num_rows), None)
-        index = table.schema.get_field_index(self.name)
+        index = self.position if columns is None else list(columns).index(self.position)
         stream.corrupt = lambda array: self.poke(array.children[index].contents, stream.pokes)
         self.streams.append(stream)
         return stream.capsule(), columns is not None
@@ -1933,11 +1933,26 @@ class TestRefusalsNameTheColumn:
     def test_a_refusal_names_the_column_the_query_reads(self, case, query):
         make, poke, message = REFUSALS_BY_COLUMN[case]
         table = pa.table({"k": range(2_000), "x": range(2_000), "s": make()})
-        source = NarrowingPokingSource(table, "s", poke)
+        source = NarrowingPokingSource(table, 2, poke)
         with duckdb.connect() as con:
             con._register_arrow_source("t", source)
             with pytest.raises(duckdb.InvalidInputException, match=re.escape(f"column 's' {message}")):
                 con.execute(query).fetchall()
+
+    @pytest.mark.timeout(60)
+    @pytest.mark.parametrize(
+        ("names", "bound"),
+        [pytest.param(["s", "x", "s"], "s_1", id="repeated"), pytest.param(["k", "x", ""], "v2", id="empty")],
+    )
+    def test_a_refusal_names_a_narrowed_column_by_its_bound_name(self, names, bound):
+        # The engine names the one column of the narrowed stream 's' or 'v0', which is not how the query reads it.
+        make, poke, message = REFUSALS_BY_COLUMN["released_struct_child"]
+        table = pa.table([pa.array(range(2_000)), pa.array(range(2_000)), make()], names=names)
+        source = NarrowingPokingSource(table, 2, poke)
+        with duckdb.connect() as con:
+            con._register_arrow_source("t", source)
+            with pytest.raises(duckdb.InvalidInputException, match=re.escape(f"column '{bound}' {message}")):
+                con.execute(f"SELECT {bound} FROM t").fetchall()
 
     @pytest.mark.timeout(60)
     def test_a_refusal_names_a_plain_array_by_its_column_name(self):

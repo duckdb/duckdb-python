@@ -93,39 +93,24 @@ static unique_ptr<PandasArrowColumn> BindArrowStringColumn(ClientContext &contex
 	if (!PyUtil::HasAttribute(chunked_array.attr("type"), "__arrow_c_schema__")) {
 		return nullptr;
 	}
-	auto subject = StringUtil::Format("column '%s'", name);
-	auto resolve = [&]() {
-		nb::object schema = chunked_array.attr("type").attr("__arrow_c_schema__")();
-		return ArrowType::GetArrowLogicalType(context, InCapsule<ArrowSchema>(schema, "arrow_schema", subject));
-	};
-	auto arrow_type = resolve();
-	const bool short_chunks = row_count < ARROW_ROWS_PER_CHUNK * nb::cast<idx_t>(chunked_array.attr("num_chunks"));
-	nb::object chunks;
-	if (arrow_type->GetPhysicalType() == ArrowArrayPhysicalType::DICTIONARY_ENCODED) {
+	if (nb::cast<bool>(nb::module_::import_("pyarrow.types").attr("is_dictionary")(chunked_array.attr("type")))) {
 		// pandas 2 keeps the dictionary its array was built from, which pandas 2.2 cannot convert with to_numpy before
-		// pyarrow 25, so it is decoded and read here at any chunk length.
-		nb::object value_type = chunked_array.attr("type").attr("value_type");
-		if (short_chunks) {
-			// A cast and an export per chunk would cost more than the conversion they replace, so the chunks are
-			// combined and decoded once.
-			chunked_array = chunked_array.attr("combine_chunks")().attr("cast")(value_type);
-			chunks = nb::make_tuple(chunked_array);
-		} else {
-			chunked_array = chunked_array.attr("cast")(value_type);
-		}
-		arrow_type = resolve();
-	} else if (short_chunks) {
+		// pyarrow 25, so it is decoded chunk by chunk and read here at any chunk length; combining the chunks first
+		// would merge their dictionaries into the original index type, which a few hundred values overflow.
+		chunked_array = chunked_array.attr("cast")(chunked_array.attr("type").attr("value_type"));
+	} else if (row_count < ARROW_ROWS_PER_CHUNK * nb::cast<idx_t>(chunked_array.attr("num_chunks"))) {
 		return nullptr;
 	}
+	auto subject = StringUtil::Format("column '%s'", name);
+	nb::object schema = chunked_array.attr("type").attr("__arrow_c_schema__")();
+	auto arrow_type = ArrowType::GetArrowLogicalType(context, InCapsule<ArrowSchema>(schema, "arrow_schema", subject));
 	// Only a plain layout may be read without the engine adopting the chunks.
 	if (arrow_type->GetDuckType().id() != LogicalTypeId::VARCHAR ||
 	    arrow_type->GetPhysicalType() != ArrowArrayPhysicalType::DEFAULT) {
 		return nullptr;
 	}
 	auto result = make_uniq<PandasArrowColumn>(std::move(arrow_type));
-	if (!chunks.is_valid()) {
-		chunks = chunked_array.attr("chunks");
-	}
+	nb::object chunks = chunked_array.attr("chunks");
 	for (auto chunk : chunks) {
 		auto exported = nb::cast<nb::tuple>(chunk.attr("__arrow_c_array__")());
 		result->AddChunk(InCapsule<ArrowArray>(exported[1], "arrow_array", subject));
