@@ -132,7 +132,20 @@ def arrow_schema(con: _duckdb.DuckDBPyConnection, names: list[str], types: Seque
 
 def parse_type(con: _duckdb.DuckDBPyConnection, text: str) -> DuckDBPyType:
     """A type name parsed on this connection, so its own types resolve."""
-    return con.sqltype(text)
+    return con._parse_type(text)
+
+
+def connected_refusal() -> _duckdb.InvalidInputException:
+    """The error the seam's own calls raise on a CONNECT-ed connection."""
+    return _duckdb.InvalidInputException(f"Invalid Input Error: {_duckdb._CONNECTED_REFUSAL}")
+
+
+def connected(con: _duckdb.DuckDBPyConnection) -> bool:
+    """Whether the connection is CONNECT-ed, so the engine sends its statements to the connected database.
+
+    False once it is closed or while another call holds it, which the caller's own call then reports.
+    """
+    return con._connected()
 
 
 def catalog_version(con: _duckdb.DuckDBPyConnection) -> int:

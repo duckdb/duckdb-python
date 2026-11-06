@@ -638,6 +638,7 @@ static void CreateView(DuckDBPyConnection &self, const nb::object &name, const s
 	nb::gil_scoped_release release;
 	// One claim from reading the registry to creating the view, so no other call changes either in between
 	auto claim = session.Claim();
+	engine::RefuseWhileConnected(session.Context());
 	auto statement = DuckDBPySeam::ViewStatement(session.Context(), qualified, sql, temporary, replace, false);
 	session.RunClaimed(std::move(statement), DuckDBPyConnection::CheckSignals);
 }
@@ -664,10 +665,13 @@ static nb::tuple Bind(DuckDBPyConnection &self, const nb::object &sql, bool capt
 		// A statement parsed earlier is copied rather than parsed again
 		auto statement = parsed ? parsed->GetStatement() : ParseOneStatement(session, text, false);
 		statement_type = statement->type;
+		// Converting the values runs Python, which can CONNECT, so the check holds the claim the bind runs under
+		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context());
 		if (values.is_none()) {
-			signature = session.Bind(std::move(statement), tables);
+			signature = session.BindClaimed(std::move(statement), tables);
 		} else {
-			signature = session.Bind(std::move(statement), tables, converted);
+			signature = session.BindClaimed(std::move(statement), tables, converted);
 		}
 	}
 	nb::list result;
@@ -735,6 +739,7 @@ static std::shared_ptr<DuckDBPyResult> Submit(DuckDBPyConnection &self, const st
 		// One claim from submission to the last row, or to the first unit of a stream, so no other call takes the
 		// connection while the statement is half run
 		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context(), statement->type);
 		result = session.SubmitClaimed(std::move(statement), named_values, format);
 		if (retain) {
 			result->RetainClaimed(DuckDBPyConnection::CheckSignals);
@@ -778,6 +783,7 @@ std::shared_ptr<SourceHandle> DuckDBPySeam::RegisterSource(DuckDBPyConnection &s
 	{
 		// Classifying and adapting the object runs its own Python, which must not close or use this connection
 		engine::ConnectionClaim claim(context);
+		engine::RefuseWhileConnected(context);
 		table = PythonReplacementScan::ReplacementObject(obj, subject.empty() ? "source" : subject, context, kind,
 		                                                 std::move(declared_types));
 	}
@@ -818,6 +824,7 @@ static string TableKind(DuckDBPyConnection &self, const nb::object &name) {
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
 	auto claim = session.Claim();
+	engine::RefuseWhileConnected(session.Context());
 	string kind = "none";
 	// The lookup a table reference binds through, which answers rather than throws when it finds nothing, so asking
 	// costs no statement and leaves an open result alone. Binder::BindTableName settles what a lone qualifier is:
@@ -840,6 +847,7 @@ vector<std::pair<string, LogicalType>> DuckDBPySeam::InsertableColumns(DuckDBPyC
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
 	auto claim = session.Claim();
+	engine::RefuseWhileConnected(session.Context());
 	vector<std::pair<string, LogicalType>> columns;
 	// The same lookup an INSERT INTO binds through, so the temporary schema and the search path shadow as they do there
 	context.RunFunctionInTransaction([&]() {
@@ -867,6 +875,7 @@ static string NameScope(DuckDBPyConnection &self, const string &name) {
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
 	auto claim = session.Claim();
+	engine::RefuseWhileConnected(session.Context());
 	string scope = "none";
 	context.RunFunctionInTransaction([&]() {
 		if (Catalog::GetCatalogEntry(context, Identifier(name))) {
@@ -926,6 +935,8 @@ static std::shared_ptr<SourceHandle> RegisterValues(DuckDBPyConnection &self, co
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		auto claim = session.Claim();
+		// Converting the values ran Python, which can CONNECT
+		engine::RefuseWhileConnected(context);
 		vector<LogicalType> types(width, LogicalType::SQLNULL);
 		for (auto &row : converted) {
 			for (idx_t i = 0; i < width; i++) {
@@ -962,10 +973,6 @@ static std::shared_ptr<SourceHandle> RegisterCollection(DuckDBPyConnection &self
 	// The session owns the context across the take, which is the longest call of the seam
 	auto session = OpenSession(self);
 	auto &context = session.Context();
-	// While CONNECT-ed the engine sends every statement to the remote as text, which cannot name rows held here
-	if (context.IsConnected()) {
-		throw InvalidInputException("materialize() is not available while CONNECT-ed; DISCONNECT first");
-	}
 	DuckDBPyResult::Use use(result);
 	RequireFormat(*use, false, "_register_collection");
 	// The rows live in the buffers of the database that produced them. A database that is gone is not this one,
@@ -995,6 +1002,7 @@ static std::shared_ptr<SourceHandle> RegisterMap(DuckDBPyConnection &self, const
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context());
 		subquery->SubqueryMutable() = ParseSelect(session.Context(), input_sql);
 	}
 	subquery->GetSubqueryTypeMutable() = SubqueryType::SCALAR;
@@ -1010,8 +1018,13 @@ static std::shared_ptr<SourceHandle> RegisterFilelike(DuckDBPyConnection &self, 
 	if (nb::isinstance<nb::list>(obj)) {
 		throw InvalidInputException("_register_filelike takes one file-like object, not a list");
 	}
-	OpenConnection(self);
+	auto session = OpenSession(self);
 	auto path_like = PathLike::Create(obj, self);
+	{
+		// Creating the path ran Python, which can CONNECT
+		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context());
+	}
 	return std::make_shared<SourceHandle>(path_like.files[0], weak_ptr<engine::SourceRegistry>(),
 	                                      std::move(path_like.dependency));
 }
@@ -1050,6 +1063,19 @@ static string ResultToBox(DuckDBPyResult &result, const std::optional<idx_t> &ma
 	engine::ConnectionClaim claim(*context);
 	ClientBoxRendererContext box_context(*context);
 	return use->ToBox(box_context, config);
+}
+
+static std::unique_ptr<DuckDBPyType> ParseType(DuckDBPyConnection &self, const string &text) {
+	auto session = OpenSession(self);
+	LogicalType type;
+	{
+		DUCKDB_PY_ASSERT_GIL_HELD();
+		nb::gil_scoped_release release;
+		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context());
+		type = DuckDBPyType::ParseTypeName(session.Context(), text);
+	}
+	return make_uniq<DuckDBPyType>(type);
 }
 
 static string LiteralType(const nb::handle &value) {
@@ -1139,6 +1165,7 @@ static nb::object PyArrowSchema(const vector<string> &names_p, const nb::list &t
 		nb::gil_scoped_release release;
 		// As Result::BuildArrowSchema: the converter reads the connection's settings and its catalog's types
 		auto claim = session.Claim();
+		engine::RefuseWhileConnected(session.Context());
 		auto properties = context.GetClientProperties();
 		context.RunFunctionInTransaction([&]() { ArrowConverter::ToArrowSchema(&schema, types, names, properties); });
 	}
@@ -1232,6 +1259,7 @@ static nb::list ParseExpressions(const string &text) {
 }
 
 void DuckDBPySeam::Initialize(nb::module_ &m) {
+	m.attr("_CONNECTED_REFUSAL") = engine::CONNECTED_REFUSAL;
 	nb::class_<SourceHandle>(m, "SourceHandle", nb::is_weak_referenceable())
 	    .def_prop_ro("name", &SourceHandle::Name, "The name statements read the source by")
 	    .def("__repr__", [](const SourceHandle &handle) { return "<SourceHandle " + handle.Name() + ">"; });
@@ -1481,6 +1509,26 @@ void DuckDBPySeam::InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m
 	      nb::arg("name"), nb::arg("sql"), nb::kw_only(), nb::arg("temporary") = false, nb::arg("replace") = false);
 	m.def("_catalog_version", &CatalogVersion,
 	      "How many statements that can change what a name binds to have run on this connection's database");
+	m.def("_parse_type", &ParseType, "A type name parsed on this connection, so its own types resolve",
+	      nb::arg("text"));
+	m.def(
+	    "_connected",
+	    [](DuckDBPyConnection &self) {
+		    if (self.con.ConnectionIsClosed()) {
+			    return false;
+		    }
+		    try {
+			    // The session owns the context, as in TableKind; the engine writes the flag under the claim
+			    auto session = self.EngineSession();
+			    auto claim = session.Claim();
+			    return session.Context().IsConnected();
+		    } catch (ResourceInUseException &) {
+			    // The caller's own call then reports the connection busy, as it did before it asked
+			    return false;
+		    }
+	    },
+	    "Whether the connection is CONNECT-ed, so the engine sends its statements to the connected database; False "
+	    "once it is closed or while another call holds it");
 	m.def("_own_sources", &OwnSources,
 	      "Keep the handles alive under the name until unregister(name) or the next _own_sources of the name",
 	      nb::arg("name"), nb::arg("handles"));
