@@ -136,6 +136,28 @@ Result::~Result() {
 		Close();
 	} catch (...) { // NOLINT: a destructor must not throw
 	}
+	StopCounting();
+}
+
+void Result::CountWhileRunning(std::shared_ptr<ResultCount> count) {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	if (state != State::PENDING || counted_running || !count) {
+		return;
+	}
+	running_count = std::move(count);
+	running_count->results.fetch_add(1);
+	counted_running = true;
+	// Registered at submission, the result can meanwhile have been ended on another thread, the exit hook's: every
+	// end sets its state before it stops counting, so either that stop or this one drops the count, exactly once
+	if (state != State::PENDING) {
+		StopCounting();
+	}
+}
+
+void Result::StopCounting() noexcept {
+	if (counted_running.exchange(false)) {
+		running_count->results.fetch_sub(1);
+	}
 }
 
 vector<shared_ptr<Result>> Result::Live() {
@@ -171,6 +193,7 @@ void Result::OpenStream() {
 	} catch (...) {
 		// A stream that fails to open has consumed and ended the query
 		state = State::CLOSED;
+		StopCounting();
 		throw;
 	}
 	state = State::STREAMING;
@@ -180,6 +203,7 @@ void Result::EndStream() {
 	// The stream object stays alive: another thread can still be inside a fetch on it, and a drained
 	// stream keeps reporting its terminal state
 	state = State::DRAINED;
+	StopCounting();
 }
 
 template <class FORMAT>
@@ -196,7 +220,14 @@ unique_ptr<typename FORMAT::T> Result::FetchStreamUnit(const InterruptCheck &che
 			return nullptr;
 		}
 		if (query_state == QueryResultState::EXECUTION_ERROR) {
-			typed.GetErrorObject().Throw();
+			try {
+				typed.GetErrorObject().Throw();
+			} catch (...) {
+				// The engine ended the query; ended here too, so its tasks are cancelled, it stops counting, and a
+				// later call reports the error
+				CloseAfterFailure(std::current_exception());
+				throw;
+			}
 		}
 		check();
 		query_state = typed.ExecuteTask();
@@ -279,6 +310,7 @@ void Result::RetainClaimed(const InterruptCheck &check) {
 		throw;
 	}
 	state = State::RETAINED;
+	StopCounting();
 }
 
 void Result::Settle(const InterruptCheck &check) {
@@ -496,6 +528,9 @@ void Result::Close() {
 	if (state == State::PENDING || state == State::STREAMING) {
 		DUCKDB_PY_ASSERT_GIL_RELEASED();
 	}
+	// Closing the query can drop the last reference to its context and database, which runs Python code, so that
+	// drop waits until the lock is released
+	auto keep_alive = context_owner.lock();
 	{
 		lock_guard<mutex> guard(handle_lock);
 		if (stream) {
@@ -505,6 +540,7 @@ void Result::Close() {
 		}
 	}
 	state = State::CLOSED;
+	StopCounting();
 }
 
 void Result::EndIfRunning() {

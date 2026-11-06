@@ -20,8 +20,31 @@
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/exceptions.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 namespace duckdb {
+
+namespace {
+
+//! Marks every copy of a function the engine makes (its catalog entry, every bound plan) as one registered from Python.
+//! The callable belongs to the database's KeptCallables, because the engine destroys a dropped function under its
+//! catalog locks, where releasing a reference could run Python code that needs those locks.
+struct PythonUDFInfo : public ScalarFunctionInfo {};
+
+} // namespace
+
+bool DuckDBPyConnection::IsPythonFunction(CatalogEntry &entry) {
+	if (entry.type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+		return false;
+	}
+	for (auto &function : entry.Cast<ScalarFunctionCatalogEntry>().functions.functions) {
+		if (!function->HasExtraFunctionInfo() ||
+		    !dynamic_cast<const PythonUDFInfo *>(&function->GetExtraFunctionInfo())) {
+			return false;
+		}
+	}
+	return true;
+}
 
 //! A lone surrogate has no UTF-8 encoding, so it is escaped the way Python prints it in a traceback.
 string ToUTF8(const nb::object &text) {
@@ -254,8 +277,7 @@ static scalar_function_t RunsPython(scalar_function_t body) {
 
 static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExceptionHandling exception_handling,
                                                   FunctionNullHandling null_handling) {
-	// Through the capture of the lambda, we have access to the function pointer
-	// We just need to make sure that it doesn't get garbage collected
+	// Borrowed: the database's KeptCallables owns the callable for as long as any copy of the function can run
 	scalar_function_t func = RunsPython([=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
@@ -387,13 +409,15 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 }
 
 static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling,
-                                              const ClientProperties &client_properties,
                                               FunctionNullHandling null_handling) {
-	// Through the capture of the lambda, we have access to the function pointer
-	// We just need to make sure that it doesn't get garbage collected
+	// Borrowed: the database's KeptCallables owns the callable for as long as any copy of the function can run
 	scalar_function_t func =
 	    RunsPython([=](DataChunk &input, ExpressionState &state, Vector &result) -> void { // NOLINT
 		    const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
+		    // The settings of the connection the query runs on, as they are now: the function serves every connection
+		    // of its database. Read at the first value that needs them, since an index expression has no client
+		    // context and a NULL row needs none.
+		    std::optional<ClientProperties> client_properties;
 
 		    for (idx_t row = 0; row < input.size(); row++) {
 
@@ -409,7 +433,10 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 						    contains_null = true;
 						    break;
 					    }
-					    parameter_builder.append(PythonObject::FromValue(value, column.GetType(), client_properties));
+					    if (!client_properties) {
+						    client_properties = state.GetContext().GetClientProperties();
+					    }
+					    parameter_builder.append(PythonObject::FromValue(value, column.GetType(), *client_properties));
 				    }
 				    if (contains_null) {
 					    // Immediately insert None, no need to call the function
@@ -603,8 +630,7 @@ public:
 		}
 	}
 
-	ScalarFunction GetFunction(const nb::callable &udf, PythonExceptionHandling exception_handling, bool side_effects,
-	                           const ClientProperties &client_properties) {
+	ScalarFunction GetFunction(const nb::callable &udf, PythonExceptionHandling exception_handling, bool side_effects) {
 
 		// Import this module, because importing this from a non-main thread causes a segfault
 
@@ -628,7 +654,7 @@ public:
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling, null_handling);
 		} else {
-			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties, null_handling);
+			func = CreateNativeFunction(udf.ptr(), exception_handling, null_handling);
 		}
 		FunctionStability function_side_effects =
 		    side_effects ? FunctionStability::VOLATILE : FunctionStability::CONSISTENT;
@@ -637,6 +663,7 @@ public:
 		// A Python callable can raise, and casting its return value can fail, so a UDF is always
 		// fallible. Without this core rethrows any execution error as an InternalException.
 		scalar_function.SetFallible();
+		scalar_function.SetExtraFunctionInfo<PythonUDFInfo>();
 		return scalar_function;
 	}
 };
@@ -652,9 +679,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const nb:
 	data.OverrideParameters(parameters);
 	data.OverrideReturnType(return_type);
 	data.Verify();
-	// Read after the conversion, because converting runs Python code that can close the connection
-	auto &connection = con.GetConnection();
-	return data.GetFunction(udf, exception_handling, side_effects, connection.context->GetClientProperties());
+	return data.GetFunction(udf, exception_handling, side_effects);
 }
 
 } // namespace duckdb

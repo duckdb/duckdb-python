@@ -21,17 +21,21 @@
 #include "duckdb_python/registered_py_object.hpp"
 #include "duckdb_python/python_dependency.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/common/list.hpp"
 #include "duckdb_python/nb/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/nb/conversions/python_udf_type_enum.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 struct BoundParameterData;
+class CatalogEntry;
 
 enum class PythonEnvironmentType { NORMAL, INTERACTIVE, JUPYTER };
 
 class SourceHandle;
 class SourceIdentity;
+struct MapFunctionInfo;
 
 //! Parameter values as execute() binds them: a list to ?, $1 and so on, a dict to $name
 identifier_map_t<BoundParameterData> TransformPreparedParameters(ClientContext &context, const nb::object &params,
@@ -249,6 +253,63 @@ private:
 	std::unique_ptr<DbapiResult> result;
 };
 
+//! The callables of the Python functions registered on one database, owned for as long as the database lives: the
+//! engine's copies of a function only borrow them. It is the data of the replacement scan every database of the
+//! binding carries, so it is destroyed with the database's config, the first member of DatabaseInstance and so the last
+//! one destroyed, after the database released its instance cache entry: a finalizer of a callable may reopen the file.
+//! Guarded by the GIL, all but the count of results.
+struct KeptCallables : public ReplacementScanData {
+	explicit KeptCallables(bool cached_p) : cached(cached_p) {
+	}
+	~KeptCallables() override;
+
+	//! The record of the database
+	static KeptCallables &Of(DatabaseInstance &database);
+
+	//! An open connection of the database, which holds the DatabaseFunctions object once the database has a callable
+	void Attach(DuckDBPyConnection &connection);
+	//! Called before the connection lets go of the database
+	void Detach(DuckDBPyConnection &connection);
+	//! Gives every open connection the DatabaseFunctions object, making it at the first registration of a function on
+	//! the database, so a database that never had one holds no Python object that could outlive the interpreter
+	void GiveFunctionsToConnections();
+	//! Takes over the callable of a function about to be published, which the engine borrows from then on; allocates
+	//! nothing. Returns where it is kept, for TakeBack.
+	list<PyObjectHolder>::iterator Keep(list<PyObjectHolder> &pending) noexcept;
+	//! Gives a kept callable back to pending, for a registration that certainly published nothing
+	void TakeBack(list<PyObjectHolder>::iterator kept, list<PyObjectHolder> &pending) noexcept;
+	//! A map() function, owned by its registry entry, which unlists it before it goes
+	void List(MapFunctionInfo &map);
+	void Unlist(MapFunctionInfo &map);
+	//! Whether the DatabaseFunctions object reports the callables and map() functions to the cycle collector
+	bool Reports() const;
+
+	list<PyObjectHolder> callables;
+	unordered_set<MapFunctionInfo *> maps;
+	std::shared_ptr<engine::ResultCount> results = std::make_shared<engine::ResultCount>();
+	//! Borrowed, each until it detaches
+	unordered_set<DuckDBPyConnection *> connections;
+	//! Whether connect() can reach the database by its name at any moment, even from inside a collection
+	const bool cached;
+	//! The DatabaseFunctions object, borrowed: it clears this when it dies, and this record clears its pointer back
+	PyObject *functions_object = nullptr;
+};
+
+//! The Python object that every open connection of a database holds, so the cycle collector sees those connections
+//! and the database's callables as one group: the callables are garbage only when every connection is. It reports them
+//! once for all connections, and never while a result or stream of the database exists or for a database that
+//! connect() can reach by its name.
+class DatabaseFunctions {
+public:
+	explicit DatabaseFunctions(KeptCallables &record);
+	~DatabaseFunctions();
+
+	int Traverse(visitproc visit, void *arg) const;
+
+	//! Cleared by the record when the database goes
+	KeptCallables *record;
+};
+
 struct DuckDBPyConnection : public std::enable_shared_from_this<DuckDBPyConnection> {
 private:
 	class Cursors {
@@ -300,7 +361,6 @@ public:
 	std::recursive_mutex py_connection_lock;
 	//! MemoryFileSystem used to temporarily store file-like objects for reading
 	std::shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
-	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
 	//! The names register() succeeded with on this connection, bounded oldest out. Only a hint: unregister() of a
 	//! name it holds refuses beside an open DB-API result, and of one it does not hold, such as a view renamed in SQL,
 	//! asks the catalog when the connection is free and is a no-op beside an open result
@@ -317,10 +377,32 @@ public:
 	//! The temporary view register() makes over a source, which owns the source's table reference in the catalog
 	void RegisterSourceView(const string &name, const SourceHandle &source);
 
+	//! The DatabaseFunctions object of the database, held while the connection is open and the database has one
+	unique_ptr<PyObjectHolder> functions;
+	//! The record the connection is attached to, until it detaches
+	KeptCallables *functions_record = nullptr;
+	//! Lets go of the DatabaseFunctions object, before the connection lets go of its database; call with the GIL held
+	void DetachFunctions();
+
 public:
 	explicit DuckDBPyConnection() {
 	}
 	~DuckDBPyConnection();
+
+	//! The cycle collector's view of the connection: its database's DatabaseFunctions object, while nothing but the
+	//! Python object owns the connection
+	int Traverse(visitproc visit, void *arg) const;
+	//! Closes the connection as dropping its last reference does, when the Python object is its only owner, releasing
+	//! the DB-API result under the connection's lock first, as close() does
+	void Clear();
+
+private:
+	bool OwnedByPythonOnly() const;
+	//! What the destructor does, safe to run again
+	void Teardown();
+	//! Lets go of what needs the GIL, in the order close and teardown share, and takes the connection and database out
+	//! for the caller to destroy without it
+	ConnectionGuard::Released LetGo();
 
 public:
 	static void Initialize(nb::handle &m);
@@ -458,6 +540,10 @@ public:
 
 	static std::shared_ptr<DuckDBPyConnection> Connect(const nb::object &database, bool read_only,
 	                                                   const nb::dict &config);
+	//! The per database record of callables, carried by the binding's replacement scan
+	static unique_ptr<ReplacementScanData> CreateCallableRecord(bool cached);
+	//! Attaches to the database's record, once the connection is open; call with the GIL held
+	void AttachFunctions();
 
 	static vector<Value> TransformPythonParamList(ClientContext &context, const nb::handle &params);
 	static identifier_map_t<BoundParameterData> TransformPythonParamDict(ClientContext &context,
@@ -490,6 +576,8 @@ private:
 	//! Runs every statement of the group but the last, after making way for them first when supersede, and returns
 	//! the last, unrun; null when none is left. Releases the GIL for the engine work.
 	unique_ptr<SQLStatement> RunAllButLast(engine::StatementGroup &statements, bool supersede);
+	//! Whether every overload of the entry was registered from Python
+	static bool IsPythonFunction(CatalogEntry &entry);
 
 	static void DetectEnvironment();
 };

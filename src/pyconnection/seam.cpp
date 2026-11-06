@@ -58,6 +58,12 @@ void SourceHandle::RememberFor(const std::shared_ptr<SourceIdentity> &identity_p
 	object_id = object.ptr();
 }
 
+void SourceHandle::ListMap(KeptCallables &record_p, MapFunctionInfo &map) {
+	record = &record_p;
+	listed = &map;
+	record->List(map);
+}
+
 SourceHandle::~SourceHandle() {
 	if (object_id) {
 		if (auto remembered = identity.lock()) {
@@ -66,6 +72,9 @@ SourceHandle::~SourceHandle() {
 	}
 	auto sources = registry.lock();
 	if (sources) {
+		if (listed) {
+			record->Unlist(*listed);
+		}
 		// Destroyed here rather than under the registry's lock, since it can own Python objects
 		auto table = sources->Unregister(name);
 	}
@@ -742,7 +751,10 @@ static std::shared_ptr<DuckDBPyResult> Submit(DuckDBPyConnection &self, const st
 			result->SettleClaimed(DuckDBPyConnection::CheckSignals);
 		}
 	}
-	return std::make_shared<DuckDBPyResult>(std::move(result));
+	auto submitted = std::make_shared<DuckDBPyResult>(std::move(result));
+	// Found from the session's context, since the connection may have closed once the claim ended
+	submitted->CountOn(KeptCallables::Of(*session.Context().db).results);
+	return submitted;
 }
 
 //! Whether reading the object uses it up: an Arrow stream, or a reader of batches or of IPC messages
@@ -1002,8 +1014,12 @@ static std::shared_ptr<SourceHandle> RegisterMap(DuckDBPyConnection &self, const
 	children.push_back(std::move(subquery));
 	auto table = make_uniq<TableFunctionRef>();
 	table->function = make_uniq<FunctionExpression>("python_map_function", std::move(children));
-	table->bind_info = make_shared_ptr<MapFunctionInfo>(function, schema);
-	return RegisterTable(session.Context(), std::move(table));
+	auto map = make_shared_ptr<MapFunctionInfo>(function, schema);
+	table->bind_info = map;
+	auto handle = RegisterTable(session.Context(), std::move(table));
+	// Found from the session's context, since the connection may have closed once the claim ended
+	handle->ListMap(KeptCallables::Of(*session.Context().db), *map);
+	return handle;
 }
 
 static std::shared_ptr<SourceHandle> RegisterFilelike(DuckDBPyConnection &self, const nb::object &obj) {

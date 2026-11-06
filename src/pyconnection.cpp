@@ -1,7 +1,9 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -63,17 +65,186 @@ static DuckDBPyModuleState &GetModuleState() {
 	return state;
 }
 
+KeptCallables::~KeptCallables() {
+	if (nb::detail::cleanup_guard guard {}) {
+		if (functions_object) {
+			nb::inst_ptr<DatabaseFunctions>(functions_object)->record = nullptr;
+		}
+	}
+}
+
+KeptCallables &KeptCallables::Of(DatabaseInstance &database) {
+	for (auto &scan : DBConfig::GetConfig(database).replacement_scans.Snapshot()) {
+		if (scan->function == PythonReplacementScan::Replace && scan->data) {
+			return scan->data->Cast<KeptCallables>();
+		}
+	}
+	throw InternalException("The database has no record for the callables of its Python functions");
+}
+
+void KeptCallables::Attach(DuckDBPyConnection &connection) {
+	unique_ptr<PyObjectHolder> held;
+	if (functions_object) {
+		held = make_uniq<PyObjectHolder>(nb::borrow<nb::object>(functions_object));
+	}
+	connections.insert(&connection);
+	connection.functions_record = this;
+	connection.functions = std::move(held);
+}
+
+void KeptCallables::Detach(DuckDBPyConnection &connection) {
+	connections.erase(&connection);
+	connection.functions_record = nullptr;
+	// Moved out first: dropping the last reference frees the DatabaseFunctions object
+	auto held = std::move(connection.functions);
+}
+
+list<PyObjectHolder>::iterator KeptCallables::Keep(list<PyObjectHolder> &pending) noexcept {
+	auto kept = pending.begin();
+	callables.splice(callables.end(), pending, kept);
+	return kept;
+}
+
+void KeptCallables::TakeBack(list<PyObjectHolder>::iterator kept, list<PyObjectHolder> &pending) noexcept {
+	pending.splice(pending.end(), callables, kept);
+}
+
+void KeptCallables::List(MapFunctionInfo &map) {
+	maps.insert(&map);
+	GiveFunctionsToConnections();
+}
+
+void KeptCallables::Unlist(MapFunctionInfo &map) {
+	maps.erase(&map);
+}
+
+void KeptCallables::GiveFunctionsToConnections() {
+	nb::object made;
+	if (functions_object) {
+		made = nb::borrow<nb::object>(functions_object);
+	} else {
+		made = nb::cast(new DatabaseFunctions(*this), nb::rv_policy::take_ownership);
+		functions_object = made.ptr();
+	}
+	for (auto connection : connections) {
+		if (!connection->functions) {
+			connection->functions = make_uniq<PyObjectHolder>(made);
+		}
+	}
+}
+
+DatabaseFunctions::DatabaseFunctions(KeptCallables &record_p) : record(&record_p) {
+}
+
+DatabaseFunctions::~DatabaseFunctions() {
+	if (record) {
+		record->functions_object = nullptr;
+	}
+}
+
+bool KeptCallables::Reports() const {
+	// connect() reaches a cached database by its name, even from code that runs while the collector clears, and a
+	// result or stream can still run its statements. Without an open connection the database may be going away, its
+	// registry and the map() functions listed here with it.
+	if (cached || connections.empty() || results->results > 0) {
+		return false;
+	}
+	// An open connection without the object can still call the callables, and the collector would not count it among
+	// their owners
+	for (auto connection : connections) {
+		if (!connection->functions || connection->functions->obj.ptr() != functions_object) {
+			return false;
+		}
+	}
+	return true;
+}
+
+int DatabaseFunctions::Traverse(visitproc visit, void *arg) const {
+	if (!record || !record->Reports()) {
+		return 0;
+	}
+	for (auto &callable : record->callables) {
+		Py_VISIT(callable.obj.ptr());
+	}
+	for (auto map : record->maps) {
+		Py_VISIT(map->function.obj.ptr());
+		Py_VISIT(map->schema.obj.ptr());
+	}
+	return 0;
+}
+
+static int DatabaseFunctionsTraverse(PyObject *self, visitproc visit, void *arg) {
+	Py_VISIT(Py_TYPE(self));
+	if (!nb::inst_ready(self)) {
+		return 0;
+	}
+	return nb::inst_ptr<DatabaseFunctions>(self)->Traverse(visit, arg);
+}
+
+static PyType_Slot DATABASE_FUNCTIONS_SLOTS[] = {{Py_tp_traverse, reinterpret_cast<void *>(DatabaseFunctionsTraverse)},
+                                                 {0, nullptr}};
+
+unique_ptr<ReplacementScanData> DuckDBPyConnection::CreateCallableRecord(bool cached) {
+	return make_uniq<KeptCallables>(cached);
+}
+
+void DuckDBPyConnection::AttachFunctions() {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	KeptCallables::Of(*con.GetDatabase().instance).Attach(*this);
+}
+
+void DuckDBPyConnection::DetachFunctions() {
+	if (functions_record) {
+		functions_record->Detach(*this);
+	}
+}
+
 DuckDBPyConnection::~DuckDBPyConnection() {
 	try {
-		// Released with the GIL held, since the registry entries they let go own Python references
-		ReleaseOwnedSources();
-		auto released = con.Release();
-		{
-			nb::gil_scoped_release gil;
-			released.Destroy();
-		}
+		Teardown();
 	} catch (...) { // NOLINT
 	}
+}
+
+void DuckDBPyConnection::Teardown() {
+	auto released = LetGo();
+	{
+		nb::gil_scoped_release gil;
+		released.Destroy();
+	}
+}
+
+ConnectionGuard::Released DuckDBPyConnection::LetGo() {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	con.SetResult(nullptr);
+	// Released with the GIL held, since the registry entries they let go own Python references
+	ReleaseOwnedSources();
+	// After the release, whose finalizers can still use the connection, and right before it lets go of its database
+	DetachFunctions();
+	// Taken out under the GIL, so a seam call reading the guard under the GIL sees all of it or a closed connection
+	return con.Release();
+}
+
+bool DuckDBPyConnection::OwnedByPythonOnly() const {
+	return weak_from_this().use_count() == 1;
+}
+
+int DuckDBPyConnection::Traverse(visitproc visit, void *arg) const {
+	if (functions && OwnedByPythonOnly()) {
+		Py_VISIT(functions->obj.ptr());
+	}
+	return 0;
+}
+
+void DuckDBPyConnection::Clear() {
+	if (!OwnedByPythonOnly()) {
+		return;
+	}
+	{
+		ConnectionLockGuard conn_lock(*this);
+		con.SetResult(nullptr);
+	}
+	Teardown();
 }
 
 DbapiResult::DbapiResult(std::shared_ptr<DuckDBPyResult> result_p) : result(std::move(result_p)) {
@@ -462,25 +633,40 @@ bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 
-std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
-	auto entry = registered_functions.find(name);
-	if (entry == registered_functions.end()) {
-		// Not registered or already unregistered
-		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
-		                            name);
+//! A DB-API result belongs to its connection, but engine workers keep running a streaming statement between fetches,
+//! so the result counts on its database while its statement can still run
+static void CountDbapiResult(engine::Result &result) {
+	if (auto database = result.TryGetDatabase()) {
+		result.CountWhileRunning(KeptCallables::Of(*database).results);
 	}
+}
+
+//! Python functions are registered in the system catalog's main schema
+static optional_ptr<CatalogEntry> GetSystemFunction(ClientContext &context, const string &name) {
+	auto &catalog = Catalog::GetSystemCatalog(context);
+	auto transaction = catalog.GetCatalogTransaction(context);
+	// Looked up in the schema itself, because a catalog lookup would autoload an extension that defines the name
+	return catalog.GetSchema(transaction, Identifier(DEFAULT_SCHEMA))
+	    .GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(name));
+}
+
+std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
 	// Held from here on, as close() takes it too: the check below releases the GIL while it uses the context
 	ConnectionLockGuard conn_lock(*this);
-
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
 	// Held from the check to the change, so no result can open in between and be ended by it
 	engine::ConnectionClaim claim(context);
 	engine::VerifyNoOpenResult(context);
 
+	bool removed = false;
 	context.RunFunctionInTransaction([&]() {
-		// create function
-		auto &catalog = Catalog::GetCatalog(context, SYSTEM_CATALOG);
+		auto entry = GetSystemFunction(context, name);
+		// A built in function is an internal entry too, so only the marker keeps the drop below off it
+		if (!entry || !IsPythonFunction(*entry)) {
+			return;
+		}
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		DropInfo info;
 		info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
 		info.SetName(Identifier(name));
@@ -488,9 +674,13 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const stri
 		info.cascade = false;
 		info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
 		catalog.DropEntry(context, info);
+		removed = true;
 	});
-	registered_functions.erase(entry);
-
+	// Thrown after the transaction, since an error inside it would invalidate a transaction the user has open
+	if (!removed) {
+		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
+		                            name);
+	}
 	return shared_from_this();
 }
 
@@ -519,26 +709,86 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const nb::callable &ud
 	if (context.transaction.HasActiveTransaction()) {
 		context.CancelTransaction();
 	}
-	if (registered_functions.find(name) != registered_functions.end()) {
-		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
-		                              "functions with the same name is not supported yet, please remove it first",
-		                              name);
-	}
+	auto &record = KeptCallables::Of(*context.db);
+	list<PyObjectHolder> pending;
+	pending.emplace_back(nb::borrow<nb::object>(udf));
+	record.GiveFunctionsToConnections();
 	CreateScalarFunctionInfo info(scalar_function);
-
-	context.RegisterFunction(info);
-
-	auto dependency = make_uniq<ExternalDependency>();
-	dependency->AddDependency("function", PythonDependencyItem::Create(udf));
-	registered_functions[name] = std::move(dependency);
-
+	ErrorData refusal;
+	bool created = false;
+	// Kept right before the engine can publish the function, since the commit can throw after it committed, and taken
+	// back only when the function certainly does not exist
+	auto kept = record.Keep(pending);
+	// The check and the change in one transaction, so a registration of the same signature on another connection either
+	// sees this one or conflicts with it; it does what ClientContext::RegisterFunction does, which takes the context
+	// lock itself and so cannot run inside
+	try {
+		context.RunFunctionInTransaction([&]() {
+			QualifiedName qualified_name(Identifier::InvalidCatalog(), Identifier::DefaultSchema(), Identifier(name));
+			EntryLookupInfo lookup(CatalogType::SCALAR_FUNCTION_ENTRY, qualified_name);
+			auto entry = Catalog::GetEntry(context, lookup, OnEntryNotFound::RETURN_NULL);
+			if (entry && entry->type != CatalogType::SCALAR_FUNCTION_ENTRY) {
+				refusal = CatalogException("%s is not an %s", name, ScalarFunctionCatalogEntry::Name);
+				return;
+			}
+			if (entry) {
+				auto &existing = entry->Cast<ScalarFunctionCatalogEntry>();
+				for (auto &overload : existing.functions.functions) {
+					if (overload->GetSignature().IsSameOverload(scalar_function.GetSignature())) {
+						refusal =
+						    CatalogException::EntryAlreadyExists(CatalogType::SCALAR_FUNCTION_ENTRY, Identifier(name));
+						return;
+					}
+				}
+				if (info.functions.MergeFunctionSet(existing.functions)) {
+					info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+				}
+			}
+			Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+			created = true;
+		});
+	} catch (...) {
+		if (!created) {
+			record.TakeBack(kept, pending);
+		}
+		throw;
+	}
+	// Refused after the transaction, since an error inside it would invalidate a transaction the user has open
+	if (refusal.HasError()) {
+		record.TakeBack(kept, pending);
+		refusal.Throw();
+	}
 	return shared_from_this();
 }
 
+static int ConnectionTraverse(PyObject *self, visitproc visit, void *arg) {
+	Py_VISIT(Py_TYPE(self));
+	if (!nb::inst_ready(self)) {
+		return 0;
+	}
+	return nb::inst_ptr<DuckDBPyConnection>(self)->Traverse(visit, arg);
+}
+
+static int ConnectionClear(PyObject *self) {
+	if (nb::inst_ready(self)) {
+		try {
+			nb::inst_ptr<DuckDBPyConnection>(self)->Clear();
+		} catch (...) { // NOLINT: a connection that fails to close here closes when its last reference goes
+		}
+	}
+	return 0;
+}
+
+static PyType_Slot CONNECTION_SLOTS[] = {{Py_tp_traverse, reinterpret_cast<void *>(ConnectionTraverse)},
+                                         {Py_tp_clear, reinterpret_cast<void *>(ConnectionClear)},
+                                         {0, nullptr}};
+
 void DuckDBPyConnection::Initialize(nb::handle &m) {
+	nb::class_<DatabaseFunctions>(m, "_DatabaseFunctions", nb::type_slots(DATABASE_FUNCTIONS_SLOTS));
 	// nanobind types aren't weak-referenceable by default;
 	// otherwise weakref.ref/proxy/finalize on a connection raises TypeError.
-	auto connection_module = nb::class_<DuckDBPyConnection>(m, "DuckDBPyConnection", nb::is_weak_referenceable());
+	auto connection_module = nb::class_<DuckDBPyConnection>(m, "DuckDBPyConnection", nb::is_weak_referenceable(),
+	                                                        nb::type_slots(CONNECTION_SLOTS));
 
 	connection_module.def("__enter__", &DuckDBPyConnection::Enter)
 	    .def(
@@ -681,6 +931,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::ob
 		// TODO: should we throw?
 		return nullptr;
 	}
+	CountDbapiResult(*result);
 	auto py_result = std::make_shared<DuckDBPyResult>(std::move(result));
 	// The rowcount counts what the parameterized statement changed, whichever statement's rows the result holds
 	if (query_result) {
@@ -910,6 +1161,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 		// TODO: should we throw?
 		return nullptr;
 	}
+	CountDbapiResult(*res);
 	auto py_result = std::make_shared<DuckDBPyResult>(std::move(res));
 	con.SetResult(std::make_unique<DbapiResult>(std::move(py_result)));
 	return shared_from_this();
@@ -1074,7 +1326,10 @@ nb::tuple DuckDBPyConnection::PrepareScript(const nb::object &query, const nb::o
 	nb::object kept_result = nb::none();
 	// A kept result that returns no rows only stands in for a last statement that returns none, which the caller runs
 	if (kept && kept->Properties().return_type == StatementReturnType::QUERY_RESULT) {
-		kept_result = nb::cast(std::make_shared<DuckDBPyResult>(std::move(kept)));
+		auto kept_rows = std::make_shared<DuckDBPyResult>(std::move(kept));
+		// Found from the statements' own context, since the connection may have closed while they ran without the GIL
+		kept_rows->CountOn(KeptCallables::Of(*statements.Context().db).results);
+		kept_result = nb::cast(std::move(kept_rows));
 	}
 	if (!last_statement) {
 		if (with_statement) {
@@ -1212,28 +1467,22 @@ void DuckDBPyConnection::Abort() {
 }
 
 void DuckDBPyConnection::Close() {
-	ConnectionLockGuard conn_lock(*this);
-	con.SetResult(nullptr);
-	DUCKDB_PY_ASSERT_GIL_HELD();
-	// Released with the GIL held, since the registry entries they let go own Python references
-	ReleaseOwnedSources();
-	// Taken out under the GIL, so a seam call reading the guard under the GIL sees all of it or a closed connection.
-	auto released = con.Release();
-	// Release the GIL only for the native Connection / DuckDB teardown, which
-	// is pure C++ work and can take noticeable time. Hold the GIL back for
-	// `registered_functions.clear()` because the
-	// `case_insensitive_map_t<unique_ptr<ExternalDependency>>` it destroys
-	// transitively owns Python references (Python UDF
-	// callables, registered Python objects, …). Decrementing those
-	// references with the GIL released is undefined behaviour — see
-	// duckdb-python#456.
+	ConnectionGuard::Released released;
+	{
+		ConnectionLockGuard conn_lock(*this);
+		// A call that claimed the connection while this one waited for the lock may still be using it
+		con.ThrowIfBusy();
+		released = LetGo();
+	}
+	// Dropped after the lock, since closing the database runs the finalizers of its Python callables, which may use
+	// this connection from another thread. Engine teardown can take noticeable time, so it runs without the GIL; a
+	// Python reference it drops takes the GIL itself.
 	{
 		nb::gil_scoped_release release;
 		released.Destroy();
 	}
 	// https://peps.python.org/pep-0249/#Connection.close
 	cursors.ClearCursors();
-	registered_functions.clear();
 }
 
 void DuckDBPyConnection::ReleaseOwnedSources() {
@@ -1391,8 +1640,8 @@ void DuckDBPyConnection::Cursors::AddCursor(std::shared_ptr<DuckDBPyConnection> 
 	vector<std::weak_ptr<DuckDBPyConnection>> compacted_cursors;
 	bool needs_compaction = false;
 	for (auto &cur_p : cursors) {
-		auto cur = cur_p.lock();
-		if (!cur) {
+		// Checked without a strong reference, since dropping one under the lock could close a database
+		if (cur_p.expired()) {
 			needs_compaction = true;
 			continue;
 		}
@@ -1406,29 +1655,40 @@ void DuckDBPyConnection::Cursors::AddCursor(std::shared_ptr<DuckDBPyConnection> 
 }
 
 void DuckDBPyConnection::Cursors::ClearCursors() {
-	lock_guard<mutex> l(lock);
-
-	for (auto &cur : cursors) {
-		auto cursor = cur.lock();
+	vector<std::weak_ptr<DuckDBPyConnection>> closing;
+	{
+		lock_guard<mutex> l(lock);
+		std::swap(cursors, closing);
+	}
+	// Closed outside the lock, since closing the last of them closes the database, which can run Python code that
+	// uses this connection
+	for (auto it = closing.begin(); it != closing.end(); ++it) {
+		// This is *only* needed because we have a nb::gil_scoped_release in Close, so it *needs* the GIL in order to
+		// release it don't ask me why it can't just realize there is no GIL and move on
+		nb::gil_scoped_acquire gil;
+		auto cursor = it->lock();
 		if (!cursor) {
 			// The cursor has already been closed
 			continue;
 		}
-		// This is *only* needed because we have a nb::gil_scoped_release in Close, so it *needs* the GIL in order to
-		// release it don't ask me why it can't just realize there is no GIL and move on
-		nb::gil_scoped_acquire gil;
-		cursor->Close();
+		try {
+			cursor->Close();
+		} catch (...) {
+			// The cursors not closed yet stay with this connection, so that its next close closes them
+			lock_guard<mutex> l(lock);
+			cursors.insert(cursors.end(), it, closing.end());
+			throw;
+		}
 		// Ensure destructor runs with gil if triggered.
 		cursor.reset();
 	}
-
-	cursors.clear();
 }
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Cursor() {
 	auto res = std::make_shared<DuckDBPyConnection>();
 	res->con.SetDatabase(con);
 	res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
+	res->AttachFunctions();
 	cursors.AddCursor(res);
 	return res;
 }
@@ -1563,6 +1823,7 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 		}
 	}
 	DuckDBPyResult converted(std::move(arrow), std::move(names));
+	converted.CountOn(KeptCallables::Of(*session.Context().db).results);
 	if (reader) {
 		return nb::cast(converted.FetchRecordBatchReader(batch_size));
 	}
@@ -1640,7 +1901,8 @@ void InstantiateNewInstance(DuckDB &db) {
 static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
 	auto res = std::make_shared<DuckDBPyConnection>();
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();
-	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
+	config.replacement_scans.emplace_back(PythonReplacementScan::Replace,
+	                                      DuckDBPyConnection::CreateCallableRecord(cache_instance));
 	{
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
@@ -1650,6 +1912,7 @@ static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &d
 		res->con.SetDatabase(std::move(database));
 		res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
 	}
+	res->AttachFunctions();
 	return res;
 }
 

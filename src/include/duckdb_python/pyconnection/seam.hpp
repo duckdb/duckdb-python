@@ -8,6 +8,8 @@
 namespace duckdb {
 
 struct DuckDBPyConnection;
+struct KeptCallables;
+struct MapFunctionInfo;
 class SourceIdentity;
 
 //! Keeps a registered source, or a file on a connection's object store, for as long as it lives
@@ -25,12 +27,19 @@ public:
 	}
 	//! Records which Python object the source was registered for, so registering that object again finds this handle
 	void RememberFor(const std::shared_ptr<SourceIdentity> &identity_p, const nb::handle &object);
+	//! Lists the map() function the source's entry holds on the database's record of callables, which reports it to
+	//! the cycle collector with the rest of the database's callables; call with the GIL held
+	void ListMap(KeptCallables &record_p, MapFunctionInfo &map);
 
 private:
 	string name;
 	//! Weak, so a closed database frees its sources even while handles to them live on
 	weak_ptr<engine::SourceRegistry> registry;
 	shared_ptr<ExternalDependency> keep_alive;
+	//! Where the map() function is listed, borrowed: valid while the registry is, which the same database owns
+	KeptCallables *record = nullptr;
+	//! A key of that list only, never dereferenced
+	MapFunctionInfo *listed = nullptr;
 	//! Weak, so a handle never keeps the connection that registered the source alive
 	std::weak_ptr<SourceIdentity> identity;
 	//! A map key only, never dereferenced

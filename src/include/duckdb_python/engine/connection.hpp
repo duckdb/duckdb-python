@@ -250,6 +250,9 @@ public:
 	StatementGroup(StatementGroup &&) = default;
 
 public:
+	ClientContext &Context() const {
+		return session.Context();
+	}
 	//! The first statement, parsed but not run; null for a group without statements. Only before Next. Inside an
 	//! explicit transaction, an error parsing it aborts the transaction, as in the engine.
 	optional_ptr<const SQLStatement> First();
