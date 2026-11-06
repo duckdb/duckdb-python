@@ -693,6 +693,58 @@ def test_str_chunks_outlive_the_frames_column_while_a_result_streams(pa, dtype):
     assert pa.total_allocated_bytes() == before
 
 
+needs_dictionary_backed_strings = pytest.mark.skipif(
+    PANDAS_GE_3,
+    reason=(
+        "pandas 3 decodes a dictionary when it builds an ArrowStringArray and no CI job runs pandas 2; run it by hand "
+        "with pandas 2.2.3 and pyarrow 18.1.0 layered onto this environment through uv run's with option"
+    ),
+)
+DICTIONARY_LAYOUTS = {
+    "one_chunk_with_nulls": [["x", "y", None, "z"] * 250],
+    "two_chunks_with_different_dictionaries": [["a", "b"] * 60, ["c", None] * 60],
+    "one_chunk_without_nulls": [["x", "y"] * 60],
+    "below_the_chunk_length_threshold": [["x", None, "y"]],
+    "many_short_chunks": [["v", None]] * 30,
+    "many_one_row_chunks": [[("a", None, "b")[index % 3]] for index in range(100)],
+    # More distinct values than an int8 index addresses, in chunks too short to be read one by one.
+    "distinct_values_beyond_an_int8_index": [[f"v{index}"] for index in range(200)],
+    "an_empty_chunk_between_two": [["a", None] * 50, [], ["b"] * 50],
+    "only_nulls": [[None] * 100],
+    "chunks_longer_than_a_vector": [
+        [None if index % 7 == 0 else f"v{index % 100}" for index in range(2 * VECTOR_SIZE + 1)],
+        ["é", None, "", "nan", "a\x00b", "🦆"] * 700,
+    ],
+}
+
+
+def _dictionary_backed(pa, pieces, index_type):
+    kind = pa.dictionary(index_type, pa.large_string())
+    chunks = [pa.array(piece, pa.large_string()).dictionary_encode().cast(kind) for piece in pieces]
+    array = pd.arrays.ArrowStringArray(pa.chunked_array(chunks, kind))
+    assert array._pa_array.type == kind
+    return array
+
+
+@needs_dictionary_backed_strings
+@needs_arrow_chunk_export
+@pytest.mark.parametrize("index_type", ["int8", "int32", "int64"])
+@pytest.mark.parametrize("layout", list(DICTIONARY_LAYOUTS))
+def test_dictionary_backed_string_column_reads_its_values_from_its_chunks(
+    duckdb_cursor, monkeypatch, pa, layout, index_type
+):
+    pieces = DICTIONARY_LAYOUTS[layout]
+    values = [value for piece in pieces for value in piece]
+    frame = pd.DataFrame(  # noqa: F841
+        {"s": _dictionary_backed(pa, pieces, getattr(pa, index_type)()), "i": numpy.arange(len(values))}
+    )
+    calls = _to_numpy_calls(monkeypatch, pd.arrays.ArrowStringArray, len(values))
+    relation = duckdb_cursor.sql("SELECT s FROM frame ORDER BY i")
+    assert _types(relation) == ["VARCHAR"]
+    assert relation.fetchall() == _rows_of(values)
+    assert calls == []
+
+
 @pytest.mark.parametrize("rows", [3, 3 * ARROW_ROWS_PER_CHUNK], ids=["short", "long"])
 @pytest.mark.parametrize("dtype", PYARROW_STORAGE)
 def test_pyarrow_string_column_is_never_read_through_data(duckdb_cursor, monkeypatch, dtype, rows):
