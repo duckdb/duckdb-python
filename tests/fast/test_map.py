@@ -1,6 +1,7 @@
 import gc
 import itertools
 import json
+import os
 import re
 import subprocess
 import sys
@@ -603,3 +604,182 @@ def test_map_result_column_of_another_length_is_refused(kind, rows, length, expl
     if "words" in outcome:
         outcome["words"] = named & set(outcome["words"])
     assert outcome == {"error": "InvalidInputException", "words": named, "answers": [[[42]], [[42]]]}
+
+
+@pytest.mark.parametrize("explicit_schema", [False, True], ids=["inferred", "explicit_schema"])
+@pytest.mark.parametrize(
+    ("sql_type", "value"),
+    [
+        pytest.param("BOOLEAN", "i % 2 = 0", id="BOOLEAN"),
+        pytest.param("VARCHAR", "i::VARCHAR", id="VARCHAR"),
+        pytest.param("BLOB", "i::VARCHAR::BLOB", id="BLOB"),
+        pytest.param("UUID", "md5(i::VARCHAR)::UUID", id="UUID"),
+        pytest.param("INTEGER[]", "[i::INTEGER]", id="LIST"),
+        pytest.param("STRUCT(a INTEGER)", "{'a': i::INTEGER}", id="STRUCT"),
+    ],
+)
+def test_map_identity_round_trips_a_column_with_null_chunks(duckdb_cursor, sql_type, value, explicit_schema):
+    duckdb_cursor.execute("set threads = 1")
+    # Of the four 2048 row chunks of a, the first holds no NULL, the second one, the third only NULLs and the fourth
+    # none again, so a chunk follows the one whose column came back as a constant NULL; n has no NULL at all.
+    source = duckdb_cursor.sql(
+        f"select (case when (i < 4096 and i != 3000) or i >= 6144 then {value} end)::{sql_type} as a, i as n "
+        "from range(8192) t(i)"
+    )
+    mapped = source.map(lambda df: df, schema={"a": sql_type, "n": "BIGINT"} if explicit_schema else None)
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+@pytest.mark.parametrize("explicit_schema", [False, True], ids=["inferred", "explicit_schema"])
+@pytest.mark.parametrize(
+    ("sql_type", "make_missing"),
+    [
+        pytest.param("BIGINT", lambda: None, id="None_for_BIGINT"),
+        pytest.param("VARCHAR", duckdb.NullValue, id="NullValue_for_VARCHAR"),
+        pytest.param("VARCHAR", lambda: np.datetime64("NaT", "us"), id="NaT_for_VARCHAR"),
+        pytest.param("BIGINT", lambda: duckdb.Value(True, duckdb.sqltypes.SQLNULL), id="NULL_typed_Value_for_BIGINT"),
+    ],
+)
+def test_map_returned_column_the_analyzer_reads_as_null_is_null(duckdb_cursor, sql_type, make_missing, explicit_schema):
+    def missing_on_rows(df):
+        if not len(df):
+            return df
+        return df.assign(a=pd.Series([make_missing() for _ in range(len(df))], dtype=object))
+
+    source = duckdb_cursor.sql(f"select i::{sql_type} as a from range(3) t(i)")
+    mapped = source.map(missing_on_rows, schema={"a": sql_type} if explicit_schema else None)
+    assert mapped.types == source.types
+    assert mapped.fetchall() == [(None,), (None,), (None,)]
+
+
+def test_map_returned_object_column_with_a_value_of_another_type_still_mismatches(duckdb_cursor):
+    def text_on_rows(df):
+        return df.assign(a=pd.Series(["x"] + [None] * (len(df) - 1), dtype=object)) if len(df) else df
+
+    mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(text_on_rows)
+    with pytest.raises(
+        duckdb.InvalidInputException, match=re.escape("UDF column type mismatch, expected [BIGINT], got [VARCHAR]")
+    ):
+        mapped.fetchall()
+
+
+MAP_FUNCTION_ERROR = "Python error in the map function: "
+
+
+class CustomBaseException(BaseException):
+    pass
+
+
+@pytest.mark.parametrize("stage", ["bind", "execution"])
+@pytest.mark.parametrize(
+    "exc",
+    [pytest.param(cls, id=cls.__name__) for cls in [ValueError, MemoryError, KeyboardInterrupt, CustomBaseException]],
+)
+def test_map_function_exception_reaches_the_caller_with_its_type_and_message(duckdb_cursor, capfd, exc, stage):
+    def boom(df):
+        if stage == "bind" or len(df):
+            msg = "boom in map"
+            raise exc(msg)
+        return df
+
+    with pytest.raises(
+        duckdb.InvalidInputException, match=re.escape(f"{MAP_FUNCTION_ERROR}{exc.__name__}: boom in map")
+    ):
+        duckdb_cursor.sql("select i as a from range(3) t(i)").map(boom).fetchall()
+    assert capfd.readouterr().err == ""
+    _assert_connection_answers(duckdb_cursor)
+
+
+_SYS_EXIT_CHILD = """
+import json
+import sys
+import threading
+
+import duckdb
+
+stage = sys.argv[1]
+submitting = threading.get_ident()
+exited = threading.Event()
+lock = threading.Lock()
+exited_on = []
+
+
+def exit_always(df):
+    exited_on.append(threading.get_ident())
+    sys.exit(3)
+
+
+def exit_on_rows(df):
+    if len(df):
+        exited_on.append(threading.get_ident())
+        sys.exit(3)
+    return df
+
+
+def exit_once_off_the_submitting_thread(df):
+    if not len(df):
+        return df
+    if threading.get_ident() == submitting:
+        # Waiting releases the GIL and holds this task, so a worker thread takes another one and exits.
+        exited.wait(timeout=10)
+        return df
+    with lock:
+        if exited_on:
+            return df
+        exited_on.append(threading.get_ident())
+    exited.set()
+    sys.exit(3)
+
+
+con = duckdb.connect(config={"threads": 4}) if stage == "worker_thread" else duckdb.default_connection()
+if stage == "calling_thread":
+    # One thread runs every task on the thread that fetches.
+    con.execute("set threads = 1")
+try:
+    if stage == "bind":
+        con.sql("select i as a from range(10) t(i)").map(exit_always)
+    elif stage == "calling_thread":
+        con.sql("select i as a from range(10) t(i)").map(exit_on_rows).fetchall()
+    else:
+        # Five row groups give the scan several tasks, where range() gives one.
+        con.execute("create table t as select range a from range(500000)")
+        con.table("t").map(exit_once_off_the_submitting_thread).fetchall()
+    outcome = {"error": None}
+except duckdb.Error as error:
+    outcome = {"error": type(error).__name__, "message": str(error)}
+outcome["raised_on_the_submitting_thread"] = [ident == submitting for ident in exited_on]
+outcome["answers"] = con.sql("select 42").fetchall()
+print("outcome " + json.dumps(outcome), flush=True)
+"""
+
+SYS_EXIT_CHILD_TIMEOUT = 60
+
+
+@pytest.mark.timeout(2 * SYS_EXIT_CHILD_TIMEOUT)
+@pytest.mark.parametrize("stage", ["bind", "calling_thread", "worker_thread"])
+def test_map_function_calling_sys_exit_raises_instead_of_ending_the_process(stage):
+    # sys.exit in a map function can end or hang the process, so the case runs in a child.
+    try:
+        child = subprocess.run(
+            [sys.executable, "-I", "-c", _SYS_EXIT_CHILD, stage],
+            capture_output=True,
+            text=True,
+            timeout=SYS_EXIT_CHILD_TIMEOUT,
+            check=False,
+            # An editable install that rebuilds on import otherwise prints its build output to stderr.
+            env={**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"},
+        )
+    except subprocess.TimeoutExpired as hang:
+        pytest.fail(f"the child did not finish within {SYS_EXIT_CHILD_TIMEOUT} seconds: {hang.stderr!r}")
+    assert child.returncode == 0, child.stdout[-2000:] + child.stderr[-2000:]
+    assert child.stderr == "", child.stderr[-2000:]
+    outcomes = [
+        json.loads(line.removeprefix("outcome ")) for line in child.stdout.splitlines() if line.startswith("outcome ")
+    ]
+    assert len(outcomes) == 1, child.stdout[-2000:]
+    outcome = outcomes[0]
+    assert outcome["error"] == "InvalidInputException", outcome
+    assert f"{MAP_FUNCTION_ERROR}SystemExit: 3" in outcome["message"], outcome
+    assert outcome["raised_on_the_submitting_thread"] == [stage != "worker_thread"]
+    assert outcome["answers"] == [[42]]
