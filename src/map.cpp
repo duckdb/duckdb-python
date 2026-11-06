@@ -58,8 +58,9 @@ static nb::object FunctionCall(const MapFunctionData &data, NumpyResultConversio
 	// Not PyObject_CallOneArg: nanobind links macOS extensions against a fixed list of CPython symbols that lacks it.
 	auto *df_obj = PyObject_CallFunctionObjArgs(function, in_df.ptr(), nullptr);
 	if (!df_obj) {
-		PyErr_PrintEx(1);
-		throw InvalidInputException("Python error. See above for a stack trace.");
+		// Never PyErr_Print: for SystemExit it ends the interpreter, from inside an engine task.
+		nb::python_error error;
+		throw InvalidInputException("Python error in the map function: %s", FormatUDFPythonError(error));
 	}
 
 	auto df = nb::steal<nb::object>(df_obj);
@@ -217,6 +218,18 @@ static string TypeVectorToString(const vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
+//! A returned column the analyzer reads as all NULL binds as NULL, which holds for any type, as OverrideNullType
+//! assumes at bind
+static bool MatchesBoundTypes(const vector<LogicalType> &returned, const vector<LogicalType> &bound) {
+	D_ASSERT(returned.size() == bound.size());
+	for (idx_t col_idx = 0; col_idx < returned.size(); col_idx++) {
+		if (returned[col_idx] != bound[col_idx] && returned[col_idx].id() != LogicalTypeId::SQLNULL) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                      DataChunk &output) {
 	if (input.size() == 0) {
@@ -279,7 +292,7 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 	}
 
 	D_ASSERT(output.GetTypes() == data.out_types);
-	if (pandas_return_types != output.GetTypes()) {
+	if (!MatchesBoundTypes(pandas_return_types, output.GetTypes())) {
 		throw InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
 		                            TypeVectorToString(data.out_types), TypeVectorToString(pandas_return_types));
 	}
@@ -293,7 +306,9 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 	}
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		if (missing_values[col_idx]) {
+		// A guessed column whose chunk holds only missing values, and a column bind left untyped, the only one still
+		// typed NULL here; the bound type's scanner would read some missing values as data, such as NaT as 'NaT'.
+		if (missing_values[col_idx] || pandas_return_types[col_idx].id() == LogicalTypeId::SQLNULL) {
 			ConstantVector::SetNull(output.data[col_idx], count_t(row_count));
 			continue;
 		}
