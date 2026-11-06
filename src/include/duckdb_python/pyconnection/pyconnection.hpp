@@ -379,7 +379,8 @@ public:
 	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
-	//! Execute, where local_only refuses each statement as PrepareAndSubmitInternal's local_only does
+	//! Execute, where local_only refuses each statement engine::RefuseWhileConnected refuses, under the claim it runs
+	//! in: the last one in PrepareAndSubmitInternal, every earlier one in the group's RunAllButLast
 	std::shared_ptr<DuckDBPyConnection> ExecuteQuery(const nb::object &query, nb::object params, bool local_only);
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 

@@ -235,8 +235,9 @@ public:
 	void Run(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
 	//! Run for a caller that already holds the connection's claim
 	void RunClaimed(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
-	//! Runs a statement to its end and drops its rows, its replacement scans answered from tables and nothing else
-	void Run(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check);
+	//! Runs a statement to its end and drops its rows, its replacement scans answered from tables and nothing else, for
+	//! a caller that already holds the connection's claim
+	void RunClaimed(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check);
 	ConnectionClaim Claim();
 
 private:

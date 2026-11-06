@@ -28,6 +28,7 @@ __all__ = [
     "check_text",
     "collation",
     "column_reference",
+    "connected",
     "create_view",
     "literal_type",
     "name_scope",
@@ -133,11 +134,6 @@ def arrow_schema(con: _duckdb.DuckDBPyConnection, names: list[str], types: Seque
 def parse_type(con: _duckdb.DuckDBPyConnection, text: str) -> DuckDBPyType:
     """A type name parsed on this connection, so its own types resolve."""
     return con._parse_type(text)
-
-
-def connected_refusal() -> _duckdb.InvalidInputException:
-    """The error the seam's own calls raise on a CONNECT-ed connection."""
-    return _duckdb.InvalidInputException(f"Invalid Input Error: {_duckdb._CONNECTED_REFUSAL}")
 
 
 def connected(con: _duckdb.DuckDBPyConnection) -> bool:

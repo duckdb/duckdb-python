@@ -1259,7 +1259,6 @@ static nb::list ParseExpressions(const string &text) {
 }
 
 void DuckDBPySeam::Initialize(nb::module_ &m) {
-	m.attr("_CONNECTED_REFUSAL") = engine::CONNECTED_REFUSAL;
 	nb::class_<SourceHandle>(m, "SourceHandle", nb::is_weak_referenceable())
 	    .def_prop_ro("name", &SourceHandle::Name, "The name statements read the source by")
 	    .def("__repr__", [](const SourceHandle &handle) { return "<SourceHandle " + handle.Name() + ">"; });

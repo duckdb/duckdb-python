@@ -576,8 +576,12 @@ void DuckDBPyAppender::Flush() {
 	};
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
+	// Taken before the run, so a busy connection refuses with every row kept for a retry, and so does a CONNECT-ed
+	// one, to which the statement over the rows held here would go as its text alone
+	auto connection_claim = session.Claim();
+	engine::RefuseWhileConnected(*held.context);
 	try {
-		session.Run(statement->Copy(), tables, check);
+		session.RunClaimed(statement->Copy(), tables, check);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		// A refused or interrupted flush keeps its rows for a retry, as the stable C++ Appender does

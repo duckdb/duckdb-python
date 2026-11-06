@@ -772,7 +772,6 @@ __interactive__: bool
 __jupyter__: bool
 __standard_vector_size__: int
 __version__: str
-_CONNECTED_REFUSAL: str
 _clean_default_connection: typing.Any  # value = <capsule object>
 apilevel: str
 paramstyle: str

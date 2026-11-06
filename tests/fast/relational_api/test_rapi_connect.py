@@ -1,4 +1,5 @@
 import datetime
+import importlib.util
 import os
 import threading
 import warnings
@@ -17,8 +18,7 @@ def _extensions():
     root = os.environ.get("DUCKDB_PYTHON_TEST_EXTENSION_PATH")
     if not root:
         return None
-    paths = [Path(root) / f"{name}.duckdb_extension" for name in ("httpfs", "quack")]
-    return paths if all(path.is_file() for path in paths) else None
+    return [Path(root) / f"{name}.duckdb_extension" for name in ("httpfs", "quack")]
 
 
 EXTENSIONS = _extensions()
@@ -72,6 +72,9 @@ def server():
     # requires, built for this engine, since no published build loads into a development build.
     if EXTENSIONS is None:
         pytest.skip("needs httpfs and quack built for this engine in DUCKDB_PYTHON_TEST_EXTENSION_PATH")
+    missing = [str(path) for path in EXTENSIONS if not path.is_file()]
+    if missing:
+        pytest.fail(f"DUCKDB_PYTHON_TEST_EXTENSION_PATH is set, but {', '.join(missing)} is missing")
     connection = _open()
     uri, _, token = connection.execute("CALL quack_serve('quack:127.0.0.1:0', token = 'connect-relations')").fetchone()
     connection.execute("CREATE TABLE t AS SELECT 'remote' AS side, 1 AS i")
@@ -224,12 +227,14 @@ class TestRelationBuiltBeforeConnect:
             lambda relation: str(relation),
             lambda relation: relation.select_types(["VARCHAR"]),
             lambda relation: relation.map(lambda frame: frame),
-            lambda relation: relation.pl(lazy=True),
+            pytest.param(
+                lambda relation: relation.pl(lazy=True),
+                marks=pytest.mark.skipif(importlib.util.find_spec("polars") is None, reason="needs polars"),
+            ),
         ],
         ids=["df", "to_arrow_table", "filter", "columns", "show", "select_types", "map", "lazy_polars"],
     )
     def test_every_method_that_reaches_the_engine_refuses(self, local, call):
-        pytest.importorskip("polars")
         relation = local.table("t")
         local.execute("CONNECT remote")
         assert_refused(lambda: call(relation))
@@ -267,7 +272,10 @@ class TestRelationBuiltBeforeConnect:
         assert server[0].execute("SELECT v FROM named").fetchall() == [("remote view",)]
         assert side(local) == [("local",)]
         assert local.execute("SELECT count(*) FROM duckdb_views() WHERE view_name = 'named'").fetchone() == (0,)
-        assert error == REFUSAL
+        assert error == (
+            "Invalid Input Error: DuckDBPyRelation.query() cannot run a CONNECT, since it could not drop the name it "
+            "gives the relation for the call once CONNECT-ed; run the CONNECT through con.sql() or con.execute()"
+        )
 
 
 class TestRelationConstructors:
@@ -345,6 +353,19 @@ class TestUnregister:
 
     def test_refuses_a_name_never_registered(self, con):
         assert_refused(lambda: con.unregister("never_registered"))
+
+
+class TestAppender:
+    def test_a_flush_refuses_and_keeps_its_rows_for_a_flush_after_disconnect(self, local, server):
+        appender = local.appender("t")
+        appender.append_row("buffered", 2)
+        local.execute("CONNECT remote")
+        error = error_of(appender.flush)
+        assert remote_rows(server) == [("remote", 1)]
+        assert error == REFUSAL
+        local.execute("DISCONNECT")
+        appender.flush()
+        assert local.execute("SELECT side, i FROM t ORDER BY i").fetchall() == [("local", 1), ("buffered", 2)]
 
 
 class TestDbApi:

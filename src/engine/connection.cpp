@@ -468,8 +468,8 @@ void Session::RunClaimed(unique_ptr<SQLStatement> statement, const InterruptChec
 	Complete(*handle, check);
 }
 
-void Session::Run(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check) {
-	ConnectionClaim claim(*state, *context);
+void Session::RunClaimed(unique_ptr<SQLStatement> statement, const ResolvedTables &tables,
+                         const InterruptCheck &check) {
 	registry->CountStatement(statement->type);
 	unique_ptr<QueryResult> handle;
 	{
