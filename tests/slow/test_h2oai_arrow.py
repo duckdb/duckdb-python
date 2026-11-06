@@ -202,9 +202,9 @@ def arrow_dataset_register(tmp_path_factory):
         allowed_methods={"GET"},  # only retry on GETs (all we do)
         total=None,  # disable to make the below take effect
         redirect=10,  # Don't follow more than 10 redirects in a row
-        connect=6,  # try 6 times before giving up on connection errors
-        read=6,  # try 6 times before giving up on read errors
-        status=6,  # try 6 times before giving up on status errors (see forcelist below)
+        connect=6,  # retry up to 6 times on connection errors
+        read=6,  # retry up to 6 times on read errors
+        status=6,  # retry up to 6 times on status errors (see forcelist below)
         status_forcelist=[429, *list(range(500, 512))],
         other=0,  # whatever else may cause an error should break
         backoff_factor=2,  # [0s, 4s, 8s, 16s, 32s, 64s] outlasts a CI runner losing DNS for a minute
@@ -231,7 +231,7 @@ def arrow_dataset_register(tmp_path_factory):
     yield _register
 
     for filepath in saved_filepaths:
-        filepath.unlink()
+        filepath.unlink(missing_ok=True)
     session.close()
 
 
