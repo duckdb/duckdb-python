@@ -1,7 +1,10 @@
 """A connection's readers take a list or a tuple of paths, and their annotations say so."""
 
+import importlib.util
 import json
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -68,14 +71,25 @@ def test_an_empty_tuple_is_refused_like_an_empty_list():
         duckdb.connect().read_json(())
 
 
+def run_mypy(*arguments):
+    """Mypy's report and errors, from a process of its own, since mypy raises the recursion limit of its process."""
+    if importlib.util.find_spec("mypy") is None:
+        pytest.skip("mypy is not installed")
+    checked = subprocess.run(
+        [sys.executable, "-I", "-m", "mypy", *arguments], capture_output=True, text=True, timeout=300, check=False
+    )
+    return checked.stdout, checked.stderr, checked.returncode
+
+
 def test_mypy_accepts_every_path_shape_and_refuses_a_number(tmp_path):
-    api = pytest.importorskip("mypy.api")
     text, refused = annotated_calls()
     snippet = tmp_path / "calls.py"
     snippet.write_text(text)
     dash = "-" * 2
     flags = [f"{dash}{flag}" for flag in ("strict", "no-incremental", "follow-imports=silent", "no-pretty")]
-    report, errors, _ = api.run([str(snippet), *flags, f"{dash}cache-dir", str(tmp_path / "cache")])
+    limit = sys.getrecursionlimit()
+    report, errors, _ = run_mypy(str(snippet), *flags, f"{dash}cache-dir", str(tmp_path / "cache"))
+    assert sys.getrecursionlimit() == limit
     found = {int(line): message for line, message in re.findall(r"calls\.py:(\d+): error: (.*)", report)}
     assert sorted(found) == sorted(refused.values()), report + errors
     for reader, line in refused.items():
