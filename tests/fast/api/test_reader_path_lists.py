@@ -62,7 +62,9 @@ def test_every_reader_reads_every_file_of_a_tuple(tmp_path, reader, extension):
 
 
 def test_an_empty_tuple_is_refused_like_an_empty_list():
-    with pytest.raises(duckdb.InvalidInputException, match="Please provide a non-empty list of paths"):
+    with pytest.raises(
+        duckdb.InvalidInputException, match="Please provide a non-empty list or tuple of paths or file-like objects"
+    ):
         duckdb.connect().read_json(())
 
 

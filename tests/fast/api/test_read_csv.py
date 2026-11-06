@@ -558,7 +558,7 @@ class TestReadCSV:
         con = duckdb.connect()
         files = []
         with pytest.raises(
-            duckdb.InvalidInputException, match="Please provide a non-empty list of paths or file-like objects"
+            duckdb.InvalidInputException, match="Please provide a non-empty list or tuple of paths or file-like objects"
         ):
             con.read_csv(files)
 

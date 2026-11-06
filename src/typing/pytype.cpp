@@ -156,7 +156,9 @@ static bool DerivesFromConcreteNumpyScalar(const nb::handle &type, NumpyCacheIte
 	return false;
 }
 
-static bool ReadNumpyScalarType(const nb::object &type, PythonImportCache &import_cache, LogicalType &result) {
+//! is_numpy_own says whether the type is numpy's own scalar class, not a subclass of one
+static bool ReadNumpyScalarType(const nb::object &type, PythonImportCache &import_cache, LogicalType &result,
+                                bool &is_numpy_own) {
 	if (!DerivesFromConcreteNumpyScalar(type, import_cache.numpy)) {
 		return false;
 	}
@@ -175,6 +177,7 @@ static bool ReadNumpyScalarType(const nb::object &type, PythonImportCache &impor
 	if (!nb::issubclass(type, dtype_type)) {
 		return false;
 	}
+	is_numpy_own = type.is(dtype_type);
 	// We convert these to string because the underlying physical
 	// types of a numpy type aren't consistent on every platform
 	string type_str = nb::cast<std::string>(nb::str(dtype));
@@ -219,9 +222,10 @@ static bool FromNumpyType(const nb::object &type, LogicalType &result) {
 	if (!generic || !nb::issubclass(type, generic)) {
 		return false;
 	}
-	// Reading a class costs more than the rest of converting a value it types, so each class is read once. The
-	// type is kept as its id, which describes every type a numpy scalar maps to; a kept DuckDBPyType would be
-	// reported as leaked at exit.
+	// Reading a class costs more than the rest of converting a value it types, so numpy's own scalar classes are
+	// read once; a subclass is read each time, since keeping it would keep a class made at run time alive. The type
+	// is kept as its id, which describes every type a numpy scalar maps to; a kept DuckDBPyType would be reported
+	// as leaked at exit.
 	auto known = nb::borrow<nb::dict>(DuckDBPyConnection::NumpyScalarTypes());
 	auto cached = PyDict_GetItemWithError(known.ptr(), type.ptr());
 	if (cached) {
@@ -231,10 +235,13 @@ static bool FromNumpyType(const nb::object &type, LogicalType &result) {
 	if (PyErr_Occurred()) {
 		throw nb::python_error();
 	}
-	if (!ReadNumpyScalarType(type, import_cache, result)) {
+	bool is_numpy_own = false;
+	if (!ReadNumpyScalarType(type, import_cache, result, is_numpy_own)) {
 		return false;
 	}
-	known[type] = nb::int_(static_cast<uint8_t>(result.id()));
+	if (is_numpy_own) {
+		known[type] = nb::int_(static_cast<uint8_t>(result.id()));
+	}
 	return true;
 }
 

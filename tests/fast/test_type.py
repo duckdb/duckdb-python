@@ -1,6 +1,8 @@
 import datetime
+import gc
 import sys
 import warnings
+import weakref
 
 import pytest
 
@@ -404,6 +406,34 @@ class TestAClassThatIsNoType:
             with pytest.raises(TypeError, match="Could not convert from unknown 'type' to DuckDBPyType"):
                 DuckDBPyType(scalar)
         assert [str(warning.message) for warning in caught] == []
+
+
+class TestKeptNumpyScalarTypes:
+    """numpy's own scalar classes are converted once and kept; a subclass of one is converted each time and not kept."""
+
+    @pytest.mark.parametrize(("name", "expected"), [("int32", INTEGER), ("intc", INTEGER), ("longlong", BIGINT)])
+    def test_a_kept_class_converts_the_same_again(self, name, expected):
+        np = pytest.importorskip("numpy")
+        scalar = getattr(np, name)
+        assert [DuckDBPyType(scalar) for _ in range(3)] == [expected] * 3
+        assert expected == scalar
+        assert expected == scalar
+
+    def test_a_converted_subclass_can_be_collected(self):
+        np = pytest.importorskip("numpy")
+        enabled = gc.isenabled()
+        gc.disable()
+        try:
+            subclassed = type("Collectable", (np.int16,), {})
+            assert DuckDBPyType(subclassed) == SMALLINT
+            assert SMALLINT == subclassed  # noqa: SIM300
+            alive = weakref.ref(subclassed)
+            del subclassed
+            gc.collect()
+            assert alive() is None
+        finally:
+            if enabled:
+                gc.enable()
 
 
 class TestConvertingATypeOperand:

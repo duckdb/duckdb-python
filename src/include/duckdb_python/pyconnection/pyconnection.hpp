@@ -338,7 +338,7 @@ public:
 	static void SetDefaultConnection(std::shared_ptr<DuckDBPyConnection> conn);
 	static PythonImportCache *ImportCache();
 	static nb::object ConsumedArrowReaders();
-	//! The dict of numpy scalar class to the id of the DuckDB type it converts to; call with the GIL held
+	//! The dict of numpy's own scalar classes to the id of the DuckDB type each converts to; call with the GIL held
 	static nb::object NumpyScalarTypes();
 	//! Keeps adapt and the nodes module of the duckdb._sources package the package passes in as it imports
 	static void SetArrowSources(const nb::object &sources);

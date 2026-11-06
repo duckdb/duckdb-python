@@ -3652,7 +3652,9 @@ def _files(con: _duckdb.DuckDBPyConnection, source: object) -> tuple[str, tuple[
 
     if isinstance(source, (list, tuple)):
         if not source:
-            raise _error(_duckdb.InvalidInputException, "Please provide a non-empty list of paths or file-like objects")
+            raise _error(
+                _duckdb.InvalidInputException, "Please provide a non-empty list or tuple of paths or file-like objects"
+            )
         paths = [one(item) for item in source]
         return _option_literal(paths), tuple(handles)
     return _option_literal(one(source)), tuple(handles)

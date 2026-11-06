@@ -50,7 +50,7 @@ struct DuckDBPyModuleState {
 	std::shared_ptr<PythonImportCache> import_cache;
 	//! The single-use Arrow readers that have handed out their stream, by identity and held weakly
 	unique_ptr<PyObjectHolder> consumed_arrow_readers;
-	//! The DuckDB type id of each numpy scalar class converted so far; only Cleanup clears it, as such classes are few
+	//! The DuckDB type id of each of numpy's own scalar classes converted so far; only Cleanup clears it
 	unique_ptr<PyObjectHolder> numpy_scalar_types;
 	//! Held rather than imported on use, since an import fails once the package has left sys.modules
 	unique_ptr<PyObjectHolder> arrow_sources_adapt;
