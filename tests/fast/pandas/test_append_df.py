@@ -540,6 +540,12 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.append("t", frame)
         assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,), (expected,)]
 
+    def test_map_of_two_plain_values_named_key_and_value_appends_its_entries(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, VARCHAR))")
+        frame = pd.DataFrame({"a": pd.Series([{"key": "ab", "value": "cd"}], dtype=object)})
+        duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.table("t").fetchall() == [({"key": "ab", "value": "cd"},)]
+
     def test_map_keys_a_str_and_its_bytes_are_one_key_and_refused(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
         frame = pd.DataFrame({"a": pd.Series([{"a": 1, b"a": 2}], dtype=object)})

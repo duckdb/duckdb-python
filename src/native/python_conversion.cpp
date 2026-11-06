@@ -97,18 +97,11 @@ static vector<Identifier> TransformStructKeys(nb::handle keys, idx_t size) {
 	return res;
 }
 
-static bool IsValidMapComponent(const nb::handle &component) {
-	// The component is either NULL
-	if (nb::none().is(component)) {
-		return true;
-	}
-	if (!nb::hasattr(component, "__getitem__")) {
-		return false;
-	}
-	if (!nb::hasattr(component, "__len__")) {
-		return false;
-	}
-	return true;
+//! Whether a MAP's key or value component is a column of keys or values: a list, a tuple or a numpy array, which the
+//! conversion reads as a LIST (an array of no dimensions it refuses)
+static bool IsMapComponentList(nb::handle component) {
+	return PyList_Check(component.ptr()) || PyTuple_Check(component.ptr()) ||
+	       duckdb::PyUtil::IsInstance(component, DuckDBPyConnection::ImportCache()->numpy.ndarray());
 }
 
 //! The length of a MAP's key or value component, or -1 for one that has none although it claims one, as a numpy
@@ -136,15 +129,17 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 		return false;
 	}
 
-	if (!IsValidMapComponent(keys)) {
+	// A list on either side, or None on both, makes the dict a MAP of the two lists: None a NULL MAP, and the
+	// conversion refuses the other side when it is no list. Without a list it is a plain dict, a MAP of the entries
+	// 'key' and 'value', so a NULL entry beside a plain value stays an entry
+	auto key_none = nb::none().is(keys);
+	auto value_none = nb::none().is(values);
+	auto key_list = IsMapComponentList(keys);
+	auto value_list = IsMapComponentList(values);
+	if (!key_list && !value_list && !(key_none && value_none)) {
 		return false;
 	}
-	if (!IsValidMapComponent(values)) {
-		return false;
-	}
-
-	// If either of the components is NULL, return early
-	if (nb::none().is(keys) || nb::none().is(values)) {
+	if (key_none || value_none || !key_list || !value_list) {
 		return true;
 	}
 
@@ -258,7 +253,7 @@ bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
 	}
 	if (duckdb::PyUtil::IsInstance(cell, datetime_type)) {
 		// A Timestamp without nanoseconds reads as the datetime it is: its value in nanoseconds overflows outside the
-		// years 1677 to 2262, and building it costs more than the datetime's own conversion
+		// years 1677 to 2262, and a coarser column would judge that value by a cast where the datetime fits outright
 		if (NanosecondOf(cell) <= 0 || !nb::getattr(cell, "tzinfo").is_none()) {
 			return false;
 		}

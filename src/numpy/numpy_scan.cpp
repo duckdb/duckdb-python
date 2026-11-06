@@ -951,12 +951,7 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 	const auto bits_refused = bit_storage_refused && TypeVisitor::Contains(target, LogicalTypeId::BIT);
 	const auto shape = keyed ? KeyedShape(target, !implied_type) : LogicalType(LogicalTypeId::UNKNOWN);
 	ImpliedKinds kinds(context);
-	auto read = [&](nb::handle cell, idx_t row) {
-		// The row already holds the NULL a None reads as
-		if (cell.ptr() == Py_None) {
-			return;
-		}
-		auto value = DeclaredValue(context, target, cell, shape, implied_type);
+	auto accept = [&](nb::handle cell, idx_t row, Value &&value) {
 		// A duckdb.Value states its type, as a schema does, so a cast into the column's type is meant
 		if (implied_type && !kinds.Fits(value, target) &&
 		    !duckdb::PyUtil::IsInstance(cell, DuckDBPyConnection::ImportCache()->duckdb.Value())) {
@@ -966,6 +961,13 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 			throw ImpliedTypeRefused(value.type());
 		}
 		staged.Set(row, std::move(value));
+	};
+	auto read = [&](nb::handle cell, idx_t row) {
+		// The row already holds the NULL a None reads as
+		if (cell.ptr() == Py_None) {
+			return;
+		}
+		accept(cell, row, DeclaredValue(context, target, cell, shape, implied_type));
 	};
 	// A str into VARCHAR without an alias, bytes or a bytearray into BLOB without one, and a time or a datetime without
 	// a zone into TIME or TIMESTAMP read as TransformPythonValue would read them, without building a Value per cell; a
@@ -1036,13 +1038,14 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 			auto type = Py_TYPE(cell.ptr());
 			if (type == datetime_type || (PyType_IsSubtype(type, datetime_type) && NanosecondOf(cell) == 0)) {
 				PyDateTime datetime(cell);
-				// A datetime with a zone converts as a TIMESTAMPTZ, which an implied TIMESTAMP refuses and the cast
-				// into a stated one reads in the session's time zone
 				if (datetime.tzone_obj.is_none()) {
 					FlatVector::GetDataMutable<timestamp_t>(out)[row] = datetime.ToTimestamp();
 					staged.MarkWritten(row);
 					return;
 				}
+				// A datetime with a zone converts as a TIMESTAMPTZ, as the conversion reads the one built here, which
+				// an implied TIMESTAMP refuses and the cast into a stated one reads in the session's time zone
+				return accept(cell, row, datetime.ToDuckValue(LogicalType::UNKNOWN));
 			}
 			read(cell, row);
 		});

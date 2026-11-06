@@ -606,7 +606,7 @@ FAR_YEARS = pytest.mark.parametrize(
 
 
 @FAR_YEARS
-@pytest.mark.parametrize("sql_type", ["TIMESTAMP", "TIMESTAMP_S"])
+@pytest.mark.parametrize("sql_type", ["TIMESTAMP", "TIMESTAMP_MS", "TIMESTAMP_S"])
 def test_map_timestamp_column_handed_back_as_timestamps_outside_the_nanosecond_range_round_trips(
     duckdb_cursor, sql_type, value
 ):
@@ -720,11 +720,11 @@ def test_map_scalar_inside_a_container_of_a_type_holding_a_map_is_refused_and_th
 @pytest.mark.parametrize(
     ("sql_type", "cell", "converted"),
     [
-        pytest.param("MAP(VARCHAR, VARCHAR)", {"key": "ab", "value": "cd"}, "VARCHAR and VARCHAR", id="map"),
+        pytest.param("MAP(VARCHAR, VARCHAR)", {"key": ["a"], "value": "b"}, "VARCHAR[] and VARCHAR", id="map"),
         pytest.param(
             "STRUCT(m MAP(VARCHAR, VARCHAR))",
-            {"m": {"key": "ab", "value": "cd"}},
-            "VARCHAR and VARCHAR",
+            {"m": {"key": ["a"], "value": "b"}},
+            "VARCHAR[] and VARCHAR",
             id="map_field",
         ),
         pytest.param(
@@ -736,7 +736,7 @@ def test_map_scalar_inside_a_container_of_a_type_holding_a_map_is_refused_and_th
     ],
 )
 @pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter"])
-def test_map_of_a_key_and_a_value_that_are_no_lists_is_refused_and_the_database_stays_usable(
+def test_map_of_a_key_list_and_a_value_that_is_no_list_is_refused_and_the_database_stays_usable(
     sql_type, cell, converted, mode
 ):
     con = duckdb.connect()
@@ -759,6 +759,73 @@ def test_map_of_a_key_and_a_value_that_are_no_lists_is_refused_and_the_database_
     with pytest.raises(duckdb.InvalidInputException, match=re.escape(expected)):
         run()
     assert con.sql("select 42").fetchall() == [(42,)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "MAP {'key': 'ab', 'value': 'cd'}",
+        "MAP {'key': 'ab', 'value': 'cde'}",
+        "MAP {'key': 1, 'value': 2}",
+        "MAP {'key': 'x', 'value': NULL}",
+        "MAP {'key': NULL, 'value': 'y'}",
+    ],
+    ids=["text_of_one_length", "text_of_two_lengths", "ints", "null_value", "null_key_entry"],
+)
+@SCHEMAS
+def test_map_identity_of_a_map_keyed_by_key_and_value_reads_its_entries(duckdb_cursor, value, explicit_schema):
+    # df() hands such a MAP over as the dict of its two entries, which no list makes a dict of key and value lists
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(lambda df: df, schema=_schema_of(source, explicit_schema))
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+@pytest.mark.parametrize(
+    "value", ["MAP {'key': NULL, 'value': NULL}", "MAP {'key': [1], 'value': NULL}"], ids=["both_null", "list_and_null"]
+)
+@SCHEMAS
+def test_map_identity_of_a_map_keyed_by_key_and_value_of_a_null_beside_a_list_or_a_null_reads_null(
+    duckdb_cursor, value, explicit_schema
+):
+    # df() hands it over as {"key": None, "value": None} or {"key": [1], "value": None}, the forms of a NULL MAP
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(lambda df: df, schema=_schema_of(source, explicit_schema))
+    assert mapped.types == source.types
+    assert mapped.fetchall() == [(None,)]
+
+
+@pytest.mark.parametrize("mode", ["append", "appender", "parameter"])
+def test_map_of_a_null_key_entry_beside_a_plain_value_reads_its_two_entries(mode):
+    cell = {"key": None, "value": 5}
+    con = duckdb.connect()
+    con.execute("create table t (a MAP(VARCHAR, INTEGER))")
+    if mode == "append":
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+    elif mode == "appender":
+        with con.appender("t") as appender:
+            appender.append_row(cell)
+    else:
+        con.execute("insert into t values (?)", [cell])
+    assert con.table("t").fetchall() == [({"key": None, "value": 5},)]
+
+
+@pytest.mark.parametrize(
+    "cell",
+    [{"key": None, "value": None}, {"key": ["a"], "value": None}, {"key": None, "value": ["a"]}],
+    ids=["both_none", "values_none", "keys_none"],
+)
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_map_of_key_and_value_with_a_none_reads_a_null_map(cell, mode):
+    con = duckdb.connect()
+    con.execute("create table t (a MAP(VARCHAR, VARCHAR))")
+    if mode == "append":
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        assert con.table("t").fetchall() == [(None,)]
+    else:
+        con.execute("insert into t values (MAP {'k': 'v'})")
+        schema = {"a": duckdb.sqltype("MAP(VARCHAR, VARCHAR)")} if mode == "explicit_schema" else None
+        assert con.table("t").map(_returning(cell), schema=schema).fetchall() == [(None,)]
 
 
 @pytest.mark.parametrize(
