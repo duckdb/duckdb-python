@@ -50,6 +50,8 @@ struct DuckDBPyModuleState {
 	std::shared_ptr<PythonImportCache> import_cache;
 	//! The single-use Arrow readers that have handed out their stream, by identity and held weakly
 	unique_ptr<PyObjectHolder> consumed_arrow_readers;
+	//! The DuckDB type id of each numpy scalar class converted so far; only Cleanup clears it, as such classes are few
+	unique_ptr<PyObjectHolder> numpy_scalar_types;
 	//! Held rather than imported on use, since an import fails once the package has left sys.modules
 	unique_ptr<PyObjectHolder> arrow_sources_adapt;
 	unique_ptr<PyObjectHolder> arrow_sources_nodes;
@@ -1758,6 +1760,14 @@ nb::object DuckDBPyConnection::ConsumedArrowReaders() {
 	return readers->obj;
 }
 
+nb::object DuckDBPyConnection::NumpyScalarTypes() {
+	auto &types = GetModuleState().numpy_scalar_types;
+	if (!types) {
+		types = make_uniq<PyObjectHolder>(nb::dict());
+	}
+	return types->obj;
+}
+
 void DuckDBPyConnection::SetArrowSources(const nb::object &sources) {
 	auto adapt = sources.attr("adapt");
 	auto nodes = sources.attr("nodes");
@@ -1828,6 +1838,7 @@ void DuckDBPyConnection::Cleanup() {
 	GetModuleState().default_connection.Release();
 	GetModuleState().import_cache.reset();
 	GetModuleState().consumed_arrow_readers.reset();
+	GetModuleState().numpy_scalar_types.reset();
 	GetModuleState().arrow_sources_adapt.reset();
 	GetModuleState().arrow_sources_nodes.reset();
 }

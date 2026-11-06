@@ -291,6 +291,11 @@ def execute_text(con, text):
     return con.execute(f"SELECT '{text}'")
 
 
+def pandas_struct_key(con, text):
+    df = pd.DataFrame({"c": [{text: 1}]})  # noqa: F841
+    return con.sql("SELECT * FROM df").fetchall()
+
+
 NAME_AND_TEXT_REFUSALS = [
     name_or_text(execute_text, SQL_TEXT_PREFIX, "execute_text"),
     name_or_text(lambda con, text: con.executemany(f"SELECT '{text}'", [[]]), SQL_TEXT_PREFIX, "executemany_text"),
@@ -303,6 +308,7 @@ NAME_AND_TEXT_REFUSALS = [
     name_or_text(lambda con, text: con.execute("SELECT ?", [[{"a": {text: 1}}]]), 0, "nested_struct_key"),
     name_or_text(lambda con, text: con.executemany("SELECT ?", [[{text: 1}]]), 0, "executemany_struct_key"),
     name_or_text(lambda con, text: con.sql("SELECT ?", params=[{text: 1}]).fetchall(), 0, "sql_params_struct_key"),
+    name_or_text(pandas_struct_key, 0, "pandas_object_column_struct_key"),
     name_or_text(lambda con, text: con.execute("SELECT $x", {text: 1}), 0, "execute_parameter_name"),
     name_or_text(lambda con, text: con.executemany("SELECT $x", [{text: 1}]), 0, "executemany_parameter_name"),
     name_or_text(lambda con, text: con.struct_type({text: BIGINT}), 0, "struct_type_field_name"),

@@ -1,4 +1,4 @@
-"""A connection's readers take a list of paths, and their annotations say so."""
+"""A connection's readers take a list or a tuple of paths, and their annotations say so."""
 
 import json
 import re
@@ -9,8 +9,8 @@ import duckdb
 
 READERS = ("read_json", "read_csv", "from_csv_auto")
 #: Every path shape the readers take at runtime: one path, a list literal, a list[str] variable, a list of
-#: pathlib.Path and a list of a file like object.
-ACCEPTED_ARGUMENTS = ('"a"', '["a", "b"]', "paths", '[pathlib.Path("a")]', '[io.BytesIO(b"")]')
+#: pathlib.Path, a list of a file like object and a tuple.
+ACCEPTED_ARGUMENTS = ('"a"', '["a", "b"]', "paths", '[pathlib.Path("a")]', '[io.BytesIO(b"")]', '("a", "b")')
 
 
 def annotated_calls():
@@ -34,6 +34,36 @@ def test_read_json_reads_every_file_of_a_list(tmp_path):
     con = duckdb.connect()
     assert con.read_json([str(p) for p in paths]).order("x").fetchall() == [("a",), ("b",)]
     assert con.read_json(paths, format="newline_delimited").order("x").fetchall() == [("a",), ("b",)]
+
+
+def write_two_files(con, tmp_path, extension):
+    paths = []
+    for name in ("a", "b"):
+        path = tmp_path / f"{name}.{extension}"
+        con.execute(f"COPY (SELECT '{name}' AS x) TO '{path}'")
+        paths.append(str(path))
+    return tuple(paths)
+
+
+@pytest.mark.parametrize(
+    ("reader", "extension"),
+    [
+        ("read_json", "json"),
+        ("read_csv", "csv"),
+        ("from_csv_auto", "csv"),
+        ("read_parquet", "parquet"),
+        ("from_parquet", "parquet"),
+    ],
+)
+def test_every_reader_reads_every_file_of_a_tuple(tmp_path, reader, extension):
+    con = duckdb.connect()
+    paths = write_two_files(con, tmp_path, extension)
+    assert getattr(con, reader)(paths).order("x").fetchall() == [("a",), ("b",)]
+
+
+def test_an_empty_tuple_is_refused_like_an_empty_list():
+    with pytest.raises(duckdb.InvalidInputException, match="Please provide a non-empty list of paths"):
+        duckdb.connect().read_json(())
 
 
 def test_mypy_accepts_every_path_shape_and_refuses_a_number(tmp_path):

@@ -156,22 +156,8 @@ static bool DerivesFromConcreteNumpyScalar(const nb::handle &type, NumpyCacheIte
 	return false;
 }
 
-static bool IsSubclass(const nb::handle &type, const nb::handle &base) {
-	auto is_subclass = PyObject_IsSubclass(type.ptr(), base.ptr());
-	if (is_subclass < 0) {
-		throw nb::python_error();
-	}
-	return is_subclass != 0;
-}
-
-static bool FromNumpyType(const nb::object &type, LogicalType &result) {
-	// Only a concrete numpy scalar type is read, through numpy.dtype, so converting a class never calls it.
-	if (!ModuleIsLoaded<NumpyCacheItem>()) {
-		return false;
-	}
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto generic = import_cache.numpy.generic();
-	if (!generic || !IsSubclass(type, generic) || !DerivesFromConcreteNumpyScalar(type, import_cache.numpy)) {
+static bool ReadNumpyScalarType(const nb::object &type, PythonImportCache &import_cache, LogicalType &result) {
+	if (!DerivesFromConcreteNumpyScalar(type, import_cache.numpy)) {
 		return false;
 	}
 	nb::object dtype;
@@ -186,7 +172,7 @@ static bool FromNumpyType(const nb::object &type, LogicalType &result) {
 	}
 	// numpy maps a class onto the dtype of the scalar type it derives from, and only such a class is that type
 	nb::object dtype_type = dtype.attr("type");
-	if (!IsSubclass(type, dtype_type)) {
+	if (!nb::issubclass(type, dtype_type)) {
 		return false;
 	}
 	// We convert these to string because the underlying physical
@@ -220,6 +206,35 @@ static bool FromNumpyType(const nb::object &type, LogicalType &result) {
 	} else {
 		return false;
 	}
+	return true;
+}
+
+static bool FromNumpyType(const nb::object &type, LogicalType &result) {
+	// Only a concrete numpy scalar type is read, through numpy.dtype, so converting a class never calls it.
+	if (!ModuleIsLoaded<NumpyCacheItem>()) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto generic = import_cache.numpy.generic();
+	if (!generic || !nb::issubclass(type, generic)) {
+		return false;
+	}
+	// Reading a class costs more than the rest of converting a value it types, so each class is read once. The
+	// type is kept as its id, which describes every type a numpy scalar maps to; a kept DuckDBPyType would be
+	// reported as leaked at exit.
+	auto known = nb::borrow<nb::dict>(DuckDBPyConnection::NumpyScalarTypes());
+	auto cached = PyDict_GetItemWithError(known.ptr(), type.ptr());
+	if (cached) {
+		result = LogicalType(static_cast<LogicalTypeId>(nb::cast<uint8_t>(nb::handle(cached))));
+		return true;
+	}
+	if (PyErr_Occurred()) {
+		throw nb::python_error();
+	}
+	if (!ReadNumpyScalarType(type, import_cache, result)) {
+		return false;
+	}
+	known[type] = nb::int_(static_cast<uint8_t>(result.id()));
 	return true;
 }
 
