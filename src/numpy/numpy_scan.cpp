@@ -305,11 +305,19 @@ private:
 
 //! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
 //! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
-//! every depth, a numpy scalar reads as its Python value, and a value without a DuckDB type of its own reads as its
-//! text in a text column
+//! every depth, a numpy scalar reads as its Python value (a datetime64 finer than a microsecond as a TIMESTAMP_NS),
+//! and a value without a DuckDB type of its own reads as its text in a text column
 static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell) {
-	auto plain = PythonValueOfNumpyScalar(cell);
+	if (cell.ptr() == Py_None) {
+		return Value();
+	}
+	timestamp_ns_t timestamp;
+	auto plain = PythonValueOfNumpyScalar(cell, timestamp);
+	if (!plain.is_valid()) {
+		return Value::TIMESTAMPNS(timestamp);
+	}
 	nb::handle value = plain;
+	// A NaT reads as None
 	if (value.ptr() == Py_None) {
 		return Value();
 	}

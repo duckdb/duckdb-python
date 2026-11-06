@@ -274,19 +274,27 @@ class TestAppendObjectColumnsToDeclaredTypes:
             pytest.param(
                 "BOOLEAN", _outside_the_sample(True, np.bool_(False)), True, False, id="numpy_bool_into_boolean"
             ),
+            # The engine's TIMESTAMP_NS cast rounds both to the nearest microsecond, as for a datetime64[ns] column
             pytest.param(
                 "TIMESTAMP",
                 _outside_the_sample(NAIVE, np.datetime64("2024-05-08T01:02:03.123456789", "ns")),
                 NAIVE,
-                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123457),
                 id="numpy_datetime_into_timestamp",
             ),
             pytest.param(
                 "TIMESTAMP",
                 _outside_the_sample(NAIVE, np.array("2024-05-08T01:02:03.123456789", dtype="datetime64[ns]")),
                 NAIVE,
-                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123457),
                 id="numpy_zero_dimensional_datetime_into_timestamp",
+            ),
+            pytest.param(
+                "VARCHAR",
+                _outside_the_sample("a", np.datetime64("2024-05-08", "D")),
+                "a",
+                "2024-05-08",
+                id="numpy_day_datetime_into_varchar_reads_as_its_date",
             ),
             pytest.param(
                 "STRUCT(x VARCHAR)",

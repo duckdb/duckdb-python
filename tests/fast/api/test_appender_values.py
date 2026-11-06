@@ -13,7 +13,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 from duckdb.sqltypes import BIGINT
-from duckdb.value.constant import IntegerValue, StringValue, Value
+from duckdb.value.constant import IntegerValue, StringValue, TimestampNanosecondValue, Value
 
 TZ_PLUS_2 = dt.timezone(dt.timedelta(hours=2))
 UUID_TEXT = "12345678-1234-5678-1234-567812345678"
@@ -245,17 +245,21 @@ def cells(column_type):
     return VALUES
 
 
+FINER_THAN_A_MICROSECOND = ("ns", "ps", "fs", "as")
+
+
 def python_value_of_numpy_scalar(value):
     """The value the appender converts: a numpy scalar, or an array of no dimensions, as its Python value."""
-    if not (isinstance(value, np.generic) or (type(value) is np.ndarray and value.ndim == 0)):
+    if isinstance(value, (float, str, bytes)) or not (
+        isinstance(value, np.generic) or (type(value) is np.ndarray and value.ndim == 0)
+    ):
         return value
     kind = value.dtype.kind
-    if kind == "M":
-        item = value.astype("datetime64[us]").tolist()
-    elif kind == "m":
-        item = value.astype("timedelta64[us]").tolist()
-    else:
-        item = value.item()
+    finer = kind in "Mm" and np.datetime_data(value.dtype)[0] in FINER_THAN_A_MICROSECOND
+    if kind == "M" and finer:
+        nanoseconds = value.astype("datetime64[ns]")
+        return None if np.isnat(nanoseconds) else TimestampNanosecondValue(np.datetime_as_string(nanoseconds))
+    item = value.astype("timedelta64[us]").item() if kind == "m" and finer else value.item()
     return value if isinstance(item, np.generic) else item
 
 
@@ -266,7 +270,8 @@ def reference_failures(con, values):
         cursor = cursors[thread]
         # The appender reads a numpy scalar as its Python value and converts that as executemany converts it, so the
         # reference takes the value the appender reads; for a datetime64 that differs from executemany's own reading
-        # (its integer), for an int64 or bool executemany refuses the scalar
+        # (its integer), a nanosecond one is a TIMESTAMP_NS value since no Python value holds it, and for an int64 or
+        # bool executemany refuses the scalar
         return [
             (
                 i,
@@ -335,9 +340,19 @@ def test_strings_past_the_inline_length_survive_several_flushes(con, column_type
     assert outcomes(con, "tgt", column_type, values, appended) == expected
 
 
+NANOSECOND_STAMP = np.datetime64("2024-05-08T01:02:03.123456789", "ns")
+
+
+class _ItemRaises(np.int64):
+    def item(self):
+        msg = "no item"
+        raise ValueError(msg)
+
+
 class TestNumpyScalars:
     # The appender reads a numpy scalar as con.append reads one in a declared object column: its Python value, a
-    # datetime64 or timedelta64 at the microsecond unit.
+    # timedelta64 finer than a microsecond at microseconds, and a datetime64 finer than a microsecond as a
+    # TIMESTAMP_NS the engine casts into the column.
 
     @pytest.mark.parametrize(
         ("column_type", "value", "expected"),
@@ -345,17 +360,25 @@ class TestNumpyScalars:
             pytest.param("INTEGER", np.int64(2), 2, id="int64_into_integer"),
             pytest.param("DOUBLE", np.float32(2.5), 2.5, id="float32_into_double"),
             pytest.param("BOOLEAN", np.bool_(False), False, id="bool_into_boolean"),
+            pytest.param("DATE", np.datetime64("2024-05-08", "D"), dt.date(2024, 5, 8), id="day_datetime64_into_date"),
             pytest.param(
-                "TIMESTAMP",
-                np.datetime64("2024-05-08T01:02:03.123456789", "ns"),
-                dt.datetime(2024, 5, 8, 1, 2, 3, 123456),
-                id="datetime64_ns_into_timestamp",
+                "TIMESTAMP_S",
+                np.datetime64("2024-05-08T01:02:03", "s"),
+                dt.datetime(2024, 5, 8, 1, 2, 3),
+                id="second_datetime64_into_timestamp_s",
             ),
+            pytest.param("INTERVAL", np.timedelta64(2, "D"), dt.timedelta(days=2), id="timedelta64_day"),
             pytest.param("INTERVAL", np.timedelta64(1500, "us"), dt.timedelta(microseconds=1500), id="timedelta64_us"),
             pytest.param("INTERVAL", np.timedelta64(1501, "ns"), dt.timedelta(microseconds=1), id="timedelta64_ns"),
             pytest.param("INTERVAL", np.timedelta64("NaT", "ns"), None, id="timedelta64_nat_is_null"),
+            # A month has no fixed length: item() gives the count, which stays an integer
+            pytest.param("BIGINT", np.timedelta64(1, "M"), 1, id="month_timedelta64_reads_as_its_integer"),
             pytest.param("VARCHAR", np.str_("a\x00b"), "a\x00b", id="str_scalar_into_varchar"),
+            pytest.param("VARCHAR", np.str_("ab\x00"), "ab\x00", id="str_scalar_keeps_a_trailing_nul"),
+            pytest.param("VARCHAR", np.str_("\x00\x00"), "\x00\x00", id="str_scalar_of_nuls_keeps_them"),
             pytest.param("BLOB", np.bytes_(b"\x00\xff"), b"\x00\xff", id="bytes_scalar_into_blob"),
+            pytest.param("BLOB", np.bytes_(b"\x01\x00"), b"\x01\x00", id="bytes_scalar_keeps_a_trailing_nul"),
+            pytest.param("BLOB", np.bytes_(b"\x00\x00"), b"\x00\x00", id="bytes_scalar_of_nuls_keeps_them"),
             pytest.param(
                 "STRUCT(a INTEGER)",
                 np.array({"a": 1}, dtype=object),
@@ -366,6 +389,7 @@ class TestNumpyScalars:
             pytest.param("DOUBLE", np.float64("nan"), float("nan"), id="float64_nan_stays_a_value"),
             pytest.param("DOUBLE", np.ma.masked, None, id="masked_singleton_is_null"),
             pytest.param("TIMESTAMP", np.datetime64("NaT", "ns"), None, id="datetime64_nat_is_null"),
+            pytest.param("TIMESTAMP", np.datetime64("NaT", "D"), None, id="day_datetime64_nat_is_null"),
         ],
     )
     def test_numpy_scalars_append_as_their_python_values(self, con, column_type, value, expected):
@@ -378,21 +402,123 @@ class TestNumpyScalars:
         else:
             assert stored == expected
 
-    def test_datetime64_reads_as_a_datetime_not_its_integer(self, con):
-        # The appender used to hand a datetime64 to the conversion, which read a nanosecond one as its integer
-        con.execute("CREATE OR REPLACE TABLE t (b BIGINT, v VARCHAR)")
-        stamp = np.datetime64("2024-05-08T01:02:03.123456789", "ns")
+    @pytest.mark.parametrize(
+        ("column_type", "value", "text"),
+        [
+            pytest.param("VARCHAR", np.datetime64("2024-05-08", "D"), "2024-05-08", id="day_unit_reads_as_a_date"),
+            pytest.param("VARCHAR", np.datetime64("2024-05", "M"), "2024-05-01", id="month_unit_reads_as_a_date"),
+            pytest.param(
+                "VARCHAR",
+                np.datetime64("2024-05-08T01:02:03", "s"),
+                "2024-05-08 01:02:03",
+                id="second_unit_reads_as_a_datetime",
+            ),
+            pytest.param(
+                "VARCHAR", NANOSECOND_STAMP, "2024-05-08 01:02:03.123456789", id="nanosecond_unit_into_varchar"
+            ),
+            pytest.param(
+                "TIMESTAMP_NS",
+                NANOSECOND_STAMP,
+                "2024-05-08 01:02:03.123456789",
+                id="nanosecond_unit_into_timestamp_ns",
+            ),
+            # The engine's TIMESTAMP_NS cast rounds to the nearest microsecond, as for a datetime64[ns] frame column
+            pytest.param(
+                "TIMESTAMP", NANOSECOND_STAMP, "2024-05-08 01:02:03.123457", id="nanosecond_unit_rounds_into_timestamp"
+            ),
+            pytest.param(
+                "TIMESTAMP_NS",
+                np.datetime64(1500, "ps"),
+                "1970-01-01 00:00:00.000000001",
+                id="picosecond_unit_at_nanoseconds",
+            ),
+        ],
+    )
+    def test_datetime64_stores_the_text_of_its_value(self, con, column_type, value, text):
+        con.execute(f"CREATE OR REPLACE TABLE t (x {column_type})")
         with con.appender("t") as appender:
-            appender.append_row(None, stamp)
-        assert con.execute("SELECT v FROM t").fetchall() == [("2024-05-08 01:02:03.123456",)]
-        with pytest.raises(duckdb.ConversionException), con.appender("t") as appender:
-            appender.append_row(stamp, None)
+            appender.append_row(value)
+        assert con.execute("SELECT x::VARCHAR FROM t").fetchall() == [(text,)]
+
+    @pytest.mark.parametrize(
+        ("column_type", "value", "match"),
+        [
+            pytest.param("TIME", np.datetime64("2024-05-08", "D"), r"DATE -> TIME\)", id="day_datetime64_into_time"),
+            pytest.param("INTERVAL", np.timedelta64(1, "M"), r"INT\w* -> INTERVAL", id="month_timedelta64"),
+            pytest.param("INTERVAL", np.timedelta64(1, "Y"), r"INT\w* -> INTERVAL", id="year_timedelta64"),
+            pytest.param("BIGINT", NANOSECOND_STAMP, r"TIMESTAMP_NS -> BIGINT", id="nanosecond_datetime64_into_bigint"),
+        ],
+    )
+    def test_a_numpy_value_without_a_cast_into_the_column_is_refused(self, con, column_type, value, match):
+        con.execute(f"CREATE OR REPLACE TABLE t (x {column_type})")
+        with pytest.raises(duckdb.ConversionException, match=match), con.appender("t") as appender:
+            appender.append_row(value)
+
+    @pytest.mark.parametrize(
+        "column_type",
+        [
+            "TIMESTAMP",
+            "TIMESTAMP_MS",
+            "TIMESTAMP_NS",
+            "TIMESTAMPTZ",
+            "TIMESTAMPTZ_NS",
+            "DATE",
+            "TIME",
+            "TIME_NS",
+            "VARCHAR",
+            # The engine has no cast from TIMESTAMP_NS into these two, for a frame column as for the appender
+            "TIMESTAMP_S",
+            "TIMETZ",
+        ],
+    )
+    def test_nanosecond_datetime64_stores_what_a_nanosecond_frame_column_stores(self, con, column_type):
+        # The engine's cast from TIMESTAMP_NS rounds to the nearest microsecond, so the last stamp, a nanosecond before
+        # 1970, stores 1970 in a microsecond column
+        stamps = [NANOSECOND_STAMP, np.datetime64("NaT", "ns"), np.datetime64(-1, "ns")]
+        con.execute(f"CREATE OR REPLACE TABLE t (i INTEGER, x {column_type})")
+        frame = pd.DataFrame({"i": range(len(stamps)), "x": pd.Series(stamps, dtype="datetime64[ns]")})
+        frame_error = failure(con.append, "t", frame)
+        expected = con.execute("SELECT i, x::VARCHAR FROM t ORDER BY i").fetchall()
+        con.execute(f"CREATE OR REPLACE TABLE t (i INTEGER, x {column_type})")
+        with con.appender("t") as appender:
+            errors = [failure(appender.append_row, i, stamp) for i, stamp in enumerate(stamps)]
+        stored = con.execute("SELECT i, x::VARCHAR FROM t ORDER BY i").fetchall()
+        if frame_error is None:
+            assert (stored, errors) == (expected, [None, None, None])
+        else:
+            # The frame refuses the whole column, the appender each stamp that is not NaT, with the same cast error
+            assert (stored, errors[1]) == ([(1, None)], None)
+            for name, message in (errors[0], errors[2]):
+                assert name == frame_error[0] == "ConversionException"
+                assert frame_error[1].startswith(message)
+
+    def test_a_refused_numpy_value_keeps_the_rows_around_it(self, con):
+        con.execute("CREATE OR REPLACE TABLE t (i INTEGER, x TIMESTAMP)")
+        with con.appender("t") as appender:
+            appender.append_row(1, np.datetime64("2024-05-08", "D"))
+            # Past the range of a Python date item() gives the day count, which no cast takes into a TIMESTAMP
+            with pytest.raises(duckdb.ConversionException):
+                appender.append_row(2, np.datetime64("300000-01-01", "D"))
+            appender.append_row(3, np.datetime64("2024-05-09", "D"))
+        assert con.execute("SELECT i, x FROM t ORDER BY i").fetchall() == [
+            (1, dt.datetime(2024, 5, 8)),
+            (3, dt.datetime(2024, 5, 9)),
+        ]
+
+    def test_a_raising_reading_keeps_the_rows_around_it(self, con):
+        con.execute("CREATE OR REPLACE TABLE t (i INTEGER, x INTEGER)")
+        with con.appender("t") as appender:
+            appender.append_row(1, np.int64(1))
+            with pytest.raises(ValueError, match="no item"):
+                appender.append_row(2, _ItemRaises(2))
+            appender.append_row(3, np.int64(3))
+        assert con.execute("SELECT i, x FROM t ORDER BY i").fetchall() == [(1, 1), (3, 3)]
 
     def test_rows_of_a_two_dimensional_array_append(self, con):
-        con.execute("CREATE OR REPLACE TABLE t (x INTEGER, y DOUBLE)")
+        con.execute("CREATE OR REPLACE TABLE t (x INTEGER, y INTEGER)")
         with con.appender("t") as appender:
-            appender.append_rows(np.array([[1, 1.5], [2, 2.5]]))
-        assert con.execute("SELECT x, y FROM t ORDER BY x").fetchall() == [(1, 1.5), (2, 2.5)]
+            appender.append_rows(np.array([[1, 2], [3, 4]]))
+        assert con.execute("SELECT x, y FROM t ORDER BY x").fetchall() == [(1, 2), (3, 4)]
 
     def test_nested_numpy_values_keep_their_existing_conversion(self, con):
         # A numpy value inside a list keeps the conversion it had, in the appender, executemany and con.append alike:
@@ -412,16 +538,15 @@ class TestNumpyScalars:
             import sys
             import duckdb
             con = duckdb.connect()
+            import decimal
             con.execute("CREATE TABLE t (x INTEGER, s VARCHAR)")
             with con.appender("t") as appender:
                 appender.append_row(1, "a")
+                appender.append_row(decimal.Decimal(2), None)
             print("numpy" in sys.modules, con.execute("SELECT x, s FROM t").fetchall())
             """
         )
-        env = {**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"}
-        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120, env=env)
-        assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "False [(1, 'a')]"
+        assert run_isolated(script) == "False [(1, 'a'), (2, None)]"
 
     def test_ordinary_values_append_without_numpy(self):
         # numpy is optional; the scalar reading must not touch its types when it cannot be imported
@@ -432,18 +557,25 @@ class TestNumpyScalars:
             import duckdb
             con = duckdb.connect()
             con.execute("CREATE TABLE t (x INTEGER, s VARCHAR)")
+            import decimal
             with con.appender("t") as appender:
                 appender.append_row(1, "a")
+                appender.append_row(decimal.Decimal(2), None)
             print(con.execute("SELECT x, s FROM t").fetchall())
             """
         )
-        # An editable install that rebuilds on import otherwise prints its cmake command into the child's stdout
-        env = {**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"}
-        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120, env=env)
-        assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "[(1, 'a')]"
+        assert run_isolated(script) == "[(1, 'a'), (2, None)]"
 
     def test_numpy_long_double_is_refused(self, con):
         con.execute("CREATE OR REPLACE TABLE t (x DOUBLE)")
         with pytest.raises(duckdb.NotImplementedException, match="longdouble"), con.appender("t") as appender:
             appender.append_row(np.longdouble("2.5"))
+
+
+def run_isolated(script):
+    # -I keeps a user site file that imports numpy out of the child; an editable install that rebuilds on import
+    # otherwise prints its cmake command into the child's stdout
+    env = {**os.environ, "SKBUILD_EDITABLE_VERBOSE": "0"}
+    result = subprocess.run([sys.executable, "-I", "-c", script], capture_output=True, text=True, timeout=120, env=env)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()

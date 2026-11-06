@@ -71,21 +71,34 @@ void ThrowUnencodableStr(nb::handle str) {
 	throw UnencodableStrError(PyUnicode_ReadChar(str.ptr(), start), NumericCast<idx_t>(start));
 }
 
-//! Whether numpy is imported, asked of the module dict without importing it: a numpy scalar cannot exist before
-static bool NumpyIsImported(PythonImportCache &import_cache) {
-	if (import_cache.numpy.LoadSucceeded()) {
+// Importing the module here instead would run the import on whichever thread of the query converts the value, and a
+// None entry in sys.modules is how a program blocks the import
+static bool ModuleIsImported(PythonImportCacheItem &module, PyObject *name) {
+	if (module.LoadSucceeded()) {
 		return true;
 	}
-	static PyObject *const name = PyUnicode_InternFromString("numpy");
 	if (!name) {
 		PyErr_Clear();
 		return false;
 	}
-	auto module = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
-	if (!module && PyErr_Occurred()) {
+	auto entry = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
+	if (!entry && PyErr_Occurred()) {
 		PyErr_Clear();
 	}
-	return module && module != Py_None;
+	return entry && entry != Py_None;
+}
+
+bool PandasIsImported(PythonImportCache &import_cache) {
+	// Interned once: building the key on every call, or asking the import cache about a module it has not loaded,
+	// costs an allocation for every converted value
+	static PyObject *const name = PyUnicode_InternFromString("pandas");
+	return ModuleIsImported(import_cache.pandas, name);
+}
+
+//! A numpy scalar cannot exist before numpy is imported
+static bool NumpyIsImported(PythonImportCache &import_cache) {
+	static PyObject *const name = PyUnicode_InternFromString("numpy");
+	return ModuleIsImported(import_cache.numpy, name);
 }
 
 //! Decided from the object's type, which runs no code of the object's; numpy is optional and loaded by nothing here,
@@ -106,16 +119,35 @@ static bool IsNumpyScalar(nb::handle cell) {
 	       nb::cast<idx_t>(cell.attr("ndim")) == 0;
 }
 
-nb::object PythonValueOfNumpyScalar(nb::handle cell) {
-	if (!IsNumpyScalar(cell)) {
+//! A datetime or a timedelta holds no unit finer than a microsecond, so item() gives an integer at these
+static bool IsFinerThanAMicrosecond(nb::handle dtype) {
+	auto code = nb::cast<string>(dtype.attr("str"));
+	return StringUtil::EndsWith(code, "ns]") || StringUtil::EndsWith(code, "ps]") ||
+	       StringUtil::EndsWith(code, "fs]") || StringUtil::EndsWith(code, "as]");
+}
+
+nb::object PythonValueOfNumpyScalar(nb::handle cell, timestamp_ns_t &timestamp) {
+	auto object = cell.ptr();
+	// numpy's float, str and bytes scalars are a float, str and bytes the conversion reads as they are, where item()
+	// would drop the trailing NUL characters of a str or bytes; an int or None is never a numpy scalar
+	if (object == Py_None || PyLong_Check(object) || PyFloat_Check(object) || PyUnicode_Check(object) ||
+	    PyBytes_Check(object) || !IsNumpyScalar(cell)) {
 		return nb::borrow(cell);
 	}
-	auto kind = nb::cast<string>(cell.attr("dtype").attr("kind"));
+	auto dtype = cell.attr("dtype");
+	auto kind = nb::cast<string>(dtype.attr("kind"));
+	if (kind == "M" && IsFinerThanAMicrosecond(dtype)) {
+		// No Python value holds the nanoseconds; the engine's cast into the column then treats them as it treats a
+		// datetime64[ns] column of a frame
+		auto nanoseconds = cell.attr("astype")("datetime64[ns]").attr("item")();
+		if (nanoseconds.is_none()) {
+			return nanoseconds;
+		}
+		timestamp = timestamp_ns_t(nb::cast<int64_t>(nanoseconds));
+		return nb::object();
+	}
 	nb::object value;
-	if (kind == "M") {
-		// A nanosecond datetime64 lists as an integer; the microsecond unit lists as a datetime, NaT as None
-		value = cell.attr("astype")("datetime64[us]").attr("item")();
-	} else if (kind == "m") {
+	if (kind == "m" && IsFinerThanAMicrosecond(dtype)) {
 		value = cell.attr("astype")("timedelta64[us]").attr("item")();
 	} else {
 		value = cell.attr("item")();
@@ -559,26 +591,6 @@ struct ContiguousBuffer {
 
 	Py_buffer view;
 };
-
-// Importing pandas here instead would run the import on whichever thread of the query converts the value, and a None
-// entry in sys.modules is how a program blocks the import
-bool PandasIsImported(PythonImportCache &import_cache) {
-	if (import_cache.pandas.LoadSucceeded()) {
-		return true;
-	}
-	// Interned once: building the key on every call, or asking the import cache about a module it has not loaded,
-	// costs an allocation for every converted value
-	static PyObject *const name = PyUnicode_InternFromString("pandas");
-	if (!name) {
-		PyErr_Clear();
-		return false;
-	}
-	auto module = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
-	if (!module && PyErr_Occurred()) {
-		PyErr_Clear();
-	}
-	return module && module != Py_None;
-}
 
 bool NumpyMaIsImported() {
 	nb::str name("numpy.ma");

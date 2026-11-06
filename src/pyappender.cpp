@@ -484,8 +484,11 @@ void DuckDBPyAppender::ThrowIfBroken() const {
 }
 
 Value DuckDBPyAppender::Convert(ClientContext &context, const nb::handle &object, const LogicalType &type) {
-	auto plain = PythonValueOfNumpyScalar(object);
-	return CastToColumn(context, TransformPythonValue(context, plain, LogicalType::UNKNOWN, false), type);
+	timestamp_ns_t timestamp;
+	auto plain = PythonValueOfNumpyScalar(object, timestamp);
+	auto value = plain.is_valid() ? TransformPythonValue(context, plain, LogicalType::UNKNOWN, false)
+	                              : Value::TIMESTAMPNS(timestamp);
+	return CastToColumn(context, value, type);
 }
 
 void DuckDBPyAppender::Stage(const vector<Value> &row) {
@@ -638,8 +641,9 @@ idx_t DuckDBPyAppender::BufferedRows() const {
 void DuckDBPyAppender::Initialize(nb::handle &m) {
 	auto appender = nb::class_<DuckDBPyAppender>(m, "Appender", nb::is_weak_referenceable());
 	appender.def("append_row", &DuckDBPyAppender::AppendRow,
-	             "Buffer one row, one value per column; a numpy scalar is read as its Python value, then each value is "
-	             "converted as an executemany parameter would be");
+	             "Buffer one row, one value per column; a numpy scalar is read as its Python value (a datetime64 finer "
+	             "than a microsecond as a TIMESTAMP_NS), then each value is converted as an executemany parameter "
+	             "would be");
 	appender.def("append_rows", &DuckDBPyAppender::AppendRows,
 	             "Buffer each row of an iterable of sequences, stopping at the first bad row and keeping the rows "
 	             "before it",
