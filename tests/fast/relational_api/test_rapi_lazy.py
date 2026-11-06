@@ -119,7 +119,12 @@ class TestRelationsKeepNoResult:
             [sys.executable, "-c", script], capture_output=True, text=True, timeout=120, check=False, cwd=tmp_path
         )
         assert shown.returncode == 1, shown.stdout + shown.stderr
-        assert "Use rel.limit(1).fetchall() instead. Did you mean: 'fetchall'?" in shown.stderr, shown.stderr
+        # The suggestion's wording differs by version ("Did you mean: 'fetchall'?" up to 3.14, "Did you mean
+        # '.fetchall' instead of '.fetchone'?" from 3.15); one period, then the suggestion naming fetchall.
+        assert re.search(r"Use rel\.limit\(1\)\.fetchall\(\) instead\. Did you mean[^\n]*fetchall", shown.stderr), (
+            shown.stderr
+        )
+        assert ".." not in shown.stderr, shown.stderr
 
     def test_a_column_named_like_a_removed_method_is_still_reachable(self, con):
         rel = con.sql("SELECT 1 AS execute, 2 AS fetchone")
