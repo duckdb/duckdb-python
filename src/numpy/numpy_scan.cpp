@@ -307,9 +307,7 @@ private:
 //! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
 //! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
 //! every depth, and a value without a DuckDB type of its own reads as its text in a text column
-//! A numpy scalar, or an array of no dimensions, reads as its Python value; a datetime64 or timedelta64 at
-//! nanoseconds would read as an integer, so those take the microsecond unit first, as the frame's own datetime
-//! columns do
+//! A numpy scalar, or an array of no dimensions, reads as its Python value (NumpyScalarItem)
 static bool IsNumpyScalar(nb::handle cell) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (nb::isinstance(cell, import_cache.numpy.generic())) {
@@ -317,17 +315,6 @@ static bool IsNumpyScalar(nb::handle cell) {
 	}
 	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
 	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
-}
-
-static nb::object NumpyScalarValue(nb::handle scalar) {
-	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
-	if (kind == "M") {
-		return scalar.attr("astype")("datetime64[us]").attr("item")();
-	}
-	if (kind == "m") {
-		return scalar.attr("astype")("timedelta64[us]").attr("item")();
-	}
-	return scalar.attr("item")();
 }
 
 //! With a shape (KeyedShape) the cell converts with it as its target, which a type holding a MAP needs: without it a
@@ -338,8 +325,19 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
+	// A TIMESTAMP_NS column keeps a cell's nanoseconds, and an implied naive timestamp type sees them, so its kind
+	// check refuses what a coarser unit would drop; a stated coarser type reads the cell at microseconds, as a frame's
+	// own datetime64 column reads
+	auto naive_timestamp =
+	    target.id() == LogicalTypeId::TIMESTAMP_NS ||
+	    (implied && (target.id() == LogicalTypeId::TIMESTAMP || target.id() == LogicalTypeId::TIMESTAMP_MS ||
+	                 target.id() == LogicalTypeId::TIMESTAMP_SEC));
+	timestamp_ns_t nanoseconds;
+	if (naive_timestamp && HoldsNanoseconds(cell, nanoseconds)) {
+		return Value::TIMESTAMPNS(nanoseconds);
+	}
 	if (IsNumpyScalar(cell)) {
-		auto value = NumpyScalarValue(cell);
+		auto value = NumpyScalarItem(cell);
 		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
 		if (!IsNumpyScalar(value)) {
 			return DeclaredValue(context, target, value, shape, implied);
@@ -351,24 +349,41 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	return TransformPythonValue(context, cell, shape ? *shape : LogicalType(LogicalTypeId::UNKNOWN), true);
 }
 
-//! The type a cell of a type holding a MAP converts with: its containers and no other type, so a dict builds its MAP
-//! from its keys and values in the types they have in Python, and every key and value meets the engine's cast with
-//! the connection's settings, as a TIMESTAMPTZ in the session time zone
-static LogicalType KeyedShape(const LogicalType &type) {
+//! The type a cell of a nested type converts with: its containers and its naive timestamps and no other type, so a
+//! dict builds its MAP from its keys and values in the types they have in Python and every key and value meets the
+//! engine's cast with the connection's settings, as a TIMESTAMPTZ in the session time zone, and a timestamp reads in
+//! the unit of its place. With typed_entries a MAP keeps a key or value type that
+//! has no children, so its entries are each cast into it rather than into their common type first; a type the caller
+//! stated takes that, while an implied type keeps the entries' own types for the kind check.
+static LogicalType KeyedShape(const LogicalType &type, bool typed_entries) {
+	auto entry = [&](const LogicalType &entry_type) {
+		auto plain = !entry_type.IsNested() && entry_type.id() != LogicalTypeId::UNION;
+		return typed_entries && plain ? entry_type : KeyedShape(entry_type, typed_entries);
+	};
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {
 		child_list_t<LogicalType> children;
 		for (idx_t i = 0; i < StructType::GetChildCount(type); i++) {
-			children.emplace_back(StructType::GetChildName(type, i), KeyedShape(StructType::GetChildType(type, i)));
+			children.emplace_back(StructType::GetChildName(type, i),
+			                      KeyedShape(StructType::GetChildType(type, i), typed_entries));
 		}
-		return LogicalType::STRUCT(std::move(children));
+		return AsShape(LogicalType::STRUCT(std::move(children)));
 	}
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(KeyedShape(ListType::GetChildType(type)));
+		return AsShape(LogicalType::LIST(KeyedShape(ListType::GetChildType(type), typed_entries)));
 	case LogicalTypeId::ARRAY:
-		return LogicalType::ARRAY(KeyedShape(ArrayType::GetChildType(type)), ArrayType::GetSize(type));
+		return AsShape(
+		    LogicalType::ARRAY(KeyedShape(ArrayType::GetChildType(type), typed_entries), ArrayType::GetSize(type)));
 	case LogicalTypeId::MAP:
-		return LogicalType::MAP(KeyedShape(MapType::KeyType(type)), KeyedShape(MapType::ValueType(type)));
+		return AsShape(LogicalType::MAP(entry(MapType::KeyType(type)), entry(MapType::ValueType(type))));
+	case LogicalTypeId::TIMESTAMP_NS:
+		return AsShape(type);
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		// An implied type sees the nanoseconds a coarser unit would drop, so its kind check refuses them; a stated one
+		// reads them at microseconds, as at the top
+		return AsShape(typed_entries ? type : LogicalType::TIMESTAMP_NS);
 	default:
 		return LogicalType::UNKNOWN;
 	}
@@ -483,16 +498,7 @@ public:
 		if (source == type) {
 			return true;
 		}
-		for (auto &entry : seen) {
-			if (entry.source == source) {
-				return entry.verdict == Verdict::FITS ||
-				       (entry.verdict == Verdict::BY_VALUE && FitsByValue(value, type));
-			}
-		}
-		auto verdict = Judge(source, type);
-		if (seen.size() < CACHED_SOURCE_TYPES) {
-			seen.push_back({source, verdict});
-		}
+		auto verdict = JudgeOnce(source, type);
 		return verdict == Verdict::FITS || (verdict == Verdict::BY_VALUE && FitsByValue(value, type));
 	}
 
@@ -565,8 +571,8 @@ private:
 					return Verdict::REFUSED;
 				}
 				claimed[field.GetIndex()] = true;
-				verdict = Combine(verdict, Judge(StructType::GetChildType(source, i),
-				                                 StructType::GetChildType(type, field.GetIndex())));
+				verdict = Combine(verdict, JudgeOnce(StructType::GetChildType(source, i),
+				                                     StructType::GetChildType(type, field.GetIndex())));
 			}
 			return verdict;
 		}
@@ -575,22 +581,22 @@ private:
 			if (source.id() != LogicalTypeId::MAP) {
 				return Verdict::REFUSED;
 			}
-			return Combine(Judge(MapType::KeyType(source), MapType::KeyType(type)),
-			               Judge(MapType::ValueType(source), MapType::ValueType(type)));
+			return Combine(JudgeOnce(MapType::KeyType(source), MapType::KeyType(type)),
+			               JudgeOnce(MapType::ValueType(source), MapType::ValueType(type)));
 		case LogicalTypeId::LIST:
 			if (source.id() != LogicalTypeId::LIST) {
 				return Verdict::REFUSED;
 			}
-			return Judge(ListType::GetChildType(source), ListType::GetChildType(type));
+			return JudgeOnce(ListType::GetChildType(source), ListType::GetChildType(type));
 		case LogicalTypeId::ARRAY:
 			// A Python list reads as a LIST, which the cast takes into an ARRAY of its length or refuses
 			if (source.id() == LogicalTypeId::LIST) {
-				return Judge(ListType::GetChildType(source), ArrayType::GetChildType(type));
+				return JudgeOnce(ListType::GetChildType(source), ArrayType::GetChildType(type));
 			}
 			if (source.id() != LogicalTypeId::ARRAY) {
 				return Verdict::REFUSED;
 			}
-			return Judge(ArrayType::GetChildType(source), ArrayType::GetChildType(type));
+			return JudgeOnce(ArrayType::GetChildType(source), ArrayType::GetChildType(type));
 		default:
 			break;
 		}
@@ -640,12 +646,64 @@ private:
 		return CastFunctionSet::ImplicitCastCost(context, source, type) >= 0 ? Verdict::FITS : Verdict::REFUSED;
 	}
 
+	//! Judge, looked up once per pair of types for the scan of a vector: the elements of a list share a type, and so do
+	//! the cells of a column, so a pair is judged once rather than per cell or element
+	Verdict JudgeOnce(const LogicalType &source, const LogicalType &type) {
+		for (auto &entry : judged) {
+			if (entry.source == source && entry.type == type) {
+				return entry.verdict;
+			}
+		}
+		auto verdict = Judge(source, type);
+		if (judged.size() < CACHED_TYPE_PAIRS) {
+			judged.push_back({source, type, verdict});
+		}
+		return verdict;
+	}
+
+	static bool HoldsInteger(int64_t value, LogicalTypeId id) {
+		switch (id) {
+		case LogicalTypeId::TINYINT:
+			return value >= NumericLimits<int8_t>::Minimum() && value <= NumericLimits<int8_t>::Maximum();
+		case LogicalTypeId::SMALLINT:
+			return value >= NumericLimits<int16_t>::Minimum() && value <= NumericLimits<int16_t>::Maximum();
+		case LogicalTypeId::INTEGER:
+			return value >= NumericLimits<int32_t>::Minimum() && value <= NumericLimits<int32_t>::Maximum();
+		case LogicalTypeId::UTINYINT:
+			return value >= 0 && value <= NumericLimits<uint8_t>::Maximum();
+		case LogicalTypeId::USMALLINT:
+			return value >= 0 && value <= NumericLimits<uint16_t>::Maximum();
+		case LogicalTypeId::UINTEGER:
+			return value >= 0 && value <= NumericLimits<uint32_t>::Maximum();
+		case LogicalTypeId::UBIGINT:
+		case LogicalTypeId::UHUGEINT:
+			return value >= 0;
+		default:
+			return true;
+		}
+	}
+
+	static bool HoldsInt64(LogicalTypeId id) {
+		switch (id) {
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	bool FitsByValue(const Value &value, const LogicalType &type) {
 		if (value.IsNull()) {
 			return true;
 		}
 		auto &source = value.type();
-		switch (Judge(source, type)) {
+		switch (JudgeOnce(source, type)) {
 		case Verdict::FITS:
 			return true;
 		case Verdict::REFUSED:
@@ -686,6 +744,10 @@ private:
 			return true;
 		}
 		default: {
+			// A Python int converts to INTEGER or BIGINT, whose range says whether a narrower type holds it
+			if (HoldsInt64(source.id()) && type.IsIntegral()) {
+				return HoldsInteger(value.GetValue<int64_t>(), type.id());
+			}
 			if ((source.id() == LogicalTypeId::DOUBLE || source.id() == LogicalTypeId::FLOAT) &&
 			    !FloatHoldsItsText(value, type)) {
 				return false;
@@ -759,9 +821,8 @@ public:
 	}
 
 private:
-	//! The significant digits of a number's shortest text ("2.0" has one, "1e+20" twenty one): from its first digit
-	//! that is not zero to its last, or to the units when its integer part ends in zeros
-	static idx_t SignificantDigits(const string &text) {
+	//! The digits of the integer part of a number's shortest text: none for "0.1", one for "2.0", 21 for "1e+20"
+	static idx_t IntegerDigits(const string &text) {
 		string digits;
 		int64_t integer_digits = 0;
 		bool point = false;
@@ -776,32 +837,28 @@ private:
 		}
 		int64_t exponent = i < text.size() ? std::stoll(text.substr(i + 1)) : 0;
 		auto units = integer_digits + exponent;
-		auto end = static_cast<int64_t>(digits.size());
-		while (end > MaxValue<int64_t>(units, 0) && digits[NumericCast<idx_t>(end - 1)] == '0') {
-			end--;
+		int64_t leading_zeros = 0;
+		while (leading_zeros < units && leading_zeros < static_cast<int64_t>(digits.size()) &&
+		       digits[NumericCast<idx_t>(leading_zeros)] == '0') {
+			leading_zeros++;
 		}
-		int64_t start = 0;
-		while (start < end && digits[NumericCast<idx_t>(start)] == '0') {
-			start++;
-		}
-		if (start == end) {
-			return 0;
-		}
-		return NumericCast<idx_t>(MaxValue<int64_t>(end, units) - start);
+		return NumericCast<idx_t>(MaxValue<int64_t>(units - leading_zeros, 0));
 	}
 
-	//! A double holds every decimal of at most 15 significant digits exactly enough to give it back as its shortest
-	//! text, so a float whose text has more may be a rounding already: df() hands a HUGEINT or a DECIMAL over as a
-	//! float64. And the engine's cast of a float into a DECIMAL rounds the value times 10**scale in double precision,
-	//! which for a wide scale is no longer that value (2.0 reads 2.000000000000000039769249677312 in a DECIMAL(38,30),
-	//! exactly in a DECIMAL(38,20)), so the float fits only when the cast gives the value of its text.
+	//! A float stands for the value it was made from only when that value had at most 15 significant digits, the
+	//! decimals a double holds exactly: df() hands a HUGEINT or a DECIMAL over as a float64, already rounded when
+	//! the value had more. A float with i integer digits stands for a DECIMAL(p, s) value of at most i + s digits, so
+	//! it fits only when i + s is at most 15 (s is 0 for an integer type). And the engine's cast of a float into a
+	//! DECIMAL rounds the value times 10**scale in double precision, so it must also give the value of the float's
+	//! shortest text.
 	static bool FloatHoldsItsText(const Value &value, const LogicalType &type) {
 		auto number = value.GetValue<double>();
 		if (!Value::DoubleIsFinite(number)) {
 			return false;
 		}
 		auto text = Value::DOUBLE(number).ToString();
-		if (SignificantDigits(text) > MAX_EXACT_FLOAT_DIGITS) {
+		auto scale = type.id() == LogicalTypeId::DECIMAL ? DecimalType::GetScale(type) : 0;
+		if (IntegerDigits(text) + scale > MAX_EXACT_FLOAT_DIGITS) {
 			return false;
 		}
 		if (type.id() != LogicalTypeId::DECIMAL) {
@@ -812,17 +869,18 @@ private:
 		return cast && exact && Value::NotDistinctFrom(*cast, *exact);
 	}
 
-	struct Seen {
+	struct Judged {
 		LogicalType source;
+		LogicalType type;
 		Verdict verdict;
 	};
 	//! DBL_DIG: every decimal of this many significant digits survives a round trip through a double
 	static constexpr idx_t MAX_EXACT_FLOAT_DIGITS = 15;
 	//! Bounded like DeclaredCasts, since dicts give a STRUCT type per key set
-	static constexpr idx_t CACHED_SOURCE_TYPES = 16;
+	static constexpr idx_t CACHED_TYPE_PAIRS = 32;
 
 	ClientContext &context;
-	vector<Seen> seen;
+	vector<Judged> judged;
 };
 
 // A column without a mask takes the instantiation that tests no mask bits, so it reads like the plain array
@@ -867,14 +925,22 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
                                    bool bit_storage_refused) {
 	DeclaredVector staged(count);
 	auto &target = out.GetType();
-	const auto keyed = TypeVisitor::Contains(target, LogicalTypeId::MAP);
+	// A type holding a MAP takes a shape for its keys, and one holding a naive timestamp for the unit a nested value
+	// reads in; a top level timestamp is read by DeclaredValue itself
+	const auto keyed = target.IsNested() && (TypeVisitor::Contains(target, LogicalTypeId::MAP) ||
+	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_NS) ||
+	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP) ||
+	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_MS) ||
+	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_SEC));
 	const auto holds_bit = TypeVisitor::Contains(target, LogicalTypeId::BIT);
-	const auto shape = keyed ? KeyedShape(target) : LogicalType(LogicalTypeId::UNKNOWN);
-	// A str into VARCHAR without an alias, and bytes or a bytearray into BLOB without one, read as TransformPythonValue
-	// would read them, without building a Value per cell; a collation governs comparison only, an alias such as JSON
-	// validates the text in its cast
+	const auto shape = keyed ? KeyedShape(target, !implied_type) : LogicalType(LogicalTypeId::UNKNOWN);
+	// A str into VARCHAR without an alias, bytes or a bytearray into BLOB without one, and a time without a zone into
+	// TIME read as TransformPythonValue would read them, without building a Value per cell; a collation governs
+	// comparison only, an alias such as JSON validates the text in its cast
 	const bool plain_text = target == LogicalType::VARCHAR;
 	const bool plain_blob = target == LogicalType::BLOB;
+	const bool plain_time = target == LogicalType::TIME;
+	PyObject *time_type = nullptr;
 	ImpliedKinds kinds(context);
 	ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
 		if (plain_text && PyUnicode_CheckExact(cell.ptr())) {
@@ -890,13 +956,38 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 		}
 		// df() hands a BLOB cell to the function as a bytearray
 		if (plain_blob && (PyBytes_CheckExact(cell.ptr()) || PyByteArray_CheckExact(cell.ptr()))) {
-			auto bytes = PyBytes_CheckExact(cell.ptr());
-			auto data = bytes ? PyBytes_AS_STRING(cell.ptr()) : PyByteArray_AS_STRING(cell.ptr());
-			auto size = bytes ? PyBytes_GET_SIZE(cell.ptr()) : PyByteArray_GET_SIZE(cell.ptr());
+			char *data;
+			Py_ssize_t size;
+			if (PyBytes_CheckExact(cell.ptr())) {
+				if (PyBytes_AsStringAndSize(cell.ptr(), &data, &size) < 0) {
+					throw nb::python_error();
+				}
+			} else {
+				data = PyByteArray_AsString(cell.ptr());
+				size = PyByteArray_Size(cell.ptr());
+				if (!data || size < 0) {
+					throw nb::python_error();
+				}
+			}
 			FlatVector::GetDataMutable<string_t>(out)[row] =
 			    StringVector::AddStringOrBlob(out, data, NumericCast<idx_t>(size));
 			staged.MarkWritten(row);
 			return;
+		}
+		if (plain_time) {
+			if (!time_type) {
+				time_type = DuckDBPyConnection::ImportCache()->datetime.time().ptr();
+			}
+			if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(time_type)) {
+				PyTime time(cell);
+				// A time with a zone converts as a TIMETZ, which an implied TIME refuses and the cast into a stated one
+				// reads without its offset
+				if (time.timezone_obj.is_none()) {
+					FlatVector::GetDataMutable<dtime_t>(out)[row] = time.ToDuckTime();
+					staged.MarkWritten(row);
+					return;
+				}
+			}
 		}
 		auto value = DeclaredValue(context, target, cell, keyed ? &shape : nullptr, implied_type);
 		// A duckdb.Value states its type, as a schema does, so a cast into the column's type is meant

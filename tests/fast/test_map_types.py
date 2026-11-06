@@ -346,9 +346,9 @@ CHANGED_IN_KIND = pytest.mark.parametrize(
         ),
         pytest.param(
             "{'t': TIMESTAMP '2020-01-01'}",
-            _apply_to_a(lambda d: {"t": np.datetime64("2020-01-01T00:00:00", "ns")}),
+            _apply_to_a(lambda d: {"t": np.datetime64("2020-01-01T00:00:00.000000001", "ns")}),
             "STRUCT(t TIMESTAMP)",
-            "STRUCT(t BIGINT)",
+            "STRUCT(t TIMESTAMP_NS)",
             id="nanosecond_datetime64_field",
         ),
         # A float of more than 15 significant digits, or one the cast into a wide scale rounds in double precision
@@ -498,6 +498,8 @@ def test_map_time_value_outside_the_range_of_its_columns_unit_is_refused(duckdb_
         pytest.param("[123456789012345678901::HUGEINT]", "HUGEINT[]", id="hugeint_beyond_bigint"),
         pytest.param("[1152921504606846977::HUGEINT, NULL]", "HUGEINT[]", id="hugeint_with_a_null"),
         pytest.param("[1234567890123456.78::DECIMAL(18,2)]", "DECIMAL(18,2)[]", id="decimal_of_18_digits"),
+        pytest.param("[1.000000000000000001::DECIMAL(19,18)]", "DECIMAL(19,18)[]", id="decimal_of_scale_18"),
+        pytest.param("[100000000000000.001::DECIMAL(18,3)]", "DECIMAL(18,3)[]", id="decimal_of_15_integer_digits"),
     ],
 )
 def test_map_identity_of_a_list_whose_floats_may_have_rounded_is_refused(duckdb_cursor, values, sql_type):
@@ -512,6 +514,10 @@ def test_map_identity_of_a_list_whose_floats_may_have_rounded_is_refused(duckdb_
     [
         pytest.param("[5::HUGEINT, NULL, (-999999999999999)::HUGEINT]", id="hugeint_of_15_digits"),
         pytest.param("[1.25::DECIMAL(9,2), NULL, 0.1::DECIMAL(9,2)]", id="decimal"),
+        pytest.param("[1.5::DECIMAL(18,3), NULL]", id="decimal_of_scale_3"),
+        pytest.param("[(-32768)::SMALLINT, NULL, 32767::SMALLINT]", id="smallint"),
+        pytest.param("[(-128)::TINYINT, 127::TINYINT]", id="tinyint"),
+        pytest.param("{'x': 32767::SMALLINT}", id="smallint_field"),
     ],
 )
 def test_map_identity_of_a_list_whose_floats_hold_their_values_round_trips(duckdb_cursor, values):
@@ -519,6 +525,240 @@ def test_map_identity_of_a_list_whose_floats_hold_their_values_round_trips(duckd
     mapped = source.map(lambda df: df)
     assert mapped.types == source.types
     assert mapped.fetchall() == source.fetchall()
+
+
+@pytest.mark.parametrize(
+    ("source", "values", "returned"),
+    [
+        pytest.param("[1::SMALLINT]", [40000], "INTEGER[]", id="smallint_list"),
+        pytest.param("[1::TINYINT]", [-129], "INTEGER[]", id="tinyint_list"),
+    ],
+)
+def test_map_narrow_integer_list_with_an_int_beyond_its_range_is_refused(duckdb_cursor, source, values, returned):
+    mapped = duckdb_cursor.sql(f"select {source} as a").map(_apply_to_a(lambda v: values))
+    sql_type = duckdb_cursor.sql(f"select {source} as a").types[0]
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@pytest.mark.parametrize("cell", [0, "x"], ids=["int", "str"])
+def test_map_scalar_returned_for_a_map_column_is_refused_and_the_database_stays_usable(cell):
+    con = duckdb.connect()
+    mapped = con.sql("select map(['k'], [1]) as a").map(
+        lambda df: df.assign(a=pd.Series([cell] * len(df), dtype=object, index=df.index))
+    )
+    with pytest.raises(duckdb.InvalidInputException, match=re.escape("UDF column type mismatch")):
+        mapped.fetchall()
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
+def test_map_text_of_a_map_for_a_stated_map_column_reads_as_the_cast_reads_it():
+    con = duckdb.connect()
+    mapped = con.sql("select map(['k'], [1]) as a").map(
+        lambda df: df.assign(a=pd.Series(["{k=2}"] * len(df), dtype=object, index=df.index)),
+        schema={"a": duckdb.sqltype("MAP(VARCHAR, INTEGER)")},
+    )
+    assert mapped.fetchall() == [({"k": 2},)]
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
+@pytest.mark.parametrize(
+    ("value", "nanoseconds"),
+    [
+        pytest.param("'2020-01-01 00:00:00.000000001'::TIMESTAMP_NS", 1, id="pandas_timestamp"),
+        pytest.param("NULL::TIMESTAMP_NS", None, id="null"),
+    ],
+)
+def test_map_timestamp_ns_column_handed_back_as_objects_keeps_its_nanoseconds(duckdb_cursor, value, nanoseconds):
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(lambda df: df.assign(a=df["a"].astype(object)))
+    assert mapped.types == [duckdb.sqltype("TIMESTAMP_NS")]
+    assert mapped.project("a::VARCHAR").fetchall() == source.project("a::VARCHAR").fetchall()
+
+
+def test_map_timestamp_ns_column_of_numpy_datetime64_cells_keeps_their_nanoseconds(duckdb_cursor):
+    cell = np.datetime64("2020-01-01T00:00:00.000000002", "ns")
+    mapped = duckdb_cursor.sql("select '2020-01-01'::TIMESTAMP_NS as a").map(
+        lambda df: df.assign(a=pd.Series([cell] * len(df), dtype=object, index=df.index))
+    )
+    assert mapped.project("a::VARCHAR").fetchall() == [("2020-01-01 00:00:00.000000002",)]
+
+
+def test_map_timestamp_column_given_a_timestamp_with_nanoseconds_is_refused(duckdb_cursor):
+    # The cast into microseconds would drop the nanosecond
+    stamp = pd.Timestamp("2020-01-01 00:00:00.000000001")
+    mapped = duckdb_cursor.sql("select TIMESTAMP '2020-01-01' as a").map(
+        lambda df: df.assign(a=pd.Series([stamp] * len(df), dtype=object, index=df.index))
+    )
+    expected = "Invalid Input Error: UDF column type mismatch, expected [TIMESTAMP], got [TIMESTAMP_NS]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+# A scalar inside a container of a type holding a MAP, which meets the engine's cast or the kind check, never a
+# conversion target holding no type
+NESTED_SCALARS = pytest.mark.parametrize(
+    ("sql_type", "cell", "cast_into"),
+    [
+        pytest.param("MAP(VARCHAR, INTEGER)[]", [0], "MAP(VARCHAR, INTEGER)", id="int_in_a_list_of_maps"),
+        pytest.param("MAP(VARCHAR, INTEGER)[]", ["x"], "MAP(VARCHAR, INTEGER)", id="str_in_a_list_of_maps"),
+        pytest.param("STRUCT(m MAP(VARCHAR, INTEGER))", {"m": 5}, "MAP(VARCHAR, INTEGER)", id="int_for_a_map_field"),
+        pytest.param("MAP(VARCHAR, INTEGER)[]", np.array([0, 1]), "MAP(VARCHAR, INTEGER)", id="int_array_for_a_list"),
+        pytest.param("MAP(VARCHAR, INTEGER)[]", (0,), "MAP(VARCHAR, INTEGER)", id="tuple_for_a_list"),
+        pytest.param("MAP(VARCHAR, STRUCT(x INTEGER))", {"k": "abc"}, "STRUCT(x INTEGER)", id="str_for_a_struct_value"),
+    ],
+)
+
+
+def _returning(cell):
+    def replace(df):
+        return df.assign(a=pd.Series([cell] * len(df), dtype=object, index=df.index))
+
+    return replace
+
+
+@NESTED_SCALARS
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_map_scalar_inside_a_container_of_a_type_holding_a_map_is_refused_and_the_database_stays_usable(
+    sql_type, cell, cast_into, mode
+):
+    con = duckdb.connect()
+    con.execute(f"create table t (a {sql_type})")
+    con.execute("insert into t values (NULL)")
+    if mode == "append":
+        run = lambda: con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))  # noqa: E731
+    else:
+        schema = {"a": duckdb.sqltype(sql_type)} if mode == "explicit_schema" else None
+        run = con.table("t").map(_returning(cell), schema=schema).fetchall
+    with pytest.raises(duckdb.Error) as error:
+        run()
+    message = str(error.value)
+    assert not isinstance(error.value, duckdb.FatalException), message
+    if mode == "inferred":
+        assert message.startswith(f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got ["), (
+            message
+        )
+    else:
+        # The message names the column's own types, never a conversion target
+        assert cast_into in message, message
+        assert "shape" not in message, message
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
+def test_map_cast_error_for_a_nested_scalar_names_the_columns_type():
+    con = duckdb.connect()
+    con.execute("create table t (a MAP(VARCHAR, INTEGER)[])")
+    expected = "Conversion Error: Unimplemented type for cast (INTEGER -> MAP(VARCHAR, INTEGER))"
+    with pytest.raises(duckdb.ConversionException, match=re.escape(expected)):
+        con.append("t", pd.DataFrame({"a": pd.Series([[0]], dtype=object)}))
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
+NANOSECOND = pd.Timestamp("2020-01-01 00:00:00.000000001")
+
+
+@pytest.mark.parametrize(
+    ("value", "cell"),
+    [
+        pytest.param("{'t': '2020-01-01'::TIMESTAMP_NS}", {"t": NANOSECOND}, id="struct_field"),
+        pytest.param("['2020-01-01'::TIMESTAMP_NS]", [NANOSECOND], id="list_element"),
+    ],
+)
+def test_map_nested_timestamp_ns_value_keeps_its_nanoseconds(duckdb_cursor, value, cell):
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(_returning(cell))
+    assert mapped.types == source.types
+    assert "00:00:00.000000001" in mapped.project("a::VARCHAR").fetchall()[0][0]
+
+
+def test_map_nested_timestamp_with_nanoseconds_for_an_implied_timestamp_is_refused(duckdb_cursor):
+    mapped = duckdb_cursor.sql("select {'t': TIMESTAMP '2020-01-01'} as a").map(_returning({"t": NANOSECOND}))
+    expected = (
+        "Invalid Input Error: UDF column type mismatch, expected [STRUCT(t TIMESTAMP)], got [STRUCT(t TIMESTAMP_NS)]"
+    )
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+FIVE_MICROSECONDS = np.datetime64("2020-01-01T00:00:00.000005123", "ns")
+
+
+@pytest.mark.parametrize(
+    ("sql_type", "cell", "expected"),
+    [
+        pytest.param(
+            "STRUCT(t TIMESTAMP)",
+            {"t": FIVE_MICROSECONDS},
+            "{'t': '2020-01-01 00:00:00.000005'}",
+            id="datetime64_in_a_struct",
+        ),
+        pytest.param(
+            "STRUCT(t TIMESTAMP)",
+            {"t": pd.Timestamp(FIVE_MICROSECONDS)},
+            "{'t': '2020-01-01 00:00:00.000005'}",
+            id="pandas_timestamp_in_a_struct",
+        ),
+        pytest.param("TIMESTAMP[]", [FIVE_MICROSECONDS], "['2020-01-01 00:00:00.000005']", id="datetime64_in_a_list"),
+        pytest.param(
+            "MAP(VARCHAR, TIMESTAMP)",
+            {"k": FIVE_MICROSECONDS},
+            "{k='2020-01-01 00:00:00.000005'}",
+            id="datetime64_as_a_map_value",
+        ),
+        pytest.param(
+            "TIMESTAMP_MS[]",
+            [np.datetime64("2020-01-01T00:00:00.005123", "ns")],
+            "['2020-01-01 00:00:00.005']",
+            id="datetime64_in_a_list_of_milliseconds",
+        ),
+    ],
+)
+@pytest.mark.parametrize("mode", ["explicit_schema", "append"])
+def test_map_nested_timestamp_with_nanoseconds_for_a_stated_coarser_unit_reads_at_microseconds_as_at_the_top(
+    sql_type, cell, expected, mode
+):
+    con = duckdb.connect()
+    con.execute(f"create table t (a {sql_type})")
+    if mode == "append":
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        rows = con.sql("select a::VARCHAR from t").fetchall()
+    else:
+        con.execute("insert into t values (NULL)")
+        schema = {"a": duckdb.sqltype(sql_type)}
+        rows = con.table("t").map(_returning(cell), schema=schema).project("a::VARCHAR").fetchall()
+    assert rows == [(expected,)]
+
+
+@pytest.mark.parametrize(
+    "sql_type",
+    ["STRUCT(a INTEGER, b INTEGER)", "STRUCT(a INTEGER, t TIMESTAMP)", "STRUCT(a INTEGER, m MAP(VARCHAR, INTEGER))"],
+    ids=["plain_fields", "timestamp_field", "map_field"],
+)
+@pytest.mark.parametrize("depth", ["top", "struct_field", "list_element"])
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_map_tuple_reads_as_a_list_at_every_depth_so_a_struct_refuses_it(sql_type, depth, mode):
+    column_type, cell = {
+        "top": (sql_type, (3, 4)),
+        "struct_field": (f"STRUCT(s {sql_type})", {"s": (3, 4)}),
+        "list_element": (f"{sql_type}[]", [(3, 4)]),
+    }[depth]
+    con = duckdb.connect()
+    con.execute(f"create table t (a {column_type})")
+    con.execute("insert into t values (NULL)")
+    if mode == "append":
+        run = lambda: con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))  # noqa: E731
+    else:
+        schema = {"a": duckdb.sqltype(column_type)} if mode == "explicit_schema" else None
+        run = con.table("t").map(_returning(cell), schema=schema).fetchall
+    if mode == "inferred":
+        expected = f"UDF column type mismatch, expected [{column_type}], got ["
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape(expected)):
+            run()
+    else:
+        with pytest.raises(duckdb.ConversionException, match=re.escape(f"(INTEGER[] -> {sql_type})")):
+            run()
+    assert con.sql("select 42").fetchall() == [(42,)]
 
 
 def test_map_decimal_column_handed_back_as_objects_of_18_digits_is_refused(duckdb_cursor):
@@ -576,7 +816,7 @@ def test_map_time_value_its_column_unit_holds_reads_unchanged(duckdb_cursor, sou
     ],
 )
 def test_map_container_of_mixed_elements_reads_as_the_conversion_types_it(duckdb_cursor, source, function, expected):
-    # The conversion types a list or a MAP by the common type of its elements; the base refused these
+    # The conversion types a list or a MAP by the common type of its elements; 2.0.0 refused these
     relation = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)")
     mapped = relation.map(function)
     assert mapped.types == relation.types
@@ -645,6 +885,12 @@ def test_map_column_whose_cells_changed_in_kind_casts_into_the_schema_type(duckd
         pytest.param("{'x': i::BIGINT}", _apply_to_a(lambda d: {"x": Decimal(5)}), {"x": 5}, id="integral_decimal"),
         pytest.param("{'x': i::BIGINT}", _apply_to_a(lambda d: {"x": 2.0}), {"x": 2}, id="integral_float_for_bigint"),
         pytest.param(
+            "{'t': TIMESTAMP '2020-01-01'}",
+            _apply_to_a(lambda d: {"t": np.datetime64("2020-01-02T00:00:00", "ns")}),
+            {"t": datetime.datetime(2020, 1, 2)},
+            id="nanosecond_datetime64_of_whole_microseconds",
+        ),
+        pytest.param(
             "{'x': i::DECIMAL(18,2)}",
             _apply_to_a(lambda d: {"x": 1234567890123.45}),
             {"x": Decimal("1234567890123.45")},
@@ -698,7 +944,7 @@ def test_map_text_column_mixing_str_with_other_cells_reads_each_as_text_in_the_s
 
 
 @SCHEMAS
-def test_map_text_list_mixing_str_with_an_int_reads_as_text_as_on_the_base(duckdb_cursor, explicit_schema):
+def test_map_text_list_mixing_str_with_an_int_reads_as_text_as_2_0_0_reads_it(duckdb_cursor, explicit_schema):
     # A list converts by the common type of its elements, so the int reads as its text inside a text list
     source = duckdb_cursor.sql("select ['x', 'y'] as a from range(1) t(i)")
     mapped = source.map(
@@ -777,6 +1023,29 @@ def test_map_bit_value_reaching_the_function_as_its_storage_bytes_is_refused(
     expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
     with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
         mapped.fetchall()
+
+
+@SCHEMAS
+def test_map_time_column_of_times_with_and_without_a_zone(duckdb_cursor, explicit_schema):
+    source = duckdb_cursor.sql(
+        "select (case when i = 1 then NULL else TIME '01:02:03.000004' end) as a from range(3) t(i)"
+    )
+    schema = _schema_of(source, explicit_schema)
+    mapped = source.map(lambda df: df, schema=schema)
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+    zone = datetime.timezone(datetime.timedelta(hours=2))
+    zoned = source.map(
+        lambda df: df.assign(a=pd.Series([datetime.time(1, tzinfo=zone)] * len(df), dtype=object, index=df.index)),
+        schema=schema,
+    )
+    if explicit_schema:
+        # The cast of a TIMETZ into TIME keeps the wall time and drops the offset
+        assert zoned.fetchall() == [(datetime.time(1),)] * 3
+    else:
+        expected = "Invalid Input Error: UDF column type mismatch, expected [TIME], got [TIME WITH TIME ZONE]"
+        with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+            zoned.fetchall()
 
 
 def test_map_json_column_still_validates_its_text(duckdb_cursor):
@@ -1001,6 +1270,33 @@ def test_map_new_object_column_named_otherwise_after_bind_reports_the_name_misma
     expected = "Invalid Input Error: UDF column name mismatch, expected [a, s], got [a, t]"
     with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
         mapped.fetchall()
+
+
+def test_map_column_filled_from_a_null_typed_input_names_the_column_and_schema(duckdb_cursor):
+    def fill(df):
+        return df.assign(c=pd.Series(["x"] * len(df), dtype=object, index=df.index))
+
+    mapped = duckdb_cursor.sql("select i as a, NULL as c from range(3) t(i)").map(fill)
+    with pytest.raises(duckdb.InvalidInputException, match=_no_type("c")):
+        mapped.fetchall()
+
+
+def test_map_column_a_first_map_added_as_none_and_a_second_fills_names_the_column_and_schema(duckdb_cursor):
+    def add_none(df):
+        return df.assign(c=pd.Series([None] * len(df), dtype=object, index=df.index))
+
+    def fill(df):
+        return df.assign(c=pd.Series([1] * len(df), dtype=object, index=df.index))
+
+    mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(add_none).map(fill)
+    with pytest.raises(duckdb.InvalidInputException, match=_no_type("c")):
+        mapped.fetchall()
+
+
+def test_map_identity_of_a_null_typed_input_column_reads_null(duckdb_cursor):
+    mapped = duckdb_cursor.sql("select i as a, NULL as c from range(3) t(i)").map(lambda df: df)
+    assert mapped.types == [duckdb.sqltypes.BIGINT, duckdb.sqltypes.SQLNULL]
+    assert mapped.fetchall() == [(0, None), (1, None), (2, None)]
 
 
 def test_map_new_object_column_fails_on_the_first_chunk_with_a_value(duckdb_cursor):

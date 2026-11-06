@@ -483,16 +483,18 @@ class TestAppendObjectColumnsToDeclaredTypes:
     @pytest.mark.parametrize(
         ("target", "key", "expected"),
         [
-            # The engine's cast reads the instant in the session's time zone; the base dropped the offset
+            # The engine's cast reads the instant in the session's time zone; 2.0.0 dropped the offset
             pytest.param(
                 "TIMESTAMP",
                 datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
                 "{'2019-12-31 19:00:00'=1}",
                 id="aware_datetime_into_timestamp",
             ),
-            # The cast from BLOB gives the bytes' text; the base gave the text of the Python bytes object
+            # The cast from BLOB gives the bytes' text; 2.0.0 gave the text of the Python bytes object
             pytest.param("VARCHAR", b"x", "{x=1}", id="bytes_into_varchar"),
-            pytest.param("STRUCT(a INTEGER)", (1,), "{{'a': 1}=1}", id="tuple_into_struct"),
+            pytest.param("VARCHAR", True, "{true=1}", id="bool_into_varchar"),
+            pytest.param("VARCHAR", datetime.timedelta(days=1), "{1 day=1}", id="timedelta_into_varchar"),
+            pytest.param("VARCHAR", (1, 2), "{'[1, 2]'=1}", id="tuple_into_varchar"),
         ],
     )
     def test_map_key_reads_as_the_cast_from_its_python_type_gives_it(self, duckdb_cursor, target, key, expected):
@@ -501,11 +503,35 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{key: 1}], dtype=object)}))
         assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
 
+    def test_map_key_given_as_a_tuple_for_a_struct_key_type_reads_as_a_list_and_is_refused(self, duckdb_cursor):
+        # A tuple is a LIST at every depth, as the appender reads a value of a row; 2.0.0 read this key through its text
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(STRUCT(a INTEGER), INTEGER))")
+        frame = pd.DataFrame({"a": pd.Series([{(1,): 1}], dtype=object)})
+        expected = "Unimplemented type for cast (INTEGER[] -> STRUCT(a INTEGER))"
+        with pytest.raises(duckdb.ConversionException, match=re.escape(expected)):
+            duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
+
     def test_map_keys_a_str_and_its_bytes_are_one_key_and_refused(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
         frame = pd.DataFrame({"a": pd.Series([{"a": 1, b"a": 2}], dtype=object)})
         with pytest.raises(duckdb.InvalidInputException, match=re.escape("Map keys must be unique")):
             duckdb_cursor.append("t", frame)
+
+    def test_text_of_a_map_into_a_map_column_reads_as_the_cast_reads_it(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        con.append("t", pd.DataFrame({"a": pd.Series(["{a=1}"], dtype=object)}))
+        assert con.table("t").fetchall() == [({"a": 1},)]
+        assert con.sql("SELECT 42").fetchall() == [(42,)]
+
+    def test_map_values_of_mixed_numbers_each_keep_their_value(self):
+        # Converted toward their common type first, 2**60 + 1 beside 1.0 would read as a rounded DOUBLE
+        con = duckdb.connect()
+        con.execute("CREATE TABLE t (a MAP(VARCHAR, BIGINT))")
+        con.append("t", pd.DataFrame({"a": pd.Series([{"a": 2**60 + 1, "b": 1.0}], dtype=object)}))
+        assert con.table("t").fetchall() == [({"a": 2**60 + 1, "b": 1},)]
+        assert con.sql("SELECT 42").fetchall() == [(42,)]
 
     def test_map_key_of_none_is_refused_and_the_connection_stays_usable(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")

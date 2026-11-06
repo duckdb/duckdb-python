@@ -152,9 +152,9 @@ Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyD
 		                             dict.ToString(), target_type.ToString());
 	};
 	bool struct_target = StructType::IsStruct(target_type);
-	// A target holding UNKNOWN gives only the shape of the values below it: the dict's own keys name the fields, as
-	// without a target, and each value converts with the shape of the field of its name
-	bool shape_only = struct_target && TypeVisitor::Contains(target_type, LogicalTypeId::UNKNOWN);
+	// A shape gives only the containers of the values below it: the dict's own keys name the fields, as without a
+	// target, and each value converts with the shape of the field of its name
+	bool shape_only = struct_target && IsShape(target_type);
 	if (struct_target && !shape_only && dict.len != StructType::GetChildCount(target_type)) {
 		throw conversion_error();
 	}
@@ -213,6 +213,117 @@ Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyD
 	return Value::STRUCT(std::move(struct_values));
 }
 
+// Short enough to stay in a string's own buffer, since every shaped conversion compares it
+static constexpr const char *SHAPE_ALIAS = "duckdb_py_shape";
+
+LogicalType AsShape(const LogicalType &type) {
+	return type.WithAlias(SHAPE_ALIAS);
+}
+
+bool IsShape(const LogicalType &type) {
+	return type.HasAlias() && type.GetAlias() == SHAPE_ALIAS;
+}
+
+bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto datetime_type = import_cache.datetime.datetime();
+	if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(datetime_type.ptr())) {
+		return false;
+	}
+	if (duckdb::PyUtil::IsInstance(cell, import_cache.numpy.datetime64())) {
+		auto code = nb::cast<string>(cell.attr("dtype").attr("str"));
+		if (!StringUtil::EndsWith(code, "ns]") && !StringUtil::EndsWith(code, "ps]") &&
+		    !StringUtil::EndsWith(code, "fs]") && !StringUtil::EndsWith(code, "as]")) {
+			return false;
+		}
+		auto value = cell.attr("astype")("datetime64[ns]").attr("item")();
+		if (value.is_none()) {
+			return false;
+		}
+		nanoseconds = timestamp_ns_t(nb::cast<int64_t>(value));
+		return true;
+	}
+	if (!duckdb::PyUtil::IsInstance(cell, datetime_type) || !PandasIsImported(import_cache) ||
+	    cell.is(import_cache.pandas.NaT()) || !nb::hasattr(cell, "nanosecond") ||
+	    !nb::getattr(cell, "tzinfo").is_none()) {
+		return false;
+	}
+	nanoseconds = timestamp_ns_t(nb::cast<int64_t>(cell.attr("value")));
+	return true;
+}
+
+nb::object NumpyScalarItem(nb::handle scalar) {
+	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
+	if (kind == "M") {
+		return scalar.attr("astype")("datetime64[us]").attr("item")();
+	}
+	if (kind == "m") {
+		return scalar.attr("astype")("timedelta64[us]").attr("item")();
+	}
+	return scalar.attr("item")();
+}
+
+Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
+                         bool nan_as_null) {
+	switch (target_type.id()) {
+	case LogicalTypeId::TIMESTAMP_NS: {
+		timestamp_ns_t nanoseconds;
+		if (HoldsNanoseconds(ele, nanoseconds)) {
+			return Value::TIMESTAMPNS(nanoseconds);
+		}
+		break;
+	}
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		if (duckdb::PyUtil::IsInstance(ele, DuckDBPyConnection::ImportCache()->numpy.datetime64())) {
+			return TransformPythonValue(context, NumpyScalarItem(ele), LogicalType::UNKNOWN, nan_as_null);
+		}
+		break;
+	default:
+		break;
+	}
+	return TransformPythonValue(context, ele, LogicalType::UNKNOWN, nan_as_null);
+}
+
+//! Whether an object is what a shape is for: a dict for a MAP or a STRUCT, a list, a tuple or a numpy array for a
+//! LIST or an ARRAY; any other object converts without a target and meets the engine's cast or the kind check, so a
+//! tuple reads as a LIST at every depth, as the appender reads a value of a row
+static bool ShapeTakes(nb::handle ele, const LogicalType &shape) {
+	switch (shape.id()) {
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+		return PyDict_Check(ele.ptr());
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+		return PyList_Check(ele.ptr()) || PyTuple_Check(ele.ptr()) ||
+		       duckdb::PyUtil::IsInstance(ele, DuckDBPyConnection::ImportCache()->numpy.ndarray());
+	default:
+		return false;
+	}
+}
+
+//! A key or value of a MAP whose target is a type without children converts without a target and is then cast with
+//! the connection's settings, as a value of a column is, so each keeps its own type until the cast instead of meeting
+//! its siblings' common type (2**60 + 1 beside 1.0 would read as a DOUBLE, rounded)
+static Value TransformMapEntry(optional_ptr<ClientContext> context, nb::handle entry, const LogicalType &target_type,
+                               bool nan_as_null) {
+	if (IsShape(target_type) || target_type.IsNested() || target_type.id() == LogicalTypeId::UNKNOWN ||
+	    target_type.id() == LogicalTypeId::UNION) {
+		return TransformPythonValue(context, entry, target_type, nan_as_null);
+	}
+	auto value = TransformTimestamp(context, entry, target_type, nan_as_null);
+	if (!context) {
+		return value.DefaultCastAs(target_type);
+	}
+	string error;
+	auto cast = value.TryCastAs(*context, target_type, &error);
+	if (!cast) {
+		throw ConversionException(error);
+	}
+	return std::move(*cast);
+}
+
 Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, const PyDictionary &dict,
                                            const LogicalType &target_type, bool nan_as_null) {
 	if (dict.len == 0) {
@@ -232,6 +343,7 @@ Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, 
 
 	auto key_target = MapType::KeyType(target_type);
 	auto value_target = MapType::ValueType(target_type);
+	auto shape = IsShape(target_type);
 
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
@@ -239,8 +351,12 @@ Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, 
 	vector<Value> elements;
 	for (idx_t i = 0; i < size; i++) {
 
-		Value new_key = TransformPythonValue(context, dict.keys.attr("__getitem__")(i), key_target, nan_as_null);
-		Value new_value = TransformPythonValue(context, dict.values.attr("__getitem__")(i), value_target, nan_as_null);
+		auto key = dict.keys.attr("__getitem__")(i);
+		auto value = dict.values.attr("__getitem__")(i);
+		Value new_key = shape ? TransformMapEntry(context, key, key_target, nan_as_null)
+		                      : TransformPythonValue(context, key, key_target, nan_as_null);
+		Value new_value = shape ? TransformMapEntry(context, value, value_target, nan_as_null)
+		                        : TransformPythonValue(context, value, value_target, nan_as_null);
 
 		key_type = ProxiedForceMaxLogicalType(context, key_type, new_key.type());
 		value_type = ProxiedForceMaxLogicalType(context, value_type, new_value.type());
@@ -252,10 +368,12 @@ Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, 
 		elements.push_back(Value::STRUCT(std::move(struct_values)));
 	}
 	// A target holding UNKNOWN asks for no type there, and a MAP of such a type is no value the engine can hold
-	if (key_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(key_target, LogicalTypeId::UNKNOWN)) {
+	if (key_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(key_target, LogicalTypeId::UNKNOWN) &&
+	    !IsShape(key_target)) {
 		key_type = key_target;
 	}
-	if (value_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(value_target, LogicalTypeId::UNKNOWN)) {
+	if (value_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(value_target, LogicalTypeId::UNKNOWN) &&
+	    !IsShape(value_target)) {
 		value_type = value_target;
 	}
 
@@ -1222,6 +1340,17 @@ void TransformPythonObject(optional_ptr<ClientContext> context, nb::handle ele, 
 
 Value TransformPythonValue(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
                            bool nan_as_null) {
+	// A shape of no children marks a timestamp, read as TransformTimestamp reads it; a container shape takes only the
+	// objects it is for, so a scalar inside a container meets the engine's cast as at the top, never a type holding
+	// UNKNOWN
+	if (IsShape(target_type)) {
+		if (!target_type.IsNested()) {
+			return TransformTimestamp(context, ele, target_type, nan_as_null);
+		}
+		if (!ShapeTakes(ele, target_type)) {
+			return TransformPythonValue(context, ele, LogicalType::UNKNOWN, nan_as_null);
+		}
+	}
 	Value result;
 	TransformPythonObjectInternal<PythonValueConversion>(context, ele, result, target_type, nan_as_null);
 	return result;

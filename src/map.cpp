@@ -45,7 +45,7 @@ struct MapFunctionData : public TableFunctionData {
 	vector<LogicalType> in_types, out_types;
 	vector<Identifier> in_names, out_names;
 	vector<TypeSource> sources;
-	//! Per output column, the type a returned object column is read into, INVALID where the analyzer types it
+	//! Per output column, the type a returned object column is declared: the column's own type, NULL for an untyped one
 	vector<LogicalType> declared_types;
 	//! Per input column, the CategoricalDtype an ENUM column is handed over in, built once since it lists every value
 	vector<PyObjectHolder> enum_dtypes;
@@ -124,7 +124,9 @@ static void OverrideNullType(vector<LogicalType> &return_types, const vector<Ide
 			continue;
 		}
 		auto input = InputColumnNamed(input_names, return_names[col_idx], col_idx);
-		if (!input.IsValid()) {
+		// An input SQL typed as NULL has no type to lend: a column the function fills from it is as untyped as a new
+		// one
+		if (!input.IsValid() || input_types[input.GetIndex()].id() == LogicalTypeId::SQLNULL) {
 			sources.push_back(TypeSource::UNTYPED);
 			continue;
 		}
