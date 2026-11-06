@@ -1,6 +1,10 @@
 """map() fixes one type per output column at bind and reads each chunk's returned column into it."""
 
+import datetime
+import json
 import re
+from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 from conftest import PANDAS_GE_3
@@ -89,7 +93,9 @@ def test_map_enum_column_compares_with_its_text(duckdb_cursor):
         pytest.param("MAP(INTEGER, INTEGER)", "map([i::INTEGER], [i::INTEGER])", id="MAP_INTEGER_keys"),
         pytest.param("MAP(VARCHAR, BIGINT)", "map([i::VARCHAR], [i::BIGINT])", id="MAP_BIGINT_values"),
         pytest.param("INTEGER[2]", "[i, i]::INTEGER[2]", id="ARRAY"),
-        pytest.param("UNION(a INTEGER, b VARCHAR)", "i::INTEGER::UNION(a INTEGER, b VARCHAR)", id="UNION"),
+        pytest.param("MAP(BLOB, INTEGER)", "map([i::VARCHAR::BLOB], [i::INTEGER])", id="MAP_BLOB_keys"),
+        pytest.param("MAP(INTERVAL, INTEGER)", "map([to_days(i::INTEGER)], [i::INTEGER])", id="MAP_INTERVAL_keys"),
+        pytest.param("MAP(VARCHAR, STRUCT(x INTEGER))", "map(['k'], [NULL::STRUCT(x INTEGER)])", id="MAP_NULL_values"),
         pytest.param("TIME_NS", "'01:00:00'::TIME_NS", id="TIME_NS"),
         pytest.param(
             "STRUCT(a INTEGER[], b MAP(VARCHAR, INTEGER))",
@@ -105,6 +111,54 @@ def test_map_identity_returns_an_object_column_in_its_own_type(duckdb_cursor, sq
     mapped = source.map(lambda df: df, schema=_schema_of(source, explicit_schema))
     assert mapped.types == source.types
     assert mapped.fetchall() == source.fetchall()
+
+
+UNION_AB = "UNION(a INTEGER, b VARCHAR)"
+UNION_OVERLAPPING = "UNION(a INTEGER, b BIGINT)"
+# The function gets a UNION's member values only, so the tags cannot reach the result through it.
+UNION_ROWS = pytest.mark.parametrize(
+    ("sql_type", "rows", "returned", "tags_cast"),
+    [
+        pytest.param(
+            UNION_AB,
+            f"(union_value(a := 1)::{UNION_AB}), (union_value(b := 'x')::{UNION_AB}), (NULL::{UNION_AB})",
+            "INTEGER",
+            [("a", 1), ("b", "x"), (None, None)],
+            id="both_members",
+        ),
+        pytest.param(
+            UNION_AB,
+            f"(union_value(a := 1)::{UNION_AB}), (union_value(b := NULL::VARCHAR)::{UNION_AB})",
+            "INTEGER",
+            [("a", 1), (None, None)],
+            id="null_member",
+        ),
+        pytest.param(
+            UNION_OVERLAPPING,
+            f"(union_value(a := 1)::{UNION_OVERLAPPING}), (union_value(b := 7::BIGINT)::{UNION_OVERLAPPING})",
+            "INTEGER",
+            [("a", 1), ("a", 7)],
+            id="overlapping_members",
+        ),
+    ],
+)
+
+
+@UNION_ROWS
+def test_map_identity_of_a_union_column_is_refused(duckdb_cursor, sql_type, rows, returned, tags_cast):
+    mapped = duckdb_cursor.sql(f"select * from (values {rows}) t(u)").map(lambda df: df)
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@UNION_ROWS
+def test_map_union_column_in_the_schema_casts_each_member_value(duckdb_cursor, sql_type, rows, returned, tags_cast):
+    # The cast picks the member for each value, so a NULL member reads as a NULL UNION and 7 as the INTEGER member.
+    source = duckdb_cursor.sql(f"select * from (values {rows}) t(u)")
+    mapped = source.map(lambda df: df, schema={"u": duckdb.sqltype(sql_type)})
+    assert mapped.types == source.types
+    assert mapped.project("union_tag(u), u").fetchall() == tags_cast
 
 
 @SCHEMAS
@@ -217,6 +271,397 @@ def test_map_struct_cell_without_a_field_reads_it_as_null(duckdb_cursor, row):
     assert mapped.fetchall() == expected
 
 
+@ODD_ROWS
+def test_map_struct_cell_without_a_field_in_a_type_holding_a_map_reads_it_as_null(duckdb_cursor, row):
+    duckdb_cursor.execute("set threads = 1")
+    source = duckdb_cursor.sql("select {'x': i::INTEGER, 'm': map(['k'], [i::INTEGER])} as a from range(2048) t(i)")
+    mapped = source.map(_odd_cell_at(row, {"x": 3}))
+    expected = [({"x": 3, "m": None} if i == row else {"x": i, "m": {"k": i}},) for i in range(2048)]
+    assert mapped.types == source.types
+    assert mapped.fetchall() == expected
+
+
+def _apply_to_a(convert):
+    return lambda df: df.assign(a=df["a"].apply(convert))
+
+
+CHANGED_IN_KIND = pytest.mark.parametrize(
+    ("source", "function", "sql_type", "returned"),
+    [
+        pytest.param(
+            "{'x': i::BIGINT}",
+            _apply_to_a(lambda d: {"x": str(d["x"]).zfill(5)}),
+            "STRUCT(x BIGINT)",
+            "STRUCT(x VARCHAR)",
+            id="struct_field_turned_into_text",
+        ),
+        pytest.param(
+            "[i::INTEGER]",
+            _apply_to_a(lambda values: [str(v).zfill(5) for v in values]),
+            "INTEGER[]",
+            "VARCHAR[]",
+            id="list_elements_turned_into_text",
+        ),
+        pytest.param(
+            """'{"k": ' || i || '}'""",
+            _apply_to_a(json.loads),
+            "VARCHAR",
+            "STRUCT(k INTEGER)",
+            id="text_parsed_as_json",
+        ),
+        pytest.param(
+            "i",
+            _apply_to_a(lambda v: Decimal(int(v)) / 3),
+            "BIGINT",
+            "DECIMAL(28,28)",
+            id="integers_divided_as_decimals",
+        ),
+        pytest.param(
+            "map([i::INTEGER], [i::INTEGER])",
+            _apply_to_a(lambda m: {str(k).zfill(3): v for k, v in m.items()}),
+            "MAP(INTEGER, INTEGER)",
+            "MAP(VARCHAR, INTEGER)",
+            id="map_keys_turned_into_text",
+        ),
+        pytest.param(
+            "{'x': i::TINYINT}",
+            _apply_to_a(lambda d: {"x": d["x"] + 300}),
+            "STRUCT(x TINYINT)",
+            "STRUCT(x INTEGER)",
+            id="struct_field_outside_its_type",
+        ),
+        pytest.param(
+            "[i::INTEGER]",
+            _apply_to_a(lambda values: np.asarray(values, dtype=np.float64) / 2),
+            "INTEGER[]",
+            "DOUBLE[]",
+            id="list_given_as_a_float_array",
+        ),
+        pytest.param(
+            "{'x': i::BIGINT}",
+            _apply_to_a(lambda d: {"x": d["x"], "y": 1}),
+            "STRUCT(x BIGINT)",
+            "STRUCT(x INTEGER, y INTEGER)",
+            id="struct_given_a_key_it_does_not_name",
+        ),
+        pytest.param(
+            "{'t': TIMESTAMP '2020-01-01'}",
+            _apply_to_a(lambda d: {"t": np.datetime64("2020-01-01T00:00:00", "ns")}),
+            "STRUCT(t TIMESTAMP)",
+            "STRUCT(t BIGINT)",
+            id="nanosecond_datetime64_field",
+        ),
+        # A float of more than 15 significant digits, or one the cast into a wide scale rounds in double precision
+        pytest.param(
+            "{'x': i::BIGINT}",
+            _apply_to_a(lambda d: {"x": 9007199254740992.0}),
+            "STRUCT(x BIGINT)",
+            "STRUCT(x DOUBLE)",
+            id="float_of_16_digits",
+        ),
+        pytest.param(
+            "{'x': i::DECIMAL(38,30)}",
+            _apply_to_a(lambda d: {"x": 0.1}),
+            "STRUCT(x DECIMAL(38,30))",
+            "STRUCT(x DOUBLE)",
+            id="float_the_cast_rounds_at_a_wide_scale",
+        ),
+        pytest.param(
+            "{'x': i::BIGINT}",
+            _apply_to_a(lambda d: {"x": d["x"], "X": 2}),
+            "STRUCT(x BIGINT)",
+            "STRUCT(x INTEGER, X INTEGER)",
+            id="struct_given_two_keys_for_one_field",
+        ),
+    ],
+)
+
+
+@CHANGED_IN_KIND
+def test_map_column_whose_cells_the_function_changed_in_kind_is_refused(
+    duckdb_cursor, source, function, sql_type, returned
+):
+    mapped = duckdb_cursor.sql(f"select {source} as a from range(3) t(i)").map(function)
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+NEW_YORK = "SET TimeZone = 'America/New_York'"
+UTC = datetime.timezone.utc
+
+
+@pytest.mark.parametrize(
+    ("source", "function", "sql_type", "returned"),
+    [
+        # df() hands the elements over as naive UTC datetimes
+        pytest.param(
+            "[TIMESTAMPTZ '2020-01-01 12:00:00+00']",
+            lambda df: df,
+            "TIMESTAMP WITH TIME ZONE[]",
+            "TIMESTAMP[]",
+            id="list_of_timestamptz_identity",
+        ),
+        pytest.param(
+            "{'t': TIMESTAMP '2020-01-01 12:00:00'}",
+            _apply_to_a(lambda d: {"t": datetime.datetime(2020, 1, 1, 12, tzinfo=UTC)}),
+            "STRUCT(t TIMESTAMP)",
+            "STRUCT(t TIMESTAMP WITH TIME ZONE)",
+            id="aware_datetime_for_timestamp",
+        ),
+        pytest.param(
+            "{'t': TIMESTAMPTZ '2020-01-01 12:00:00+00'}",
+            _apply_to_a(lambda d: {"t": datetime.datetime(2020, 1, 1, 7)}),
+            "STRUCT(t TIMESTAMP WITH TIME ZONE)",
+            "STRUCT(t TIMESTAMP)",
+            id="naive_datetime_for_timestamptz",
+        ),
+        pytest.param(
+            "{'t': TIME '01:00:00'}",
+            _apply_to_a(lambda d: {"t": datetime.time(1, tzinfo=UTC)}),
+            "STRUCT(t TIME)",
+            "STRUCT(t TIME WITH TIME ZONE)",
+            id="aware_time_for_time",
+        ),
+        pytest.param(
+            "{'t': TIMETZ '01:00:00+00'}",
+            _apply_to_a(lambda d: {"t": datetime.time(1)}),
+            "STRUCT(t TIME WITH TIME ZONE)",
+            "STRUCT(t TIME)",
+            id="naive_time_for_timetz",
+        ),
+    ],
+)
+def test_map_value_with_a_time_zone_and_one_without_are_of_different_kinds(
+    duckdb_cursor, source, function, sql_type, returned
+):
+    duckdb_cursor.execute(NEW_YORK)
+    mapped = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)").map(function)
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@pytest.mark.parametrize(
+    ("source", "function", "sql_type", "returned"),
+    [
+        pytest.param(
+            "{'t': '2020-01-01'::TIMESTAMP_S}",
+            _apply_to_a(lambda d: {"t": datetime.datetime(2020, 1, 1, 0, 0, 0, 500000)}),
+            "STRUCT(t TIMESTAMP_S)",
+            "STRUCT(t TIMESTAMP)",
+            id="milliseconds_for_seconds",
+        ),
+        pytest.param(
+            "{'t': '2020-01-01'::TIMESTAMP_MS}",
+            _apply_to_a(lambda d: {"t": datetime.datetime(2020, 1, 1, 0, 0, 0, 1)}),
+            "STRUCT(t TIMESTAMP_MS)",
+            "STRUCT(t TIMESTAMP)",
+            id="a_microsecond_for_milliseconds",
+        ),
+        pytest.param(
+            "{'t': TIME '01:00:00'}",
+            _apply_to_a(lambda d: {"t": duckdb.Value("01:00:00.000000001", duckdb.sqltype("TIME_NS"))}),
+            "STRUCT(t TIME)",
+            "STRUCT(t TIME_NS)",
+            id="a_nanosecond_for_microseconds",
+        ),
+    ],
+)
+def test_map_time_value_finer_than_its_column_keeps_only_values_the_unit_holds(
+    duckdb_cursor, source, function, sql_type, returned
+):
+    mapped = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)").map(function)
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+def test_map_time_value_outside_the_range_of_its_columns_unit_is_refused(duckdb_cursor):
+    # TIMESTAMP_NS covers the years 1677 to 2262 only
+    mapped = duckdb_cursor.sql("select {'t': '2020-01-01'::TIMESTAMP_NS} as a from range(1) t(i)").map(
+        _apply_to_a(lambda d: {"t": datetime.datetime(1500, 1, 1)})
+    )
+    expected = (
+        "Invalid Input Error: UDF column type mismatch, expected [STRUCT(t TIMESTAMP_NS)], got [STRUCT(t TIMESTAMP)]"
+    )
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+# df() hands a LIST of HUGEINT or DECIMAL over as float64 elements, and a float of more than 15 significant digits
+# may already have rounded the value it came from
+@pytest.mark.parametrize(
+    ("values", "sql_type"),
+    [
+        pytest.param("[1152921504606846977::HUGEINT]", "HUGEINT[]", id="hugeint_beyond_2_53"),
+        pytest.param("[123456789012345678901::HUGEINT]", "HUGEINT[]", id="hugeint_beyond_bigint"),
+        pytest.param("[1152921504606846977::HUGEINT, NULL]", "HUGEINT[]", id="hugeint_with_a_null"),
+        pytest.param("[1234567890123456.78::DECIMAL(18,2)]", "DECIMAL(18,2)[]", id="decimal_of_18_digits"),
+    ],
+)
+def test_map_identity_of_a_list_whose_floats_may_have_rounded_is_refused(duckdb_cursor, values, sql_type):
+    mapped = duckdb_cursor.sql(f"select {values} as a").map(lambda df: df)
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [DOUBLE[]]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        pytest.param("[5::HUGEINT, NULL, (-999999999999999)::HUGEINT]", id="hugeint_of_15_digits"),
+        pytest.param("[1.25::DECIMAL(9,2), NULL, 0.1::DECIMAL(9,2)]", id="decimal"),
+    ],
+)
+def test_map_identity_of_a_list_whose_floats_hold_their_values_round_trips(duckdb_cursor, values):
+    source = duckdb_cursor.sql(f"select {values} as a")
+    mapped = source.map(lambda df: df)
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+def test_map_decimal_column_handed_back_as_objects_of_18_digits_is_refused(duckdb_cursor):
+    # df() hands a DECIMAL column over as float64, which rounds 1234567890123456.78
+    source = duckdb_cursor.sql("select 1234567890123456.78::DECIMAL(18,2) as a")
+    mapped = source.map(lambda df: df.assign(a=df["a"].astype(object)))
+    expected = "Invalid Input Error: UDF column type mismatch, expected [DECIMAL(18,2)], got [DOUBLE]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@pytest.mark.parametrize(
+    ("source", "cell", "expected"),
+    [
+        pytest.param(
+            "{'t': '2020-01-01'::TIMESTAMP_S}",
+            datetime.datetime(2020, 1, 1, 0, 0, 3),
+            datetime.datetime(2020, 1, 1, 0, 0, 3),
+            id="whole_seconds_into_seconds",
+        ),
+        pytest.param(
+            "{'t': '2020-01-01'::TIMESTAMP_NS}",
+            datetime.datetime(2020, 1, 1, 0, 0, 0, 7),
+            datetime.datetime(2020, 1, 1, 0, 0, 0, 7),
+            id="microseconds_into_nanoseconds",
+        ),
+        pytest.param(
+            "{'t': TIME '01:00:00'}",
+            duckdb.Value("01:00:00.000001000", duckdb.sqltype("TIME_NS")),
+            datetime.time(1, 0, 0, 1),
+            id="whole_microseconds_into_microseconds",
+        ),
+        pytest.param(
+            "{'t': '01:00:00'::TIME_NS}",
+            datetime.time(2, 0, 0, 5),
+            datetime.time(2, 0, 0, 5),
+            id="time_into_nanoseconds",
+        ),
+    ],
+)
+def test_map_time_value_its_column_unit_holds_reads_unchanged(duckdb_cursor, source, cell, expected):
+    relation = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)")
+    mapped = relation.map(_apply_to_a(lambda d: {"t": cell}))
+    assert mapped.types == relation.types
+    assert mapped.fetchall() == [({"t": expected},)]
+
+
+@pytest.mark.parametrize(
+    ("source", "function", "expected"),
+    [
+        pytest.param("[1, 2]", _apply_to_a(lambda values: [1, True]), [1, 1], id="int_and_bool_list"),
+        pytest.param(
+            "map(['a'], ['x'])", _apply_to_a(lambda m: {"a": 1, "b": "x"}), {"a": "1", "b": "x"}, id="int_and_str_map"
+        ),
+    ],
+)
+def test_map_container_of_mixed_elements_reads_as_the_conversion_types_it(duckdb_cursor, source, function, expected):
+    # The conversion types a list or a MAP by the common type of its elements; the base refused these
+    relation = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)")
+    mapped = relation.map(function)
+    assert mapped.types == relation.types
+    assert mapped.fetchall() == [(expected,)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("{'t': TIMESTAMPTZ '2020-01-01 12:00:00+00'}", id="struct_field"),
+        pytest.param("map(['k'], [TIMESTAMPTZ '2020-01-01 12:00:00+00'])", id="map_value"),
+        pytest.param("{'t': TIMETZ '01:00:00+02'}", id="timetz_field"),
+    ],
+)
+def test_map_identity_of_a_zoned_value_keeps_its_instant_in_another_session_time_zone(duckdb_cursor, value):
+    duckdb_cursor.execute(NEW_YORK)
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(lambda df: df)
+    assert mapped.types == source.types
+    assert mapped.project("a::VARCHAR").fetchall() == source.project("a::VARCHAR").fetchall()
+
+
+@SCHEMAS
+def test_map_numpy_scalar_inside_a_struct_raises_the_conversions_error(duckdb_cursor, explicit_schema):
+    source = duckdb_cursor.sql("select {'x': i::INTEGER} as a from range(1) t(i)")
+    mapped = source.map(_apply_to_a(lambda d: {"x": np.int64(5)}), schema=_schema_of(source, explicit_schema))
+    expected = (
+        "Not implemented Error: UDF column 'a': Unable to transform python value of type "
+        "'<class 'numpy.int64'>' to DuckDB LogicalType"
+    )
+    with pytest.raises(duckdb.NotImplementedException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+def test_map_column_whose_cells_changed_in_kind_casts_into_the_schema_type(duckdb_cursor):
+    mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(
+        _apply_to_a(lambda v: Decimal(int(v)) / 3), schema=BIGINT_A
+    )
+    assert mapped.fetchall() == [(0,), (0,), (1,)]
+
+
+@pytest.mark.parametrize(
+    ("source", "function", "expected"),
+    [
+        pytest.param("{'x': i::TINYINT}", _apply_to_a(lambda d: {"x": d["x"] + 100}), {"x": 100}, id="int_that_fits"),
+        pytest.param("[i::DOUBLE]", _apply_to_a(lambda values: [int(v) for v in values]), [0.0], id="int_into_double"),
+        pytest.param("{'x': i::FLOAT}", _apply_to_a(lambda d: {"x": d["x"] / 2}), {"x": 0.0}, id="float_into_float"),
+        pytest.param(
+            "{'x': i::DECIMAL(9,2)}", _apply_to_a(lambda d: {"x": Decimal("1.5")}), {"x": Decimal("1.50")}, id="decimal"
+        ),
+        pytest.param(
+            "{'x': i::BIGINT}", _apply_to_a(lambda d: {"X": d["x"]}), {"x": 0}, id="field_named_in_other_case"
+        ),
+        pytest.param(
+            "map([i::INTEGER], [i::INTEGER])",
+            _apply_to_a(lambda m: {k + 5: v for k, v in m.items()}),
+            {5: 0},
+            id="map_keys_of_their_kind",
+        ),
+        pytest.param(
+            "[i::INTEGER]", _apply_to_a(lambda values: np.asarray(values, dtype=np.int64) + 3), [3], id="int64_array"
+        ),
+        pytest.param(
+            "[i::DOUBLE]", _apply_to_a(lambda values: np.asarray(values, dtype=np.float32)), [0.0], id="float32_array"
+        ),
+        pytest.param("{'x': i::BIGINT}", _apply_to_a(lambda d: {"x": Decimal(5)}), {"x": 5}, id="integral_decimal"),
+        pytest.param("{'x': i::BIGINT}", _apply_to_a(lambda d: {"x": 2.0}), {"x": 2}, id="integral_float_for_bigint"),
+        pytest.param(
+            "{'x': i::DECIMAL(18,2)}",
+            _apply_to_a(lambda d: {"x": 1234567890123.45}),
+            {"x": Decimal("1234567890123.45")},
+            id="float_of_15_digits",
+        ),
+        pytest.param(
+            "{'x': i::DECIMAL(9,2)}", _apply_to_a(lambda d: {"x": 2.0}), {"x": Decimal("2.00")}, id="integral_float"
+        ),
+    ],
+)
+def test_map_column_whose_cells_keep_their_kind_reads_into_the_input_type(duckdb_cursor, source, function, expected):
+    relation = duckdb_cursor.sql(f"select {source} as a from range(1) t(i)")
+    mapped = relation.map(function)
+    assert mapped.types == relation.types
+    assert mapped.fetchall() == [(expected,)]
+
+
 def test_map_object_column_of_zero_dimensional_arrays_reads_their_values(duckdb_cursor):
     def arrays(df):
         cells = np.empty(len(df), dtype=object)
@@ -239,15 +684,99 @@ def test_map_declared_column_read_error_names_the_column(duckdb_cursor):
 @pytest.mark.parametrize(
     ("cells", "expected"),
     [
-        # Every staged value is an int, so one cast reads them; the str rows between them are written directly.
+        # A text cell and cells of other kinds in one vector, the NULL among them
         pytest.param(["a", 5, 6, "b", None, 7, "c"], ["a", "5", "6", "b", None, "7", "c"], id="str_int_and_null"),
         pytest.param(["a", 5, np.str_("c"), None], ["a", "5", "c", None], id="with_a_str_subclass"),
     ],
 )
-def test_map_text_column_mixing_str_with_other_cells_reads_each_as_text(duckdb_cursor, cells, expected):
+def test_map_text_column_mixing_str_with_other_cells_reads_each_as_text_in_the_schema_type(
+    duckdb_cursor, cells, expected
+):
     source = duckdb_cursor.sql(f"select i::VARCHAR as a from range({len(cells)}) t(i)")
-    mapped = source.map(_text_cells(cells))
+    mapped = source.map(_text_cells(cells), schema={"a": duckdb.sqltypes.VARCHAR})
     assert mapped.fetchall() == [(value,) for value in expected]
+
+
+@SCHEMAS
+def test_map_text_list_mixing_str_with_an_int_reads_as_text_as_on_the_base(duckdb_cursor, explicit_schema):
+    # A list converts by the common type of its elements, so the int reads as its text inside a text list
+    source = duckdb_cursor.sql("select ['x', 'y'] as a from range(1) t(i)")
+    mapped = source.map(
+        _apply_to_a(lambda values: np.array(["x", 5], dtype=object)), schema=_schema_of(source, explicit_schema)
+    )
+    assert mapped.types == source.types
+    assert mapped.fetchall() == [(["x", "5"],)]
+
+
+def test_map_text_column_of_str_subclass_cells_reads_them_without_a_schema(duckdb_cursor):
+    mapped = duckdb_cursor.sql("select i::VARCHAR as a from range(3) t(i)").map(_text_cells(["a", np.str_("c"), None]))
+    assert mapped.fetchall() == [("a",), ("c",), (None,)]
+
+
+def test_map_text_column_with_a_cell_of_another_kind_is_refused_without_a_schema(duckdb_cursor):
+    mapped = duckdb_cursor.sql("select i::VARCHAR as a from range(4) t(i)").map(
+        _text_cells(["a", np.str_("c"), 5, None])
+    )
+    expected = "Invalid Input Error: UDF column type mismatch, expected [VARCHAR], got [INTEGER]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+@SCHEMAS
+def test_map_blob_column_mixing_bytes_with_other_cells_reads_each(duckdb_cursor, explicit_schema):
+    # Every Python type a BLOB value reads from, in one vector
+    cells = [b"a", bytearray(b"b"), None, memoryview(b"c"), b"\x00d"]
+    source = duckdb_cursor.sql(f"select i::VARCHAR::BLOB as a from range({len(cells)}) t(i)")
+    mapped = source.map(
+        lambda df: df.assign(a=pd.Series(cells[: len(df)], dtype=object, index=df.index)),
+        schema=_schema_of(source, explicit_schema),
+    )
+    assert mapped.fetchall() == [(b"a",), (b"b",), (None,), (b"c",), (b"\x00d",)]
+
+
+@pytest.mark.parametrize(
+    ("cell", "name"),
+    [pytest.param(Fraction(1, 3), "fractions.Fraction", id="Fraction"), pytest.param({"b"}, "set", id="set")],
+)
+def test_map_text_column_with_an_object_without_a_duckdb_type_is_refused_without_a_schema(duckdb_cursor, cell, name):
+    mapped = duckdb_cursor.sql("select i::VARCHAR as a from range(2) t(i)").map(_text_cells(["a", cell]))
+    expected = (
+        f"Not implemented Error: UDF column 'a': Unable to transform python value of type '<class '{name}'>' to "
+        "DuckDB LogicalType"
+    )
+    with pytest.raises(duckdb.NotImplementedException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
+
+
+def test_map_text_column_with_an_object_without_a_duckdb_type_reads_its_text_in_the_schema_type(duckdb_cursor):
+    source = duckdb_cursor.sql("select i::VARCHAR as a from range(2) t(i)")
+    mapped = source.map(_text_cells(["a", Fraction(1, 3)]), schema={"a": duckdb.sqltypes.VARCHAR})
+    assert mapped.fetchall() == [("a",), ("1/3",)]
+
+
+@SCHEMAS
+@pytest.mark.parametrize(
+    ("value", "function", "sql_type", "returned"),
+    [
+        pytest.param("'101'::BIT", lambda df: df, "BIT", "BLOB", id="column"),
+        pytest.param("['101'::BIT]", lambda df: df, "BIT[]", "BLOB[]", id="list_element"),
+        pytest.param(
+            "'101'::BIT",
+            lambda df: df.assign(a=pd.Series([memoryview(bytes(v)) for v in df["a"]], dtype=object, index=df.index)),
+            "BIT",
+            "BLOB",
+            id="memoryview",
+        ),
+    ],
+)
+def test_map_bit_value_reaching_the_function_as_its_storage_bytes_is_refused(
+    duckdb_cursor, explicit_schema, value, function, sql_type, returned
+):
+    source = duckdb_cursor.sql(f"select {value} as a from range(2) t(i)")
+    mapped = source.map(function, schema=_schema_of(source, explicit_schema))
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{sql_type}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
 
 
 def test_map_json_column_still_validates_its_text(duckdb_cursor):
@@ -336,39 +865,142 @@ def test_map_new_object_column_with_a_cell_the_analyzer_cannot_read_names_the_co
 
 
 @pytest.mark.parametrize(
-    ("function", "column"),
+    ("function", "types"),
     [
         pytest.param(
             lambda df: df.assign(a=pd.Series(df["a"].astype(str).str.zfill(5).tolist(), dtype=object, index=df.index)),
-            "a",
+            ("BIGINT, VARCHAR", "VARCHAR, VARCHAR"),
             id="typed_input_turned_into_text",
         ),
-        pytest.param(lambda df: df.rename(columns={"a": "b", "b": "a"}), "a", id="names_swapped"),
+        # rename keeps the order, so the BIGINT column comes first under the name b
+        pytest.param(
+            lambda df: df.rename(columns={"a": "b", "b": "a"}),
+            ("BIGINT, BIGINT", "BIGINT, VARCHAR"),
+            id="names_swapped",
+        ),
     ],
 )
-def test_map_typed_input_column_the_function_moved_to_another_type_is_refused(duckdb_cursor, function, column):
+def test_map_typed_input_column_the_function_moved_to_another_type_is_refused(duckdb_cursor, function, types):
     mapped = duckdb_cursor.sql("select i as a, i::VARCHAR as b from range(3) t(i)").map(function)
-    with pytest.raises(duckdb.InvalidInputException, match=_no_type(column)):
+    expected = f"Invalid Input Error: UDF column type mismatch, expected [{types[0]}], got [{types[1]}]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
         mapped.fetchall()
 
 
 @pytest.mark.parametrize(
-    ("make_cell", "expected"),
+    ("sql_type", "offset"),
     [
-        pytest.param(int, [(0,), (1,), (2,)], id="python_ints"),
-        pytest.param(lambda v: None, [(None,), (None,), (None,)], id="only_none"),
+        pytest.param("INTEGER", 0, id="INTEGER"),
+        # Python ints in the INTEGER range for a BIGINT input
+        pytest.param("BIGINT", 0, id="BIGINT_holding_INTEGER_values"),
+        pytest.param("BIGINT", 2**40, id="BIGINT_holding_BIGINT_values"),
+        pytest.param("HUGEINT", 0, id="HUGEINT_holding_INTEGER_values"),
     ],
 )
+@pytest.mark.parametrize("only_none", [False, True], ids=["python_ints", "only_none"])
 def test_map_typed_input_column_the_function_turned_into_objects_keeps_a_confirmed_type(
-    duckdb_cursor, make_cell, expected
+    duckdb_cursor, sql_type, offset, only_none
 ):
     def objects(df):
-        return df.assign(a=pd.Series([make_cell(v) for v in df["a"]], dtype=object, index=df.index))
+        return df.assign(a=pd.Series([None if only_none else int(v) for v in df["a"]], dtype=object, index=df.index))
 
-    source = duckdb_cursor.sql("select i::INTEGER as a from range(3) t(i)")
+    source = duckdb_cursor.sql(f"select (i + {offset})::{sql_type} as a from range(3) t(i)")
     mapped = source.map(objects)
     assert mapped.types == source.types
-    assert mapped.fetchall() == expected
+    assert mapped.fetchall() == [(None if only_none else i + offset,) for i in range(3)]
+
+
+@ODD_ROWS
+def test_map_typed_input_column_turned_into_objects_reads_a_wide_value_at_any_row(duckdb_cursor, row):
+    duckdb_cursor.execute("set threads = 1")
+
+    def objects(df):
+        return df.assign(a=pd.Series([2**40 if i == row else int(v) for i, v in enumerate(df["a"])], dtype=object))
+
+    mapped = duckdb_cursor.sql("select i as a from range(2048) t(i)").map(objects)
+    assert mapped.types == [duckdb.sqltypes.BIGINT]
+    assert mapped.fetchall() == [(2**40 if i == row else i,) for i in range(2048)]
+
+
+@pytest.mark.parametrize("sampled", [0, 2**40], ids=["small_sample", "wide_sample"])
+# In a 2048 row chunk the analyzer samples the even rows, so row 6 is inside its sample and row 7 outside it
+@pytest.mark.parametrize("row", [6, 7], ids=["sampled_row", "unsampled_row"])
+@pytest.mark.parametrize(
+    ("cell", "outcome"), [pytest.param(2.0, 2, id="integral_float"), pytest.param(2.5, None, id="fractional_float")]
+)
+def test_map_typed_input_column_turned_into_objects_reads_a_float_the_same_whatever_the_sample(
+    duckdb_cursor, sampled, row, cell, outcome
+):
+    duckdb_cursor.execute("set threads = 1")
+
+    def objects(df):
+        values = [sampled if i == 0 else cell if i == row else int(v) for i, v in enumerate(df["a"])]
+        return df.assign(a=pd.Series(values, dtype=object, index=df.index))
+
+    mapped = duckdb_cursor.sql("select i as a from range(2048) t(i)").map(objects)
+    if outcome is None:
+        expected = "Invalid Input Error: UDF column type mismatch, expected [BIGINT], got [DOUBLE]"
+        with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+            mapped.fetchall()
+    else:
+        assert mapped.fetchall() == [(sampled if i == 0 else outcome if i == row else i,) for i in range(2048)]
+
+
+@pytest.mark.parametrize(
+    ("sql_type", "dtype", "values"),
+    [
+        pytest.param("BIGINT", np.int32, [0, 1, 2], id="int32_chunk_for_bigint"),
+        pytest.param("DOUBLE", np.float32, [0.5, 1.5, 2.5], id="float32_chunk_for_double"),
+    ],
+)
+def test_map_typed_chunk_for_a_guess_widens_into_it(duckdb_cursor, sql_type, dtype, values):
+    # A Series built from no values is object, so the bind frame's column takes the input's type as a guess
+    def typed_chunk(df):
+        cells = np.asarray(df["a"], dtype=dtype) if len(df) else []
+        return pd.DataFrame({"a": pd.Series(cells, dtype=None if len(df) else object)})
+
+    source = duckdb_cursor.sql(f"select (i + {values[0]})::{sql_type} as a from range(3) t(i)")
+    mapped = source.map(typed_chunk)
+    assert mapped.types == source.types
+    assert mapped.fetchall() == [(v,) for v in values]
+
+
+def test_map_double_input_column_turned_into_float_values_reads_them_as_double(duckdb_cursor):
+    def floats(df):
+        cells = [duckdb.Value(float(v), duckdb.sqltypes.FLOAT) for v in df["a"]]
+        return df.assign(a=pd.Series(cells, dtype=object, index=df.index))
+
+    mapped = duckdb_cursor.sql("select (i + 0.5)::DOUBLE as a from range(3) t(i)").map(floats)
+    assert mapped.types == [duckdb.sqltypes.DOUBLE]
+    assert mapped.fetchall() == [(0.5,), (1.5,), (2.5,)]
+
+
+@pytest.mark.parametrize(("offset", "fits"), [(0, True), (40000, False)], ids=["values_it_holds", "values_beyond_it"])
+def test_map_typed_input_column_turned_into_objects_of_a_narrow_type_reads_the_values_it_holds(
+    duckdb_cursor, offset, fits
+):
+    def objects(df):
+        return df.assign(a=pd.Series([int(v) + offset for v in df["a"]], dtype=object, index=df.index))
+
+    mapped = duckdb_cursor.sql("select i::SMALLINT as a from range(3) t(i)").map(objects)
+    if fits:
+        assert mapped.types == [duckdb.sqltypes.SMALLINT]
+        assert mapped.fetchall() == [(0,), (1,), (2,)]
+    else:
+        expected = "Invalid Input Error: UDF column type mismatch, expected [SMALLINT], got [INTEGER]"
+        with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+            mapped.fetchall()
+
+
+def test_map_new_object_column_named_otherwise_after_bind_reports_the_name_mismatch(duckdb_cursor):
+    def late_name(df):
+        name = "t" if len(df) else "s"
+        return df.assign(**{name: pd.Series(["x"] * len(df), dtype=object, index=df.index)})
+
+    mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(late_name)
+    expected = "Invalid Input Error: UDF column name mismatch, expected [a, s], got [a, t]"
+    with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+        mapped.fetchall()
 
 
 def test_map_new_object_column_fails_on_the_first_chunk_with_a_value(duckdb_cursor):
@@ -395,6 +1027,9 @@ def test_map_new_object_column_fails_on_the_first_chunk_with_a_value(duckdb_curs
         pytest.param(pd.NA, id="pd.NA"),
         pytest.param(pd.NaT, id="pandas_NaT"),
         pytest.param(np.datetime64("NaT", "us"), id="numpy_NaT"),
+        # pandas reads neither as missing; the conversion reads both as NULL
+        pytest.param(duckdb.NullValue(), id="duckdb_NullValue"),
+        pytest.param(np.ma.masked, id="numpy_masked"),
     ],
 )
 def test_map_new_object_column_of_only_missing_values_stays_null(duckdb_cursor, missing):
@@ -404,13 +1039,3 @@ def test_map_new_object_column_of_only_missing_values_stays_null(duckdb_cursor, 
     mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(note)
     assert mapped.types == [duckdb.sqltypes.BIGINT, duckdb.sqltypes.SQLNULL]
     assert mapped.fetchall() == [(0, None), (1, None), (2, None)]
-
-
-def test_map_new_object_column_of_null_values_is_refused_as_untyped(duckdb_cursor):
-    # pandas does not read a duckdb.NullValue() as missing, so the column holds values bind could not type
-    def nulls(df):
-        return df.assign(s=pd.Series([duckdb.NullValue() for _ in range(len(df))], dtype=object, index=df.index))
-
-    mapped = duckdb_cursor.sql("select i as a from range(3) t(i)").map(nulls)
-    with pytest.raises(duckdb.InvalidInputException, match=_no_type("s")):
-        mapped.fetchall()

@@ -4,6 +4,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/swar.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
@@ -329,7 +330,11 @@ static nb::object NumpyScalarValue(nb::handle scalar) {
 	return scalar.attr("item")();
 }
 
-static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell) {
+//! With a shape (KeyedShape) the cell converts with it as its target, which a type holding a MAP needs: without it a
+//! dict reads as a STRUCT named by its keys' text, and a key whose text does not cast back, such as bytes, is lost.
+//! An object without a DuckDB type reads as its text into a stated VARCHAR, and has no kind for an implied one.
+static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell,
+                           optional_ptr<const LogicalType> shape, bool implied) {
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
@@ -337,13 +342,36 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 		auto value = NumpyScalarValue(cell);
 		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
 		if (!IsNumpyScalar(value)) {
-			return DeclaredValue(context, target, value);
+			return DeclaredValue(context, target, value, shape, implied);
 		}
 	}
-	if (target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
+	if (!implied && target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
 		return Value(TransformPythonString(nb::str(cell)));
 	}
-	return TransformPythonValue(context, cell, LogicalType::UNKNOWN, true);
+	return TransformPythonValue(context, cell, shape ? *shape : LogicalType(LogicalTypeId::UNKNOWN), true);
+}
+
+//! The type a cell of a type holding a MAP converts with: its containers and no other type, so a dict builds its MAP
+//! from its keys and values in the types they have in Python, and every key and value meets the engine's cast with
+//! the connection's settings, as a TIMESTAMPTZ in the session time zone
+static LogicalType KeyedShape(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (idx_t i = 0; i < StructType::GetChildCount(type); i++) {
+			children.emplace_back(StructType::GetChildName(type, i), KeyedShape(StructType::GetChildType(type, i)));
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(KeyedShape(ListType::GetChildType(type)));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(KeyedShape(ArrayType::GetChildType(type)), ArrayType::GetSize(type));
+	case LogicalTypeId::MAP:
+		return LogicalType::MAP(KeyedShape(MapType::KeyType(type)), KeyedShape(MapType::ValueType(type)));
+	default:
+		return LogicalType::UNKNOWN;
+	}
 }
 
 //! The values of one vector of a declared column, written once the cells are read: a vector whose values share one
@@ -358,6 +386,7 @@ public:
 	//! A row the scan wrote into the output itself, which Write leaves as it is
 	void MarkWritten(idx_t row) {
 		written[row] = true;
+		written_count++;
 	}
 
 	void Set(idx_t row, Value value) {
@@ -373,6 +402,9 @@ public:
 	}
 
 	void Write(ClientContext &context, Vector &out, idx_t count) {
+		if (written_count == count) {
+			return;
+		}
 		auto &target = out.GetType();
 		if (uniform && source.id() != LogicalTypeId::SQLNULL && source != target) {
 			idx_t present = 0;
@@ -429,8 +461,368 @@ public:
 private:
 	vector<Value> values;
 	vector<bool> written;
+	idx_t written_count = 0;
 	LogicalType source;
 	bool uniform = true;
+};
+
+//! Whether the value a cell of a column whose type was implied, not stated, converted to is of that type's kind: it
+//! is the type, or each of its parts is of the kind of the type's part in the same place, by the rules below, so a
+//! function that changed what a column holds is refused, not cast back. The check reads the converted value, so it
+//! judges exactly what the write would read.
+class ImpliedKinds {
+public:
+	explicit ImpliedKinds(ClientContext &context) : context(context) {
+	}
+
+	bool Fits(const Value &value, const LogicalType &type) {
+		if (value.IsNull()) {
+			return true;
+		}
+		auto &source = value.type();
+		if (source == type) {
+			return true;
+		}
+		for (auto &entry : seen) {
+			if (entry.source == source) {
+				return entry.verdict == Verdict::FITS ||
+				       (entry.verdict == Verdict::BY_VALUE && FitsByValue(value, type));
+			}
+		}
+		auto verdict = Judge(source, type);
+		if (seen.size() < CACHED_SOURCE_TYPES) {
+			seen.push_back({source, verdict});
+		}
+		return verdict == Verdict::FITS || (verdict == Verdict::BY_VALUE && FitsByValue(value, type));
+	}
+
+private:
+	//! BY_VALUE: the kinds agree, but whether the type holds the value depends on the value (an integer, a DECIMAL)
+	enum class Verdict : uint8_t { FITS, REFUSED, BY_VALUE };
+
+	static Verdict Combine(Verdict a, Verdict b) {
+		if (a == Verdict::REFUSED || b == Verdict::REFUSED) {
+			return Verdict::REFUSED;
+		}
+		return a == Verdict::BY_VALUE || b == Verdict::BY_VALUE ? Verdict::BY_VALUE : Verdict::FITS;
+	}
+
+	//! The field of a STRUCT type a key names, or INVALID; the engine's STRUCT cast matches names ignoring case
+	static optional_idx FieldNamed(const LogicalType &type, const Identifier &name) {
+		for (idx_t i = 0; i < StructType::GetChildCount(type); i++) {
+			if (StructType::GetChildName(type, i) == name) {
+				return i;
+			}
+		}
+		return optional_idx();
+	}
+
+	//! The unit of a naive time or timestamp type, finer the higher, or 0 for any other type
+	static idx_t NaiveUnit(LogicalTypeId id) {
+		switch (id) {
+		case LogicalTypeId::TIMESTAMP_SEC:
+			return 1;
+		case LogicalTypeId::TIMESTAMP_MS:
+			return 2;
+		case LogicalTypeId::TIMESTAMP:
+			return 3;
+		case LogicalTypeId::TIMESTAMP_NS:
+			return 4;
+		case LogicalTypeId::TIME:
+			return 13;
+		case LogicalTypeId::TIME_NS:
+			return 14;
+		default:
+			return 0;
+		}
+	}
+
+	static bool IsZoned(LogicalTypeId id) {
+		return id == LogicalTypeId::TIME_TZ || id == LogicalTypeId::TIMESTAMP_TZ ||
+		       id == LogicalTypeId::TIMESTAMP_TZ_NS;
+	}
+
+	static bool IsNested(const LogicalType &type) {
+		return type.IsNested() || type.id() == LogicalTypeId::UNION;
+	}
+
+	Verdict Judge(const LogicalType &source, const LogicalType &type) {
+		if (source == type || source.id() == LogicalTypeId::SQLNULL) {
+			return Verdict::FITS;
+		}
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT: {
+			if (source.id() != LogicalTypeId::STRUCT) {
+				return Verdict::REFUSED;
+			}
+			// A key the STRUCT does not name, or a second key for one field, would be dropped by the cast; a field
+			// without a key reads NULL
+			vector<bool> claimed(StructType::GetChildCount(type), false);
+			auto verdict = Verdict::FITS;
+			for (idx_t i = 0; i < StructType::GetChildCount(source); i++) {
+				auto field = FieldNamed(type, StructType::GetChildName(source, i));
+				if (!field.IsValid() || claimed[field.GetIndex()]) {
+					return Verdict::REFUSED;
+				}
+				claimed[field.GetIndex()] = true;
+				verdict = Combine(verdict, Judge(StructType::GetChildType(source, i),
+				                                 StructType::GetChildType(type, field.GetIndex())));
+			}
+			return verdict;
+		}
+		// The engine casts any MAP into any MAP implicitly without looking at its key and value types
+		case LogicalTypeId::MAP:
+			if (source.id() != LogicalTypeId::MAP) {
+				return Verdict::REFUSED;
+			}
+			return Combine(Judge(MapType::KeyType(source), MapType::KeyType(type)),
+			               Judge(MapType::ValueType(source), MapType::ValueType(type)));
+		case LogicalTypeId::LIST:
+			if (source.id() != LogicalTypeId::LIST) {
+				return Verdict::REFUSED;
+			}
+			return Judge(ListType::GetChildType(source), ListType::GetChildType(type));
+		case LogicalTypeId::ARRAY:
+			// A Python list reads as a LIST, which the cast takes into an ARRAY of its length or refuses
+			if (source.id() == LogicalTypeId::LIST) {
+				return Judge(ListType::GetChildType(source), ArrayType::GetChildType(type));
+			}
+			if (source.id() != LogicalTypeId::ARRAY) {
+				return Verdict::REFUSED;
+			}
+			return Judge(ArrayType::GetChildType(source), ArrayType::GetChildType(type));
+		default:
+			break;
+		}
+		if (IsNested(source) || IsNested(type)) {
+			return Verdict::REFUSED;
+		}
+		// A naive value and one with a time zone are of different kinds: the cast between them reads the wall time in
+		// the session's time zone
+		if (IsZoned(source.id()) != IsZoned(type.id())) {
+			return Verdict::REFUSED;
+		}
+		// A time or timestamp of another unit holds only the values the cast keeps unchanged: a coarser unit rounds,
+		// and a finer one covers fewer years
+		auto source_unit = NaiveUnit(source.id());
+		auto unit = NaiveUnit(type.id());
+		if (source_unit && unit && source_unit / 10 == unit / 10) {
+			return source_unit == unit ? Verdict::FITS : Verdict::BY_VALUE;
+		}
+		auto zoned_timestamps =
+		    (source.id() == LogicalTypeId::TIMESTAMP_TZ || source.id() == LogicalTypeId::TIMESTAMP_TZ_NS) &&
+		    (type.id() == LogicalTypeId::TIMESTAMP_TZ || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS);
+		if (zoned_timestamps || (source.id() == LogicalTypeId::VARCHAR && type.id() == LogicalTypeId::VARCHAR) ||
+		    (source.id() == LogicalTypeId::DOUBLE && type.id() == LogicalTypeId::FLOAT)) {
+			return Verdict::FITS;
+		}
+		// df() hands a BIT value over as its storage bytes, which the cast from BLOB reads as eight bits per byte
+		if (source.id() == LogicalTypeId::BLOB && type.id() == LogicalTypeId::BIT) {
+			return Verdict::REFUSED;
+		}
+		// A number fits an integer or a DECIMAL when the cast into it and back gives the number again, whatever kind of
+		// number it was in Python: 2.0 and Decimal(5) are the integer 2 and 5, 2.5 is none
+		if (source.IsIntegral() && type.IsIntegral()) {
+			return CastFunctionSet::ImplicitCastCost(context, source, type) >= 0 ? Verdict::FITS : Verdict::BY_VALUE;
+		}
+		if (source.id() == LogicalTypeId::DECIMAL && type.id() == LogicalTypeId::DECIMAL) {
+			auto source_scale = DecimalType::GetScale(source);
+			auto scale = DecimalType::GetScale(type);
+			auto fits = source_scale <= scale &&
+			            DecimalType::GetWidth(source) - source_scale <= DecimalType::GetWidth(type) - scale;
+			return fits ? Verdict::FITS : Verdict::BY_VALUE;
+		}
+		auto number = source.IsIntegral() || source.id() == LogicalTypeId::DECIMAL ||
+		              source.id() == LogicalTypeId::DOUBLE || source.id() == LogicalTypeId::FLOAT;
+		if (number && (type.IsIntegral() || type.id() == LogicalTypeId::DECIMAL)) {
+			return Verdict::BY_VALUE;
+		}
+		return CastFunctionSet::ImplicitCastCost(context, source, type) >= 0 ? Verdict::FITS : Verdict::REFUSED;
+	}
+
+	bool FitsByValue(const Value &value, const LogicalType &type) {
+		if (value.IsNull()) {
+			return true;
+		}
+		auto &source = value.type();
+		switch (Judge(source, type)) {
+		case Verdict::FITS:
+			return true;
+		case Verdict::REFUSED:
+			return false;
+		case Verdict::BY_VALUE:
+			break;
+		}
+		switch (type.id()) {
+		case LogicalTypeId::STRUCT: {
+			auto &children = StructValue::GetChildren(value);
+			for (idx_t i = 0; i < children.size(); i++) {
+				auto field = FieldNamed(type, StructType::GetChildName(source, i));
+				if (!FitsByValue(children[i], StructType::GetChildType(type, field.GetIndex()))) {
+					return false;
+				}
+			}
+			return true;
+		}
+		case LogicalTypeId::MAP:
+			for (auto &entry : MapValue::GetChildren(value)) {
+				auto &pair = StructValue::GetChildren(entry);
+				if (!FitsByValue(pair[0], MapType::KeyType(type)) || !FitsByValue(pair[1], MapType::ValueType(type))) {
+					return false;
+				}
+			}
+			return true;
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY: {
+			auto &child =
+			    type.id() == LogicalTypeId::LIST ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
+			auto &children =
+			    source.id() == LogicalTypeId::LIST ? ListValue::GetChildren(value) : ArrayValue::GetChildren(value);
+			for (auto &element : children) {
+				if (!FitsByValue(element, child)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		default: {
+			if ((source.id() == LogicalTypeId::DOUBLE || source.id() == LogicalTypeId::FLOAT) &&
+			    !FloatHoldsItsText(value, type)) {
+				return false;
+			}
+			// The type holds the value when the cast into it and back gives the value again
+			auto cast = value.DefaultTryCastAs(type);
+			if (!cast) {
+				return false;
+			}
+			auto back = cast->DefaultTryCastAs(source);
+			return back && Value::NotDistinctFrom(*back, value);
+		}
+		}
+	}
+
+public:
+	//! Whether a value holds bytes where the type holds a BIT, at any depth: df() hands a BIT value over as its
+	//! storage bytes, which no cast reads back, whether or not the type was stated
+	static bool HoldsBitStorage(const Value &value, const LogicalType &type) {
+		if (value.IsNull()) {
+			return false;
+		}
+		auto &source = value.type();
+		switch (type.id()) {
+		case LogicalTypeId::BIT:
+			return source.id() == LogicalTypeId::BLOB;
+		case LogicalTypeId::STRUCT: {
+			if (source.id() != LogicalTypeId::STRUCT) {
+				return false;
+			}
+			auto &children = StructValue::GetChildren(value);
+			for (idx_t i = 0; i < children.size(); i++) {
+				auto field = FieldNamed(type, StructType::GetChildName(source, i));
+				if (field.IsValid() && HoldsBitStorage(children[i], StructType::GetChildType(type, field.GetIndex()))) {
+					return true;
+				}
+			}
+			return false;
+		}
+		case LogicalTypeId::MAP:
+			if (source.id() != LogicalTypeId::MAP) {
+				return false;
+			}
+			for (auto &entry : MapValue::GetChildren(value)) {
+				auto &pair = StructValue::GetChildren(entry);
+				if (HoldsBitStorage(pair[0], MapType::KeyType(type)) ||
+				    HoldsBitStorage(pair[1], MapType::ValueType(type))) {
+					return true;
+				}
+			}
+			return false;
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY: {
+			if (source.id() != LogicalTypeId::LIST && source.id() != LogicalTypeId::ARRAY) {
+				return false;
+			}
+			auto &child =
+			    type.id() == LogicalTypeId::LIST ? ListType::GetChildType(type) : ArrayType::GetChildType(type);
+			auto &children =
+			    source.id() == LogicalTypeId::LIST ? ListValue::GetChildren(value) : ArrayValue::GetChildren(value);
+			for (auto &element : children) {
+				if (HoldsBitStorage(element, child)) {
+					return true;
+				}
+			}
+			return false;
+		}
+		default:
+			return false;
+		}
+	}
+
+private:
+	//! The significant digits of a number's shortest text ("2.0" has one, "1e+20" twenty one): from its first digit
+	//! that is not zero to its last, or to the units when its integer part ends in zeros
+	static idx_t SignificantDigits(const string &text) {
+		string digits;
+		int64_t integer_digits = 0;
+		bool point = false;
+		idx_t i = 0;
+		for (; i < text.size() && text[i] != 'e' && text[i] != 'E'; i++) {
+			if (text[i] == '.') {
+				point = true;
+			} else if (StringUtil::CharacterIsDigit(text[i])) {
+				digits += text[i];
+				integer_digits += point ? 0 : 1;
+			}
+		}
+		int64_t exponent = i < text.size() ? std::stoll(text.substr(i + 1)) : 0;
+		auto units = integer_digits + exponent;
+		auto end = static_cast<int64_t>(digits.size());
+		while (end > MaxValue<int64_t>(units, 0) && digits[NumericCast<idx_t>(end - 1)] == '0') {
+			end--;
+		}
+		int64_t start = 0;
+		while (start < end && digits[NumericCast<idx_t>(start)] == '0') {
+			start++;
+		}
+		if (start == end) {
+			return 0;
+		}
+		return NumericCast<idx_t>(MaxValue<int64_t>(end, units) - start);
+	}
+
+	//! A double holds every decimal of at most 15 significant digits exactly enough to give it back as its shortest
+	//! text, so a float whose text has more may be a rounding already: df() hands a HUGEINT or a DECIMAL over as a
+	//! float64. And the engine's cast of a float into a DECIMAL rounds the value times 10**scale in double precision,
+	//! which for a wide scale is no longer that value (2.0 reads 2.000000000000000039769249677312 in a DECIMAL(38,30),
+	//! exactly in a DECIMAL(38,20)), so the float fits only when the cast gives the value of its text.
+	static bool FloatHoldsItsText(const Value &value, const LogicalType &type) {
+		auto number = value.GetValue<double>();
+		if (!Value::DoubleIsFinite(number)) {
+			return false;
+		}
+		auto text = Value::DOUBLE(number).ToString();
+		if (SignificantDigits(text) > MAX_EXACT_FLOAT_DIGITS) {
+			return false;
+		}
+		if (type.id() != LogicalTypeId::DECIMAL) {
+			return true;
+		}
+		auto cast = value.DefaultTryCastAs(type);
+		auto exact = Value(text).DefaultTryCastAs(type);
+		return cast && exact && Value::NotDistinctFrom(*cast, *exact);
+	}
+
+	struct Seen {
+		LogicalType source;
+		Verdict verdict;
+	};
+	//! DBL_DIG: every decimal of this many significant digits survives a round trip through a double
+	static constexpr idx_t MAX_EXACT_FLOAT_DIGITS = 15;
+	//! Bounded like DeclaredCasts, since dicts give a STRUCT type per key set
+	static constexpr idx_t CACHED_SOURCE_TYPES = 16;
+
+	ClientContext &context;
+	vector<Seen> seen;
 };
 
 // A column without a mask takes the instantiation that tests no mask bits, so it reads like the plain array
@@ -471,18 +863,51 @@ static void ScanObjectCells(ClientContext &context, PyObject **col, idx_t stride
 }
 
 void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
-                                   idx_t count, idx_t offset, Vector &out) {
+                                   idx_t count, idx_t offset, Vector &out, bool implied_type,
+                                   bool bit_storage_refused) {
 	DeclaredVector staged(count);
 	auto &target = out.GetType();
-	// A str into plain VARCHAR reads as TransformPythonValue would read it, without building a Value per cell
+	const auto keyed = TypeVisitor::Contains(target, LogicalTypeId::MAP);
+	const auto holds_bit = TypeVisitor::Contains(target, LogicalTypeId::BIT);
+	const auto shape = keyed ? KeyedShape(target) : LogicalType(LogicalTypeId::UNKNOWN);
+	// A str into VARCHAR without an alias, and bytes or a bytearray into BLOB without one, read as TransformPythonValue
+	// would read them, without building a Value per cell; a collation governs comparison only, an alias such as JSON
+	// validates the text in its cast
 	const bool plain_text = target == LogicalType::VARCHAR;
+	const bool plain_blob = target == LogicalType::BLOB;
+	ImpliedKinds kinds(context);
 	ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
 		if (plain_text && PyUnicode_CheckExact(cell.ptr())) {
-			FlatVector::GetDataMutable<string_t>(out)[row] = StringVector::AddString(out, TransformPythonString(cell));
+			Py_ssize_t size;
+			auto text = PyUnicode_AsUTF8AndSize(cell.ptr(), &size);
+			if (!text) {
+				ThrowUnencodableStr(cell);
+			}
+			FlatVector::GetDataMutable<string_t>(out)[row] =
+			    StringVector::AddString(out, text, NumericCast<idx_t>(size));
 			staged.MarkWritten(row);
 			return;
 		}
-		staged.Set(row, DeclaredValue(context, target, cell));
+		// df() hands a BLOB cell to the function as a bytearray
+		if (plain_blob && (PyBytes_CheckExact(cell.ptr()) || PyByteArray_CheckExact(cell.ptr()))) {
+			auto bytes = PyBytes_CheckExact(cell.ptr());
+			auto data = bytes ? PyBytes_AS_STRING(cell.ptr()) : PyByteArray_AS_STRING(cell.ptr());
+			auto size = bytes ? PyBytes_GET_SIZE(cell.ptr()) : PyByteArray_GET_SIZE(cell.ptr());
+			FlatVector::GetDataMutable<string_t>(out)[row] =
+			    StringVector::AddStringOrBlob(out, data, NumericCast<idx_t>(size));
+			staged.MarkWritten(row);
+			return;
+		}
+		auto value = DeclaredValue(context, target, cell, keyed ? &shape : nullptr, implied_type);
+		// A duckdb.Value states its type, as a schema does, so a cast into the column's type is meant
+		if (implied_type && !kinds.Fits(value, target) &&
+		    !duckdb::PyUtil::IsInstance(cell, DuckDBPyConnection::ImportCache()->duckdb.Value())) {
+			throw ImpliedTypeRefused(value.type());
+		}
+		if (bit_storage_refused && holds_bit && ImpliedKinds::HoldsBitStorage(value, target)) {
+			throw ImpliedTypeRefused(value.type());
+		}
+		staged.Set(row, std::move(value));
 	});
 	staged.Write(context, out, count);
 	VerifyTypeConstraints(out, count);
@@ -761,7 +1186,7 @@ void NumpyScan::Scan(ClientContext &context, PandasColumnBindData &bind_data, id
 		const bool is_object_col = bind_data.numpy_type.type == NumpyNullableType::OBJECT;
 		if (is_object_col && bind_data.declared) {
 			return NumpyScan::ScanDeclaredColumn(context, src_ptr, numpy_col.stride, MaskedRows(bind_data), count,
-			                                     offset, out);
+			                                     offset, out, bind_data.implied_type, bind_data.bit_storage_refused);
 		}
 		if (is_object_col && out.GetType().id() != LogicalTypeId::VARCHAR) {
 			//! We have determined the underlying logical type of this object column

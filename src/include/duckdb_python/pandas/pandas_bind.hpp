@@ -40,6 +40,12 @@ struct PandasColumnBindData {
 	PythonObjectContainer object_str_val;
 	//! The caller declared the column's type: each value converts into it as the appender converts a row
 	bool declared = false;
+	//! Of a declared column: the caller implied the type rather than stating it, so a cell is read only when it is of
+	//! the type's kind, since a cast could change what it was
+	bool implied_type = false;
+	//! Of a declared column map() reads: a cell holding bytes where the type holds a BIT is refused, since df() hands
+	//! a BIT value to the function as its storage bytes
+	bool bit_storage_refused = false;
 };
 
 //! The categories of a CategoricalDtype the caller built from an ENUM's values, in order

@@ -13,6 +13,8 @@
 #include "duckdb_python/dataframe.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -20,15 +22,31 @@ MapFunction::MapFunction() : TableFunction("python_map_function", {LogicalType::
 	in_out_function = MapFunctionExec;
 }
 
+//! Where an output column's type came from, which decides how a chunk's column is read into it
+enum class TypeSource : uint8_t {
+	//! The schema stated it, so an object column's values are cast into it whatever they hold
+	SCHEMA,
+	//! The empty bind frame typed the column, or the object input column of its name lent its type: an object
+	//! column's cells are read into it only when they are of its kind, since a function that changed what they hold
+	//! would otherwise see them cast back
+	INFERRED,
+	//! The input column of its name lent its type, but the function got that input typed, or as the member values of
+	//! a UNION, whose tags cannot travel: an object column is read into it only from cells of its kind, as an
+	//! inferred one is, and a typed column must have the type, or one that widens into it losslessly
+	GUESSED,
+	//! Nothing typed the column: it may hold only missing values
+	UNTYPED
+};
+
 struct MapFunctionData : public TableFunctionData {
 	explicit MapFunctionData(shared_ptr<MapFunctionInfo> info_p) : info(std::move(info_p)) {
 	}
 	shared_ptr<MapFunctionInfo> info;
 	vector<LogicalType> in_types, out_types;
 	vector<Identifier> in_names, out_names;
-	//! Per output column, whether its type is only a guess from the typed input column of its name, which each chunk
-	//! must confirm, rather than imposed by the schema or an object input
-	vector<bool> guessed;
+	vector<TypeSource> sources;
+	//! Per output column, the type a returned object column is read into, INVALID where the analyzer types it
+	vector<LogicalType> declared_types;
 	//! Per input column, the CategoricalDtype an ENUM column is handed over in, built once since it lists every value
 	vector<PyObjectHolder> enum_dtypes;
 	//! The categories of those dtypes with their ENUM types, by which a returned column of them reads its codes
@@ -95,23 +113,44 @@ static optional_idx InputColumnNamed(const vector<Identifier> &input_names, cons
 }
 
 //! An object column of the empty bind frame has no values to type it, so it takes the type of the input column of its
-//! name. That type is imposed when the function got the input as an object column too; from a typed input it is only
-//! a guess, since the function may have moved the column to another type, and casting back would lose values.
+//! name: inferred when the function got that input as an object column too, a guess otherwise (TypeSource).
 static void OverrideNullType(vector<LogicalType> &return_types, const vector<Identifier> &return_names,
                              const vector<LogicalType> &input_types, const vector<Identifier> &input_names,
-                             vector<bool> &guessed) {
-	guessed.assign(return_types.size(), false);
+                             vector<TypeSource> &sources) {
+	sources.clear();
 	for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
 		if (return_types[col_idx].id() != LogicalTypeId::SQLNULL) {
+			sources.push_back(TypeSource::INFERRED);
 			continue;
 		}
 		auto input = InputColumnNamed(input_names, return_names[col_idx], col_idx);
 		if (!input.IsValid()) {
+			sources.push_back(TypeSource::UNTYPED);
 			continue;
 		}
 		auto &input_type = input_types[input.GetIndex()];
 		return_types[col_idx] = input_type;
-		guessed[col_idx] = RawArrayWrapper::DuckDBToNumpyDtype(input_type) != "object";
+		auto object_input = RawArrayWrapper::DuckDBToNumpyDtype(input_type) == "object";
+		auto lends_type = object_input && !TypeVisitor::Contains(input_type, LogicalTypeId::UNION);
+		sources.push_back(lends_type ? TypeSource::INFERRED : TypeSource::GUESSED);
+	}
+}
+
+//! Every object column is declared, so the analyzer never reads one and no sample decides how a cell reads; an untyped
+//! column is declared NULL, its check that it holds no value comes after the frame's own checks
+static void DeclareTypes(MapFunctionData &data) {
+	data.declared_types.clear();
+	for (idx_t col_idx = 0; col_idx < data.out_types.size(); col_idx++) {
+		switch (data.sources[col_idx]) {
+		case TypeSource::SCHEMA:
+		case TypeSource::INFERRED:
+		case TypeSource::GUESSED:
+			data.declared_types.push_back(data.out_types[col_idx]);
+			break;
+		case TypeSource::UNTYPED:
+			data.declared_types.push_back(LogicalType::SQLNULL);
+			break;
+		}
 	}
 }
 
@@ -149,7 +188,8 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 
 	function_data->out_names = names;
 	function_data->out_types = types;
-	function_data->guessed.assign(types.size(), false);
+	function_data->sources.assign(types.size(), TypeSource::SCHEMA);
+	DeclareTypes(*function_data);
 
 	return std::move(function_data);
 }
@@ -185,10 +225,11 @@ static unique_ptr<FunctionData> BindMap(ClientContext &context, shared_ptr<MapFu
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	Pandas::Bind(context, df, pandas_bind_data, return_types, names, {}, data.known_enums);
 
-	OverrideNullType(return_types, names, data.in_types, data.in_names, data.guessed);
+	OverrideNullType(return_types, names, data.in_types, data.in_names, data.sources);
 
 	data.out_names = names;
 	data.out_types = return_types;
+	DeclareTypes(data);
 	return std::move(data_uptr);
 }
 
@@ -218,16 +259,77 @@ static string TypeVectorToString(const vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
-//! A returned column the analyzer reads as all NULL binds as NULL, which holds for any type, as OverrideNullType
-//! assumes at bind
-static bool MatchesBoundTypes(const vector<LogicalType> &returned, const vector<LogicalType> &bound) {
-	D_ASSERT(returned.size() == bound.size());
-	for (idx_t col_idx = 0; col_idx < returned.size(); col_idx++) {
-		if (returned[col_idx] != bound[col_idx] && returned[col_idx].id() != LogicalTypeId::SQLNULL) {
-			return false;
+static InvalidInputException TypeMismatch(const MapFunctionData &data, const vector<LogicalType> &returned) {
+	return InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
+	                             TypeVectorToString(data.out_types), TypeVectorToString(returned));
+}
+
+static bool IsTrue(const nb::object &object) {
+	auto truth = PyObject_IsTrue(object.ptr());
+	if (truth < 0) {
+		throw nb::python_error();
+	}
+	return truth;
+}
+
+//! Whether a column bind could not type holds a value: pandas' missing values, numpy's masked constant and DuckDB's
+//! NULL Values are none, as the conversion reads them all as NULL
+static bool HoldsValue(const nb::object &column) {
+	auto present = column.attr("notna")();
+	if (!IsTrue(present.attr("any")())) {
+		return false;
+	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto cells = nb::list(column.attr("__getitem__")(present).attr("tolist")());
+	for (auto cell : cells) {
+		if (cell.is(import_cache.numpy.ma.masked())) {
+			continue;
+		}
+		if (!duckdb::PyUtil::IsInstance(cell, import_cache.duckdb.Value()) ||
+		    !TransformPythonValue(nullptr, cell).IsNull()) {
+			return true;
 		}
 	}
+	return false;
+}
+
+static bool IntegerRange(const LogicalType &type, bool &is_signed, idx_t &width) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::HUGEINT:
+		is_signed = true;
+		break;
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+		is_signed = false;
+		break;
+	default:
+		return false;
+	}
+	width = GetTypeIdSize(type.InternalType());
 	return true;
+}
+
+//! Whether every value of one type is a value of the other: an integer into a wider one, a FLOAT into a DOUBLE
+static bool WidensLosslessly(const LogicalType &from, const LogicalType &to) {
+	if (from.id() == LogicalTypeId::FLOAT && to.id() == LogicalTypeId::DOUBLE) {
+		return true;
+	}
+	bool from_signed, to_signed;
+	idx_t from_width, to_width;
+	if (!IntegerRange(from, from_signed, from_width) || !IntegerRange(to, to_signed, to_width)) {
+		return false;
+	}
+	if (from_signed) {
+		return to_signed && to_width >= from_width;
+	}
+	return to_signed ? to_width > from_width : to_width >= from_width;
 }
 
 static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
@@ -244,57 +346,38 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 
 	auto df = PandasScanFunction::PandasWithBoundNames(FunctionCall(data, conversion));
 
-	auto column_count = nb::len(nb::object(df.attr("columns")));
-	if (column_count != output.ColumnCount()) {
-		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(), column_count);
-	}
-	// Before anything types the frame, which could fail on a value it cannot read
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		if (data.out_types[col_idx].id() != LogicalTypeId::SQLNULL) {
-			continue;
-		}
-		auto column = df.attr("__getitem__")(nb::object(df.attr("columns"))[nb::int_(col_idx)]);
-		auto has_value = PyObject_IsTrue(nb::object(column.attr("notna")().attr("any")()).ptr());
-		if (has_value < 0) {
-			throw nb::python_error();
-		}
-		if (has_value) {
-			throw UntypedColumnError(data.out_names[col_idx]);
-		}
-	}
-	// An object column has no type of its own, only values, so it is read into the type the schema or an object input
-	// imposed, whatever its values. A guessed type and a column bind could not type, which holds only missing values
-	// here, are left to the analyzer.
-	vector<LogicalType> declared_types;
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		auto &type = data.out_types[col_idx];
-		auto imposed = type.id() != LogicalTypeId::SQLNULL && !data.guessed[col_idx];
-		declared_types.push_back(imposed ? type : LogicalType::INVALID);
+	auto labels = nb::list(nb::object(df.attr("columns")));
+	if (labels.size() != output.ColumnCount()) {
+		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(), labels.size());
 	}
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> pandas_return_types;
 	vector<Identifier> pandas_names;
 	auto row_count = Pandas::Bind(context.client, df, pandas_bind_data, pandas_return_types, pandas_names,
-	                              declared_types, data.known_enums);
-
-	// A guess is only checked: a chunk of only missing values confirms nothing and reads NULL, any other type refutes
-	// it, and the analyzer's sample decides which, as it did before for every column.
-	vector<bool> missing_values(output.ColumnCount(), false);
+	                              data.declared_types, data.known_enums);
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		if (!data.guessed[col_idx] || pandas_return_types[col_idx] == data.out_types[col_idx]) {
+		pandas_bind_data[col_idx].implied_type =
+		    data.sources[col_idx] == TypeSource::INFERRED || data.sources[col_idx] == TypeSource::GUESSED;
+		pandas_bind_data[col_idx].bit_storage_refused = true;
+	}
+
+	// A typed column for a guess must have the guessed type, or one that widens losslessly into it and is cast after
+	// the read; an object column was declared the guess and reads only cells of its kind
+	vector<bool> widened(output.ColumnCount(), false);
+	auto checked_types = pandas_return_types;
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		auto &returned = pandas_return_types[col_idx];
+		auto &bound = data.out_types[col_idx];
+		if (data.sources[col_idx] != TypeSource::GUESSED || returned == bound || !WidensLosslessly(returned, bound)) {
 			continue;
 		}
-		if (pandas_return_types[col_idx].id() != LogicalTypeId::SQLNULL) {
-			throw UntypedColumnError(data.out_names[col_idx]);
-		}
-		pandas_return_types[col_idx] = data.out_types[col_idx];
-		missing_values[col_idx] = true;
+		widened[col_idx] = true;
+		checked_types[col_idx] = bound;
 	}
 
 	D_ASSERT(output.GetTypes() == data.out_types);
-	if (!MatchesBoundTypes(pandas_return_types, output.GetTypes())) {
-		throw InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
-		                            TypeVectorToString(data.out_types), TypeVectorToString(pandas_return_types));
+	if (checked_types != output.GetTypes()) {
+		throw TypeMismatch(data, pandas_return_types);
 	}
 	if (pandas_names != data.out_names) {
 		throw InvalidInputException("UDF column name mismatch, expected [%s], got [%s]",
@@ -304,18 +387,25 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 	if (row_count > STANDARD_VECTOR_SIZE) {
 		throw InvalidInputException("UDF returned more than %llu rows, which is not allowed.", STANDARD_VECTOR_SIZE);
 	}
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		if (data.sources[col_idx] == TypeSource::UNTYPED && HoldsValue(df.attr("__getitem__")(labels[col_idx]))) {
+			throw UntypedColumnError(data.out_names[col_idx]);
+		}
+	}
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		// A guessed column whose chunk holds only missing values, and a column bind left untyped, the only one still
-		// typed NULL here; the bound type's scanner would read some missing values as data, such as NaT as 'NaT'.
-		if (missing_values[col_idx] || pandas_return_types[col_idx].id() == LogicalTypeId::SQLNULL) {
+		if (pandas_return_types[col_idx].id() == LogicalTypeId::SQLNULL) {
 			ConstantVector::SetNull(output.data[col_idx], count_t(row_count));
 			continue;
 		}
 		auto &bind_data = pandas_bind_data[col_idx];
-		Vector temp(output.data[col_idx].GetType(), row_count);
+		Vector temp(pandas_return_types[col_idx], row_count);
 		try {
 			PandasScanFunction::PandasBackendScanSwitch(context.client, bind_data, row_count, 0, temp);
+		} catch (ImpliedTypeRefused &refused) {
+			auto returned = pandas_return_types;
+			returned[col_idx] = refused.source;
+			throw TypeMismatch(data, returned);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			// The cast's own message names no column; a Python error keeps the traceback its message starts with
@@ -325,7 +415,11 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 			}
 			error.Throw(StringUtil::Format("UDF column '%s': ", data.out_names[col_idx].c_str()));
 		}
-		VectorOperations::Copy(temp, output.data[col_idx], row_count, 0, 0);
+		if (widened[col_idx]) {
+			VectorOperations::Cast(context.client, temp, output.data[col_idx], row_count);
+		} else {
+			VectorOperations::Copy(temp, output.data[col_idx], row_count, 0, 0);
+		}
 	}
 	output.SetChildCardinality(row_count);
 	return OperatorResultType::NEED_MORE_INPUT;

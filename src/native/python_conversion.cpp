@@ -5,6 +5,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/array_vector.hpp"
@@ -151,12 +152,15 @@ Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyD
 		                             dict.ToString(), target_type.ToString());
 	};
 	bool struct_target = StructType::IsStruct(target_type);
-	if (struct_target && dict.len != StructType::GetChildCount(target_type)) {
+	// A target holding UNKNOWN gives only the shape of the values below it: the dict's own keys name the fields, as
+	// without a target, and each value converts with the shape of the field of its name
+	bool shape_only = struct_target && TypeVisitor::Contains(target_type, LogicalTypeId::UNKNOWN);
+	if (struct_target && !shape_only && dict.len != StructType::GetChildCount(target_type)) {
 		throw conversion_error();
 	}
 
 	child_list_t<Value> struct_values;
-	if (StructType::IsUnnamed(target_type)) {
+	if (!shape_only && StructType::IsUnnamed(target_type)) {
 		// A TUPLE has no member names, so its members take the dict's values in dict order.
 		for (idx_t i = 0; i < dict.len; i++) {
 			auto val = TransformPythonValue(context, dict.values.attr("__getitem__")(i),
@@ -167,10 +171,16 @@ Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyD
 	}
 
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len);
-	if (!struct_target) {
+	if (!struct_target || shape_only) {
 		for (idx_t i = 0; i < dict.len; i++) {
-			auto val =
-			    TransformPythonValue(context, dict.values.attr("__getitem__")(i), LogicalType::UNKNOWN, nan_as_null);
+			LogicalType child_type = LogicalType::UNKNOWN;
+			for (idx_t child = 0; shape_only && child < StructType::GetChildCount(target_type); child++) {
+				if (StructType::GetChildName(target_type, child) == struct_keys[i]) {
+					child_type = StructType::GetChildType(target_type, child);
+					break;
+				}
+			}
+			auto val = TransformPythonValue(context, dict.values.attr("__getitem__")(i), child_type, nan_as_null);
 			struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
 		}
 		return Value::STRUCT(std::move(struct_values));
@@ -241,10 +251,11 @@ Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, 
 
 		elements.push_back(Value::STRUCT(std::move(struct_values)));
 	}
-	if (key_type.id() == LogicalTypeId::SQLNULL) {
+	// A target holding UNKNOWN asks for no type there, and a MAP of such a type is no value the engine can hold
+	if (key_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(key_target, LogicalTypeId::UNKNOWN)) {
 		key_type = key_target;
 	}
-	if (value_type.id() == LogicalTypeId::SQLNULL) {
+	if (value_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(value_target, LogicalTypeId::UNKNOWN)) {
 		value_type = value_target;
 	}
 
