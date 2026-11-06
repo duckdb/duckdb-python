@@ -26,15 +26,30 @@ struct MapFunctionData : public TableFunctionData {
 	shared_ptr<MapFunctionInfo> info;
 	vector<LogicalType> in_types, out_types;
 	vector<Identifier> in_names, out_names;
+	//! Per output column, whether its type is only a guess from the typed input column of its name, which each chunk
+	//! must confirm, rather than imposed by the schema or an object input
+	vector<bool> guessed;
+	//! Per input column, the CategoricalDtype an ENUM column is handed over in, built once since it lists every value
+	vector<PyObjectHolder> enum_dtypes;
+	//! The categories of those dtypes with their ENUM types, by which a returned column of them reads its codes
+	vector<PyObjectHolder> enum_categories;
+	vector<PandasEnumDtype> known_enums;
 };
 
-static nb::object FunctionCall(NumpyResultConversion &conversion, const vector<Identifier> &names, PyObject *function) {
-	nb::dict in_numpy_dict;
-	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
-	}
-
+static nb::object FunctionCall(const MapFunctionData &data, NumpyResultConversion &conversion) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	nb::dict in_numpy_dict;
+	for (idx_t col_idx = 0; col_idx < data.in_names.size(); col_idx++) {
+		auto column = conversion.ToArray(col_idx);
+		// As df() gives it: the codes alone bind back as TINYINT, a NULL as the code -1.
+		if (data.in_types[col_idx].id() == LogicalTypeId::ENUM) {
+			column = import_cache.pandas.Categorical().attr("from_codes")(column, nb::arg("dtype") =
+			                                                                          data.enum_dtypes[col_idx].obj);
+		}
+		in_numpy_dict[data.in_names[col_idx].c_str()] = column;
+	}
+	auto function = data.info->function.obj.ptr();
+
 	auto pandas_df = import_cache.pandas.DataFrame();
 	auto in_df = pandas_df(in_numpy_dict);
 	D_ASSERT(in_df.ptr());
@@ -65,39 +80,37 @@ static nb::object FunctionCall(NumpyResultConversion &conversion, const vector<I
 	return df;
 }
 
-static bool ContainsNullType(const vector<LogicalType> &types) {
-	for (auto &type : types) {
-		if (type.id() == LogicalTypeId::SQLNULL) {
-			return true;
+//! The input column of that name, the one at the same position first; the input names are deduplicated at bind
+static optional_idx InputColumnNamed(const vector<Identifier> &input_names, const Identifier &name, idx_t position) {
+	if (position < input_names.size() && input_names[position] == name) {
+		return position;
+	}
+	for (idx_t col_idx = 0; col_idx < input_names.size(); col_idx++) {
+		if (input_names[col_idx] == name) {
+			return col_idx;
 		}
 	}
-	return false;
+	return optional_idx();
 }
 
+//! An object column of the empty bind frame has no values to type it, so it takes the type of the input column of its
+//! name. That type is imposed when the function got the input as an object column too; from a typed input it is only
+//! a guess, since the function may have moved the column to another type, and casting back would lose values.
 static void OverrideNullType(vector<LogicalType> &return_types, const vector<Identifier> &return_names,
-                             const vector<LogicalType> &original_types, const vector<Identifier> &original_names) {
-	if (!ContainsNullType(return_types)) {
-		// Nothing to override, none of the returned types are NULL
-		return;
-	}
-	if (return_types.size() != original_types.size()) {
-		// FIXME: we can probably infer from the names in this case
-		//  Cant infer what the type should be
-		return;
-	}
-	for (idx_t i = 0; i < return_types.size(); i++) {
-		auto &return_type = return_types[i];
-		auto &original_type = original_types[i];
-
-		if (return_type != LogicalTypeId::SQLNULL) {
+                             const vector<LogicalType> &input_types, const vector<Identifier> &input_names,
+                             vector<bool> &guessed) {
+	guessed.assign(return_types.size(), false);
+	for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
+		if (return_types[col_idx].id() != LogicalTypeId::SQLNULL) {
 			continue;
 		}
-		if (return_names[i] != original_names[i]) {
-			throw InvalidInputException(
-			    "Returned dataframe contains NULL type, and we could not infer the desired type");
+		auto input = InputColumnNamed(input_names, return_names[col_idx], col_idx);
+		if (!input.IsValid()) {
+			continue;
 		}
-		// Override the NULL with the original type
-		return_type = original_type;
+		auto &input_type = input_types[input.GetIndex()];
+		return_types[col_idx] = input_type;
+		guessed[col_idx] = RawArrayWrapper::DuckDBToNumpyDtype(input_type) != "object";
 	}
 }
 
@@ -135,6 +148,7 @@ unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function
 
 	function_data->out_names = names;
 	function_data->out_types = types;
+	function_data->guessed.assign(types.size(), false);
 
 	return std::move(function_data);
 }
@@ -146,22 +160,31 @@ static unique_ptr<FunctionData> BindMap(ClientContext &context, shared_ptr<MapFu
                                         vector<Identifier> &names) {
 	auto data_uptr = make_uniq<MapFunctionData>(std::move(info));
 	auto &data = *data_uptr;
-	auto function = data.info->function.obj.ptr();
 	auto explicit_schema = data.info->schema.obj.ptr();
 
 	data.in_names = input.input_table_names;
+	// The frame is keyed by name, so two input columns of one name would leave the function one of them
+	QueryResult::DeduplicateColumns(data.in_names);
 	data.in_types = input.input_table_types;
+	for (auto &type : data.in_types) {
+		if (type.id() != LogicalTypeId::ENUM) {
+			data.enum_dtypes.emplace_back();
+			continue;
+		}
+		data.enum_dtypes.emplace_back(EnumCategoricalDtype(type));
+		data.enum_categories.emplace_back(data.enum_dtypes.back().obj.attr("categories"));
+		data.known_enums.push_back({data.enum_categories.back().obj, type});
+	}
 
 	if (explicit_schema != Py_None) {
 		return BindExplicitSchema(std::move(data_uptr), explicit_schema, return_types, names);
 	}
 	NumpyResultConversion conversion(data.in_types, 0, context.GetClientProperties());
-	auto df = PandasScanFunction::PandasWithBoundNames(FunctionCall(conversion, data.in_names, function));
+	auto df = PandasScanFunction::PandasWithBoundNames(FunctionCall(data, conversion));
 	vector<PandasColumnBindData> pandas_bind_data; // unused
-	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
+	Pandas::Bind(context, df, pandas_bind_data, return_types, names, {}, data.known_enums);
 
-	// output types are potentially NULL, this happens for types that map to 'object' dtype
-	OverrideNullType(return_types, names, data.in_types, data.in_names);
+	OverrideNullType(return_types, names, data.in_types, data.in_names, data.guessed);
 
 	data.out_names = names;
 	data.out_types = return_types;
@@ -184,6 +207,12 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	}
 }
 
+static InvalidInputException UntypedColumnError(const Identifier &name) {
+	return InvalidInputException(
+	    "UDF column '%s' has no type: the function returned no values for it at bind time; pass its type with schema=",
+	    name.c_str());
+}
+
 static string TypeVectorToString(const vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
@@ -200,18 +229,55 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 	NumpyResultConversion conversion(data.in_types, input.size(), context.client.GetClientProperties());
 	conversion.Append(input);
 
-	auto df = PandasScanFunction::PandasWithBoundNames(
-	    FunctionCall(conversion, data.in_names, data.info->function.obj.ptr()));
+	auto df = PandasScanFunction::PandasWithBoundNames(FunctionCall(data, conversion));
 
+	auto column_count = nb::len(nb::object(df.attr("columns")));
+	if (column_count != output.ColumnCount()) {
+		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(), column_count);
+	}
+	// Before anything types the frame, which could fail on a value it cannot read
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		if (data.out_types[col_idx].id() != LogicalTypeId::SQLNULL) {
+			continue;
+		}
+		auto column = df.attr("__getitem__")(nb::object(df.attr("columns"))[nb::int_(col_idx)]);
+		auto has_value = PyObject_IsTrue(nb::object(column.attr("notna")().attr("any")()).ptr());
+		if (has_value < 0) {
+			throw nb::python_error();
+		}
+		if (has_value) {
+			throw UntypedColumnError(data.out_names[col_idx]);
+		}
+	}
+	// An object column has no type of its own, only values, so it is read into the type the schema or an object input
+	// imposed, whatever its values. A guessed type and a column bind could not type, which holds only missing values
+	// here, are left to the analyzer.
+	vector<LogicalType> declared_types;
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		auto &type = data.out_types[col_idx];
+		auto imposed = type.id() != LogicalTypeId::SQLNULL && !data.guessed[col_idx];
+		declared_types.push_back(imposed ? type : LogicalType::INVALID);
+	}
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> pandas_return_types;
 	vector<Identifier> pandas_names;
+	auto row_count = Pandas::Bind(context.client, df, pandas_bind_data, pandas_return_types, pandas_names,
+	                              declared_types, data.known_enums);
 
-	auto row_count = Pandas::Bind(context.client, df, pandas_bind_data, pandas_return_types, pandas_names);
-	if (pandas_return_types.size() != output.ColumnCount()) {
-		throw InvalidInputException("Expected %llu columns from UDF, got %llu", output.ColumnCount(),
-		                            pandas_return_types.size());
+	// A guess is only checked: a chunk of only missing values confirms nothing and reads NULL, any other type refutes
+	// it, and the analyzer's sample decides which, as it did before for every column.
+	vector<bool> missing_values(output.ColumnCount(), false);
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		if (!data.guessed[col_idx] || pandas_return_types[col_idx] == data.out_types[col_idx]) {
+			continue;
+		}
+		if (pandas_return_types[col_idx].id() != LogicalTypeId::SQLNULL) {
+			throw UntypedColumnError(data.out_names[col_idx]);
+		}
+		pandas_return_types[col_idx] = data.out_types[col_idx];
+		missing_values[col_idx] = true;
 	}
+
 	D_ASSERT(output.GetTypes() == data.out_types);
 	if (pandas_return_types != output.GetTypes()) {
 		throw InvalidInputException("UDF column type mismatch, expected [%s], got [%s]",
@@ -227,9 +293,23 @@ static OperatorResultType ExecuteMap(ExecutionContext &context, TableFunctionInp
 	}
 
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		if (missing_values[col_idx]) {
+			ConstantVector::SetNull(output.data[col_idx], count_t(row_count));
+			continue;
+		}
 		auto &bind_data = pandas_bind_data[col_idx];
 		Vector temp(output.data[col_idx].GetType(), row_count);
-		PandasScanFunction::PandasBackendScanSwitch(context.client, bind_data, row_count, 0, temp);
+		try {
+			PandasScanFunction::PandasBackendScanSwitch(context.client, bind_data, row_count, 0, temp);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			// The cast's own message names no column; a Python error keeps the traceback its message starts with
+			if (!bind_data.declared || error.Type() == ExceptionType::INVALID ||
+			    error.Type() == ExceptionType::INTERRUPT) {
+				throw;
+			}
+			error.Throw(StringUtil::Format("UDF column '%s': ", data.out_names[col_idx].c_str()));
+		}
 		VectorOperations::Copy(temp, output.data[col_idx], row_count, 0, 0);
 	}
 	output.SetChildCardinality(row_count);

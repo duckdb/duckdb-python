@@ -352,7 +352,12 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 //! shape of its own (a UNION member that is NULL), and the output owns every string the cast produced.
 class DeclaredVector {
 public:
-	explicit DeclaredVector(idx_t count) : values(count), source(LogicalTypeId::SQLNULL) {
+	explicit DeclaredVector(idx_t count) : values(count), written(count, false), source(LogicalTypeId::SQLNULL) {
+	}
+
+	//! A row the scan wrote into the output itself, which Write leaves as it is
+	void MarkWritten(idx_t row) {
+		written[row] = true;
 	}
 
 	void Set(idx_t row, Value value) {
@@ -389,6 +394,10 @@ public:
 			VectorOperations::TryCast(context, staged, casted, present, nullptr);
 			idx_t copied = 0;
 			for (idx_t row = 0; row < count;) {
+				if (written[row]) {
+					row++;
+					continue;
+				}
 				if (values[row].IsNull()) {
 					FlatVector::SetNull(out, row, true);
 					row++;
@@ -406,6 +415,9 @@ public:
 		}
 		DeclaredCasts casts(context, target);
 		for (idx_t row = 0; row < count; row++) {
+			if (written[row]) {
+				continue;
+			}
 			if (values[row].IsNull()) {
 				FlatVector::SetNull(out, row, true);
 			} else {
@@ -416,6 +428,7 @@ public:
 
 private:
 	vector<Value> values;
+	vector<bool> written;
 	LogicalType source;
 	bool uniform = true;
 };
@@ -461,8 +474,16 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
                                    idx_t count, idx_t offset, Vector &out) {
 	DeclaredVector staged(count);
 	auto &target = out.GetType();
-	ScanObjectCells(context, col, stride, masked, count, offset, out,
-	                [&](nb::handle cell, idx_t row) { staged.Set(row, DeclaredValue(context, target, cell)); });
+	// A str into plain VARCHAR reads as TransformPythonValue would read it, without building a Value per cell
+	const bool plain_text = target == LogicalType::VARCHAR;
+	ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
+		if (plain_text && PyUnicode_CheckExact(cell.ptr())) {
+			FlatVector::GetDataMutable<string_t>(out)[row] = StringVector::AddString(out, TransformPythonString(cell));
+			staged.MarkWritten(row);
+			return;
+		}
+		staged.Set(row, DeclaredValue(context, target, cell));
+	});
 	staged.Write(context, out, count);
 	VerifyTypeConstraints(out, count);
 }

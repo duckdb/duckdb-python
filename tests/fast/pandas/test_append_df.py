@@ -428,6 +428,27 @@ class TestAppendObjectColumnsToDeclaredTypes:
         with pytest.raises(duckdb.InvalidInputException, match="surrogate"):
             duckdb_cursor.append("t", frame)
 
+    def test_text_column_mixing_str_with_other_cells_appends_each_as_text(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
+        cells = ["a", 5, 6, "b", None, 7, np.str_("c"), "\u00e9 \U0001f600"]
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
+        assert duckdb_cursor.table("t").fetchall() == [
+            ("a",),
+            ("5",),
+            ("6",),
+            ("b",),
+            (None,),
+            ("7",),
+            ("c",),
+            ("\u00e9 \U0001f600",),
+        ]
+
+    def test_text_with_a_lone_surrogate_in_a_str_names_it(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
+        frame = pd.DataFrame({"a": pd.Series(["a", "b\udcff"], dtype=object)})
+        with pytest.raises(duckdb.InvalidInputException, match="surrogate"):
+            duckdb_cursor.append("t", frame)
+
     def test_null_row_among_struct_values_the_cast_converts(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a STRUCT(x INTEGER))")
         # Text fields cast into INTEGER, so the whole vector goes through one cast with the NULL row inside it

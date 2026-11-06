@@ -42,11 +42,19 @@ struct PandasColumnBindData {
 	bool declared = false;
 };
 
+//! The categories of a CategoricalDtype the caller built from an ENUM's values, in order
+struct PandasEnumDtype {
+	nb::handle categories;
+	LogicalType type;
+};
+
 struct Pandas {
-	//! Returns the frame's row count; declared_types, when given, hold one type per column, INVALID where none
+	//! Returns the frame's row count; declared_types, when given, hold one type per column, INVALID where none; a
+	//! categorical column whose categories are those of one of enum_dtypes, that very object, reads its codes as that
+	//! ENUM
 	static idx_t Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
 	                  vector<LogicalType> &return_types, vector<Identifier> &names,
-	                  const vector<LogicalType> &declared_types = {});
+	                  const vector<LogicalType> &declared_types = {}, const vector<PandasEnumDtype> &enum_dtypes = {});
 };
 
 } // namespace duckdb
