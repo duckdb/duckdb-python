@@ -58,8 +58,10 @@ bool DictionaryHasMapFormat(const PyDictionary &dict);
 //! children with the connection's settings; a shaped naive timestamp reads a cell as TransformTimestamp does
 LogicalType AsShape(const LogicalType &type);
 bool IsShape(const LogicalType &type);
-//! Whether a cell is a naive pandas Timestamp or a numpy datetime64 finer than a microsecond, whose nanoseconds no
-//! Python datetime holds; they are then in nanoseconds
+//! The nanosecond a datetime subclass such as a pandas Timestamp gives as an int, or -1 when it gives none
+int64_t NanosecondOf(nb::handle cell);
+//! Whether a cell is a naive pandas Timestamp with nanoseconds or a numpy datetime64 finer than a microsecond, whose
+//! nanoseconds no Python datetime holds; they are then in nanoseconds
 bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds);
 //! A numpy scalar's Python value; a datetime64 or timedelta64 at nanoseconds would read as an integer, so those take
 //! the microsecond unit first, as a frame's own datetime columns do

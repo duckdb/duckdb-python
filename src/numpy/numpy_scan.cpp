@@ -317,11 +317,13 @@ static bool IsNumpyScalar(nb::handle cell) {
 	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
 }
 
-//! With a shape (KeyedShape) the cell converts with it as its target, which a type holding a MAP needs: without it a
-//! dict reads as a STRUCT named by its keys' text, and a key whose text does not cast back, such as bytes, is lost.
+//! The cell converts with the column type's shape (KeyedShape) as its target, or with UNKNOWN for a type that takes
+//! none; a type holding a MAP needs one: without it a dict reads as a STRUCT named by its keys' text, and a key whose
+//! text does not cast back, such as bytes, is lost. Both are built once per vector, since building a type looks up
+//! its type information each time.
 //! An object without a DuckDB type reads as its text into a stated VARCHAR, and has no kind for an implied one.
-static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell,
-                           optional_ptr<const LogicalType> shape, bool implied) {
+static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell, const LogicalType &shape,
+                           bool implied) {
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
@@ -346,7 +348,7 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	if (!implied && target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
 		return Value(TransformPythonString(nb::str(cell)));
 	}
-	return TransformPythonValue(context, cell, shape ? *shape : LogicalType(LogicalTypeId::UNKNOWN), true);
+	return TransformPythonValue(context, cell, shape, true);
 }
 
 //! The type a cell of a nested type converts with: its containers and its naive timestamps and no other type, so a
@@ -404,7 +406,7 @@ public:
 		written_count++;
 	}
 
-	void Set(idx_t row, Value value) {
+	void Set(idx_t row, Value &&value) {
 		if (value.IsNull()) {
 			return;
 		}
@@ -420,6 +422,17 @@ public:
 		if (written_count == count) {
 			return;
 		}
+		// A vector the scan wrote no row of skips the test for one, which would cost every row of the plain path
+		if (written_count == 0) {
+			WriteStaged<false>(context, out, count);
+		} else {
+			WriteStaged<true>(context, out, count);
+		}
+	}
+
+private:
+	template <bool SKIP_WRITTEN>
+	void WriteStaged(ClientContext &context, Vector &out, idx_t count) {
 		auto &target = out.GetType();
 		if (uniform && source.id() != LogicalTypeId::SQLNULL && source != target) {
 			idx_t present = 0;
@@ -441,7 +454,7 @@ public:
 			VectorOperations::TryCast(context, staged, casted, present, nullptr);
 			idx_t copied = 0;
 			for (idx_t row = 0; row < count;) {
-				if (written[row]) {
+				if (SKIP_WRITTEN && written[row]) {
 					row++;
 					continue;
 				}
@@ -462,18 +475,21 @@ public:
 		}
 		DeclaredCasts casts(context, target);
 		for (idx_t row = 0; row < count; row++) {
-			if (written[row]) {
+			if (SKIP_WRITTEN && written[row]) {
 				continue;
 			}
-			if (values[row].IsNull()) {
+			auto &value = values[row];
+			if (value.IsNull()) {
 				FlatVector::SetNull(out, row, true);
+			} else if (value.type() == target) {
+				// Written as it is, without the copy of the Value that a cast of it would return
+				out.SetValue(row, value);
 			} else {
-				out.SetValue(row, casts.Cast(values[row]));
+				out.SetValue(row, casts.Cast(value));
 			}
 		}
 	}
 
-private:
 	vector<Value> values;
 	vector<bool> written;
 	idx_t written_count = 0;
@@ -932,18 +948,34 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP) ||
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_MS) ||
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_SEC));
-	const auto holds_bit = TypeVisitor::Contains(target, LogicalTypeId::BIT);
+	const auto bits_refused = bit_storage_refused && TypeVisitor::Contains(target, LogicalTypeId::BIT);
 	const auto shape = keyed ? KeyedShape(target, !implied_type) : LogicalType(LogicalTypeId::UNKNOWN);
-	// A str into VARCHAR without an alias, bytes or a bytearray into BLOB without one, and a time without a zone into
-	// TIME read as TransformPythonValue would read them, without building a Value per cell; a collation governs
-	// comparison only, an alias such as JSON validates the text in its cast
-	const bool plain_text = target == LogicalType::VARCHAR;
-	const bool plain_blob = target == LogicalType::BLOB;
-	const bool plain_time = target == LogicalType::TIME;
-	PyObject *time_type = nullptr;
 	ImpliedKinds kinds(context);
-	ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
-		if (plain_text && PyUnicode_CheckExact(cell.ptr())) {
+	auto read = [&](nb::handle cell, idx_t row) {
+		// The row already holds the NULL a None reads as
+		if (cell.ptr() == Py_None) {
+			return;
+		}
+		auto value = DeclaredValue(context, target, cell, shape, implied_type);
+		// A duckdb.Value states its type, as a schema does, so a cast into the column's type is meant
+		if (implied_type && !kinds.Fits(value, target) &&
+		    !duckdb::PyUtil::IsInstance(cell, DuckDBPyConnection::ImportCache()->duckdb.Value())) {
+			throw ImpliedTypeRefused(value.type());
+		}
+		if (bits_refused && ImpliedKinds::HoldsBitStorage(value, target)) {
+			throw ImpliedTypeRefused(value.type());
+		}
+		staged.Set(row, std::move(value));
+	};
+	// A str into VARCHAR without an alias, bytes or a bytearray into BLOB without one, and a time or a datetime without
+	// a zone into TIME or TIMESTAMP read as TransformPythonValue would read them, without building a Value per cell; a
+	// collation governs comparison only, an alias such as JSON validates the text in its cast. The reader is chosen
+	// once per vector, since a test per cell for every fast path costs the plain path more than the tests themselves.
+	if (target == LogicalType::VARCHAR) {
+		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
+			if (!PyUnicode_CheckExact(cell.ptr())) {
+				return read(cell, row);
+			}
 			Py_ssize_t size;
 			auto text = PyUnicode_AsUTF8AndSize(cell.ptr(), &size);
 			if (!text) {
@@ -952,33 +984,36 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 			FlatVector::GetDataMutable<string_t>(out)[row] =
 			    StringVector::AddString(out, text, NumericCast<idx_t>(size));
 			staged.MarkWritten(row);
-			return;
-		}
+		});
+	} else if (target == LogicalType::BLOB) {
 		// df() hands a BLOB cell to the function as a bytearray
-		if (plain_blob && (PyBytes_CheckExact(cell.ptr()) || PyByteArray_CheckExact(cell.ptr()))) {
+		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
 			char *data;
 			Py_ssize_t size;
 			if (PyBytes_CheckExact(cell.ptr())) {
 				if (PyBytes_AsStringAndSize(cell.ptr(), &data, &size) < 0) {
 					throw nb::python_error();
 				}
-			} else {
+			} else if (PyByteArray_CheckExact(cell.ptr())) {
 				data = PyByteArray_AsString(cell.ptr());
 				size = PyByteArray_Size(cell.ptr());
 				if (!data || size < 0) {
 					throw nb::python_error();
 				}
+			} else {
+				return read(cell, row);
 			}
 			FlatVector::GetDataMutable<string_t>(out)[row] =
 			    StringVector::AddStringOrBlob(out, data, NumericCast<idx_t>(size));
 			staged.MarkWritten(row);
-			return;
-		}
-		if (plain_time) {
+		});
+	} else if (target == LogicalType::TIME) {
+		PyTypeObject *time_type = nullptr;
+		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
 			if (!time_type) {
-				time_type = DuckDBPyConnection::ImportCache()->datetime.time().ptr();
+				time_type = reinterpret_cast<PyTypeObject *>(DuckDBPyConnection::ImportCache()->datetime.time().ptr());
 			}
-			if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(time_type)) {
+			if (Py_TYPE(cell.ptr()) == time_type) {
 				PyTime time(cell);
 				// A time with a zone converts as a TIMETZ, which an implied TIME refuses and the cast into a stated one
 				// reads without its offset
@@ -988,18 +1023,32 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 					return;
 				}
 			}
-		}
-		auto value = DeclaredValue(context, target, cell, keyed ? &shape : nullptr, implied_type);
-		// A duckdb.Value states its type, as a schema does, so a cast into the column's type is meant
-		if (implied_type && !kinds.Fits(value, target) &&
-		    !duckdb::PyUtil::IsInstance(cell, DuckDBPyConnection::ImportCache()->duckdb.Value())) {
-			throw ImpliedTypeRefused(value.type());
-		}
-		if (bit_storage_refused && holds_bit && ImpliedKinds::HoldsBitStorage(value, target)) {
-			throw ImpliedTypeRefused(value.type());
-		}
-		staged.Set(row, std::move(value));
-	});
+			read(cell, row);
+		});
+	} else if (target == LogicalType::TIMESTAMP) {
+		PyTypeObject *datetime_type = nullptr;
+		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
+			if (!datetime_type) {
+				datetime_type =
+				    reinterpret_cast<PyTypeObject *>(DuckDBPyConnection::ImportCache()->datetime.datetime().ptr());
+			}
+			// A datetime, or a pandas Timestamp without nanoseconds, holds what the conversion reads
+			auto type = Py_TYPE(cell.ptr());
+			if (type == datetime_type || (PyType_IsSubtype(type, datetime_type) && NanosecondOf(cell) == 0)) {
+				PyDateTime datetime(cell);
+				// A datetime with a zone converts as a TIMESTAMPTZ, which an implied TIMESTAMP refuses and the cast
+				// into a stated one reads in the session's time zone
+				if (datetime.tzone_obj.is_none()) {
+					FlatVector::GetDataMutable<timestamp_t>(out)[row] = datetime.ToTimestamp();
+					staged.MarkWritten(row);
+					return;
+				}
+			}
+			read(cell, row);
+		});
+	} else {
+		ScanObjectCells(context, col, stride, masked, count, offset, out, read);
+	}
 	staged.Write(context, out, count);
 	VerifyTypeConstraints(out, count);
 }

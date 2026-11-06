@@ -596,6 +596,71 @@ def test_map_timestamp_column_given_a_timestamp_with_nanoseconds_is_refused(duck
         mapped.fetchall()
 
 
+def _far_from_1970(value):
+    return pytest.param(value, id=value[:4])
+
+
+FAR_YEARS = pytest.mark.parametrize(
+    "value", [_far_from_1970("1500-01-01"), _far_from_1970("2500-01-01"), _far_from_1970("9999-12-31")]
+)
+
+
+@FAR_YEARS
+@pytest.mark.parametrize("sql_type", ["TIMESTAMP", "TIMESTAMP_S"])
+def test_map_timestamp_column_handed_back_as_timestamps_outside_the_nanosecond_range_round_trips(
+    duckdb_cursor, sql_type, value
+):
+    source = duckdb_cursor.sql(f"select '{value}'::{sql_type} as a")
+    mapped = source.map(lambda df: df.assign(a=df["a"].astype(object)))
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+@FAR_YEARS
+def test_map_struct_field_given_a_timestamp_outside_the_nanosecond_range_reads_it(duckdb_cursor, value):
+    source = duckdb_cursor.sql(f"select {{'t': '{value}'::TIMESTAMP}} as a")
+    mapped = source.map(_returning({"t": pd.Timestamp(value)}))
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+def test_map_timestamp_column_of_2020_and_9999_handed_back_as_timestamps_round_trips(duckdb_cursor):
+    source = duckdb_cursor.sql(
+        "select (case when i = 0 then '2020-01-01' else '9999-12-31' end)::TIMESTAMP as a from range(2) t(i)"
+    )
+    mapped = source.map(lambda df: df.assign(a=df["a"].astype(object)))
+    assert mapped.types == source.types
+    assert mapped.fetchall() == source.fetchall()
+
+
+@SCHEMAS
+def test_map_timestamp_ns_column_given_a_timestamp_beyond_its_range_is_refused(duckdb_cursor, explicit_schema):
+    source = duckdb_cursor.sql("select TIMESTAMP_NS '2020-01-01' as a")
+    mapped = source.map(_returning(pd.Timestamp("9999-12-31")), schema=_schema_of(source, explicit_schema))
+    if explicit_schema:
+        expected = "UDF column 'a': Could not convert Timestamp to higher precision"
+        with pytest.raises(duckdb.ConversionException, match=re.escape(expected)):
+            mapped.fetchall()
+    else:
+        expected = "Invalid Input Error: UDF column type mismatch, expected [TIMESTAMP_NS], got [TIMESTAMP]"
+        with pytest.raises(duckdb.InvalidInputException, match=f"^{re.escape(expected)}$"):
+            mapped.fetchall()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["infinity", "-infinity", "2262-04-11 23:47:16.854775806"],
+    ids=["infinity", "minus_infinity", "largest_finite_nanosecond_but_one"],
+)
+@SCHEMAS
+def test_map_timestamp_ns_identity_handed_back_as_timestamps_keeps_infinity(duckdb_cursor, value, explicit_schema):
+    # df() hands an infinity over as pandas' Timestamp.max or Timestamp.min, which read back as that infinity
+    source = duckdb_cursor.sql(f"select '{value}'::TIMESTAMP_NS as a")
+    mapped = source.map(lambda df: df.assign(a=df["a"].astype(object)), schema=_schema_of(source, explicit_schema))
+    assert mapped.types == source.types
+    assert mapped.project("a::VARCHAR").fetchall() == [(value,)]
+
+
 # A scalar inside a container of a type holding a MAP, which meets the engine's cast or the kind check, never a
 # conversion target holding no type
 NESTED_SCALARS = pytest.mark.parametrize(
@@ -607,6 +672,12 @@ NESTED_SCALARS = pytest.mark.parametrize(
         pytest.param("MAP(VARCHAR, INTEGER)[]", np.array([0, 1]), "MAP(VARCHAR, INTEGER)", id="int_array_for_a_list"),
         pytest.param("MAP(VARCHAR, INTEGER)[]", (0,), "MAP(VARCHAR, INTEGER)", id="tuple_for_a_list"),
         pytest.param("MAP(VARCHAR, STRUCT(x INTEGER))", {"k": "abc"}, "STRUCT(x INTEGER)", id="str_for_a_struct_value"),
+        pytest.param(
+            "MAP(VARCHAR, INTEGER)[][]",
+            [np.array(5)],
+            "MAP(VARCHAR, INTEGER)[]",
+            id="zero_dimensional_array_for_a_list",
+        ),
     ],
 )
 
@@ -644,6 +715,69 @@ def test_map_scalar_inside_a_container_of_a_type_holding_a_map_is_refused_and_th
         assert cast_into in message, message
         assert "shape" not in message, message
     assert con.sql("select 42").fetchall() == [(42,)]
+
+
+@pytest.mark.parametrize(
+    ("sql_type", "cell", "converted"),
+    [
+        pytest.param("MAP(VARCHAR, VARCHAR)", {"key": "ab", "value": "cd"}, "VARCHAR and VARCHAR", id="map"),
+        pytest.param(
+            "STRUCT(m MAP(VARCHAR, VARCHAR))",
+            {"m": {"key": "ab", "value": "cd"}},
+            "VARCHAR and VARCHAR",
+            id="map_field",
+        ),
+        pytest.param(
+            "MAP(VARCHAR, INTEGER)",
+            {"key": np.array("a"), "value": np.array(1)},
+            "VARCHAR and INTEGER",
+            id="zero_dimensional_arrays",
+        ),
+    ],
+)
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter"])
+def test_map_of_a_key_and_a_value_that_are_no_lists_is_refused_and_the_database_stays_usable(
+    sql_type, cell, converted, mode
+):
+    con = duckdb.connect()
+    con.execute(f"create table t (a {sql_type})")
+    if mode == "append":
+        run = lambda: con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))  # noqa: E731
+    elif mode == "appender":
+
+        def run():
+            with con.appender("t") as appender:
+                appender.append_row(cell)
+
+    elif mode == "parameter":
+        run = lambda: con.execute("insert into t values (?)", [cell])  # noqa: E731
+    else:
+        con.execute("insert into t values (NULL)")
+        schema = {"a": duckdb.sqltype(sql_type)} if mode == "explicit_schema" else None
+        run = con.table("t").map(_returning(cell), schema=schema).fetchall
+    expected = f"A dict of 'key' and 'value' for a MAP takes a list of keys and a list of values, not {converted}"
+    with pytest.raises(duckdb.InvalidInputException, match=re.escape(expected)):
+        run()
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
+@pytest.mark.parametrize(
+    ("cell", "expected"),
+    [
+        pytest.param({"key": ["k"], "value": [5]}, "{k=5}", id="list_of_an_int"),
+        pytest.param({"key": ("k",), "value": (5,)}, "{k=5}", id="tuple_of_an_int"),
+        pytest.param({"key": np.array(["k"]), "value": np.array([5])}, "{k=5}", id="numpy_arrays"),
+        pytest.param({"key": ["a", "b"], "value": [2**60 + 1, 1]}, "{a=1152921504606846977, b=1}", id="wide_ints"),
+    ],
+)
+@SCHEMAS
+def test_map_of_key_and_value_lists_reads_each_entry_as_a_dicts_entry_reads(
+    duckdb_cursor, cell, expected, explicit_schema
+):
+    source = duckdb_cursor.sql("select MAP {'k': 1::BIGINT} as a")
+    mapped = source.map(_returning(cell), schema=_schema_of(source, explicit_schema))
+    assert mapped.types == source.types
+    assert mapped.project("a::VARCHAR").fetchall() == [(expected,)]
 
 
 def test_map_cast_error_for_a_nested_scalar_names_the_columns_type():

@@ -512,6 +512,34 @@ class TestAppendObjectColumnsToDeclaredTypes:
             duckdb_cursor.append("t", frame)
         assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
 
+    @pytest.mark.parametrize(
+        ("target", "value", "expected"),
+        [
+            pytest.param(
+                "TIMESTAMPTZ",
+                datetime.datetime(2024, 5, 6),
+                "{k='2024-05-06 00:00:00-04'}",
+                id="naive_datetime_into_timestamptz",
+            ),
+            pytest.param("VARCHAR", b"x", "{k=x}", id="bytes_into_varchar"),
+            pytest.param("DECIMAL(9,2)", 1.5, "{k=1.50}", id="float_into_decimal"),
+            pytest.param(
+                "TIMESTAMP_NS",
+                datetime.datetime(2024, 5, 6),
+                "{k='2024-05-06 00:00:00'}",
+                id="datetime_into_timestamp_ns",
+            ),
+        ],
+    )
+    def test_map_of_key_and_value_lists_reads_each_entry_as_the_same_dict_does(
+        self, duckdb_cursor, target, value, expected
+    ):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a MAP(VARCHAR, {target}))")
+        frame = pd.DataFrame({"a": pd.Series([{"key": ["k"], "value": [value]}, {"k": value}], dtype=object)})
+        duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,), (expected,)]
+
     def test_map_keys_a_str_and_its_bytes_are_one_key_and_refused(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
         frame = pd.DataFrame({"a": pd.Series([{"a": 1, b"a": 2}], dtype=object)})
