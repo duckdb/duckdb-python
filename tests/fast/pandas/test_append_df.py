@@ -586,6 +586,25 @@ class TestAppendObjectColumnsToDeclaredTypes:
             ("2019-12-31 19:00:00",),
         ]
 
+    def test_struct_dicts_with_keys_out_of_field_order_read_each_field_by_name(self, duckdb_cursor):
+        # Twelve STRUCT types, more than the per thread field indexes keep, each dict's keys in reverse field order
+        inner = [f"s{i} STRUCT(a{i} INTEGER, b{i} INTEGER, c{i} INTEGER)" for i in range(12)]
+        duckdb_cursor.execute(f"CREATE TABLE t (i INTEGER, a STRUCT({', '.join(inner)}))")
+        cells = [
+            {f"s{i}": {f"c{i}": row + 3, f"b{i}": row + 2, f"a{i}": row + 1} for i in reversed(range(12))}
+            for row in range(3000)
+        ]
+        duckdb_cursor.append("t", pd.DataFrame({"i": range(3000), "a": pd.Series(cells, dtype=object)}))
+        assert [row[0] for row in duckdb_cursor.sql("SELECT a FROM t ORDER BY i").fetchall()] == cells
+
+    def test_map_column_mixing_dicts_with_other_cells_keeps_every_row_in_place(self, duckdb_cursor):
+        # Dicts are written into the MAP's entries directly and the other cells after them; 3000 rows span two vectors
+        cells = [{"a": 1}, "{b=2}", {"key": ["c"], "value": [3]}, None, {"d": 4, "e": 5}, {}] * 500
+        expected = [{"a": 1}, {"b": 2}, {"c": 3}, None, {"d": 4, "e": 5}, {}] * 500
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER, a MAP(VARCHAR, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"i": range(len(cells)), "a": pd.Series(cells, dtype=object)}))
+        assert [row[0] for row in duckdb_cursor.sql("SELECT a FROM t ORDER BY i").fetchall()] == expected
+
     def test_map_of_two_plain_values_named_key_and_value_appends_its_entries(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, VARCHAR))")
         frame = pd.DataFrame({"a": pd.Series([{"key": "ab", "value": "cd"}], dtype=object)})

@@ -842,6 +842,15 @@ def test_declared_struct_with_fields_key_and_value_reads_a_null_field_as_its_str
         assert mapped.fetchall() == expected
 
 
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_struct_given_an_empty_dict_is_refused(mode):
+    # A missing field reads NULL, but a dict of no keys is no STRUCT of the column's fields
+    con = duckdb.connect()
+    with pytest.raises(duckdb.TypeMismatchException, match="Cannot cast STRUCTs of different size"):
+        _through(mode, con, "STRUCT(a INTEGER, b INTEGER)", {})
+    assert con.sql("select 42").fetchall() == [(42,)]
+
+
 @pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter"])
 def test_map_of_key_and_value_arrays_of_no_dimensions_reads_their_two_entries(mode):
     # An array of no dimensions holds a single value, so the dict is a plain one
@@ -1008,6 +1017,43 @@ FIVE_MICROSECONDS = np.datetime64("2020-01-01T00:00:00.000005123", "ns")
 def test_map_nested_timestamp_with_nanoseconds_for_a_stated_coarser_unit_reads_at_microseconds_as_at_the_top(
     sql_type, cell, expected, mode
 ):
+    con = duckdb.connect()
+    con.execute(f"create table t (a {sql_type})")
+    if mode == "append":
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        rows = con.sql("select a::VARCHAR from t").fetchall()
+    else:
+        con.execute("insert into t values (NULL)")
+        schema = {"a": duckdb.sqltype(sql_type)}
+        rows = con.table("t").map(_returning(cell), schema=schema).project("a::VARCHAR").fetchall()
+    assert rows == [(expected,)]
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [
+        pytest.param(
+            np.datetime64("2020-01-01T00:00:00.000005789", "ns"),
+            "2020-01-01 00:00:00.000006",
+            id="datetime64_rounds_up",
+        ),
+        pytest.param(np.datetime64(-1, "ns"), "1970-01-01 00:00:00", id="datetime64_before_the_epoch"),
+        pytest.param(
+            pd.Timestamp("2020-01-01 00:00:00.000005789"), "2020-01-01 00:00:00.000005", id="timestamp_as_its_datetime"
+        ),
+        pytest.param(pd.Timestamp(-1, unit="ns"), "1969-12-31 23:59:59.999999", id="timestamp_before_the_epoch"),
+    ],
+)
+@pytest.mark.parametrize("place", ["top", "list_element", "struct_field", "map_value"])
+@pytest.mark.parametrize("mode", ["explicit_schema", "append"])
+def test_map_timestamp_finer_than_a_stated_coarser_unit_reads_at_every_depth_as_at_the_top(value, text, place, mode):
+    # A datetime64 is a TIMESTAMP_NS the engine's cast rounds into microseconds; a Timestamp is the datetime it is
+    sql_type, cell, expected = {
+        "top": ("TIMESTAMP", value, text),
+        "list_element": ("TIMESTAMP[]", [value], f"['{text}']"),
+        "struct_field": ("STRUCT(t TIMESTAMP)", {"t": value}, f"{{'t': '{text}'}}"),
+        "map_value": ("MAP(VARCHAR, TIMESTAMP)", {"k": value}, f"{{k='{text}'}}"),
+    }[place]
     con = duckdb.connect()
     con.execute(f"create table t (a {sql_type})")
     if mode == "append":

@@ -53,6 +53,17 @@ LogicalType SniffPythonIntegerType(nb::handle ele);
 //! The type of a duckdb.Value, or InvalidInputException when its 'type' attribute is not a DuckDB type
 LogicalType PythonValueType(nb::handle value);
 bool DictionaryHasMapFormat(const PyDictionary &dict);
+//! A dict of exactly 'key' and 'value' with a list on one side and a plain value on the other: a STRUCT of those
+//! fields without a target, and refused as a MAP's key and value lists for a MAP target
+bool MixesAListAndAValue(const PyDictionary &dict);
+//! Drops the field indexes the conversion of shaped STRUCT dicts kept on this thread; the declared scan calls it when
+//! the scan of a vector ends, so no index outlives the shape it was built for
+void ClearStructFieldIndexes();
+//! A key or value of a MAP whose target is a type without children converts without a target and is then cast with
+//! the connection's settings, as a value of a column is, so each keeps its own type until the cast instead of meeting
+//! its siblings' common type (2**60 + 1 beside 1.0 would read as a DOUBLE, rounded)
+Value TransformMapEntry(optional_ptr<ClientContext> context, nb::handle entry, const LogicalType &target_type,
+                        bool nan_as_null);
 //! A target the declared scan builds from a column's type (a shape), as opposed to a column's own type: a dict for a
 //! shaped STRUCT takes its own keys, as without a target; a shaped MAP casts each key and value whose type has no
 //! children with the connection's settings; a shaped naive timestamp reads a cell as TransformTimestamp does

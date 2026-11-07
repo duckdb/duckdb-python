@@ -191,9 +191,7 @@ static bool IsListLike(nb::handle ele) {
 	       nb::cast<idx_t>(ele.attr("ndim")) > 0;
 }
 
-//! A dict of exactly 'key' and 'value' with a list on one side and a plain value on the other: a STRUCT of those
-//! fields without a target, and refused as a MAP's key and value lists for a MAP target
-static bool MixesAListAndAValue(const PyDictionary &dict) {
+bool MixesAListAndAValue(const PyDictionary &dict) {
 	if (dict.len != 2) {
 		return false;
 	}
@@ -229,6 +227,40 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 	return IsListLike(keys) && IsListLike(values) && nb::len(keys) == nb::len(values);
 }
 
+namespace {
+//! The field index of each shaped STRUCT a declared scan meets, kept per thread until the scan of the vector ends,
+//! since each takes a pass over the fields to build and every dict of the vector asks the same one; an entry holds
+//! its type, so the type information it is found by cannot be freed and given to another type while it is kept, and
+//! an index stays where it is while others are added
+struct FieldIndex {
+	LogicalType type;
+	identifier_map_t<idx_t> fields;
+};
+
+unordered_map<const LogicalTypeInfo *, FieldIndex> &FieldIndexes() {
+	thread_local unordered_map<const LogicalTypeInfo *, FieldIndex> indexes;
+	return indexes;
+}
+
+const identifier_map_t<idx_t> &FieldIndexOf(const LogicalType &struct_type) {
+	auto &indexes = FieldIndexes();
+	auto entry = indexes.find(&struct_type.GetTypeInfo());
+	if (entry != indexes.end()) {
+		return entry->second.fields;
+	}
+	auto &index = indexes[&struct_type.GetTypeInfo()];
+	index.type = struct_type;
+	for (idx_t child = 0; child < StructType::GetChildCount(struct_type); child++) {
+		index.fields.emplace(StructType::GetChildName(struct_type, child), child);
+	}
+	return index.fields;
+}
+} // namespace
+
+void ClearStructFieldIndexes() {
+	FieldIndexes().clear();
+}
+
 Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyDictionary &dict,
                                   const LogicalType &target_type, bool nan_as_null) {
 	auto conversion_error = [&]() {
@@ -256,15 +288,30 @@ Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyD
 
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len);
 	if (!struct_target || shape_only) {
+		const LogicalType unknown(LogicalTypeId::UNKNOWN);
+		auto field_count = shape_only ? StructType::GetChildCount(target_type) : 0;
+		// The field at a key's own position is tried first, as df() hands a STRUCT over in field order; a key found
+		// elsewhere is looked up in an index of the field names, so a wide STRUCT costs no search for every key
+		optional_ptr<const identifier_map_t<idx_t>> fields;
 		for (idx_t i = 0; i < dict.len; i++) {
-			LogicalType child_type = LogicalType::UNKNOWN;
-			for (idx_t child = 0; shape_only && child < StructType::GetChildCount(target_type); child++) {
-				if (StructType::GetChildName(target_type, child) == struct_keys[i]) {
-					child_type = StructType::GetChildType(target_type, child);
-					break;
+			optional_idx field;
+			if (i < field_count && StructType::GetChildName(target_type, i) == struct_keys[i]) {
+				field = i;
+			} else if (field_count > 0) {
+				if (!fields) {
+					fields = &FieldIndexOf(target_type);
+				}
+				auto entry = fields->find(struct_keys[i]);
+				if (entry != fields->end()) {
+					field = entry->second;
 				}
 			}
-			auto val = TransformPythonValue(context, dict.values.attr("__getitem__")(i), child_type, nan_as_null);
+			auto &child_type = field.IsValid() ? StructType::GetChildType(target_type, field.GetIndex()) : unknown;
+			auto value = nb::steal(PySequence_GetItem(dict.values.ptr(), NumericCast<Py_ssize_t>(i)));
+			if (!value.is_valid()) {
+				throw nb::python_error();
+			}
+			auto val = TransformPythonValue(context, value, child_type, nan_as_null);
 			struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
 		}
 		return Value::STRUCT(std::move(struct_values));
@@ -368,11 +415,8 @@ static bool ShapeTakes(nb::handle ele, const LogicalType &shape) {
 	}
 }
 
-//! A key or value of a MAP whose target is a type without children converts without a target and is then cast with
-//! the connection's settings, as a value of a column is, so each keeps its own type until the cast instead of meeting
-//! its siblings' common type (2**60 + 1 beside 1.0 would read as a DOUBLE, rounded)
-static Value TransformMapEntry(optional_ptr<ClientContext> context, nb::handle entry, const LogicalType &target_type,
-                               bool nan_as_null) {
+Value TransformMapEntry(optional_ptr<ClientContext> context, nb::handle entry, const LogicalType &target_type,
+                        bool nan_as_null) {
 	if (IsShape(target_type) || target_type.IsNested() || target_type.id() == LogicalTypeId::UNKNOWN ||
 	    target_type.id() == LogicalTypeId::UNION) {
 		return TransformPythonValue(context, entry, target_type, nan_as_null);
@@ -400,11 +444,16 @@ static Value MapFromEntries(optional_ptr<ClientContext> context, nb::handle keys
 	LogicalType key_type = LogicalType::SQLNULL;
 	LogicalType value_type = LogicalType::SQLNULL;
 
-	vector<Value> elements;
+	vector<Value> map_keys;
+	vector<Value> map_values;
+	map_keys.reserve(size);
+	map_values.reserve(size);
 	for (idx_t i = 0; i < size; i++) {
-
-		auto key = keys.attr("__getitem__")(i);
-		auto value = values.attr("__getitem__")(i);
+		auto key = nb::steal(PySequence_GetItem(keys.ptr(), NumericCast<Py_ssize_t>(i)));
+		auto value = nb::steal(PySequence_GetItem(values.ptr(), NumericCast<Py_ssize_t>(i)));
+		if (!key.is_valid() || !value.is_valid()) {
+			throw nb::python_error();
+		}
 		Value new_key = shape ? TransformMapEntry(context, key, key_target, nan_as_null)
 		                      : TransformPythonValue(context, key, key_target, nan_as_null);
 		Value new_value = shape ? TransformMapEntry(context, value, value_target, nan_as_null)
@@ -412,12 +461,8 @@ static Value MapFromEntries(optional_ptr<ClientContext> context, nb::handle keys
 
 		key_type = ProxiedForceMaxLogicalType(context, key_type, new_key.type());
 		value_type = ProxiedForceMaxLogicalType(context, value_type, new_value.type());
-
-		child_list_t<Value> struct_values;
-		struct_values.emplace_back(make_pair("key", std::move(new_key)));
-		struct_values.emplace_back(make_pair("value", std::move(new_value)));
-
-		elements.push_back(Value::STRUCT(std::move(struct_values)));
+		map_keys.push_back(std::move(new_key));
+		map_values.push_back(std::move(new_value));
 	}
 	// A target holding UNKNOWN asks for no type there, and a MAP of such a type is no value the engine can hold
 	if (key_type.id() == LogicalTypeId::SQLNULL && !TypeVisitor::Contains(key_target, LogicalTypeId::UNKNOWN) &&
@@ -429,9 +474,8 @@ static Value MapFromEntries(optional_ptr<ClientContext> context, nb::handle keys
 		value_type = value_target;
 	}
 
-	LogicalType map_type = LogicalType::MAP(key_type, value_type);
-
-	return Value::MAP(ListType::GetChildType(map_type), std::move(elements));
+	// Built from the keys and values themselves, as the STRUCT of each entry would only be taken apart again
+	return Value::MAP(key_type, value_type, std::move(map_keys), std::move(map_values));
 }
 
 Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, const PyDictionary &dict,

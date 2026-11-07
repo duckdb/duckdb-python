@@ -207,18 +207,10 @@ void ScanNumpyObject(optional_ptr<ClientContext> context, PyObject *object, idx_
 	TransformPythonObject(context, object, out, offset);
 }
 
+//! Raises what the engine raises building a MAP Value of such keys, so a MAP written straight into its vector and one
+//! built as a Value are refused alike
 static void VerifyMapConstraints(Vector &vec, idx_t count) {
-	auto invalid_reason = MapVector::CheckMapValidity(vec, count);
-	switch (invalid_reason) {
-	case MapInvalidReason::VALID:
-		return;
-	case MapInvalidReason::DUPLICATE_KEY:
-		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains duplicates");
-	case MapInvalidReason::NULL_KEY:
-		throw InvalidInputException("Dict->Map conversion failed because 'key' list contains None");
-	default:
-		throw InvalidInputException("Option not implemented for MapInvalidReason");
-	}
+	MapVector::EvalMapInvalidReason(MapVector::CheckMapValidity(vec, count));
 }
 
 //! A MAP's keys must be unique at every depth; a cast of a STRUCT into a MAP, as of a dict whose keys collapse into
@@ -343,6 +335,11 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	return TransformPythonValue(context, value, shape, true);
 }
 
+//! A key or value type a stated MAP casts its entries into one by one
+static bool IsPlainEntryType(const LogicalType &type) {
+	return !type.IsNested() && type.id() != LogicalTypeId::UNION;
+}
+
 //! The type a cell of a nested type converts with: its containers and its naive timestamps and no other type, so a
 //! dict builds its MAP from its keys and values in the types they have in Python and every key and value meets the
 //! engine's cast with the connection's settings, as a TIMESTAMPTZ in the session time zone, and a timestamp reads in
@@ -351,8 +348,7 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 //! stated takes that, while an implied type keeps the entries' own types for the kind check.
 static LogicalType KeyedShape(const LogicalType &type, bool typed_entries) {
 	auto entry = [&](const LogicalType &entry_type) {
-		auto plain = !entry_type.IsNested() && entry_type.id() != LogicalTypeId::UNION;
-		return typed_entries && plain ? entry_type : KeyedShape(entry_type, typed_entries);
+		return typed_entries && IsPlainEntryType(entry_type) ? entry_type : KeyedShape(entry_type, typed_entries);
 	};
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT: {
@@ -928,10 +924,30 @@ static void ScanObjectCells(ClientContext &context, PyObject **col, idx_t stride
 	}
 }
 
+//! Writes the converted keys or values of a MAP vector's entries from first on, cast into the child's type as a
+//! declared column's values are
+static void WriteEntries(ClientContext &context, vector<Value> &entries, Vector &child, idx_t first) {
+	if (entries.empty()) {
+		return;
+	}
+	DeclaredVector staged(entries.size());
+	for (idx_t i = 0; i < entries.size(); i++) {
+		staged.Set(i, std::move(entries[i]));
+	}
+	Vector written(child.GetType(), entries.size());
+	staged.Write(context, written, entries.size());
+	VectorOperations::Copy(written, child, entries.size(), 0, first);
+}
+
 void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t stride, const uint8_t *masked,
                                    idx_t count, idx_t offset, Vector &out, bool implied_type,
                                    bool bit_storage_refused) {
 	DeclaredVector staged(count);
+	struct FieldIndexesOfTheScan {
+		~FieldIndexesOfTheScan() {
+			ClearStructFieldIndexes();
+		}
+	} field_indexes;
 	auto &target = out.GetType();
 	// A type holding a MAP takes a shape for its keys, one holding a STRUCT for a dict to name its fields, not to be
 	// guessed a MAP's key and value lists, and one holding a naive timestamp for the unit a nested value reads in; a
@@ -1043,6 +1059,47 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 			}
 			read(cell, row);
 		});
+	} else if (target.id() == LogicalTypeId::MAP && !implied_type && !bits_refused &&
+	           IsPlainEntryType(MapType::KeyType(target)) && IsPlainEntryType(MapType::ValueType(target))) {
+		// A dict of its entries goes straight into the MAP's keys and values, each converted as a MAP entry is and all
+		// of them cast together once the vector is read, since a MAP Value per cell builds and takes apart a STRUCT
+		// Value per entry; the key and value lists and every other cell take the general reader
+		auto &key_type = MapType::KeyType(target);
+		auto &value_type = MapType::ValueType(target);
+		auto first_entry = ListVector::GetListSize(out);
+		vector<Value> keys;
+		vector<Value> values;
+		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
+			if (!PyDict_Check(cell.ptr())) {
+				return read(cell, row);
+			}
+			auto size = NumericCast<idx_t>(PyDict_Size(cell.ptr()));
+			if (size == 2) {
+				PyDictionary dict(nb::borrow<nb::object>(cell));
+				if (DictionaryHasMapFormat(dict) || MixesAListAndAValue(dict)) {
+					return read(cell, row);
+				}
+			}
+			auto start = ListVector::GetListSize(out);
+			Py_ssize_t position = 0;
+			PyObject *key;
+			PyObject *value;
+			while (PyDict_Next(cell.ptr(), &position, &key, &value)) {
+				// Converting runs Python, which could drop the dict's references to them
+				auto key_object = nb::borrow<nb::object>(key);
+				auto value_object = nb::borrow<nb::object>(value);
+				keys.push_back(TransformTimestamp(context, key_object, key_type, true));
+				values.push_back(TransformTimestamp(context, value_object, value_type, true));
+			}
+			auto &list_entry = FlatVector::GetDataMutable<list_entry_t>(out)[row];
+			list_entry.offset = start;
+			list_entry.length = first_entry + keys.size() - start;
+			ListVector::Reserve(out, first_entry + keys.size());
+			ListVector::SetListSize(out, first_entry + keys.size());
+			staged.MarkWritten(row);
+		});
+		WriteEntries(context, keys, MapVector::GetKeys(out), first_entry);
+		WriteEntries(context, values, MapVector::GetValues(out), first_entry);
 	} else {
 		ScanObjectCells(context, col, stride, masked, count, offset, out, read);
 	}
