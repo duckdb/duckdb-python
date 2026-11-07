@@ -2729,12 +2729,18 @@ class DuckDBPyRelation:
                 raise _error(_duckdb.ParserException, f"Zero-length identifier in qualified name! (input: {literal})")
             text = "DESCRIBE " + ".".join(quote(p) for p in parts)
         _refresh(self)
+        _, last, kind, _ = _seam.prepare_script_parsed(self._con, text, None)
+        if kind == "CONNECT":
+            message = (
+                "DuckDBPyRelation.query() cannot run a CONNECT, since it could not drop the name it gives the relation "
+                "for the call once CONNECT-ed; run the CONNECT through con.sql() or con.execute()"
+            )
+            raise _error(_duckdb.InvalidInputException, message)
+        last = _strip_semicolons(last) if last else text
         with _reading_as(self, virtual_table_name):
-            _, last, kind, _ = _seam.prepare_script_parsed(self._con, text, None)
-            last = _strip_semicolons(last) if last else text
             if kind != "SELECT" or _seam.bind(self._con, last).writes:
                 # A statement that writes runs at the call and the relation holds what it returned.
-                return _run_now(self._con, last, None, "", None)
+                return _run_now(self._con, last, None, "", None, kind)
             step = QueryOver(virtual_table_name, last)
         try:
             # Outside the call's catalog entry, so a statement that binds only while the entry is there cannot
@@ -2746,7 +2752,7 @@ class DuckDBPyRelation:
                 # statement that writes does; any other mistake raises as it came, and binding executes nothing, so
                 # an open transaction stays usable.
                 _seam.bind(self._con, last)
-                return _run_now(self._con, last, None, "", None)
+                return _run_now(self._con, last, None, "", None, kind)
 
     def _query_view_body(self) -> str:
         """The relation as the body of the temporary view `query()` puts its name on for the length of the call."""
@@ -3443,12 +3449,12 @@ def _held(
 
 
 def _run_now(
-    con: _duckdb.DuckDBPyConnection, text: str, params: object, alias: str, kept: object
+    con: _duckdb.DuckDBPyConnection, text: str, params: object, alias: str, kept: object, kind: str | None
 ) -> DuckDBPyRelation | None:
-    """Run a statement at the call and keep what it returned.
+    """Run a statement of the given kind at the call and keep what it returned.
 
     A statement that returns no rows leaves the rows of the latest statement before it that did, as a script does;
-    with neither there is no relation.
+    with neither there is no relation. A CONNECT gives no relation at all, since none can be read once CONNECT-ed.
     """
     given = _has_values(params)
     # The statement runs, and fails as execution fails whatever ran before it. What it returns is the
@@ -3456,6 +3462,9 @@ def _run_now(
     # the shape of what came back cannot, since RETURNING can name a column Count, and a deferred group's bind does
     # not know it until the group has run.
     result = _seam.submit(con, text, params if given else None)  # type: ignore[arg-type]
+    if kind == "CONNECT":
+        result.drain()
+        return None
     return_type = result.return_type
     returns_rows = kept is None or return_type == "query_result"
     earlier = _held(con, kept, alias) if kept is not None else None
@@ -3500,7 +3509,7 @@ def sql(
         relation = _reading_source(con, text, markers, values, alias, parsed)
         if relation is not None:
             return relation
-    return _run_now(con, text, params, alias, kept)
+    return _run_now(con, text, params, alias, kept, kind)
 
 
 def _name_parts(name: str) -> tuple[str, ...]:
@@ -4422,13 +4431,16 @@ _ARROW_READER_COPY_WARNING = (
 
 def _connection_to_arrow_table(self: _duckdb.DuckDBPyConnection, batch_size: int = _seam.DEFAULT_BATCH_SIZE) -> Any:  # noqa: ANN401
     """Every row the pending result still holds, as an Arrow Table."""
-    warnings.warn(_ARROW_TABLE_COPY_WARNING, UserWarning, _caller_level())
+    # A CONNECT-ed connection refuses the call, where the hint to use con.sql() would mislead.
+    if not _seam.connected(self):
+        warnings.warn(_ARROW_TABLE_COPY_WARNING, UserWarning, _caller_level())
     return _seam.result_arrow(self, int(batch_size), reader=False)
 
 
 def _connection_to_arrow_reader(self: _duckdb.DuckDBPyConnection, batch_size: int = _seam.DEFAULT_BATCH_SIZE) -> Any:  # noqa: ANN401
     """A reader over every row the pending result still holds."""
-    warnings.warn(_ARROW_READER_COPY_WARNING, UserWarning, _caller_level())
+    if not _seam.connected(self):
+        warnings.warn(_ARROW_READER_COPY_WARNING, UserWarning, _caller_level())
     return _seam.result_arrow(self, int(batch_size), reader=True)
 
 

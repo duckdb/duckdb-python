@@ -819,7 +819,7 @@ shared_ptr<engine::Result> DuckDBPyConnection::ExecuteInternal(engine::Prepared 
 }
 
 shared_ptr<engine::Result> DuckDBPyConnection::PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-                                                                        nb::object params) {
+                                                                        nb::object params, bool local_only) {
 	if (params.is_none()) {
 		params = nb::list();
 	}
@@ -832,7 +832,11 @@ shared_ptr<engine::Result> DuckDBPyConnection::PrepareAndSubmitInternal(unique_p
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-		res = session.Submit(std::move(statement), named_values, engine::Format::Chunks());
+		auto claim = session.Claim();
+		if (local_only) {
+			engine::RefuseWhileConnected(session.Context(), statement->type);
+		}
+		res = session.SubmitClaimed(std::move(statement), named_values, engine::Format::Chunks());
 	}
 	return res;
 }
@@ -874,10 +878,18 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 }
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
+	return ExecuteQuery(query, std::move(params), false);
+}
+
+std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteQuery(const nb::object &query, nb::object params,
+                                                                     bool local_only) {
 	nb::gil_scoped_acquire gil;
 	ConnectionLockGuard conn_lock(*this);
 
 	auto statements = GetStatements(query);
+	if (local_only) {
+		statements.LocalOnly();
+	}
 	auto parameters_given = HasParameters(params);
 	// FIXME: SQLites implementation says to not accept an 'execute' call with multiple statements
 	auto last_statement = RunAllButLast(statements, true);
@@ -886,7 +898,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 	}
 	shared_ptr<engine::Result> res;
 	if (last_statement) {
-		res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params));
+		res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params), local_only);
 		if (parameters_given && ExpandedToNothing(*res)) {
 			try {
 				RefuseParameters(statements);
@@ -980,7 +992,8 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &nam
 	}
 
 	auto sql_query = StringUtil::Format("INSERT INTO %s %s SELECT * FROM __append_df", SQLIdentifier(name), columns);
-	return Execute(nb::str(sql_query.c_str(), sql_query.size()));
+	// The INSERT reads the source registered here, so a CONNECT since the registration refuses it under its claim
+	return ExecuteQuery(nb::str(sql_query.c_str(), sql_query.size()), nb::list(), true);
 }
 
 void DuckDBPyConnection::RegisterSourceView(const string &name, const SourceHandle &source) {
@@ -993,6 +1006,7 @@ void DuckDBPyConnection::RegisterSourceView(const string &name, const SourceHand
 		nb::gil_scoped_release release;
 		// Held from the check to the change, so no result can open in between and be ended by it
 		auto claim = session.Claim();
+		engine::RefuseWhileConnected(client);
 		engine::VerifyNoOpenResult(client);
 		// Only a view register() made is replaced; a temporary view of the user's own makes the create fail, as
 		// before
@@ -1060,6 +1074,7 @@ PathLike DuckDBPyConnection::GetPathLike(const nb::object &object) {
 
 nb::tuple DuckDBPyConnection::PrepareScript(const nb::object &query, const nb::object &params, bool with_statement) {
 	auto statements = GetStatements(query);
+	statements.LocalOnly();
 	auto last_statement = RunAllButLast(statements, false);
 	if (!last_statement && HasParameters(params)) {
 		RefuseParameters(statements);
@@ -1123,6 +1138,8 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterPythonObject(c
 		nb::gil_scoped_release release;
 		// Held from the check to the change, so no result can open in between and be ended by it
 		auto claim = session.Claim();
+		// The view is dropped by a statement, which while CONNECT-ed would drop one of the connected database
+		engine::RefuseWhileConnected(client);
 		if (!known) {
 			// A name this connection did not register here, a view renamed in SQL for one, is asked of the catalog
 			// only when that disturbs nothing: beside an open DB-API result it stays the no-op it always was
@@ -1520,12 +1537,6 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 	if (!con.HasResult()) {
 		throw InvalidInputException("No open result set");
 	}
-	// While CONNECT-ed the engine sends every statement to the remote as text, and a statement over rows held
-	// here has none, so the rows would be taken for nothing
-	if (session.Context().IsConnected()) {
-		throw InvalidInputException("Arrow output on a DB-API result is not available while CONNECT-ed; DISCONNECT "
-		                            "first, or use con.sql(query).to_arrow_table() or to_arrow_reader()");
-	}
 	// Everything that can refuse before the rows are taken does so, so a refused call costs no rows
 	if (reader) {
 		DuckDBPyResult::CheckBatchSize(batch_size);
@@ -1538,6 +1549,12 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		auto claim = session.Claim();
+		// While CONNECT-ed the engine sends every statement to the remote as text, and a statement over rows held
+		// here has none, so the rows would be taken for nothing
+		if (session.Context().IsConnected()) {
+			throw InvalidInputException("Arrow output on a DB-API result is not available while CONNECT-ed; use "
+			                            "fetchall(), fetchdf() or fetchnumpy(), or DISCONNECT first");
+		}
 		// The engine refuses an aborted transaction here under its own lock, and a running result keeps its
 		// transaction active, so the empty function neither begins nor commits anything the result depends on
 		session.Context().RunFunctionInTransaction([] {});

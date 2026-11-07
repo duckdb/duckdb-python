@@ -372,12 +372,16 @@ public:
 	engine::Prepared PrepareQuery(unique_ptr<SQLStatement> statement);
 	shared_ptr<engine::Result> ExecuteInternal(engine::Prepared &prep, nb::object params,
 	                                           engine::StatementGroup &statements);
-	//! Binds the parameters and submits the statement. The result is returned undriven.
+	//! Binds the parameters and submits the statement. The result is returned undriven. local_only refuses, under the
+	//! submission's claim, what engine::RefuseWhileConnected refuses.
 	shared_ptr<engine::Result> PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-	                                                    nb::object params = nb::list());
+	                                                    nb::object params = nb::list(), bool local_only = false);
 	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
+	//! Execute, where local_only refuses each statement engine::RefuseWhileConnected refuses, under the claim it runs
+	//! in: the last one in PrepareAndSubmitInternal, every earlier one in the group's RunAllButLast
+	std::shared_ptr<DuckDBPyConnection> ExecuteQuery(const nb::object &query, nb::object params, bool local_only);
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	std::shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);

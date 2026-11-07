@@ -307,6 +307,18 @@ void VerifyNoOpenResult(ClientContext &context) {
 	}
 }
 
+void RefuseWhileConnected(ClientContext &context, StatementType type) {
+	if (type != StatementType::DISCONNECT_STATEMENT) {
+		RefuseWhileConnected(context, CONNECTED_REFUSAL);
+	}
+}
+
+void RefuseWhileConnected(ClientContext &context, const char *refusal) {
+	if (context.IsConnected()) {
+		throw InvalidInputException(refusal);
+	}
+}
+
 void NameRefusal(ClientContext &context, const std::exception &error) {
 	ConnectionState::Get(context)->NameRefusal(ErrorData(error));
 }
@@ -386,20 +398,21 @@ shared_ptr<Result> Session::Submit(unique_ptr<ColumnDataCollection> collection, 
 	auto select = make_uniq<SelectStatement>();
 	select->node = std::move(select_node);
 	identifier_map_t<BoundParameterData> no_values;
-	return Submit(std::move(select), no_values, format);
+	auto claim = Claim();
+	// A statement over rows held here has no text the connected database could run
+	RefuseWhileConnected(*context);
+	return SubmitClaimed(std::move(select), no_values, format);
 }
 
-StatementSignature Session::Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables) {
-	ConnectionClaim claim(*state, *context);
+StatementSignature Session::BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables) {
 	ResolvingGuard guard(*state);
 	auto signature = context->BindStatement(std::move(statement));
 	tables = guard.End();
 	return signature;
 }
 
-StatementSignature Session::Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
-                                 const identifier_map_t<BoundParameterData> &values) {
-	ConnectionClaim claim(*state, *context);
+StatementSignature Session::BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
+                                        const identifier_map_t<BoundParameterData> &values) {
 	ResolvingGuard guard(*state);
 	StatementSignature signature;
 	ErrorData bind_error;
@@ -438,11 +451,6 @@ StatementSignature Session::Bind(unique_ptr<SQLStatement> statement, ResolvedTab
 	return signature;
 }
 
-void Session::Run(unique_ptr<SQLStatement> statement, const InterruptCheck &check) {
-	ConnectionClaim claim(*state, *context);
-	RunClaimed(std::move(statement), check);
-}
-
 void Session::RunClaimed(unique_ptr<SQLStatement> statement, const InterruptCheck &check) {
 	registry->CountStatement(statement->type);
 	auto handle = context->Submit(std::move(statement), QueryParameters());
@@ -450,8 +458,8 @@ void Session::RunClaimed(unique_ptr<SQLStatement> statement, const InterruptChec
 	Complete(*handle, check);
 }
 
-void Session::Run(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check) {
-	ConnectionClaim claim(*state, *context);
+void Session::RunClaimed(unique_ptr<SQLStatement> statement, const ResolvedTables &tables,
+                         const InterruptCheck &check) {
 	registry->CountStatement(statement->type);
 	unique_ptr<QueryResult> handle;
 	{
@@ -516,6 +524,10 @@ unique_ptr<SQLStatement> StatementGroup::RunAllButLast(unique_ptr<SQLStatement> 
 		{
 			// One claim from submission to the end of the run, so no other call finds the statement pending
 			auto claim = session.Claim();
+			// Thrown directly, not through Fail, since a statement refused before it ran is no error of the transaction
+			if (local_only) {
+				RefuseWhileConnected(session.Context(), statement->type);
+			}
 			identifier_map_t<BoundParameterData> no_values;
 			auto result = session.SubmitClaimed(std::move(statement), no_values, Format::Chunks());
 			ReleaseIfReplaced(*result);
