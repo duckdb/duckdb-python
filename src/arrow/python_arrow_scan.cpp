@@ -280,6 +280,8 @@ struct PythonArrowScanBindData : public TableFunctionData {
 	shared_ptr<PythonArrowSourceInfo> info;
 	//! The Arrow names of the declared columns, empty for a nameless array
 	vector<string> raw_names;
+	//! The names the scan binds the declared columns to
+	vector<string> bound_names;
 	vector<LogicalType> types;
 	ArrowTableSchema arrow_table;
 	PredicateColumns predicate_columns;
@@ -450,7 +452,8 @@ unique_ptr<FunctionData> PythonArrowScanBind(ClientContext &context, TableFuncti
 	for (idx_t i = 0; i < result->types.size(); i++) {
 		auto raw = NameOf(arrow_schema, i);
 		// A plain array has no column name of its own; the engine would call it v0.
-		names.emplace_back(schema->wrapped && raw.empty() ? string("value") : resolved_names[i]);
+		result->bound_names.push_back(schema->wrapped && raw.empty() ? string("value") : resolved_names[i]);
+		names.emplace_back(result->bound_names.back());
 		result->raw_names.push_back(std::move(raw));
 	}
 	result->predicate_columns = PredicateColumns(arrow_schema, result->types);
@@ -660,6 +663,9 @@ unique_ptr<GlobalTableFunctionState> PythonArrowScanInitGlobal(ClientContext &co
 	result->arrow_table = make_shared_ptr<ArrowTableSchema>();
 	ResolveBatchSchema(context, *result->arrow_table, schema);
 	auto &types = result->arrow_table->GetTypes();
+	// The engine names a stream's nameless or repeated columns by their place in the stream, which a narrowed stream
+	// changes, so the stream's columns take the names the scan bound them to.
+	auto &stream_names = result->arrow_table->GetNames();
 	for (idx_t i = 0; i < fields; i++) {
 		const auto expected = exported.projected ? requested[i] : i;
 		const auto name = NameOf(schema, i);
@@ -671,6 +677,7 @@ unique_ptr<GlobalTableFunctionState> PythonArrowScanInitGlobal(ClientContext &co
 			throw InvalidInputException("%s answered with column '%s' of type %s where %s was declared", source_subject,
 			                            name, types[i].ToString(), bind_data.types[expected].ToString());
 		}
+		stream_names[i] = bind_data.bound_names[expected];
 	}
 	// One vector ranges under verify_parallelism, as in the engine's own scans, so queries under it cross range ends.
 	result->range_rows =

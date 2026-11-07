@@ -60,14 +60,12 @@ LogicalType AsShape(const LogicalType &type);
 bool IsShape(const LogicalType &type);
 //! The nanosecond a datetime subclass such as a pandas Timestamp gives as an int, or -1 when it gives none
 int64_t NanosecondOf(nb::handle cell);
-//! Whether a cell is a naive pandas Timestamp with nanoseconds or a numpy datetime64 finer than a microsecond, whose
-//! nanoseconds no Python datetime holds; they are then in nanoseconds
+//! Whether a cell is a naive pandas Timestamp with nanoseconds, which no Python datetime holds; they are then in
+//! nanoseconds
 bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds);
-//! A numpy scalar's Python value; a datetime64 or timedelta64 at nanoseconds would read as an integer, so those take
-//! the microsecond unit first, as a frame's own datetime columns do
-nb::object NumpyScalarItem(nb::handle scalar);
 //! A value for a naive timestamp type converted without a target, but keeping the nanoseconds of a pandas Timestamp
-//! or a fine datetime64 for a TIMESTAMP_NS, and reading a datetime64 at microseconds for a coarser unit
+//! for a TIMESTAMP_NS, and reading a numpy scalar as PythonValueOfNumpyScalar does, so a datetime64 finer than a
+//! microsecond is a TIMESTAMP_NS that a coarser unit takes through the engine's cast
 Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
                          bool nan_as_null);
 void TransformPythonObject(optional_ptr<ClientContext> context, nb::handle ele, Vector &vector, idx_t result_offset,
@@ -75,6 +73,12 @@ void TransformPythonObject(optional_ptr<ClientContext> context, nb::handle ele, 
 Value TransformPythonValue(optional_ptr<ClientContext> context, nb::handle ele,
                            const LogicalType &target_type = LogicalType::UNKNOWN, bool nan_as_null = true);
 string TransformPythonString(nb::handle str);
+//! A numpy scalar, or an array of no dimensions, as its Python value through item(), one step, so a long double, whose
+//! item() is a numpy scalar again, comes back as it is for the conversion to refuse; a timedelta64 finer than a
+//! microsecond, whose item() is an integer, takes the microsecond unit first. A datetime64 finer than a microsecond
+//! has no Python value: it reads into timestamp, and the result is a null handle. Any other object comes back as it
+//! is.
+nb::object PythonValueOfNumpyScalar(nb::handle cell, timestamp_ns_t &timestamp);
 //! Needs no GIL
 InvalidInputException UnencodableStrError(uint32_t codepoint, idx_t position);
 //! Raises the pending UnicodeEncodeError of a failed UTF-8 conversion of str as the typed error above

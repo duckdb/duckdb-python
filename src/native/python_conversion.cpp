@@ -72,6 +72,90 @@ void ThrowUnencodableStr(nb::handle str) {
 	throw UnencodableStrError(PyUnicode_ReadChar(str.ptr(), start), NumericCast<idx_t>(start));
 }
 
+// Importing the module here instead would run the import on whichever thread of the query converts the value, and a
+// None entry in sys.modules is how a program blocks the import
+static bool ModuleIsImported(PythonImportCacheItem &module, PyObject *name) {
+	if (module.LoadSucceeded()) {
+		return true;
+	}
+	if (!name) {
+		PyErr_Clear();
+		return false;
+	}
+	auto entry = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
+	if (!entry && PyErr_Occurred()) {
+		PyErr_Clear();
+	}
+	return entry && entry != Py_None;
+}
+
+bool PandasIsImported(PythonImportCache &import_cache) {
+	// Interned once: building the key on every call, or asking the import cache about a module it has not loaded,
+	// costs an allocation for every converted value
+	static PyObject *const name = PyUnicode_InternFromString("pandas");
+	return ModuleIsImported(import_cache.pandas, name);
+}
+
+//! A numpy scalar cannot exist before numpy is imported
+static bool NumpyIsImported(PythonImportCache &import_cache) {
+	static PyObject *const name = PyUnicode_InternFromString("numpy");
+	return ModuleIsImported(import_cache.numpy, name);
+}
+
+//! Decided from the object's type, which runs no code of the object's; numpy is optional and loaded by nothing here,
+//! so an ordinary value costs no import and no retried import of a missing numpy
+static bool IsNumpyScalar(nb::handle cell) {
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	if (!NumpyIsImported(import_cache)) {
+		return false;
+	}
+	auto generic = import_cache.numpy.generic();
+	auto type = Py_TYPE(cell.ptr());
+	if (generic.ptr() != nullptr && PyType_IsSubtype(type, reinterpret_cast<PyTypeObject *>(generic.ptr()))) {
+		return true;
+	}
+	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
+	auto ndarray = import_cache.numpy.ndarray();
+	return ndarray.ptr() != nullptr && reinterpret_cast<PyObject *>(type) == ndarray.ptr() &&
+	       nb::cast<idx_t>(cell.attr("ndim")) == 0;
+}
+
+//! A datetime or a timedelta holds no unit finer than a microsecond, so item() gives an integer at these
+static bool IsFinerThanAMicrosecond(nb::handle dtype) {
+	auto code = nb::cast<string>(dtype.attr("str"));
+	return StringUtil::EndsWith(code, "ns]") || StringUtil::EndsWith(code, "ps]") ||
+	       StringUtil::EndsWith(code, "fs]") || StringUtil::EndsWith(code, "as]");
+}
+
+nb::object PythonValueOfNumpyScalar(nb::handle cell, timestamp_ns_t &timestamp) {
+	auto object = cell.ptr();
+	// numpy's float, str and bytes scalars are a float, str and bytes the conversion reads as they are, where item()
+	// would drop the trailing NUL characters of a str or bytes; an int or None is never a numpy scalar
+	if (object == Py_None || PyLong_Check(object) || PyFloat_Check(object) || PyUnicode_Check(object) ||
+	    PyBytes_Check(object) || !IsNumpyScalar(cell)) {
+		return nb::borrow(cell);
+	}
+	auto dtype = cell.attr("dtype");
+	auto kind = nb::cast<string>(dtype.attr("kind"));
+	if (kind == "M" && IsFinerThanAMicrosecond(dtype)) {
+		// No Python value holds the nanoseconds; the engine's cast into the column then treats them as it treats a
+		// datetime64[ns] column of a frame
+		auto nanoseconds = cell.attr("astype")("datetime64[ns]").attr("item")();
+		if (nanoseconds.is_none()) {
+			return nanoseconds;
+		}
+		timestamp = timestamp_ns_t(nb::cast<int64_t>(nanoseconds));
+		return nb::object();
+	}
+	nb::object value;
+	if (kind == "m" && IsFinerThanAMicrosecond(dtype)) {
+		value = cell.attr("astype")("timedelta64[us]").attr("item")();
+	} else {
+		value = cell.attr("item")();
+	}
+	return IsNumpyScalar(value) ? nb::borrow(cell) : value;
+}
+
 string TransformPythonString(nb::handle str) {
 	Py_ssize_t size;
 	const char *data = PyUnicode_AsUTF8AndSize(str.ptr(), &size);
@@ -241,68 +325,31 @@ int64_t NanosecondOf(nb::handle cell) {
 }
 
 bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto datetime_type = import_cache.datetime.datetime();
-	if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(datetime_type.ptr())) {
+	auto datetime_type = DuckDBPyConnection::ImportCache()->datetime.datetime();
+	if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(datetime_type.ptr()) ||
+	    !duckdb::PyUtil::IsInstance(cell, datetime_type)) {
 		return false;
 	}
-	if (duckdb::PyUtil::IsInstance(cell, datetime_type)) {
-		// A Timestamp without nanoseconds reads as the datetime it is: its value in nanoseconds overflows outside the
-		// years 1677 to 2262, and a coarser column would judge that value by a cast where the datetime fits outright
-		if (NanosecondOf(cell) <= 0 || !nb::getattr(cell, "tzinfo").is_none()) {
-			return false;
-		}
-		nanoseconds = timestamp_ns_t(nb::cast<int64_t>(cell.attr("value")));
-		return true;
+	// A Timestamp without nanoseconds reads as the datetime it is: its value in nanoseconds overflows outside the
+	// years 1677 to 2262, and a coarser column would judge that value by a cast where the datetime fits outright
+	if (NanosecondOf(cell) <= 0 || !nb::getattr(cell, "tzinfo").is_none()) {
+		return false;
 	}
-	if (duckdb::PyUtil::IsInstance(cell, import_cache.numpy.datetime64())) {
-		auto code = nb::cast<string>(cell.attr("dtype").attr("str"));
-		if (!StringUtil::EndsWith(code, "ns]") && !StringUtil::EndsWith(code, "ps]") &&
-		    !StringUtil::EndsWith(code, "fs]") && !StringUtil::EndsWith(code, "as]")) {
-			return false;
-		}
-		auto value = cell.attr("astype")("datetime64[ns]").attr("item")();
-		if (value.is_none()) {
-			return false;
-		}
-		nanoseconds = timestamp_ns_t(nb::cast<int64_t>(value));
-		return true;
-	}
-	return false;
-}
-
-nb::object NumpyScalarItem(nb::handle scalar) {
-	auto kind = nb::cast<string>(scalar.attr("dtype").attr("kind"));
-	if (kind == "M") {
-		return scalar.attr("astype")("datetime64[us]").attr("item")();
-	}
-	if (kind == "m") {
-		return scalar.attr("astype")("timedelta64[us]").attr("item")();
-	}
-	return scalar.attr("item")();
+	nanoseconds = timestamp_ns_t(nb::cast<int64_t>(cell.attr("value")));
+	return true;
 }
 
 Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
                          bool nan_as_null) {
-	switch (target_type.id()) {
-	case LogicalTypeId::TIMESTAMP_NS: {
-		timestamp_ns_t nanoseconds;
-		if (HoldsNanoseconds(ele, nanoseconds)) {
-			return Value::TIMESTAMPNS(nanoseconds);
-		}
-		break;
+	timestamp_ns_t nanoseconds;
+	if (target_type.id() == LogicalTypeId::TIMESTAMP_NS && HoldsNanoseconds(ele, nanoseconds)) {
+		return Value::TIMESTAMPNS(nanoseconds);
 	}
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_SEC:
-		if (duckdb::PyUtil::IsInstance(ele, DuckDBPyConnection::ImportCache()->numpy.datetime64())) {
-			return TransformPythonValue(context, NumpyScalarItem(ele), LogicalType::UNKNOWN, nan_as_null);
-		}
-		break;
-	default:
-		break;
+	auto plain = PythonValueOfNumpyScalar(ele, nanoseconds);
+	if (!plain.is_valid()) {
+		return Value::TIMESTAMPNS(nanoseconds);
 	}
-	return TransformPythonValue(context, ele, LogicalType::UNKNOWN, nan_as_null);
+	return TransformPythonValue(context, plain, LogicalType::UNKNOWN, nan_as_null);
 }
 
 //! Whether an object is what a shape is for: a dict for a MAP or a STRUCT, a list for a LIST or an ARRAY; any other
@@ -679,26 +726,6 @@ struct ContiguousBuffer {
 
 	Py_buffer view;
 };
-
-// Importing pandas here instead would run the import on whichever thread of the query converts the value, and a None
-// entry in sys.modules is how a program blocks the import
-bool PandasIsImported(PythonImportCache &import_cache) {
-	if (import_cache.pandas.LoadSucceeded()) {
-		return true;
-	}
-	// Interned once: building the key on every call, or asking the import cache about a module it has not loaded,
-	// costs an allocation for every converted value
-	static PyObject *const name = PyUnicode_InternFromString("pandas");
-	if (!name) {
-		PyErr_Clear();
-		return false;
-	}
-	auto module = PyDict_GetItemWithError(PyImport_GetModuleDict(), name);
-	if (!module && PyErr_Occurred()) {
-		PyErr_Clear();
-	}
-	return module && module != Py_None;
-}
 
 bool NumpyMaIsImported() {
 	nb::str name("numpy.ma");

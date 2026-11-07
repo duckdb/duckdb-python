@@ -83,21 +83,26 @@ void CheckColumnArray(const string &column, nb::handle array, idx_t row_count, c
 //! a column whose chunks are shorter than this on average is cheaper to convert.
 static constexpr idx_t ARROW_ROWS_PER_CHUNK = 50;
 
-//! The column read from its own chunks, or null when it is to be converted with to_numpy instead
+//! The column read from its own chunks, decoded first when they are dictionary encoded, or null when it is to be
+//! converted with to_numpy instead
 static unique_ptr<PandasArrowColumn> BindArrowStringColumn(ClientContext &context, const string &name,
                                                            nb::handle pandas_array, idx_t row_count,
                                                            const string &counted_from) {
 	nb::object chunked_array = pandas_array.attr("__arrow_array__")();
-	nb::object pyarrow_type = chunked_array.attr("type");
 	// Before pyarrow 14 nothing exports through capsules.
-	if (!PyUtil::HasAttribute(pyarrow_type, "__arrow_c_schema__")) {
+	if (!PyUtil::HasAttribute(chunked_array.attr("type"), "__arrow_c_schema__")) {
 		return nullptr;
 	}
-	if (row_count < ARROW_ROWS_PER_CHUNK * nb::cast<idx_t>(chunked_array.attr("num_chunks"))) {
+	if (nb::cast<bool>(nb::module_::import_("pyarrow.types").attr("is_dictionary")(chunked_array.attr("type")))) {
+		// pandas 2 keeps the dictionary its array was built from, which pandas 2.2 cannot convert with to_numpy before
+		// pyarrow 25, so it is decoded chunk by chunk and read here at any chunk length; combining the chunks first
+		// would merge their dictionaries into the original index type, which a few hundred values overflow.
+		chunked_array = chunked_array.attr("cast")(chunked_array.attr("type").attr("value_type"));
+	} else if (row_count < ARROW_ROWS_PER_CHUNK * nb::cast<idx_t>(chunked_array.attr("num_chunks"))) {
 		return nullptr;
 	}
 	auto subject = StringUtil::Format("column '%s'", name);
-	nb::object schema = pyarrow_type.attr("__arrow_c_schema__")();
+	nb::object schema = chunked_array.attr("type").attr("__arrow_c_schema__")();
 	auto arrow_type = ArrowType::GetArrowLogicalType(context, InCapsule<ArrowSchema>(schema, "arrow_schema", subject));
 	// Only a plain layout may be read without the engine adopting the chunks.
 	if (arrow_type->GetDuckType().id() != LogicalTypeId::VARCHAR ||

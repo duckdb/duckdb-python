@@ -663,7 +663,7 @@ class TestReleases:
             pytest.param(
                 core._shorten_first_column,
                 "Arrow array child length does not match the array length:"
-                f" column 0 holds 1 rows where {LARGE_BATCH} were expected",
+                f" column 'i' holds 1 rows where {LARGE_BATCH} were expected",
                 id="short_column",
             ),
             pytest.param(
@@ -892,8 +892,9 @@ STRUCT_VALUES = [{"i": 1, "s": "a"}, {"i": 2, "s": "b"}, {"i": 3, "s": "c"}]
 
 
 def _list_of_dictionary(empty, valued):
-    indices = pa.array(np.arange(2 * valued, dtype=np.int32) % 3)
-    child = pa.DictionaryArray.from_arrays(indices, pa.array(["x", "y", "z"]))
+    # Every list element names its own dictionary entry, in reverse, so a decode shifted by any amount reads other text.
+    indices = pa.array(np.arange(2 * valued, dtype=np.int32)[::-1])
+    child = pa.DictionaryArray.from_arrays(indices, pa.array([f"v{index}" for index in range(2 * valued)]))
     offsets = [0] * (empty + 1) + [2 * (i + 1) for i in range(valued)]
     return pa.ListArray.from_arrays(pa.array(offsets, pa.int32()), child)
 
@@ -926,3 +927,4 @@ class TestEngineConversions:
             assert con.execute("SELECT count(*), sum(len(l)) FROM src").fetchall() == expected
             assert con.execute(f"SELECT l FROM src LIMIT 5 OFFSET {empty - 2}").fetchall() == first_valued
             assert con.execute(f"SELECT l FROM src OFFSET {len(column) - 3}").fetchall() == last
+            assert con.execute("SELECT l FROM src").fetchall() == [(value,) for value in column.to_pylist()]

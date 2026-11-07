@@ -242,10 +242,6 @@ def _params(cases, ops, marks_for, shapes=SHAPES):
     return params
 
 
-def _xfail(reason, raises):
-    return [pytest.mark.xfail(strict=True, raises=raises, reason=reason)]
-
-
 def _no_marks(case, op):
     return []
 
@@ -663,7 +659,6 @@ def test_zoned_timestamp_parquet_dataset_matches_native(duckdb_cursor, tmp_path,
     assert_fully_pushed(duckdb_cursor, _arrow_query(predicate), len(expected))
 
 
-OFF_GRID_PRUNING = "per unit rounding: an off grid constant prunes only once it is rounded into the column's unit"
 PRUNING_CONSTANTS_MS = {"on_grid": 799, "off_grid": 799.5}
 
 
@@ -699,15 +694,127 @@ def test_zoned_timestamp_parquet_pruning_filter_matches_hand_rows(duckdb_cursor,
     assert _pruning_count(duckdb_cursor, PRUNING_CONSTANTS_MS[constant]) == (200,)
 
 
-@pytest.mark.parametrize(
-    "constant",
-    [
-        pytest.param("on_grid"),
-        pytest.param("off_grid", marks=_xfail(OFF_GRID_PRUNING, AssertionError)),
-    ],
-)
+@pytest.mark.parametrize("constant", list(PRUNING_CONSTANTS_MS))
 @pytest.mark.parametrize("column_zone", ["UTC", NEW_YORK])
 def test_zoned_timestamp_parquet_row_group_pruning(duckdb_cursor, tmp_path, column_zone, constant):
     fragment, captured = _register_capturing_parquet(duckdb_cursor, tmp_path, column_zone)
     _pruning_count(duckdb_cursor, PRUNING_CONSTANTS_MS[constant])
     assert fragment.subset(captured[-1]).num_row_groups == 2
+
+
+def _time_literal(micros):
+    return f"TIME '{dt.datetime(1970, 1, 1) + dt.timedelta(microseconds=micros):%H:%M:%S.%f}'"
+
+
+# A column of the points base to base + 999 of its unit in ten row groups of 100, and a constant on the point
+# base + 299 or a third of a point past it; > keeps the 700 rows above it and the seven row groups that hold them.
+PRUNING_COLUMNS = {
+    "zoned_ms_off_grid": (pa.timestamp("ms", tz=NEW_YORK), 0, 333, _micros_literal),
+    "zoned_ms_on_grid_before_1970": (pa.timestamp("ms", tz="UTC"), -500, 0, _micros_literal),
+    "time_ms_on_grid": (pa.time32("ms"), 0, 0, _time_literal),
+    "time_ms_off_grid": (pa.time32("ms"), 0, 333, _time_literal),
+}
+
+
+# Constants on a point of the column, a third of a point above one, one microsecond below one, and a third of a point
+# above one before 1970: the forms the comparison takes in the column's unit.
+COLUMN_UNIT_CONSTANTS = {
+    "on_grid": lambda step: 10 * step,
+    "third_above": lambda step: 10 * step + step // 3,
+    "just_below": lambda step: 10 * step - 1,
+    "third_above_before_1970": lambda step: -10 * step + step // 3,
+}
+COLUMN_UNIT_PREDICATES = {
+    "eq": "p = {c}",
+    "ne": "p <> {c}",
+    "lt": "p < {c}",
+    "le": "p <= {c}",
+    "gt": "p > {c}",
+    "ge": "p >= {c}",
+    "not_eq": "NOT (p = {c})",
+    "not_ne": "NOT (p <> {c})",
+    "between": "p BETWEEN {c} AND {c3}",
+}
+
+
+COLUMN_UNIT_KINDS = {
+    "zoned_ms": pa.timestamp("ms", tz=NEW_YORK),
+    "zoned_s": pa.timestamp("s", tz="UTC"),
+    "time_ms": pa.time32("ms"),
+    "time_s": pa.time32("s"),
+}
+
+
+@pytest.mark.parametrize("op", list(COLUMN_UNIT_PREDICATES))
+@pytest.mark.parametrize("shape", ["column", "in_null_struct"])
+@pytest.mark.parametrize(
+    ("kind", "constant", "storage"),
+    [
+        pytest.param(kind, constant, storage, id=f"{storage}-{name}-{constant}")
+        for name, kind in COLUMN_UNIT_KINDS.items()
+        for constant in COLUMN_UNIT_CONSTANTS
+        # Parquet reads a column of seconds back in milliseconds, so only a Dataset in memory keeps seconds.
+        for storage in (["in_memory"] if kind.unit == "s" else ["parquet", "in_memory"])
+        if not (pa.types.is_time(kind) and constant.endswith("before_1970"))
+    ],
+)
+def test_dataset_rows_for_every_comparison_in_the_column_unit(
+    duckdb_cursor, tmp_path, kind, constant, storage, shape, op
+):
+    # The dataset takes the whole filter, so the rows are those of the comparison built in the column's unit.
+    pq = pytest.importorskip("pyarrow.parquet")
+    pa_ds = pytest.importorskip("pyarrow.dataset")
+    is_time = pa.types.is_time(kind)
+    step = 1_000_000 // {"s": 1, "ms": 1_000}[kind.unit]
+    points = range(40) if is_time else range(-20, 20)
+    column = pa.array([*points, None, None], pa.int32() if is_time else pa.int64()).cast(kind)
+    if shape == "in_null_struct":
+        # A NULL parent makes its field NULL, also where the field's own array holds a value.
+        column = pa.StructArray.from_arrays([column], ["p"], mask=pa.array([index % 5 == 3 for index in range(42)]))
+    table = pa.table({"x": list(range(1, len(column) + 1)), "p" if shape == "column" else "s": column})
+    if storage == "parquet":
+        pq.write_table(table, tmp_path / "points.parquet", row_group_size=4)
+        dataset = pa_ds.dataset(tmp_path / "points.parquet")
+    else:
+        dataset = pa_ds.dataset(table.to_batches(max_chunksize=4))
+    assert (
+        dataset.schema.field("p").type if shape == "column" else dataset.schema.field("s").type.field("p").type
+    ) == kind
+    duckdb_cursor.execute(f"SET TimeZone = '{NEW_YORK}'")
+    duckdb_cursor.register("arrow_t", dataset)
+    duckdb_cursor.execute("CREATE TABLE native_t AS SELECT * FROM arrow_t")
+    literal = _time_literal if is_time else _micros_literal
+    at = COLUMN_UNIT_CONSTANTS[constant](step)
+    predicate = COLUMN_UNIT_PREDICATES[op].format(c=literal(at), c3=literal(at + 3 * step))
+    if shape == "in_null_struct":
+        predicate = predicate.replace("p ", "s.p ")
+    expected = _rows(duckdb_cursor, "native_t", predicate)
+    assert _arrow_rows(duckdb_cursor, predicate) == expected
+    assert_fully_pushed(duckdb_cursor, _arrow_query(predicate), len(expected))
+
+
+@pytest.mark.parametrize("column", list(PRUNING_COLUMNS))
+def test_parquet_row_group_pruning_in_the_column_unit(duckdb_cursor, tmp_path, column):
+    pq = pytest.importorskip("pyarrow.parquet")
+    pa_ds = pytest.importorskip("pyarrow.dataset")
+    kind, base, past, literal = PRUNING_COLUMNS[column]
+    step = 1_000
+    storage = pa.int64() if pa.types.is_timestamp(kind) else pa.int32()
+    path = tmp_path / "points.parquet"
+    points = pa.array(range(base, base + 1000), storage).cast(kind)
+    pq.write_table(pa.table({"x": list(range(1000)), "p": points}), path, row_group_size=100)
+    source = pa_ds.dataset(path)
+    captured = []
+
+    class FilterCapturingDataset(pa_ds.FileSystemDataset):
+        def scanner(self, **kwargs):
+            captured.append(kwargs.get("filter"))
+            return super().scanner(**kwargs)
+
+    duckdb_cursor.execute(f"SET TimeZone = '{NEW_YORK}'")
+    duckdb_cursor.register(
+        "arrow_t", FilterCapturingDataset(list(source.get_fragments()), source.schema, source.format, source.filesystem)
+    )
+    predicate = f"p > {literal((base + 299) * step + past)}"
+    assert _rows(duckdb_cursor, "arrow_t", predicate) == [(x,) for x in range(300, 1000)]
+    assert next(iter(source.get_fragments())).subset(captured[-1]).num_row_groups == 7

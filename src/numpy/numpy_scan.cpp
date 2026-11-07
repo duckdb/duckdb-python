@@ -306,30 +306,20 @@ private:
 
 //! A declared column converts a cell as the appender converts a value of a row: with the type the value has in
 //! Python, then the engine's cast into the column's type, which reads the connection's settings; NaN reads NULL at
-//! every depth, and a value without a DuckDB type of its own reads as its text in a text column
-//! A numpy scalar, or an array of no dimensions, reads as its Python value (NumpyScalarItem)
-static bool IsNumpyScalar(nb::handle cell) {
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (nb::isinstance(cell, import_cache.numpy.generic())) {
-		return true;
-	}
-	// A subclass is not taken: numpy.ma.masked and a masked array of no dimensions carry a payload under their mask
-	return cell.type().is(import_cache.numpy.ndarray()) && nb::cast<idx_t>(cell.attr("ndim")) == 0;
-}
-
+//! every depth, a numpy scalar reads as its Python value (a datetime64 finer than a microsecond as a TIMESTAMP_NS),
+//! and an object without a DuckDB type reads as its text into a stated VARCHAR and has no kind for an implied one.
 //! The cell converts with the column type's shape (KeyedShape) as its target, or with UNKNOWN for a type that takes
 //! none; a type holding a MAP needs one: without it a dict reads as a STRUCT named by its keys' text, and a key whose
 //! text does not cast back, such as bytes, is lost. Both are built once per vector, since building a type looks up
 //! its type information each time.
-//! An object without a DuckDB type reads as its text into a stated VARCHAR, and has no kind for an implied one.
 static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb::handle cell, const LogicalType &shape,
                            bool implied) {
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
-	// A TIMESTAMP_NS column keeps a cell's nanoseconds, and an implied naive timestamp type sees them, so its kind
-	// check refuses what a coarser unit would drop; a stated coarser type reads the cell at microseconds, as a frame's
-	// own datetime64 column reads
+	// A TIMESTAMP_NS column keeps a pandas Timestamp's nanoseconds, and an implied naive timestamp type sees them, so
+	// its kind check refuses what a coarser unit would drop; a stated coarser type reads the Timestamp as the datetime
+	// it also is
 	auto naive_timestamp =
 	    target.id() == LogicalTypeId::TIMESTAMP_NS ||
 	    (implied && (target.id() == LogicalTypeId::TIMESTAMP || target.id() == LogicalTypeId::TIMESTAMP_MS ||
@@ -338,17 +328,19 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	if (naive_timestamp && HoldsNanoseconds(cell, nanoseconds)) {
 		return Value::TIMESTAMPNS(nanoseconds);
 	}
-	if (IsNumpyScalar(cell)) {
-		auto value = NumpyScalarItem(cell);
-		// A long double's item() is a numpy scalar again; one step, then the conversion refuses what is left
-		if (!IsNumpyScalar(value)) {
-			return DeclaredValue(context, target, value, shape, implied);
-		}
+	auto plain = PythonValueOfNumpyScalar(cell, nanoseconds);
+	if (!plain.is_valid()) {
+		return Value::TIMESTAMPNS(nanoseconds);
 	}
-	if (!implied && target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(cell) == PythonObjectType::Other) {
-		return Value(TransformPythonString(nb::str(cell)));
+	nb::handle value = plain;
+	// A NaT reads as None
+	if (value.ptr() == Py_None) {
+		return Value();
 	}
-	return TransformPythonValue(context, cell, shape, true);
+	if (!implied && target.id() == LogicalTypeId::VARCHAR && GetPythonObjectType(value) == PythonObjectType::Other) {
+		return Value(TransformPythonString(nb::str(value)));
+	}
+	return TransformPythonValue(context, value, shape, true);
 }
 
 //! The type a cell of a nested type converts with: its containers and its naive timestamps and no other type, so a
@@ -384,7 +376,7 @@ static LogicalType KeyedShape(const LogicalType &type, bool typed_entries) {
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		// An implied type sees the nanoseconds a coarser unit would drop, so its kind check refuses them; a stated one
-		// reads them at microseconds, as at the top
+		// takes them through the engine's cast into its unit, as at the top
 		return AsShape(typed_entries ? type : LogicalType::TIMESTAMP_NS);
 	default:
 		return LogicalType::UNKNOWN;

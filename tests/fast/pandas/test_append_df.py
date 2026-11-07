@@ -275,19 +275,55 @@ class TestAppendObjectColumnsToDeclaredTypes:
             pytest.param(
                 "BOOLEAN", _outside_the_sample(True, np.bool_(False)), True, False, id="numpy_bool_into_boolean"
             ),
+            # The engine's TIMESTAMP_NS cast rounds both to the nearest microsecond, as for a datetime64[ns] column
             pytest.param(
                 "TIMESTAMP",
                 _outside_the_sample(NAIVE, np.datetime64("2024-05-08T01:02:03.123456789", "ns")),
                 NAIVE,
-                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123457),
                 id="numpy_datetime_into_timestamp",
             ),
             pytest.param(
                 "TIMESTAMP",
                 _outside_the_sample(NAIVE, np.array("2024-05-08T01:02:03.123456789", dtype="datetime64[ns]")),
                 NAIVE,
-                datetime.datetime(2024, 5, 8, 1, 2, 3, 123456),
+                datetime.datetime(2024, 5, 8, 1, 2, 3, 123457),
                 id="numpy_zero_dimensional_datetime_into_timestamp",
+            ),
+            pytest.param(
+                "VARCHAR",
+                _outside_the_sample("a", np.datetime64("2024-05-08", "D")),
+                "a",
+                "2024-05-08",
+                id="numpy_day_datetime_into_varchar_reads_as_its_date",
+            ),
+            pytest.param(
+                "VARCHAR",
+                _outside_the_sample("a", np.str_("ab\x00")),
+                "a",
+                "ab\x00",
+                id="numpy_str_into_varchar_keeps_a_trailing_nul",
+            ),
+            pytest.param(
+                "VARCHAR",
+                _outside_the_sample("a", np.str_("\x00\x00")),
+                "a",
+                "\x00\x00",
+                id="numpy_str_of_nuls_into_varchar_keeps_them",
+            ),
+            pytest.param(
+                "BLOB",
+                _outside_the_sample(b"a", np.bytes_(b"\x01\x00")),
+                b"a",
+                b"\x01\x00",
+                id="numpy_bytes_into_blob_keeps_a_trailing_nul",
+            ),
+            pytest.param(
+                "BLOB",
+                _outside_the_sample(b"a", np.bytes_(b"\x00\x00")),
+                b"a",
+                b"\x00\x00",
+                id="numpy_bytes_of_nuls_into_blob_keeps_them",
             ),
             pytest.param(
                 "STRUCT(x VARCHAR)",
