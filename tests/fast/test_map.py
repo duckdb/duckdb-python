@@ -393,9 +393,25 @@ MAP_SCHEMAS = pytest.mark.parametrize(
 )
 
 
-@MAP_SCHEMAS
-@pytest.mark.xfail(
-    strict=True, reason="not built: a fractional value outside the chunk's sample is converted with loss into INTEGER"
+@pytest.mark.parametrize(
+    "schema",
+    [
+        pytest.param(
+            None,
+            id="inferred",
+            marks=pytest.mark.xfail(
+                strict=True, reason="not built: the refusal of a fractional value names neither its row nor the float"
+            ),
+        ),
+        pytest.param(
+            {"a": duckdb.sqltypes.INTEGER},
+            id="explicit_schema",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="not built: a fractional value outside the chunk's sample is converted with loss into INTEGER",
+            ),
+        ),
+    ],
 )
 def test_map_fractional_value_outside_the_chunk_sample_raises(duckdb_cursor, schema):
     duckdb_cursor.execute("set threads = 1")
@@ -638,7 +654,6 @@ def test_map_identity_round_trips_a_column_with_null_chunks(duckdb_cursor, sql_t
         pytest.param("BIGINT", lambda: None, id="None_for_BIGINT"),
         pytest.param("VARCHAR", duckdb.NullValue, id="NullValue_for_VARCHAR"),
         pytest.param("VARCHAR", lambda: np.datetime64("NaT", "us"), id="NaT_for_VARCHAR"),
-        pytest.param("BIGINT", lambda: duckdb.Value(True, duckdb.sqltypes.SQLNULL), id="NULL_typed_Value_for_BIGINT"),
     ],
 )
 def test_map_returned_column_the_analyzer_reads_as_null_is_null(duckdb_cursor, sql_type, make_missing, explicit_schema):

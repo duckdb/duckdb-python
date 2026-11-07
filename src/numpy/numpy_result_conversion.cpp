@@ -1,5 +1,6 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb_python/numpy/numpy_result_conversion.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 namespace duckdb {
 
@@ -44,6 +45,20 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 		D_ASSERT(data.mask->count == count);
 	}
 #endif
+}
+
+nb::object EnumCategoricalDtype(const LogicalType &enum_type) {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	auto categorical_dtype = DuckDBPyConnection::ImportCache()->pandas.CategoricalDtype();
+	if (!categorical_dtype) {
+		throw InvalidInputException("'pandas' is required for this operation but it was not installed");
+	}
+	auto &values = EnumType::GetValuesInsertOrder(enum_type);
+	nb::list categories;
+	for (idx_t i = 0; i < EnumType::GetSize(enum_type); i++) {
+		categories.append(nb::cast(values.GetValue(i).ToString()));
+	}
+	return categorical_dtype(categories, true);
 }
 
 } // namespace duckdb

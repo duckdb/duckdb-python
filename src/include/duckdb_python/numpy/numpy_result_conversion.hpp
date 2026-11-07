@@ -38,4 +38,7 @@ private:
 	bool pandas;
 };
 
+//! The dtype df() gives an ENUM column: a pandas CategoricalDtype over the enum's values in order, ordered
+nb::object EnumCategoricalDtype(const LogicalType &enum_type);
+
 } // namespace duckdb

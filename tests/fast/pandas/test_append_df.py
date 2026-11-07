@@ -1,7 +1,9 @@
+import collections
 import datetime
 import enum
 import math
 import pathlib
+import re
 import zoneinfo
 from decimal import Decimal
 
@@ -458,9 +460,316 @@ class TestAppendObjectColumnsToDeclaredTypes:
         with pytest.raises(duckdb.InvalidInputException, match=r"(?i)duplicat|unique"):
             duckdb_cursor.append("t", frame)
 
+    @pytest.mark.parametrize(
+        ("key_type", "key"),
+        [
+            pytest.param("BLOB", b"\x00ab", id="bytes"),
+            pytest.param("INTERVAL", datetime.timedelta(days=1), id="timedelta"),
+        ],
+    )
+    def test_dict_key_whose_text_does_not_cast_back_keeps_its_value_in_a_map(self, duckdb_cursor, key_type, key):
+        duckdb_cursor.execute(f"CREATE TABLE t (a MAP({key_type}, INTEGER), b STRUCT(m MAP({key_type}, INTEGER)))")
+        frame = pd.DataFrame(
+            {"a": pd.Series([{key: 1}, None], dtype=object), "b": pd.Series([{"m": {key: 2}}, None], dtype=object)}
+        )
+        duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.table("t").fetchall() == [({key: 1}, {"m": {key: 2}}), (None, None)]
+
+    @pytest.mark.parametrize(
+        ("target", "cell", "expected"),
+        [
+            pytest.param("MAP(VARCHAR, INTEGER)", {"k": None}, {"k": None}, id="scalar_values"),
+            pytest.param("MAP(VARCHAR, STRUCT(x INTEGER))", {"k": None}, {"k": None}, id="struct_values"),
+            pytest.param("MAP(VARCHAR, MAP(BLOB, INTEGER))", {"k": {b"z": None}}, {"k": {b"z": None}}, id="nested_map"),
+        ],
+    )
+    def test_map_of_only_null_values_appends_them(self, duckdb_cursor, target, cell, expected):
+        duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        assert duckdb_cursor.table("t").fetchall() == [(expected,)]
+
+    @pytest.mark.parametrize(
+        "value", [datetime.datetime(2024, 5, 6, 12, 0), "2024-05-06 12:00:00"], ids=["naive_datetime", "text"]
+    )
+    def test_map_value_into_timestamptz_reads_in_the_session_time_zone(self, duckdb_cursor, value):
+        duckdb_cursor.execute("SET TimeZone = 'Europe/Amsterdam'")
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, TIMESTAMPTZ))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{"k": value}], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a['k']::VARCHAR FROM t").fetchall() == [("2024-05-06 12:00:00+02",)]
+
+    @pytest.mark.parametrize(
+        ("target", "key", "expected"),
+        [
+            pytest.param("TIMESTAMP_NS", datetime.datetime(2020, 1, 1), "{'2020-01-01 00:00:00'=1}", id="timestamp_ns"),
+            pytest.param("TIMESTAMP_MS", datetime.datetime(2020, 1, 1), "{'2020-01-01 00:00:00'=1}", id="timestamp_ms"),
+            pytest.param("TIMESTAMP_S", datetime.datetime(2020, 1, 1), "{'2020-01-01 00:00:00'=1}", id="timestamp_s"),
+            pytest.param("DATE", datetime.datetime(2020, 1, 1, 5), "{2020-01-01=1}", id="date_from_datetime"),
+            pytest.param(
+                "TIMESTAMPTZ", datetime.datetime(2020, 1, 1), "{'2020-01-01 00:00:00-05'=1}", id="timestamptz_naive"
+            ),
+            pytest.param("TIMESTAMPTZ", "2020-01-01 00:00:00", "{'2020-01-01 00:00:00-05'=1}", id="timestamptz_text"),
+            pytest.param("DECIMAL(9,2)", 1.257, "{1.26=1}", id="decimal_from_float"),
+        ],
+    )
+    def test_map_key_meets_the_cast_in_the_session_settings(self, duckdb_cursor, target, key, expected):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a MAP({target}, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{key: 1}], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    @pytest.mark.parametrize(
+        ("target", "key", "expected"),
+        [
+            # The engine's cast reads the instant in the session's time zone; 2.0.0 dropped the offset
+            pytest.param(
+                "TIMESTAMP",
+                datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
+                "{'2019-12-31 19:00:00'=1}",
+                id="aware_datetime_into_timestamp",
+            ),
+            # The cast from BLOB gives the bytes' text; 2.0.0 gave the text of the Python bytes object
+            pytest.param("VARCHAR", b"x", "{x=1}", id="bytes_into_varchar"),
+            pytest.param("VARCHAR", True, "{true=1}", id="bool_into_varchar"),
+            pytest.param("VARCHAR", datetime.timedelta(days=1), "{1 day=1}", id="timedelta_into_varchar"),
+            pytest.param("VARCHAR", (1, 2), "{'[1, 2]'=1}", id="tuple_into_varchar"),
+        ],
+    )
+    def test_map_key_reads_as_the_cast_from_its_python_type_gives_it(self, duckdb_cursor, target, key, expected):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a MAP({target}, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{key: 1}], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    def test_map_key_given_as_a_tuple_for_a_struct_key_type_reads_as_a_list_and_is_refused(self, duckdb_cursor):
+        # A tuple is a LIST at every depth, as the appender reads a value of a row; 2.0.0 read this key through its text
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(STRUCT(a INTEGER), INTEGER))")
+        frame = pd.DataFrame({"a": pd.Series([{(1,): 1}], dtype=object)})
+        expected = "Unimplemented type for cast (INTEGER[] -> STRUCT(a INTEGER))"
+        with pytest.raises(duckdb.ConversionException, match=re.escape(expected)):
+            duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
+
+    @pytest.mark.parametrize(
+        ("target", "value", "expected"),
+        [
+            pytest.param(
+                "TIMESTAMPTZ",
+                datetime.datetime(2024, 5, 6),
+                "{k='2024-05-06 00:00:00-04'}",
+                id="naive_datetime_into_timestamptz",
+            ),
+            pytest.param("VARCHAR", b"x", "{k=x}", id="bytes_into_varchar"),
+            pytest.param("DECIMAL(9,2)", 1.5, "{k=1.50}", id="float_into_decimal"),
+            pytest.param(
+                "TIMESTAMP_NS",
+                datetime.datetime(2024, 5, 6),
+                "{k='2024-05-06 00:00:00'}",
+                id="datetime_into_timestamp_ns",
+            ),
+        ],
+    )
+    def test_map_of_key_and_value_lists_reads_each_entry_as_the_same_dict_does(
+        self, duckdb_cursor, target, value, expected
+    ):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a MAP(VARCHAR, {target}))")
+        frame = pd.DataFrame({"a": pd.Series([{"key": ["k"], "value": [value]}, {"k": value}], dtype=object)})
+        duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,), (expected,)]
+
+    def test_aware_timestamp_without_nanoseconds_reads_in_the_session_time_zone(self, duckdb_cursor):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMP)")
+        stamp = pd.Timestamp("2020-01-01 00:00", tz="UTC")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([stamp, stamp.to_pydatetime()], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [
+            ("2019-12-31 19:00:00",),
+            ("2019-12-31 19:00:00",),
+        ]
+
+    def test_struct_dicts_with_keys_out_of_field_order_read_each_field_by_name(self, duckdb_cursor):
+        # Each dict's keys in reverse field order, for twelve STRUCT types and one inside a LIST; the TIMESTAMP_NS and
+        # BLOB keyed MAP fields read their nanoseconds and bytes only when the key finds its field
+        nanosecond = pd.Timestamp("2020-01-01 00:00:00.000000001")
+
+        def fields(i):
+            return f"a{i} INTEGER, t{i} TIMESTAMP_NS, m{i} MAP(BLOB, INTEGER)"
+
+        def cell(i, row):
+            return {f"m{i}": {b"\x00k": row}, f"t{i}": nanosecond, f"a{i}": row}
+
+        inner = [f"s{i} STRUCT({fields(i)})" for i in range(12)]
+        duckdb_cursor.execute(f"CREATE TABLE t (i INTEGER, a STRUCT({', '.join(inner)}, l STRUCT({fields(12)})[]))")
+        cells = [{"l": [cell(12, row)], **{f"s{i}": cell(i, row) for i in reversed(range(12))}} for row in range(3000)]
+        duckdb_cursor.append("t", pd.DataFrame({"i": range(3000), "a": pd.Series(cells, dtype=object)}))
+        places = [(f"a.s{i}", i) for i in range(12)] + [("a.l[1]", 12)]
+        columns = ", ".join(f"{place}.a{i}, {place}.t{i}::VARCHAR, {place}.m{i}" for place, i in places)
+        expected = [(row, "2020-01-01 00:00:00.000000001", {b"\x00k": row}) * len(places) for row in range(3000)]
+        assert duckdb_cursor.sql(f"SELECT {columns} FROM t ORDER BY i").fetchall() == expected
+
+    def test_struct_append_inside_a_conversion_keeps_the_outer_scans_field_index(self, duckdb_cursor):
+        # A tzinfo's utcoffset that appends on another connection runs a declared scan inside this one's, between
+        # this dict's out of order keys; with one thread that scan runs on this thread, which holds the index
+        other = duckdb.connect(config={"threads": 1})
+        other.execute("CREATE TABLE y (c BIGINT)")
+
+        class Appending(datetime.tzinfo):
+            def utcoffset(self, dt):
+                other.append("y", pd.DataFrame({"c": pd.Series([1, 2, 3], dtype=object)}))
+                return datetime.timedelta(0)
+
+            def dst(self, dt):
+                return datetime.timedelta(0)
+
+            def tzname(self, dt):
+                return "UTC"
+
+        fields = [f"f{j}" for j in range(30)]
+        integers = ", ".join(f"{f} INTEGER" for f in fields)
+        duckdb_cursor.execute(
+            f"CREATE TABLE t (a STRUCT(t TIMESTAMPTZ, {integers}, n TIMESTAMP_NS, m MAP(BLOB, INTEGER)))"
+        )
+        moment = datetime.datetime(2020, 1, 1, tzinfo=Appending())
+        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001")
+        # The fields after the callback read right only through the index: n keeps its nanosecond, m its bytes keys
+        cells = [
+            {"f29": row, "t": moment, "n": stamp, "m": {b"\x00k": row}, **dict.fromkeys(reversed(fields[:-1]), row)}
+            for row in range(20)
+        ]
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
+        rows = duckdb_cursor.sql("SELECT a.f0, a.f29, a.n::VARCHAR, a.m FROM t ORDER BY a.f0").fetchall()
+        assert rows == [(row, row, "2020-01-01 00:00:00.000000001", {b"\x00k": row}) for row in range(20)]
+        assert other.sql("SELECT count(*) > 0 FROM y").fetchall() == [(True,)]
+        other.close()
+
+    @pytest.mark.parametrize(
+        ("target", "cell", "expected"),
+        [
+            pytest.param("TIMESTAMPTZ_NS", "stamp", "2020-01-01 00:00:00.000000001+00", id="top"),
+            pytest.param(
+                "STRUCT(t TIMESTAMPTZ_NS)", {"t": "stamp"}, "{'t': '2020-01-01 00:00:00.000000001+00'}", id="field"
+            ),
+            pytest.param("TIMESTAMPTZ_NS[]", ["stamp"], "['2020-01-01 00:00:00.000000001+00']", id="list_element"),
+            pytest.param(
+                "MAP(VARCHAR, TIMESTAMPTZ_NS)", {"k": "stamp"}, "{k='2020-01-01 00:00:00.000000001+00'}", id="map_value"
+            ),
+        ],
+    )
+    @pytest.mark.parametrize("zone", ["UTC", "America/New_York"], ids=["UTC", "America_New_York"])
+    def test_zoned_timestamp_with_nanoseconds_keeps_them_in_a_timestamptz_ns(
+        self, duckdb_cursor, target, cell, expected, zone
+    ):
+        # The same instant in either zone, so a reading of the wall time instead would differ
+        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC").tz_convert(zoneinfo.ZoneInfo(zone))
+
+        def with_stamp(value):
+            if isinstance(value, dict):
+                return {key: with_stamp(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [with_stamp(item) for item in value]
+            return stamp if value == "stamp" else value
+
+        duckdb_cursor.execute("SET TimeZone = 'UTC'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([with_stamp(cell)], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    @pytest.mark.parametrize(
+        ("stamp", "text"),
+        [
+            pytest.param(pd.Timestamp.max.tz_localize("UTC"), "infinity", id="max"),
+            pytest.param(pd.Timestamp.min.tz_localize("UTC"), "-infinity", id="min"),
+        ],
+    )
+    @pytest.mark.parametrize("place", ["top", "field", "list_element"])
+    def test_zoned_timestamp_max_and_min_store_infinity_in_a_timestamptz_ns(self, duckdb_cursor, stamp, text, place):
+        target, cell, expected = {
+            "top": ("TIMESTAMPTZ_NS", stamp, text),
+            "field": ("STRUCT(t TIMESTAMPTZ_NS)", {"t": stamp}, f"{{'t': {text}}}"),
+            "list_element": ("TIMESTAMPTZ_NS[]", [stamp], f"[{text}]"),
+        }[place]
+        duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    def test_map_of_an_ordered_dict_keeps_its_iteration_order(self, duckdb_cursor):
+        ordered = collections.OrderedDict([("a", 1), ("b", 2), ("c", 3)])
+        ordered.move_to_end("a")
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([ordered], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT map_keys(a) FROM t").fetchall() == [(["b", "c", "a"],)]
+
+    def test_map_column_mixing_dicts_with_other_cells_keeps_every_row_in_place(self, duckdb_cursor):
+        # Dicts are written into the MAP's entries directly and the other cells after them; 3000 rows span two vectors
+        cells = [{"a": 1}, "{b=2}", {"key": ["c"], "value": [3]}, None, {"d": 4, "e": 5}, {}] * 500
+        expected = [{"a": 1}, {"b": 2}, {"c": 3}, None, {"d": 4, "e": 5}, {}] * 500
+        duckdb_cursor.execute("CREATE TABLE t (i INTEGER, a MAP(VARCHAR, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"i": range(len(cells)), "a": pd.Series(cells, dtype=object)}))
+        assert [row[0] for row in duckdb_cursor.sql("SELECT a FROM t ORDER BY i").fetchall()] == expected
+
+    def test_map_of_two_plain_values_named_key_and_value_appends_its_entries(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, VARCHAR))")
+        frame = pd.DataFrame({"a": pd.Series([{"key": "ab", "value": "cd"}], dtype=object)})
+        duckdb_cursor.append("t", frame)
+        assert duckdb_cursor.table("t").fetchall() == [({"key": "ab", "value": "cd"},)]
+
+    def test_map_keys_a_str_and_its_bytes_are_one_key_and_refused(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        frame = pd.DataFrame({"a": pd.Series([{"a": 1, b"a": 2}], dtype=object)})
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("Map keys must be unique")):
+            duckdb_cursor.append("t", frame)
+
+    def test_text_of_a_map_into_a_map_column_reads_as_the_cast_reads_it(self):
+        con = duckdb.connect()
+        con.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        con.append("t", pd.DataFrame({"a": pd.Series(["{a=1}"], dtype=object)}))
+        assert con.table("t").fetchall() == [({"a": 1},)]
+        assert con.sql("SELECT 42").fetchall() == [(42,)]
+
+    def test_map_values_of_mixed_numbers_each_keep_their_value(self):
+        # Converted toward their common type first, 2**60 + 1 beside 1.0 would read as a rounded DOUBLE
+        con = duckdb.connect()
+        con.execute("CREATE TABLE t (a MAP(VARCHAR, BIGINT))")
+        con.append("t", pd.DataFrame({"a": pd.Series([{"a": 2**60 + 1, "b": 1.0}], dtype=object)}))
+        assert con.table("t").fetchall() == [({"a": 2**60 + 1, "b": 1},)]
+        assert con.sql("SELECT 42").fetchall() == [(42,)]
+
+    def test_map_key_of_none_is_refused_and_the_connection_stays_usable(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("Map keys can not be NULL.")):
+            duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{None: 1}], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
+
     def test_text_with_a_lone_surrogate_names_it(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
         frame = pd.DataFrame({"a": _outside_the_sample("a", pathlib.PurePosixPath("/\udcff"))})
+        with pytest.raises(duckdb.InvalidInputException, match="surrogate"):
+            duckdb_cursor.append("t", frame)
+
+    def test_text_column_mixing_str_with_other_cells_appends_each_as_text(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
+        cells = ["a", 5, 6, "b", None, 7, np.str_("c"), "\u00e9 \U0001f600"]
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
+        assert duckdb_cursor.table("t").fetchall() == [
+            ("a",),
+            ("5",),
+            ("6",),
+            ("b",),
+            (None,),
+            ("7",),
+            ("c",),
+            ("\u00e9 \U0001f600",),
+        ]
+
+    def test_blob_column_mixing_bytes_with_other_cells_appends_each(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a BLOB)")
+        cells = [b"a", bytearray(b"b"), None, memoryview(b"c"), b"\x00d", "e"]
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
+        assert duckdb_cursor.table("t").fetchall() == [(b"a",), (b"b",), (None,), (b"c",), (b"\x00d",), (b"e",)]
+
+    def test_text_with_a_lone_surrogate_in_a_str_names_it(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a VARCHAR)")
+        frame = pd.DataFrame({"a": pd.Series(["a", "b\udcff"], dtype=object)})
         with pytest.raises(duckdb.InvalidInputException, match="surrogate"):
             duckdb_cursor.append("t", frame)
 

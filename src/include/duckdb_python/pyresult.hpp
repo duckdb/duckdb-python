@@ -136,8 +136,6 @@ private:
 	//! and whose originals the caller carries here. Empty means the result's own names.
 	vector<Identifier> names_override;
 	unique_ptr<DataChunk> current_chunk;
-	// Holds the categories of Categorical/ENUM types
-	unordered_map<idx_t, nb::list> categories;
 	// Holds the categorical type of Categorical/ENUM types
 	unordered_map<idx_t, nb::object> categories_type;
 };
