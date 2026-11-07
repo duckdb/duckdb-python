@@ -609,8 +609,8 @@ class TestAppendObjectColumnsToDeclaredTypes:
 
     def test_struct_append_inside_a_conversion_keeps_the_outer_scans_field_index(self, duckdb_cursor):
         # A tzinfo's utcoffset that appends on another connection runs a declared scan inside this one's, between
-        # this dict's out of order keys
-        other = duckdb.connect()
+        # this dict's out of order keys; with one thread that scan runs on this thread, which holds the index
+        other = duckdb.connect(config={"threads": 1})
         other.execute("CREATE TABLE y (c BIGINT)")
 
         class Appending(datetime.tzinfo):
@@ -625,12 +625,22 @@ class TestAppendObjectColumnsToDeclaredTypes:
                 return "UTC"
 
         fields = [f"f{j}" for j in range(30)]
-        duckdb_cursor.execute(f"CREATE TABLE t (a STRUCT(t TIMESTAMPTZ, {', '.join(f'{f} INTEGER' for f in fields)}))")
+        integers = ", ".join(f"{f} INTEGER" for f in fields)
+        duckdb_cursor.execute(
+            f"CREATE TABLE t (a STRUCT(t TIMESTAMPTZ, {integers}, n TIMESTAMP_NS, m MAP(BLOB, INTEGER)))"
+        )
         moment = datetime.datetime(2020, 1, 1, tzinfo=Appending())
-        cells = [{"f29": row, "t": moment, **dict.fromkeys(reversed(fields[:-1]), row)} for row in range(20)]
+        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001")
+        # The fields after the callback read right only through the index: n keeps its nanosecond, m its bytes keys
+        cells = [
+            {"f29": row, "t": moment, "n": stamp, "m": {b"\x00k": row}, **dict.fromkeys(reversed(fields[:-1]), row)}
+            for row in range(20)
+        ]
         duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
-        assert duckdb_cursor.sql("SELECT count(*), sum(a.f0), sum(a.f29) FROM t").fetchall() == [(20, 190, 190)]
+        rows = duckdb_cursor.sql("SELECT a.f0, a.f29, a.n::VARCHAR, a.m FROM t ORDER BY a.f0").fetchall()
+        assert rows == [(row, row, "2020-01-01 00:00:00.000000001", {b"\x00k": row}) for row in range(20)]
         assert other.sql("SELECT count(*) > 0 FROM y").fetchall() == [(True,)]
+        other.close()
 
     @pytest.mark.parametrize(
         ("target", "cell", "expected"),
@@ -645,10 +655,12 @@ class TestAppendObjectColumnsToDeclaredTypes:
             ),
         ],
     )
+    @pytest.mark.parametrize("zone", ["UTC", "America/New_York"], ids=["UTC", "America_New_York"])
     def test_zoned_timestamp_with_nanoseconds_keeps_them_in_a_timestamptz_ns(
-        self, duckdb_cursor, target, cell, expected
+        self, duckdb_cursor, target, cell, expected, zone
     ):
-        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC")
+        # The same instant in either zone, so a reading of the wall time instead would differ
+        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC").tz_convert(zoneinfo.ZoneInfo(zone))
 
         def with_stamp(value):
             if isinstance(value, dict):

@@ -4,6 +4,7 @@ import collections
 import datetime
 import json
 import re
+import zoneinfo
 from decimal import Decimal
 from fractions import Fraction
 
@@ -986,16 +987,21 @@ AWARE_NANOSECOND = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC")
 @pytest.mark.parametrize(
     ("value", "cell"),
     [
-        pytest.param("'2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS", AWARE_NANOSECOND, id="top"),
-        pytest.param("{'t': '2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS}", {"t": AWARE_NANOSECOND}, id="field"),
-        pytest.param("['2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS]", [AWARE_NANOSECOND], id="list_element"),
+        pytest.param("'2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS", lambda stamp: stamp, id="top"),
+        pytest.param(
+            "{'t': '2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS}", lambda stamp: {"t": stamp}, id="field"
+        ),
+        pytest.param("['2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS]", lambda stamp: [stamp], id="list_element"),
     ],
 )
+@pytest.mark.parametrize("zone", ["UTC", "America/New_York"], ids=["UTC", "America_New_York"])
 @SCHEMAS
-def test_map_zoned_timestamp_ns_value_keeps_its_nanoseconds(duckdb_cursor, value, cell, explicit_schema):
+def test_map_zoned_timestamp_ns_value_keeps_its_nanoseconds(duckdb_cursor, value, cell, zone, explicit_schema):
+    # The same instant in either zone, so a reading of the wall time instead would differ
+    stamp = AWARE_NANOSECOND.tz_convert(zoneinfo.ZoneInfo(zone))
     duckdb_cursor.execute("SET TimeZone = 'UTC'")
     source = duckdb_cursor.sql(f"select {value} as a")
-    mapped = source.map(_returning(cell), schema=_schema_of(source, explicit_schema))
+    mapped = source.map(_returning(cell(stamp)), schema=_schema_of(source, explicit_schema))
     assert mapped.types == source.types
     assert mapped.project("a::VARCHAR").fetchall() == source.project("a::VARCHAR").fetchall()
 
