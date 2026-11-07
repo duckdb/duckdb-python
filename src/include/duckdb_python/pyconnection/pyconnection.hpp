@@ -298,8 +298,8 @@ public:
 	// DuckDBPyConnection cannot dereference an already-freed result — see
 	// duckdb-python#435.
 	std::recursive_mutex py_connection_lock;
-	//! MemoryFileSystem used to temporarily store file-like objects for reading
-	std::shared_ptr<ModifiedMemoryFileSystem> internal_object_filesystem;
+	//! The database's store of file-like objects for reading, kept once this connection has found it
+	shared_ptr<ObjectStore> object_store;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
 	//! The names register() succeeded with on this connection, bounded oldest out. Only a hint: unregister() of a
 	//! name it holds refuses beside an open DB-API result, and of one it does not hold, such as a view renamed in SQL,

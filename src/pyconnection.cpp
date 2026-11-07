@@ -369,18 +369,15 @@ void DuckDBPyConnection::UnregisterFilesystem(const nb::str &name) {
 	fs.ExtractSubSystem(nb::cast<std::string>(name));
 }
 
-void DuckDBPyConnection::RegisterFilesystem(nb::object filesystem) {
-	nb::gil_scoped_acquire gil;
-
-	auto &database = con.GetDatabase();
+//! The engine side file system over an fsspec object, with the Python reads done: the registration itself then runs
+//! no Python
+static unique_ptr<PythonFilesystem> WrapFilesystem(const nb::object &filesystem) {
 	// Import fsspec here (a normal, throwing context) so a missing install surfaces as ModuleNotFoundError, rather
 	// than terminating inside the noexcept AbstractFileSystem type check (which nanobind cannot let throw).
 	auto abstract_filesystem = nb::module_::import_("fsspec").attr("AbstractFileSystem");
 	if (filesystem.is_none() || !duckdb::PyUtil::IsInstance(filesystem, abstract_filesystem)) {
 		throw InvalidInputException("Bad filesystem instance");
 	}
-
-	auto &fs = database.GetFileSystem();
 
 	// nb::object (not auto, which deduces an accessor): nb::str(protocol) below is an ambiguous overload on MSVC.
 	nb::object protocol = filesystem.attr("protocol");
@@ -396,8 +393,13 @@ void DuckDBPyConnection::RegisterFilesystem(nb::object filesystem) {
 			protocols.push_back(nb::cast<std::string>(nb::str(sub_protocol)));
 		}
 	}
+	return make_uniq<PythonFilesystem>(std::move(protocols), nb::borrow<AbstractFileSystem>(filesystem));
+}
 
-	fs.RegisterSubSystem(make_uniq<PythonFilesystem>(std::move(protocols), nb::borrow<AbstractFileSystem>(filesystem)));
+void DuckDBPyConnection::RegisterFilesystem(nb::object filesystem) {
+	nb::gil_scoped_acquire gil;
+	auto wrapped = WrapFilesystem(filesystem);
+	con.GetDatabase().GetFileSystem().RegisterSubSystem(std::move(wrapped));
 }
 
 nb::list DuckDBPyConnection::ListFilesystems() {
@@ -1790,20 +1792,48 @@ nb::object DuckDBPyConnection::ArrowSourcesNodes() {
 	return ArrowSourcesPart(GetModuleState().arrow_sources_nodes);
 }
 
-ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
-	if (!internal_object_filesystem) {
-		D_ASSERT(!FileSystemIsRegistered("DUCKDB_INTERNAL_OBJECTSTORE"));
-		auto &import_cache_py = *ImportCache();
-		auto modified_memory_fs = import_cache_py.duckdb.filesystem.ModifiedMemoryFileSystem();
-		if (modified_memory_fs.ptr() == nullptr) {
-			throw InvalidInputException(
-			    "This operation could not be completed because required module 'fsspec' is not installed");
-		}
-		internal_object_filesystem = std::make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
-		auto &abstract_fs = reinterpret_cast<AbstractFileSystem &>(*internal_object_filesystem);
-		RegisterFilesystem(abstract_fs);
+ObjectStore::~ObjectStore() {
+	if (!filesystem) {
+		return;
 	}
-	return *internal_object_filesystem;
+	// The store dies with the database, on whatever thread drops the last connection, so the reference goes through
+	// the shutdown gate as the PythonFilesystem over the same object does
+	try {
+		PyUtil::QueryGil gil(nullptr);
+		filesystem->dec_ref();
+	} catch (...) { // NOLINT
+	}
+	// Leaked when the gate refused, as the reference can then no longer be dropped
+	filesystem->release();
+}
+
+ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	if (!object_store) {
+		auto &context = *con.GetConnection().context;
+		auto store = ObjectCache::GetObjectCache(context).GetOrCreate<ObjectStore>(ObjectStore::ObjectType());
+		// The GIL is the lock here: a mutex held while the Python file system is built would deadlock against a
+		// connection that took the GIL and waits for it. Building runs Python, which can hand the GIL to another
+		// connection doing the same, so every Python step comes first and the entry is checked again right before
+		// the engine registration, which runs no Python.
+		if (!store->filesystem) {
+			auto &import_cache_py = *ImportCache();
+			auto modified_memory_fs = import_cache_py.duckdb.filesystem.ModifiedMemoryFileSystem();
+			if (modified_memory_fs.ptr() == nullptr) {
+				throw InvalidInputException(
+				    "This operation could not be completed because required module 'fsspec' is not installed");
+			}
+			auto built = make_uniq<ModifiedMemoryFileSystem>(modified_memory_fs());
+			auto wrapped = WrapFilesystem(*built);
+			if (!store->filesystem) {
+				D_ASSERT(!FileSystemIsRegistered(PathLike::OBJECT_STORE_PROTOCOL));
+				con.GetDatabase().GetFileSystem().RegisterSubSystem(std::move(wrapped));
+				store->filesystem = std::move(built);
+			}
+		}
+		object_store = std::move(store);
+	}
+	return *object_store->filesystem;
 }
 
 bool DuckDBPyConnection::IsInteractive() {

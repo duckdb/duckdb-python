@@ -5,6 +5,7 @@
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/storage/object_cache.hpp"
 
 namespace duckdb {
 
@@ -119,6 +120,29 @@ public:
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
 	idx_t SeekPosition(FileHandle &handle) override;
+};
+
+//! The in-memory file system that holds file-like objects, one per database: a cursor registers nothing of its own,
+//! since the database's virtual file system takes the name once. Found through the database's object cache, so every
+//! connection and cursor of the database reads the same entries.
+class ObjectStore : public ObjectCacheEntry {
+public:
+	~ObjectStore() override;
+
+	static string ObjectType() {
+		return "python_object_store";
+	}
+	string GetObjectType() override {
+		return ObjectType();
+	}
+	optional_idx GetEstimatedCacheMemory() const override {
+		return optional_idx();
+	}
+
+public:
+	//! The one owner of the Python file system's reference. Read and written with the GIL held, which is what
+	//! serialises the connections of a database here
+	unique_ptr<ModifiedMemoryFileSystem> filesystem;
 };
 
 } // namespace duckdb

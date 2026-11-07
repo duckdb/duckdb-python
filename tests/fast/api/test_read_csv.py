@@ -1,6 +1,11 @@
 import datetime
+import gc
 import platform
+import re
 import sys
+import threading
+import time
+import weakref
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import NoReturn
@@ -733,3 +738,329 @@ class TestReadCSV:
             rel.fetchall()
         rel = con.read_csv(file_path, files_to_sniff=-1)
         assert rel.fetchall() == [("2025-05-12", "baz"), ("bar", "baz")]
+
+
+def _object_store_path(relation):
+    return re.search(r"DUCKDB_INTERNAL_OBJECTSTORE://[0-9a-f]+", relation.sql_query()).group(0)
+
+
+def _one_reader(con):
+    return con.read_csv(StringIO("c1\na"))
+
+
+def _two_readers_in_a_union(con):
+    return con.read_csv(StringIO("c1\na")).union(con.read_csv(StringIO("c1\nb")))
+
+
+def _one_reader_of_two_filelikes(con):
+    return con.read_csv([StringIO("c1\na"), StringIO("c1\nb")])
+
+
+def _a_reader_beside_a_table(con):
+    con.execute("CREATE TABLE t AS SELECT 1 AS k")
+    return con.table("t").cross(con.read_csv(StringIO("c1\na")))
+
+
+def _a_reader_read_by_sql(con):
+    reader = con.read_csv(StringIO("c1\na"))  # noqa: F841, read by name below
+    return con.sql("SELECT * FROM reader")
+
+
+class TestFilelikeViews:
+    # The object store entry of a file-like reader must live as long as a view that reads it, not as long as the
+    # relation the view was made from.
+
+    @pytest.mark.parametrize("make_view", ["to_view", "create_view"])
+    @pytest.mark.parametrize("reader", ["read_csv", "read_json"])
+    def test_view_outlives_the_relation(self, duckdb_cursor, reader, make_view):
+        _ = pytest.importorskip("fsspec")
+        source = StringIO('[{"c1": "a"}]') if reader == "read_json" else StringIO("c1\na")
+        getattr(getattr(duckdb_cursor, reader)(source), make_view)("v")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+
+    def test_view_over_a_derived_relation(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("c1\n1\n2\n3")).filter("c1 > 1").project("c1 * 10 AS c").to_view("v")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT c FROM v ORDER BY c").fetchall() == [(20,), (30,)]
+
+    def test_view_over_two_filelikes(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        left = duckdb_cursor.read_csv(StringIO("c1\n1"))
+        right = duckdb_cursor.read_csv(StringIO("c1\n2"))
+        left.union(right).to_view("v")
+        del left, right
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT c1 FROM v ORDER BY c1").fetchall() == [(1,), (2,)]
+
+    def test_views_share_the_entry(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        rel = duckdb_cursor.read_csv(StringIO("c1\na"))
+        path = _object_store_path(rel)
+        rel.to_view("v1")
+        rel.to_view("v2")
+        del rel
+        gc.collect()
+        duckdb_cursor.execute("DROP VIEW v1")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v2").fetchall() == [("a",)]
+        duckdb_cursor.execute("DROP VIEW v2")
+        gc.collect()
+        with pytest.raises(duckdb.IOException, match="No files found"):
+            duckdb_cursor.sql(f"SELECT * FROM read_csv('{path}')").fetchall()
+
+    def test_replaced_view_releases_its_entry(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        first = duckdb_cursor.read_csv(StringIO("c1\na"))
+        first_path = _object_store_path(first)
+        first.to_view("v")
+        del first
+        duckdb_cursor.read_csv(StringIO("c1\nb")).to_view("v")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("b",)]
+        with pytest.raises(duckdb.IOException, match="No files found"):
+            duckdb_cursor.sql(f"SELECT * FROM read_csv('{first_path}')").fetchall()
+
+    @pytest.mark.parametrize(
+        ("shape", "expected"),
+        [
+            pytest.param("frame_alone", [(1,)], id="frame_alone"),
+            pytest.param("frame_union_filelike", [(1,), (2,)], id="frame_union_filelike"),
+        ],
+    )
+    def test_view_over_a_registered_frame_releases_the_frame(self, duckdb_cursor, shape, expected):
+        _ = pytest.importorskip("fsspec")
+        pd = pytest.importorskip("pandas")
+        frame = pd.DataFrame({"c1": [1]})
+        alive = weakref.ref(frame)
+        rel = duckdb_cursor.from_df(frame)
+        if shape == "frame_union_filelike":
+            rel = rel.union(duckdb_cursor.read_csv(StringIO("c1\n2")))
+        # A frame alone puts the registry's own reference, with its shared dependency, in the view's FROM; the union
+        # puts a CTE there. The registry entry must not come to hold the view's handles, or the frame outlives the view
+        rel.to_view("v")
+        del rel, frame
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT c1 FROM v ORDER BY c1").fetchall() == expected
+        duckdb_cursor.execute("DROP VIEW v")
+        gc.collect()
+        assert alive() is None
+
+    @pytest.mark.parametrize(
+        ("build", "expected"),
+        [
+            pytest.param(
+                lambda con: con.read_csv(StringIO("a\n1")).cross(con.read_csv(StringIO("b\n2"))),
+                [(1, 2)],
+                id="join_of_two_filelikes",
+            ),
+            pytest.param(
+                lambda con: con.sql("SELECT 1 AS a").cross(con.read_csv(StringIO("b\n2"))),
+                [(1, 2)],
+                id="join_with_a_constant_left_side",
+            ),
+            pytest.param(
+                lambda con: con.sql("SELECT 1 AS c1").union(con.read_csv(StringIO("c1\n2"))),
+                [(1,), (2,)],
+                id="union_with_a_constant_left_side",
+            ),
+        ],
+    )
+    def test_renamed_view_keeps_its_sources(self, duckdb_cursor, build, expected):
+        _ = pytest.importorskip("fsspec")
+        # The engine copies the view to rename it, and the copy of a join reference drops what hangs on the join
+        build(duckdb_cursor).to_view("v")
+        gc.collect()
+        duckdb_cursor.execute("ALTER VIEW v RENAME TO renamed")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM renamed ORDER BY ALL").fetchall() == expected
+
+    def test_view_over_a_join_keeps_the_deduplicated_column_names(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("a\n1")).cross(duckdb_cursor.read_csv(StringIO("a\n2"))).to_view("v")
+        gc.collect()
+        assert [row[0] for row in duckdb_cursor.execute("DESCRIBE v").fetchall()] == ["a", "a_1"]
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [(1, 2)]
+
+    def test_rolled_back_create_releases_the_entry(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        rel = duckdb_cursor.read_csv(StringIO("c1\na"))
+        path = _object_store_path(rel)
+        duckdb_cursor.execute("BEGIN")
+        rel.to_view("v")
+        del rel
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+        duckdb_cursor.execute("ROLLBACK")
+        gc.collect()
+        assert duckdb_cursor.execute("SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall() == []
+        with pytest.raises(duckdb.IOException, match="No files found"):
+            duckdb_cursor.sql(f"SELECT * FROM read_csv('{path}')").fetchall()
+
+    def test_rolled_back_drop_keeps_the_view(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("c1\na")).to_view("v")
+        gc.collect()
+        duckdb_cursor.execute("BEGIN")
+        duckdb_cursor.execute("DROP VIEW v")
+        gc.collect()
+        duckdb_cursor.execute("ROLLBACK")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+
+    def test_rolled_back_replace_restores_the_view_and_releases_the_replacement(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("c1\na")).to_view("v")
+        gc.collect()
+        duckdb_cursor.execute("BEGIN")
+        replacement = duckdb_cursor.read_csv(StringIO("c1\nb"))
+        path = _object_store_path(replacement)
+        replacement.to_view("v")
+        del replacement
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("b",)]
+        duckdb_cursor.execute("ROLLBACK")
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+        with pytest.raises(duckdb.IOException, match="No files found"):
+            duckdb_cursor.sql(f"SELECT * FROM read_csv('{path}')").fetchall()
+
+    def test_create_over_a_taken_name_without_replace_releases_the_entry(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("c1\na")).to_view("v")
+        gc.collect()
+        second = duckdb_cursor.read_csv(StringIO("c1\nb"))
+        path = _object_store_path(second)
+        with pytest.raises(duckdb.CatalogException, match="already exists"):
+            second.create_view("v", replace=False)
+        del second
+        gc.collect()
+        assert duckdb_cursor.sql("SELECT * FROM v").fetchall() == [("a",)]
+        with pytest.raises(duckdb.IOException, match="No files found"):
+            duckdb_cursor.sql(f"SELECT * FROM read_csv('{path}')").fetchall()
+
+    def test_view_reads_from_a_cursor(self, duckdb_cursor):
+        _ = pytest.importorskip("fsspec")
+        duckdb_cursor.read_csv(StringIO("c1\na")).to_view("v")
+        gc.collect()
+        assert duckdb_cursor.cursor().sql("SELECT * FROM v").fetchall() == [("a",)]
+
+    @pytest.mark.parametrize(
+        ("build", "expected"),
+        [
+            pytest.param(_one_reader, [("a",)], id="reader"),
+            pytest.param(_one_reader_of_two_filelikes, [("a",), ("b",)], id="reader_of_two_filelikes"),
+            pytest.param(_two_readers_in_a_union, [("a",), ("b",)], id="union_of_two_readers"),
+            pytest.param(_a_reader_beside_a_table, [(1, "a")], id="reader_beside_a_table"),
+            pytest.param(_a_reader_read_by_sql, [("a",)], id="reader_read_by_sql"),
+        ],
+    )
+    def test_view_over_a_filelike_is_refused_in_a_database_file(self, tmp_path, build, expected):
+        _ = pytest.importorskip("fsspec")
+        # The object store is a file system in this process's memory, so a stored view would read nothing after a
+        # reopen
+        con = duckdb.connect(str(tmp_path / "saved.duckdb"))
+        rel = build(con)
+        match = r"cannot be stored in a database file\. Use register\(\) for a view that reads it in this session"
+        with pytest.raises(duckdb.InvalidInputException, match=match):
+            rel.to_view("v")
+        assert con.execute("SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall() == []
+        con.register("v", rel)
+        del rel
+        gc.collect()
+        assert con.sql("SELECT * FROM v ORDER BY ALL").fetchall() == expected
+        con.close()
+
+    def test_view_over_a_filelike_in_an_attached_memory_database_is_created(self, tmp_path):
+        _ = pytest.importorskip("fsspec")
+        con = duckdb.connect(str(tmp_path / "saved.duckdb"))
+        con.execute("ATTACH ':memory:' AS scratch")
+        con.execute("USE scratch")
+        con.read_csv(StringIO("c1\na")).to_view("v")
+        gc.collect()
+        assert con.sql("SELECT * FROM scratch.main.v").fetchall() == [("a",)]
+        con.close()
+
+
+class TestObjectStoreAcrossConnections:
+    @pytest.mark.parametrize("first", ["cursor", "parent"])
+    def test_filelike_reads_on_cursor_and_parent(self, first):
+        _ = pytest.importorskip("fsspec")
+        con = duckdb.connect()
+        cursor = con.cursor()
+        order = [cursor, con] if first == "cursor" else [con, cursor]
+        for number, connection in enumerate(order, start=1):
+            assert connection.read_csv(StringIO(f"c1\n{number}")).fetchall() == [(number,)]
+        assert con.cursor().read_csv(StringIO("c1\n3")).fetchall() == [(3,)]
+
+    def test_database_closes_after_the_registering_cursor_is_gone(self):
+        _ = pytest.importorskip("fsspec")
+        con = duckdb.connect()
+        cursor = con.cursor()
+        assert cursor.read_csv(StringIO("c1\n1")).fetchall() == [(1,)]
+        cursor.close()
+        del cursor
+        gc.collect()
+        # The store's Python object dies with the database, dropped by a connection that never built it
+        con.close()
+
+    def test_two_connections_to_one_database_file(self, tmp_path):
+        _ = pytest.importorskip("fsspec")
+        path = str(tmp_path / "shared.db")
+        first = duckdb.connect(path)
+        second = duckdb.connect(path)
+        assert first.read_csv(StringIO("c1\n1")).fetchall() == [(1,)]
+        assert second.read_csv(StringIO("c1\n2")).fetchall() == [(2,)]
+        first.close()
+        assert second.read_csv(StringIO("c1\n3")).fetchall() == [(3,)]
+        second.close()
+
+    def test_another_connection_registers_inside_the_fsspec_import(self, monkeypatch):
+        _ = pytest.importorskip("fsspec")
+        import builtins
+
+        import duckdb.filesystem
+
+        con = duckdb.connect()
+        sibling = con.cursor()
+        original = builtins.__import__
+        armed = [True]
+
+        def reenter(name, *args, **kwargs):
+            # The import the registration runs hands the GIL over; the sibling registers the store meanwhile
+            if name == "fsspec" and armed[0]:
+                armed[0] = False
+                assert sibling.read_csv(StringIO("c1\n2")).fetchall() == [(2,)]
+            return original(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", reenter)
+        assert con.read_csv(StringIO("c1\n1")).fetchall() == [(1,)]
+
+    @pytest.mark.timeout(20)
+    def test_two_connections_build_the_store_at_once(self, monkeypatch):
+        _ = pytest.importorskip("fsspec")
+        from duckdb.filesystem import ModifiedMemoryFileSystem
+
+        original = ModifiedMemoryFileSystem.__init__
+        building = threading.Event()
+
+        def slow_init(self, *args, **kwargs):
+            # Hands the GIL to the other connection in the middle of building the store
+            building.set()
+            time.sleep(0.5)
+            original(self, *args, **kwargs)
+
+        # fsspec hands out a cached instance per thread without calling __init__; a fresh one per build is needed
+        monkeypatch.setattr(ModifiedMemoryFileSystem, "cachable", False)
+        monkeypatch.setattr(ModifiedMemoryFileSystem, "__init__", slow_init)
+        con = duckdb.connect()
+        cursor = con.cursor()
+        results = []
+        worker = threading.Thread(target=lambda: results.append(cursor.read_csv(StringIO("c1\n1")).fetchall()))
+        worker.start()
+        assert building.wait(10)
+        results.append(con.read_csv(StringIO("c1\n2")).fetchall())
+        worker.join()
+        assert sorted(results) == [[(1,)], [(2,)]]

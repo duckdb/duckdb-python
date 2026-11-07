@@ -2836,9 +2836,10 @@ class DuckDBPyRelation:
     def create_view(self, view_name: str, replace: bool = True) -> DuckDBPyRelation:  # noqa: FBT001
         """Creates a view named view_name that refers to the relation object."""
         body, _ = _render(self, literals=True, wrap_text=True)
-        # The view holds the table reference of every registry name it reads, so its catalog entry owns its sources
-        # and its transaction decides when they go; a Python object in a database file is refused there.
-        _seam.create_view(self._con, view_name, body, replace=replace)
+        # The view holds the table reference of every registry name it reads and the handles of every source the
+        # relation reads, so its catalog entry owns its sources and its transaction decides when they go; a Python
+        # object in a database file is refused there.
+        _seam.create_view(self._con, view_name, body, replace=replace, sources=self._sources())
         return self
 
     to_view = create_view

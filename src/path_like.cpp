@@ -47,7 +47,7 @@ void PathLikeProcessor::AddFile(const nb::object &object) {
 	}
 	// This is (assumed to be) a file-like object
 	auto generated_name =
-	    StringUtil::Format("%s://%s", "DUCKDB_INTERNAL_OBJECTSTORE", StringUtil::GenerateRandomName());
+	    StringUtil::Format("%s://%s", PathLike::OBJECT_STORE_PROTOCOL, StringUtil::GenerateRandomName());
 	all_files.push_back(generated_name);
 	fs_files.push_back(generated_name);
 

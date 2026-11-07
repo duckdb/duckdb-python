@@ -14,6 +14,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -291,6 +292,25 @@ static unique_ptr<TableRef> WithColumnAliases(unique_ptr<TableRef> copy, const v
 	return std::move(subquery);
 }
 
+//! Whether a table function's arguments name a file on the object store, which lives in this process's memory
+static bool ReadsTheObjectStore(const ParsedExpression &function) {
+	const auto prefix = string(PathLike::OBJECT_STORE_PROTOCOL) + "://";
+	vector<const ParsedExpression *> pending {&function};
+	while (!pending.empty()) {
+		auto &expression = *pending.back();
+		pending.pop_back();
+		if (expression.GetExpressionClass() == ExpressionClass::CONSTANT) {
+			auto &literal = expression.Cast<ConstantExpression>().GetLiteral();
+			if (literal.kind == LiteralKind::STRING && StringUtil::StartsWith(literal.text, prefix)) {
+				return true;
+			}
+		}
+		ParsedExpressionIterator::EnumerateChildren(expression,
+		                                            [&](const ParsedExpression &child) { pending.push_back(&child); });
+	}
+	return false;
+}
+
 class SourceInliner {
 public:
 	SourceInliner(ClientContext &context_p, engine::SourceRegistry &registry_p)
@@ -323,7 +343,8 @@ public:
 		}
 	}
 
-	//! Whether something written in holds a Python object, which no database file can store
+	//! Whether the query reads a Python object or a file on the object store, which live only in this process and
+	//! which no database file can store
 	bool HoldsProcessLocalInput() const {
 		return process_local;
 	}
@@ -513,9 +534,14 @@ private:
 			}
 			break;
 		}
-		case TableReferenceType::TABLE_FUNCTION:
-			steps.push_back(Task::OfExpression(ref->Cast<TableFunctionRef>().function));
+		case TableReferenceType::TABLE_FUNCTION: {
+			auto &function = ref->Cast<TableFunctionRef>().function;
+			if (function && ReadsTheObjectStore(*function)) {
+				process_local = true;
+			}
+			steps.push_back(Task::OfExpression(function));
 			break;
+		}
 		case TableReferenceType::EXPRESSION_LIST:
 			for (auto &row : ref->Cast<ExpressionListRef>().values) {
 				for (auto &value : row) {
@@ -630,15 +656,38 @@ bool DuckDBPySeam::IsRegisteredView(ClientContext &context, const string &name) 
 	return registered;
 }
 
+//! The view reads its query through a subquery that holds the handles: the catalog entry owns the query, and every
+//! copy the engine makes of a subquery reference (a bind, a rename) keeps its dependency, whatever the query reads
+static void OwnSourcesInView(SQLStatement &statement, shared_ptr<DependencyItem> sources) {
+	auto &info = statement.Cast<CreateStatement>().info->Cast<CreateViewInfo>();
+	auto subquery = make_uniq<SubqueryRef>(std::move(info.query));
+	auto dependency = make_shared_ptr<ExternalDependency>();
+	dependency->AddDependency("sources", std::move(sources));
+	subquery->external_dependency = std::move(dependency);
+	auto select = make_uniq<SelectNode>();
+	select->select_list.push_back(make_uniq<StarExpression>());
+	select->from_table = std::move(subquery);
+	info.query = make_uniq<SelectStatement>();
+	info.query->node = std::move(select);
+}
+
 static void CreateView(DuckDBPyConnection &self, const nb::object &name, const string &sql, bool temporary,
-                       bool replace) {
+                       bool replace, const nb::list &sources) {
 	auto qualified = NameFromParts(name);
 	auto session = OpenSession(self);
 	DUCKDB_PY_ASSERT_GIL_HELD();
+	// Built while the GIL is held: the item keeps a reference to the Python list of handles
+	shared_ptr<DependencyItem> owned;
+	if (nb::len(sources) > 0) {
+		owned = PythonDependencyItem::Create(sources);
+	}
 	nb::gil_scoped_release release;
 	// One claim from reading the registry to creating the view, so no other call changes either in between
 	auto claim = session.Claim();
 	auto statement = DuckDBPySeam::ViewStatement(session.Context(), qualified, sql, temporary, replace, false);
+	if (owned) {
+		OwnSourcesInView(*statement, std::move(owned));
+	}
 	session.RunClaimed(std::move(statement), DuckDBPyConnection::CheckSignals);
 }
 
@@ -1478,7 +1527,8 @@ void DuckDBPySeam::InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m
 	m.def("_create_view", &CreateView,
 	      "Create a view of the SELECT in sql, the Python objects it reads held by the view itself, so the view "
 	      "reads them for as long as it exists and its transaction decides when they go",
-	      nb::arg("name"), nb::arg("sql"), nb::kw_only(), nb::arg("temporary") = false, nb::arg("replace") = false);
+	      nb::arg("name"), nb::arg("sql"), nb::kw_only(), nb::arg("temporary") = false, nb::arg("replace") = false,
+	      nb::arg("sources") = nb::list());
 	m.def("_catalog_version", &CatalogVersion,
 	      "How many statements that can change what a name binds to have run on this connection's database");
 	m.def("_own_sources", &OwnSources,
