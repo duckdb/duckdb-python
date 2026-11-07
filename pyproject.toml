@@ -283,6 +283,7 @@ test = [ # dependencies used for running tests
     "pytest-xdist", # parallel test execution (-n auto); without this `uv sync --reinstall` prunes a manual install
     "pytest_codspeed",
     "coverage",
+    "mypy",
     "gcovr; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "gcsfs; sys_platform != 'win32' or platform_machine != 'ARM64'",
     "packaging",

@@ -342,7 +342,7 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 		//! Have to already transform here because the child_list needs a string as key. Stringify via str() so
 		//! non-string keys (e.g. the integer keys of a hashable-key MAP, produced as a plain {1: 10} dict) are
 		//! accepted (nb::cast<std::string> rejects non-str objects).
-		auto key = Identifier(nb::cast<std::string>(nb::str(dict_key)));
+		auto key = Identifier(TransformPythonString(nb::str(dict_key)));
 
 		auto dict_val = dict.values.attr("__getitem__")(i);
 		auto val = GetItemType(dict_val, can_convert);

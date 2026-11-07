@@ -313,23 +313,21 @@ class TestUDFTypeNames:
         target.create_function("block", block, [INTEGER], INTEGER, side_effects=True)
         worker = threading.Thread(target=query)
 
-        # Converting a class annotation instantiates it, so the annotations around y hold and free the connection
+        # Converting a dict annotation takes str() of its keys, so the annotations around y hold and free the connection
         class HoldTheConnection:
-            dtype = "int32"
-
-            def __init__(self) -> None:
+            def __str__(self) -> str:
                 worker.start()
                 held.append(entered.wait(10))
+                return "a"
 
         class FreeTheConnection:
-            dtype = "int32"
-
-            def __init__(self) -> None:
+            def __str__(self) -> str:
                 freed.append(True)
                 release.set()
                 worker.join(10)
+                return "a"
 
-        def f(x: HoldTheConnection, y: list["INTEGER"], z: FreeTheConnection) -> int:
+        def f(x: {HoldTheConnection(): int}, y: list["INTEGER"], z: {FreeTheConnection(): int}) -> int:
             return len(y)
 
         try:
@@ -352,14 +350,13 @@ class TestUDFTypeNames:
         with pytest.raises(duckdb.BinderException):
             target.execute("SELECT missing")
 
-        # Converting a class annotation instantiates it, so a later annotation can end the aborted transaction
+        # Converting a dict annotation takes str() of its keys, so a later annotation can end the aborted transaction
         class RollBack:
-            dtype = "int32"
-
-            def __init__(self) -> None:
+            def __str__(self) -> str:
                 target.rollback()
+                return "a"
 
-        def f(x: list["INTEGER"], y: RollBack) -> int:
+        def f(x: list["INTEGER"], y: {RollBack(): int}) -> int:
             return len(x)
 
         with pytest.raises(duckdb.TransactionException, match="transaction is aborted"):
