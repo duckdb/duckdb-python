@@ -97,22 +97,28 @@ static vector<Identifier> TransformStructKeys(nb::handle keys, idx_t size) {
 	return res;
 }
 
-//! Whether a MAP's key or value component is a column of keys or values: a list, a tuple or a numpy array, which the
-//! conversion reads as a LIST (an array of no dimensions it refuses)
-static bool IsMapComponentList(nb::handle component) {
-	return PyList_Check(component.ptr()) || PyTuple_Check(component.ptr()) ||
-	       duckdb::PyUtil::IsInstance(component, DuckDBPyConnection::ImportCache()->numpy.ndarray());
+//! Whether an object is a list the conversion reads as a LIST: a list, a tuple or a numpy array of at least one
+//! dimension, since an array of none holds a single value
+static bool IsListLike(nb::handle ele) {
+	if (PyList_Check(ele.ptr()) || PyTuple_Check(ele.ptr())) {
+		return true;
+	}
+	return duckdb::PyUtil::IsInstance(ele, DuckDBPyConnection::ImportCache()->numpy.ndarray()) &&
+	       nb::cast<idx_t>(ele.attr("ndim")) > 0;
 }
 
-//! The length of a MAP's key or value component, or -1 for one that has none although it claims one, as a numpy
-//! array of no dimensions does
-static int64_t ComponentLength(nb::handle component) {
-	auto length = PyObject_Length(component.ptr());
-	if (length < 0) {
-		PyErr_Clear();
-		return -1;
+//! A dict of exactly 'key' and 'value' with a list on one side and a plain value on the other: a STRUCT of those
+//! fields without a target, and refused as a MAP's key and value lists for a MAP target
+static bool MixesAListAndAValue(const PyDictionary &dict) {
+	if (dict.len != 2) {
+		return false;
 	}
-	return length;
+	auto keys = dict[nb::str("key")];
+	auto values = dict[nb::str("value")];
+	if (!keys || !values || nb::none().is(keys) || nb::none().is(values)) {
+		return false;
+	}
+	return IsListLike(keys) != IsListLike(values);
 }
 
 bool DictionaryHasMapFormat(const PyDictionary &dict) {
@@ -129,25 +135,14 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 		return false;
 	}
 
-	// A list on either side, or None on both, makes the dict a MAP of the two lists: None a NULL MAP, and the
-	// conversion refuses the other side when it is no list. Without a list it is a plain dict, a MAP of the entries
-	// 'key' and 'value', so a NULL entry beside a plain value stays an entry
+	// Two lists of one length are a MAP's keys and values, and None on both sides, or beside a list, a NULL MAP; any
+	// other dict is a plain one, so a NULL entry or a list beside a plain value stays an entry or a field
 	auto key_none = nb::none().is(keys);
 	auto value_none = nb::none().is(values);
-	auto key_list = IsMapComponentList(keys);
-	auto value_list = IsMapComponentList(values);
-	if (!key_list && !value_list && !(key_none && value_none)) {
-		return false;
+	if (key_none || value_none) {
+		return (key_none || IsListLike(keys)) && (value_none || IsListLike(values));
 	}
-	if (key_none || value_none || !key_list || !value_list) {
-		return true;
-	}
-
-	// Verify that both the keys and values are of the same length; a component without one is refused by the
-	// conversion
-	auto key_size = ComponentLength(keys);
-	auto value_size = ComponentLength(values);
-	return key_size < 0 || value_size < 0 || key_size == value_size;
+	return IsListLike(keys) && IsListLike(values) && nb::len(keys) == nb::len(values);
 }
 
 Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyDictionary &dict,
@@ -310,16 +305,6 @@ Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, co
 	return TransformPythonValue(context, ele, LogicalType::UNKNOWN, nan_as_null);
 }
 
-//! Whether an object is a list a shape takes: a list, a tuple or a numpy array of at least one dimension, since an
-//! array of none holds a single value
-static bool ShapeTakesAsList(nb::handle ele) {
-	if (PyList_Check(ele.ptr()) || PyTuple_Check(ele.ptr())) {
-		return true;
-	}
-	return duckdb::PyUtil::IsInstance(ele, DuckDBPyConnection::ImportCache()->numpy.ndarray()) &&
-	       nb::cast<idx_t>(ele.attr("ndim")) > 0;
-}
-
 //! Whether an object is what a shape is for: a dict for a MAP or a STRUCT, a list for a LIST or an ARRAY; any other
 //! object converts without a target and meets the engine's cast or the kind check, so a tuple reads as a LIST at
 //! every depth, as the appender reads a value of a row
@@ -330,7 +315,7 @@ static bool ShapeTakes(nb::handle ele, const LogicalType &shape) {
 		return PyDict_Check(ele.ptr());
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY:
-		return ShapeTakesAsList(ele);
+		return IsListLike(ele);
 	default:
 		return false;
 	}
@@ -424,6 +409,13 @@ Value TransformStructFormatDictionaryToMap(optional_ptr<ClientContext> context, 
 Value TransformDictionaryToMap(optional_ptr<ClientContext> context, const PyDictionary &dict,
                                const LogicalType &target_type, bool nan_as_null) {
 	if (target_type.id() != LogicalTypeId::UNKNOWN && !DictionaryHasMapFormat(dict)) {
+		if (MixesAListAndAValue(dict)) {
+			auto keys = TransformPythonValue(context, dict[nb::str("key")], LogicalType::UNKNOWN, nan_as_null);
+			auto values = TransformPythonValue(context, dict[nb::str("value")], LogicalType::UNKNOWN, nan_as_null);
+			throw InvalidInputException("A dict of 'key' and 'value' for a MAP takes a list of keys and a list of "
+			                            "values, not %s and %s",
+			                            keys.type().ToString(), values.type().ToString());
+		}
 		// dict == { 'k1': v1, 'k2': v2, ..., 'kn': vn }
 		return TransformStructFormatDictionaryToMap(context, dict, target_type, nan_as_null);
 	}
@@ -436,9 +428,8 @@ Value TransformDictionaryToMap(optional_ptr<ClientContext> context, const PyDict
 		return Value(LogicalType::MAP(LogicalTypeId::SQLNULL, LogicalTypeId::SQLNULL));
 	}
 
-	auto key_size = ComponentLength(keys);
-	auto sized = key_size >= 0 && ComponentLength(values) >= 0;
-	if (sized && key_size == 0) {
+	auto key_size = nb::len(keys);
+	if (key_size == 0) {
 		// dict == { 'key': [], 'value': [] }
 		return EmptyMapValue();
 	}
@@ -448,15 +439,12 @@ Value TransformDictionaryToMap(optional_ptr<ClientContext> context, const PyDict
 	LogicalType value_target = LogicalTypeId::UNKNOWN;
 
 	if (IsShape(target_type)) {
-		// A shape reads the two lists entry by entry, as it reads a dict's own entries; a component that is no list
-		// converts without a target and is refused below
-		if (sized && ShapeTakesAsList(keys) && ShapeTakesAsList(values)) {
-			auto items = [](nb::handle list) {
-				return PyList_Check(list.ptr()) || PyTuple_Check(list.ptr()) ? nb::borrow<nb::object>(list)
-				                                                             : list.attr("tolist")();
-			};
-			return MapFromEntries(context, items(keys), items(values), key_size, target_type, nan_as_null);
-		}
+		// A shape reads the two lists entry by entry, as it reads a dict's own entries
+		auto items = [](nb::handle list) {
+			return PyList_Check(list.ptr()) || PyTuple_Check(list.ptr()) ? nb::borrow<nb::object>(list)
+			                                                             : list.attr("tolist")();
+		};
+		return MapFromEntries(context, items(keys), items(values), key_size, target_type, nan_as_null);
 	} else if (target_type.id() != LogicalTypeId::UNKNOWN) {
 		key_target = LogicalType::LIST(MapType::KeyType(target_type));
 		value_target = LogicalType::LIST(MapType::ValueType(target_type));

@@ -717,48 +717,137 @@ def test_map_scalar_inside_a_container_of_a_type_holding_a_map_is_refused_and_th
     assert con.sql("select 42").fetchall() == [(42,)]
 
 
-@pytest.mark.parametrize(
-    ("sql_type", "cell", "converted"),
-    [
-        pytest.param("MAP(VARCHAR, VARCHAR)", {"key": ["a"], "value": "b"}, "VARCHAR[] and VARCHAR", id="map"),
-        pytest.param(
-            "STRUCT(m MAP(VARCHAR, VARCHAR))",
-            {"m": {"key": ["a"], "value": "b"}},
-            "VARCHAR[] and VARCHAR",
-            id="map_field",
-        ),
-        pytest.param(
-            "MAP(VARCHAR, INTEGER)",
-            {"key": np.array("a"), "value": np.array(1)},
-            "VARCHAR and INTEGER",
-            id="zero_dimensional_arrays",
-        ),
-    ],
-)
-@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter"])
-def test_map_of_a_key_list_and_a_value_that_is_no_list_is_refused_and_the_database_stays_usable(
-    sql_type, cell, converted, mode
-):
-    con = duckdb.connect()
-    con.execute(f"create table t (a {sql_type})")
+def _through(mode, con, sql_type, cell):
+    con.execute(f"create or replace table t (a {sql_type})")
     if mode == "append":
-        run = lambda: con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))  # noqa: E731
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
     elif mode == "appender":
-
-        def run():
-            with con.appender("t") as appender:
-                appender.append_row(cell)
-
+        with con.appender("t") as appender:
+            appender.append_row(cell)
     elif mode == "parameter":
-        run = lambda: con.execute("insert into t values (?)", [cell])  # noqa: E731
+        con.execute("insert into t values (?)", [cell])
     else:
         con.execute("insert into t values (NULL)")
         schema = {"a": duckdb.sqltype(sql_type)} if mode == "explicit_schema" else None
-        run = con.table("t").map(_returning(cell), schema=schema).fetchall
-    expected = f"A dict of 'key' and 'value' for a MAP takes a list of keys and a list of values, not {converted}"
+        return con.table("t").map(_returning(cell), schema=schema).fetchall()
+    return con.table("t").fetchall()
+
+
+@pytest.mark.parametrize(
+    ("sql_type", "cell"),
+    [
+        pytest.param("MAP(VARCHAR, VARCHAR)", {"key": ["a"], "value": "b"}, id="map"),
+        pytest.param("STRUCT(m MAP(VARCHAR, VARCHAR))", {"m": {"key": ["a"], "value": "b"}}, id="map_field"),
+    ],
+)
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_map_of_a_key_list_beside_a_plain_value_for_a_map_type_is_refused_and_the_database_stays_usable(
+    sql_type, cell, mode
+):
+    con = duckdb.connect()
+    expected = (
+        "A dict of 'key' and 'value' for a MAP takes a list of keys and a list of values, not VARCHAR[] and VARCHAR"
+    )
     with pytest.raises(duckdb.InvalidInputException, match=re.escape(expected)):
-        run()
+        _through(mode, con, sql_type, cell)
     assert con.sql("select 42").fetchall() == [(42,)]
+
+
+@pytest.mark.parametrize("mode", ["appender", "parameter"])
+def test_map_of_a_key_list_beside_a_plain_value_without_a_target_converts_as_a_struct(mode):
+    # The conversion has no MAP to read for, so the dict is the STRUCT of its fields, which the engine casts into the
+    # MAP of the two entries, the list as its text
+    con = duckdb.connect()
+    assert _through(mode, con, "MAP(VARCHAR, VARCHAR)", {"key": ["a"], "value": "b"}) == [
+        ({"key": "[a]", "value": "b"},)
+    ]
+
+
+@pytest.mark.parametrize(
+    ("cell", "struct_type"),
+    [
+        pytest.param({"key": [], "value": "ab"}, 'STRUCT("key" "NULL"[], "value" VARCHAR)', id="empty_list_and_text"),
+        pytest.param({"key": [1], "value": 5}, 'STRUCT("key" INTEGER[], "value" INTEGER)', id="list_and_int"),
+        pytest.param({"key": "x", "value": None}, 'STRUCT("key" VARCHAR, "value" "NULL")', id="text_and_null"),
+    ],
+)
+@pytest.mark.parametrize("mode", ["parameter", "dataframe_scan"])
+def test_dict_of_key_and_value_without_two_lists_is_inferred_as_a_struct(cell, struct_type, mode):
+    con = duckdb.connect()
+    if mode == "parameter":
+        rows = con.execute("select ?, typeof(?)", [cell, cell]).fetchall()
+    else:
+        frame = pd.DataFrame({"a": pd.Series([cell], dtype=object)})  # noqa: F841
+        rows = con.sql("select a, typeof(a) from frame").fetchall()
+    assert rows == [(cell, struct_type)]
+
+
+KEY_AND_VALUE_STRUCTS = pytest.mark.parametrize(
+    "value",
+    [
+        "{'key': 'color', 'value': ['red', 'blue']}::STRUCT(key VARCHAR, value VARCHAR[])",
+        "map_entries(MAP {'color': ['red', 'blue']})",
+        "{'key': [1], 'value': 5}::STRUCT(key INTEGER[], value INTEGER)",
+        "{'key': 1, 'value': [5]}::STRUCT(key INTEGER, value INTEGER[])",
+    ],
+    ids=["text_and_list", "map_entries", "list_and_int", "int_and_list"],
+)
+
+
+@KEY_AND_VALUE_STRUCTS
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter", "dataframe_scan"])
+def test_struct_with_fields_key_and_value_one_a_list_converts_as_its_struct(value, mode):
+    con = duckdb.connect()
+    source = con.sql(f"select {value} as a")
+    expected = source.fetchall()
+    frame = source.df()
+    if mode == "dataframe_scan":
+        assert duckdb.connect().sql("select a from frame").fetchall() == expected
+        return
+    if mode in ("inferred", "explicit_schema"):
+        schema = _schema_of(source, mode == "explicit_schema")
+        assert source.map(lambda df: df, schema=schema).fetchall() == expected
+        return
+    con.execute(f"create table t (a {source.types[0]})")
+    if mode == "append":
+        con.append("t", frame)
+    elif mode == "appender":
+        with con.appender("t") as appender:
+            appender.append_row(frame["a"][0])
+    else:
+        con.execute("insert into t values (?)", [frame["a"][0]])
+    assert con.table("t").fetchall() == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "{'key': NULL, 'value': NULL}::STRUCT(key VARCHAR, value VARCHAR)",
+        "{'key': [1], 'value': NULL}::STRUCT(key INTEGER[], value INTEGER)",
+    ],
+    ids=["both_null", "list_and_null"],
+)
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
+def test_declared_struct_with_fields_key_and_value_reads_a_null_field_as_its_struct(value, mode):
+    # A declared STRUCT names its fields, so such a dict is no NULL MAP of key and value lists
+    con = duckdb.connect()
+    source = con.sql(f"select {value} as a")
+    expected = source.fetchall()
+    if mode == "append":
+        con.execute(f"create table t (a {source.types[0]})")
+        con.append("t", source.df())
+        assert con.table("t").fetchall() == expected
+    else:
+        mapped = source.map(lambda df: df, schema=_schema_of(source, mode == "explicit_schema"))
+        assert mapped.fetchall() == expected
+
+
+@pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append", "appender", "parameter"])
+def test_map_of_key_and_value_arrays_of_no_dimensions_reads_their_two_entries(mode):
+    # An array of no dimensions holds a single value, so the dict is a plain one
+    con = duckdb.connect()
+    cell = {"key": np.array("a"), "value": np.array("b")}
+    assert _through(mode, con, "MAP(VARCHAR, VARCHAR)", cell) == [({"key": "a", "value": "b"},)]
 
 
 @pytest.mark.parametrize(

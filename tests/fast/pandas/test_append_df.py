@@ -540,6 +540,16 @@ class TestAppendObjectColumnsToDeclaredTypes:
         duckdb_cursor.append("t", frame)
         assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,), (expected,)]
 
+    def test_aware_timestamp_without_nanoseconds_reads_in_the_session_time_zone(self, duckdb_cursor):
+        duckdb_cursor.execute("SET TimeZone = 'America/New_York'")
+        duckdb_cursor.execute("CREATE TABLE t (a TIMESTAMP)")
+        stamp = pd.Timestamp("2020-01-01 00:00", tz="UTC")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([stamp, stamp.to_pydatetime()], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [
+            ("2019-12-31 19:00:00",),
+            ("2019-12-31 19:00:00",),
+        ]
+
     def test_map_of_two_plain_values_named_key_and_value_appends_its_entries(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, VARCHAR))")
         frame = pd.DataFrame({"a": pd.Series([{"key": "ab", "value": "cd"}], dtype=object)})

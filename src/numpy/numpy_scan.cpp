@@ -941,9 +941,11 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
                                    bool bit_storage_refused) {
 	DeclaredVector staged(count);
 	auto &target = out.GetType();
-	// A type holding a MAP takes a shape for its keys, and one holding a naive timestamp for the unit a nested value
-	// reads in; a top level timestamp is read by DeclaredValue itself
+	// A type holding a MAP takes a shape for its keys, one holding a STRUCT for a dict to name its fields, not to be
+	// guessed a MAP's key and value lists, and one holding a naive timestamp for the unit a nested value reads in; a
+	// top level timestamp is read by DeclaredValue itself
 	const auto keyed = target.IsNested() && (TypeVisitor::Contains(target, LogicalTypeId::MAP) ||
+	                                         TypeVisitor::Contains(target, LogicalTypeId::STRUCT) ||
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_NS) ||
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP) ||
 	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_MS) ||
