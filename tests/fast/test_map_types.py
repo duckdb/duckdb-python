@@ -1,5 +1,6 @@
 """map() fixes one type per output column at bind and reads each chunk's returned column into it."""
 
+import collections
 import datetime
 import json
 import re
@@ -842,6 +843,14 @@ def test_declared_struct_with_fields_key_and_value_reads_a_null_field_as_its_str
         assert mapped.fetchall() == expected
 
 
+def test_map_of_an_ordered_dict_for_a_stated_map_keeps_its_iteration_order(duckdb_cursor):
+    ordered = collections.OrderedDict([("a", 1), ("b", 2), ("c", 3)])
+    ordered.move_to_end("a")
+    source = duckdb_cursor.sql("select MAP {'k': 1} as a")
+    mapped = source.map(_returning(ordered), schema={"a": duckdb.sqltype("MAP(VARCHAR, INTEGER)")})
+    assert mapped.project("map_keys(a)").fetchall() == [(["b", "c", "a"],)]
+
+
 @pytest.mark.parametrize("mode", ["inferred", "explicit_schema", "append"])
 def test_struct_given_an_empty_dict_is_refused(mode):
     # A missing field reads NULL, but a dict of no keys is no STRUCT of the column's fields
@@ -969,6 +978,75 @@ def test_map_nested_timestamp_ns_value_keeps_its_nanoseconds(duckdb_cursor, valu
     mapped = source.map(_returning(cell))
     assert mapped.types == source.types
     assert "00:00:00.000000001" in mapped.project("a::VARCHAR").fetchall()[0][0]
+
+
+AWARE_NANOSECOND = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC")
+
+
+@pytest.mark.parametrize(
+    ("value", "cell"),
+    [
+        pytest.param("'2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS", AWARE_NANOSECOND, id="top"),
+        pytest.param("{'t': '2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS}", {"t": AWARE_NANOSECOND}, id="field"),
+        pytest.param("['2020-01-01 00:00:00.000000001+00'::TIMESTAMPTZ_NS]", [AWARE_NANOSECOND], id="list_element"),
+    ],
+)
+@SCHEMAS
+def test_map_zoned_timestamp_ns_value_keeps_its_nanoseconds(duckdb_cursor, value, cell, explicit_schema):
+    duckdb_cursor.execute("SET TimeZone = 'UTC'")
+    source = duckdb_cursor.sql(f"select {value} as a")
+    mapped = source.map(_returning(cell), schema=_schema_of(source, explicit_schema))
+    assert mapped.types == source.types
+    assert mapped.project("a::VARCHAR").fetchall() == source.project("a::VARCHAR").fetchall()
+
+
+@pytest.mark.parametrize(
+    ("value", "cell", "returned"),
+    [
+        pytest.param("'2020-01-01 00:00:00+00'::TIMESTAMPTZ", AWARE_NANOSECOND, "TIMESTAMPTZ_NS", id="top"),
+        pytest.param(
+            "{'t': '2020-01-01 00:00:00+00'::TIMESTAMPTZ}",
+            {"t": AWARE_NANOSECOND},
+            "STRUCT(t TIMESTAMPTZ_NS)",
+            id="field",
+        ),
+        pytest.param(
+            "['2020-01-01 00:00:00+00'::TIMESTAMPTZ]", [AWARE_NANOSECOND], "TIMESTAMPTZ_NS[]", id="list_element"
+        ),
+    ],
+)
+def test_map_zoned_timestamp_with_nanoseconds_for_an_implied_timestamptz_is_refused(
+    duckdb_cursor, value, cell, returned
+):
+    duckdb_cursor.execute("SET TimeZone = 'UTC'")
+    source = duckdb_cursor.sql(f"select {value} as a")
+    expected = f"UDF column type mismatch, expected [{source.types[0]}], got [{returned}]"
+    with pytest.raises(duckdb.InvalidInputException, match=re.escape(expected)):
+        source.map(_returning(cell)).fetchall()
+
+
+@pytest.mark.parametrize("place", ["top", "field", "list_element", "map_value"])
+@pytest.mark.parametrize("mode", ["explicit_schema", "append"])
+def test_map_zoned_timestamp_with_nanoseconds_for_a_stated_timestamptz_reads_as_its_datetime(place, mode):
+    stamp = pd.Timestamp("2020-01-01 00:00:00.000005789", tz="UTC")
+    text = "2020-01-01 00:00:00.000005+00"
+    sql_type, cell, expected = {
+        "top": ("TIMESTAMPTZ", stamp, text),
+        "field": ("STRUCT(t TIMESTAMPTZ)", {"t": stamp}, f"{{'t': '{text}'}}"),
+        "list_element": ("TIMESTAMPTZ[]", [stamp], f"['{text}']"),
+        "map_value": ("MAP(VARCHAR, TIMESTAMPTZ)", {"k": stamp}, f"{{k='{text}'}}"),
+    }[place]
+    con = duckdb.connect()
+    con.execute("SET TimeZone = 'UTC'")
+    con.execute(f"create table t (a {sql_type})")
+    if mode == "append":
+        con.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        rows = con.sql("select a::VARCHAR from t").fetchall()
+    else:
+        con.execute("insert into t values (NULL)")
+        schema = {"a": duckdb.sqltype(sql_type)}
+        rows = con.table("t").map(_returning(cell), schema=schema).project("a::VARCHAR").fetchall()
+    assert rows == [(expected,)]
 
 
 def test_map_nested_timestamp_with_nanoseconds_for_an_implied_timestamp_is_refused(duckdb_cursor):

@@ -309,16 +309,21 @@ static Value DeclaredValue(ClientContext &context, const LogicalType &target, nb
 	if (cell.ptr() == Py_None) {
 		return Value();
 	}
-	// A TIMESTAMP_NS column keeps a pandas Timestamp's nanoseconds, and an implied naive timestamp type sees them, so
-	// its kind check refuses what a coarser unit would drop; a stated coarser type reads the Timestamp as the datetime
-	// it also is
+	// A TIMESTAMP_NS or TIMESTAMPTZ_NS column keeps a pandas Timestamp's nanoseconds, and an implied timestamp type of
+	// a coarser unit sees them, so its kind check refuses what the unit would drop; a stated coarser type reads the
+	// Timestamp as the datetime it also is
 	auto naive_timestamp =
 	    target.id() == LogicalTypeId::TIMESTAMP_NS ||
 	    (implied && (target.id() == LogicalTypeId::TIMESTAMP || target.id() == LogicalTypeId::TIMESTAMP_MS ||
 	                 target.id() == LogicalTypeId::TIMESTAMP_SEC));
+	auto zoned_timestamp =
+	    target.id() == LogicalTypeId::TIMESTAMP_TZ_NS || (implied && target.id() == LogicalTypeId::TIMESTAMP_TZ);
 	timestamp_ns_t nanoseconds;
-	if (naive_timestamp && HoldsNanoseconds(cell, nanoseconds)) {
+	if (naive_timestamp && HoldsNanoseconds(cell, nanoseconds, false)) {
 		return Value::TIMESTAMPNS(nanoseconds);
+	}
+	if (zoned_timestamp && HoldsNanoseconds(cell, nanoseconds, true)) {
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(nanoseconds.value));
 	}
 	auto plain = PythonValueOfNumpyScalar(cell, nanoseconds);
 	if (!plain.is_valid()) {
@@ -367,6 +372,7 @@ static LogicalType KeyedShape(const LogicalType &type, bool typed_entries) {
 	case LogicalTypeId::MAP:
 		return AsShape(LogicalType::MAP(entry(MapType::KeyType(type)), entry(MapType::ValueType(type))));
 	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ_NS:
 		return AsShape(type);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -374,6 +380,9 @@ static LogicalType KeyedShape(const LogicalType &type, bool typed_entries) {
 		// An implied type sees the nanoseconds a coarser unit would drop, so its kind check refuses them; a stated one
 		// takes them through the engine's cast into its unit, as at the top
 		return AsShape(typed_entries ? type : LogicalType::TIMESTAMP_NS);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		// A stated one reads a zone aware Timestamp as the datetime it also is, as at the top
+		return typed_entries ? LogicalType(LogicalTypeId::UNKNOWN) : AsShape(LogicalType::TIMESTAMP_TZ_NS);
 	default:
 		return LogicalType::UNKNOWN;
 	}
@@ -622,7 +631,11 @@ private:
 		auto zoned_timestamps =
 		    (source.id() == LogicalTypeId::TIMESTAMP_TZ || source.id() == LogicalTypeId::TIMESTAMP_TZ_NS) &&
 		    (type.id() == LogicalTypeId::TIMESTAMP_TZ || type.id() == LogicalTypeId::TIMESTAMP_TZ_NS);
-		if (zoned_timestamps || (source.id() == LogicalTypeId::VARCHAR && type.id() == LogicalTypeId::VARCHAR) ||
+		// Another unit of a zoned timestamp, as of a naive one, holds only the values the cast keeps unchanged
+		if (zoned_timestamps) {
+			return source.id() == type.id() ? Verdict::FITS : Verdict::BY_VALUE;
+		}
+		if ((source.id() == LogicalTypeId::VARCHAR && type.id() == LogicalTypeId::VARCHAR) ||
 		    (source.id() == LogicalTypeId::DOUBLE && type.id() == LogicalTypeId::FLOAT)) {
 			return Verdict::FITS;
 		}
@@ -943,21 +956,20 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
                                    idx_t count, idx_t offset, Vector &out, bool implied_type,
                                    bool bit_storage_refused) {
 	DeclaredVector staged(count);
-	struct FieldIndexesOfTheScan {
-		~FieldIndexesOfTheScan() {
-			ClearStructFieldIndexes();
-		}
-	} field_indexes;
+	StructFieldIndexScope field_indexes;
 	auto &target = out.GetType();
 	// A type holding a MAP takes a shape for its keys, one holding a STRUCT for a dict to name its fields, not to be
-	// guessed a MAP's key and value lists, and one holding a naive timestamp for the unit a nested value reads in; a
-	// top level timestamp is read by DeclaredValue itself
-	const auto keyed = target.IsNested() && (TypeVisitor::Contains(target, LogicalTypeId::MAP) ||
-	                                         TypeVisitor::Contains(target, LogicalTypeId::STRUCT) ||
-	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_NS) ||
-	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP) ||
-	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_MS) ||
-	                                         TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_SEC));
+	// guessed a MAP's key and value lists, and one holding a timestamp for the unit a nested value reads in; a
+	// top level timestamp is read by DeclaredValue itself, and a stated TIMESTAMPTZ takes no mark in the shape
+	const auto keyed =
+	    target.IsNested() &&
+	    (TypeVisitor::Contains(target, LogicalTypeId::MAP) || TypeVisitor::Contains(target, LogicalTypeId::STRUCT) ||
+	     TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_NS) ||
+	     TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_TZ_NS) ||
+	     (implied_type && TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_TZ)) ||
+	     TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP) ||
+	     TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_MS) ||
+	     TypeVisitor::Contains(target, LogicalTypeId::TIMESTAMP_SEC));
 	const auto bits_refused = bit_storage_refused && TypeVisitor::Contains(target, LogicalTypeId::BIT);
 	const auto shape = keyed ? KeyedShape(target, !implied_type) : LogicalType(LogicalTypeId::UNKNOWN);
 	ImpliedKinds kinds(context);
@@ -1070,7 +1082,9 @@ void NumpyScan::ScanDeclaredColumn(ClientContext &context, PyObject **col, idx_t
 		vector<Value> keys;
 		vector<Value> values;
 		ScanObjectCells(context, col, stride, masked, count, offset, out, [&](nb::handle cell, idx_t row) {
-			if (!PyDict_Check(cell.ptr())) {
+			// A dict subclass, as an OrderedDict, may iterate in another order than its storage, which is what
+			// PyDict_Next walks
+			if (!PyDict_CheckExact(cell.ptr())) {
 				return read(cell, row);
 			}
 			auto size = NumericCast<idx_t>(PyDict_Size(cell.ptr()));

@@ -257,8 +257,18 @@ const identifier_map_t<idx_t> &FieldIndexOf(const LogicalType &struct_type) {
 }
 } // namespace
 
-void ClearStructFieldIndexes() {
-	FieldIndexes().clear();
+// Python a conversion runs, as a tzinfo's utcoffset, can start another declared scan on this thread while an outer
+// conversion holds an index, so only the outermost scope drops them
+static thread_local idx_t struct_field_index_scopes = 0;
+
+StructFieldIndexScope::StructFieldIndexScope() {
+	struct_field_index_scopes++;
+}
+
+StructFieldIndexScope::~StructFieldIndexScope() {
+	if (--struct_field_index_scopes == 0) {
+		FieldIndexes().clear();
+	}
 }
 
 Value TransformDictionaryToStruct(optional_ptr<ClientContext> context, const PyDictionary &dict,
@@ -371,7 +381,7 @@ int64_t NanosecondOf(nb::handle cell) {
 	return PyLong_Check(nanosecond.ptr()) ? PyLong_AsLongLong(nanosecond.ptr()) : -1;
 }
 
-bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
+bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds, bool zoned) {
 	auto datetime_type = DuckDBPyConnection::ImportCache()->datetime.datetime();
 	if (Py_TYPE(cell.ptr()) == reinterpret_cast<PyTypeObject *>(datetime_type.ptr()) ||
 	    !duckdb::PyUtil::IsInstance(cell, datetime_type)) {
@@ -379,9 +389,10 @@ bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
 	}
 	// A Timestamp without nanoseconds reads as the datetime it is: its value in nanoseconds overflows outside the
 	// years 1677 to 2262, and a coarser column would judge that value by a cast where the datetime fits outright
-	if (NanosecondOf(cell) <= 0 || !nb::getattr(cell, "tzinfo").is_none()) {
+	if (NanosecondOf(cell) <= 0 || nb::getattr(cell, "tzinfo").is_none() == zoned) {
 		return false;
 	}
+	// A zone aware Timestamp's value counts the nanoseconds since the epoch in UTC, as a TIMESTAMPTZ_NS does
 	nanoseconds = timestamp_ns_t(nb::cast<int64_t>(cell.attr("value")));
 	return true;
 }
@@ -389,8 +400,11 @@ bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds) {
 Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
                          bool nan_as_null) {
 	timestamp_ns_t nanoseconds;
-	if (target_type.id() == LogicalTypeId::TIMESTAMP_NS && HoldsNanoseconds(ele, nanoseconds)) {
+	if (target_type.id() == LogicalTypeId::TIMESTAMP_NS && HoldsNanoseconds(ele, nanoseconds, false)) {
 		return Value::TIMESTAMPNS(nanoseconds);
+	}
+	if (target_type.id() == LogicalTypeId::TIMESTAMP_TZ_NS && HoldsNanoseconds(ele, nanoseconds, true)) {
+		return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(nanoseconds.value));
 	}
 	auto plain = PythonValueOfNumpyScalar(ele, nanoseconds);
 	if (!plain.is_valid()) {

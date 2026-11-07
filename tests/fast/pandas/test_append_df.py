@@ -1,3 +1,4 @@
+import collections
 import datetime
 import enum
 import math
@@ -587,15 +588,104 @@ class TestAppendObjectColumnsToDeclaredTypes:
         ]
 
     def test_struct_dicts_with_keys_out_of_field_order_read_each_field_by_name(self, duckdb_cursor):
-        # Twelve STRUCT types, more than the per thread field indexes keep, each dict's keys in reverse field order
-        inner = [f"s{i} STRUCT(a{i} INTEGER, b{i} INTEGER, c{i} INTEGER)" for i in range(12)]
-        duckdb_cursor.execute(f"CREATE TABLE t (i INTEGER, a STRUCT({', '.join(inner)}))")
-        cells = [
-            {f"s{i}": {f"c{i}": row + 3, f"b{i}": row + 2, f"a{i}": row + 1} for i in reversed(range(12))}
-            for row in range(3000)
-        ]
+        # Each dict's keys in reverse field order, for twelve STRUCT types and one inside a LIST; the TIMESTAMP_NS and
+        # BLOB keyed MAP fields read their nanoseconds and bytes only when the key finds its field
+        nanosecond = pd.Timestamp("2020-01-01 00:00:00.000000001")
+
+        def fields(i):
+            return f"a{i} INTEGER, t{i} TIMESTAMP_NS, m{i} MAP(BLOB, INTEGER)"
+
+        def cell(i, row):
+            return {f"m{i}": {b"\x00k": row}, f"t{i}": nanosecond, f"a{i}": row}
+
+        inner = [f"s{i} STRUCT({fields(i)})" for i in range(12)]
+        duckdb_cursor.execute(f"CREATE TABLE t (i INTEGER, a STRUCT({', '.join(inner)}, l STRUCT({fields(12)})[]))")
+        cells = [{"l": [cell(12, row)], **{f"s{i}": cell(i, row) for i in reversed(range(12))}} for row in range(3000)]
         duckdb_cursor.append("t", pd.DataFrame({"i": range(3000), "a": pd.Series(cells, dtype=object)}))
-        assert [row[0] for row in duckdb_cursor.sql("SELECT a FROM t ORDER BY i").fetchall()] == cells
+        places = [(f"a.s{i}", i) for i in range(12)] + [("a.l[1]", 12)]
+        columns = ", ".join(f"{place}.a{i}, {place}.t{i}::VARCHAR, {place}.m{i}" for place, i in places)
+        expected = [(row, "2020-01-01 00:00:00.000000001", {b"\x00k": row}) * len(places) for row in range(3000)]
+        assert duckdb_cursor.sql(f"SELECT {columns} FROM t ORDER BY i").fetchall() == expected
+
+    def test_struct_append_inside_a_conversion_keeps_the_outer_scans_field_index(self, duckdb_cursor):
+        # A tzinfo's utcoffset that appends on another connection runs a declared scan inside this one's, between
+        # this dict's out of order keys
+        other = duckdb.connect()
+        other.execute("CREATE TABLE y (c BIGINT)")
+
+        class Appending(datetime.tzinfo):
+            def utcoffset(self, dt):
+                other.append("y", pd.DataFrame({"c": pd.Series([1, 2, 3], dtype=object)}))
+                return datetime.timedelta(0)
+
+            def dst(self, dt):
+                return datetime.timedelta(0)
+
+            def tzname(self, dt):
+                return "UTC"
+
+        fields = [f"f{j}" for j in range(30)]
+        duckdb_cursor.execute(f"CREATE TABLE t (a STRUCT(t TIMESTAMPTZ, {', '.join(f'{f} INTEGER' for f in fields)}))")
+        moment = datetime.datetime(2020, 1, 1, tzinfo=Appending())
+        cells = [{"f29": row, "t": moment, **dict.fromkeys(reversed(fields[:-1]), row)} for row in range(20)]
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series(cells, dtype=object)}))
+        assert duckdb_cursor.sql("SELECT count(*), sum(a.f0), sum(a.f29) FROM t").fetchall() == [(20, 190, 190)]
+        assert other.sql("SELECT count(*) > 0 FROM y").fetchall() == [(True,)]
+
+    @pytest.mark.parametrize(
+        ("target", "cell", "expected"),
+        [
+            pytest.param("TIMESTAMPTZ_NS", "stamp", "2020-01-01 00:00:00.000000001+00", id="top"),
+            pytest.param(
+                "STRUCT(t TIMESTAMPTZ_NS)", {"t": "stamp"}, "{'t': '2020-01-01 00:00:00.000000001+00'}", id="field"
+            ),
+            pytest.param("TIMESTAMPTZ_NS[]", ["stamp"], "['2020-01-01 00:00:00.000000001+00']", id="list_element"),
+            pytest.param(
+                "MAP(VARCHAR, TIMESTAMPTZ_NS)", {"k": "stamp"}, "{k='2020-01-01 00:00:00.000000001+00'}", id="map_value"
+            ),
+        ],
+    )
+    def test_zoned_timestamp_with_nanoseconds_keeps_them_in_a_timestamptz_ns(
+        self, duckdb_cursor, target, cell, expected
+    ):
+        stamp = pd.Timestamp("2020-01-01 00:00:00.000000001", tz="UTC")
+
+        def with_stamp(value):
+            if isinstance(value, dict):
+                return {key: with_stamp(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [with_stamp(item) for item in value]
+            return stamp if value == "stamp" else value
+
+        duckdb_cursor.execute("SET TimeZone = 'UTC'")
+        duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([with_stamp(cell)], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    @pytest.mark.parametrize(
+        ("stamp", "text"),
+        [
+            pytest.param(pd.Timestamp.max.tz_localize("UTC"), "infinity", id="max"),
+            pytest.param(pd.Timestamp.min.tz_localize("UTC"), "-infinity", id="min"),
+        ],
+    )
+    @pytest.mark.parametrize("place", ["top", "field", "list_element"])
+    def test_zoned_timestamp_max_and_min_store_infinity_in_a_timestamptz_ns(self, duckdb_cursor, stamp, text, place):
+        target, cell, expected = {
+            "top": ("TIMESTAMPTZ_NS", stamp, text),
+            "field": ("STRUCT(t TIMESTAMPTZ_NS)", {"t": stamp}, f"{{'t': {text}}}"),
+            "list_element": ("TIMESTAMPTZ_NS[]", [stamp], f"[{text}]"),
+        }[place]
+        duckdb_cursor.execute(f"CREATE TABLE t (a {target})")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([cell], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT a::VARCHAR FROM t").fetchall() == [(expected,)]
+
+    def test_map_of_an_ordered_dict_keeps_its_iteration_order(self, duckdb_cursor):
+        ordered = collections.OrderedDict([("a", 1), ("b", 2), ("c", 3)])
+        ordered.move_to_end("a")
+        duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
+        duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([ordered], dtype=object)}))
+        assert duckdb_cursor.sql("SELECT map_keys(a) FROM t").fetchall() == [(["b", "c", "a"],)]
 
     def test_map_column_mixing_dicts_with_other_cells_keeps_every_row_in_place(self, duckdb_cursor):
         # Dicts are written into the MAP's entries directly and the other cells after them; 3000 rows span two vectors
@@ -634,9 +724,8 @@ class TestAppendObjectColumnsToDeclaredTypes:
 
     def test_map_key_of_none_is_refused_and_the_connection_stays_usable(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (a MAP(VARCHAR, INTEGER))")
-        with pytest.raises(duckdb.Error) as error:
+        with pytest.raises(duckdb.InvalidInputException, match=re.escape("Map keys can not be NULL.")):
             duckdb_cursor.append("t", pd.DataFrame({"a": pd.Series([{None: 1}], dtype=object)}))
-        assert not isinstance(error.value, duckdb.FatalException), error.value
         assert duckdb_cursor.sql("SELECT 42").fetchall() == [(42,)]
 
     def test_text_with_a_lone_surrogate_names_it(self, duckdb_cursor):

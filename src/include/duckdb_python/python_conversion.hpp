@@ -56,9 +56,15 @@ bool DictionaryHasMapFormat(const PyDictionary &dict);
 //! A dict of exactly 'key' and 'value' with a list on one side and a plain value on the other: a STRUCT of those
 //! fields without a target, and refused as a MAP's key and value lists for a MAP target
 bool MixesAListAndAValue(const PyDictionary &dict);
-//! Drops the field indexes the conversion of shaped STRUCT dicts kept on this thread; the declared scan calls it when
-//! the scan of a vector ends, so no index outlives the shape it was built for
-void ClearStructFieldIndexes();
+//! Keeps the field indexes the conversion of shaped STRUCT dicts builds on this thread while a declared scan runs; the
+//! outermost scope drops them when it ends, so no index outlives the shapes it was built for
+class StructFieldIndexScope {
+public:
+	StructFieldIndexScope();
+	~StructFieldIndexScope();
+	StructFieldIndexScope(const StructFieldIndexScope &) = delete;
+	StructFieldIndexScope &operator=(const StructFieldIndexScope &) = delete;
+};
 //! A key or value of a MAP whose target is a type without children converts without a target and is then cast with
 //! the connection's settings, as a value of a column is, so each keeps its own type until the cast instead of meeting
 //! its siblings' common type (2**60 + 1 beside 1.0 would read as a DOUBLE, rounded)
@@ -71,12 +77,12 @@ LogicalType AsShape(const LogicalType &type);
 bool IsShape(const LogicalType &type);
 //! The nanosecond a datetime subclass such as a pandas Timestamp gives as an int, or -1 when it gives none
 int64_t NanosecondOf(nb::handle cell);
-//! Whether a cell is a naive pandas Timestamp with nanoseconds, which no Python datetime holds; they are then in
-//! nanoseconds
-bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds);
-//! A value for a naive timestamp type converted without a target, but keeping the nanoseconds of a pandas Timestamp
-//! for a TIMESTAMP_NS, and reading a numpy scalar as PythonValueOfNumpyScalar does, so a datetime64 finer than a
-//! microsecond is a TIMESTAMP_NS that a coarser unit takes through the engine's cast
+//! Whether a cell is a pandas Timestamp with nanoseconds, which no Python datetime holds, naive or, when zoned, zone
+//! aware; they are then the nanoseconds since the epoch, in UTC for a zone aware one
+bool HoldsNanoseconds(nb::handle cell, timestamp_ns_t &nanoseconds, bool zoned);
+//! A value for a timestamp type converted without a target, but keeping the nanoseconds of a pandas Timestamp for a
+//! TIMESTAMP_NS or a TIMESTAMPTZ_NS, and reading a numpy scalar as PythonValueOfNumpyScalar does, so a datetime64 finer
+//! than a microsecond is a TIMESTAMP_NS that a coarser unit takes through the engine's cast
 Value TransformTimestamp(optional_ptr<ClientContext> context, nb::handle ele, const LogicalType &target_type,
                          bool nan_as_null);
 void TransformPythonObject(optional_ptr<ClientContext> context, nb::handle ele, Vector &vector, idx_t result_offset,
