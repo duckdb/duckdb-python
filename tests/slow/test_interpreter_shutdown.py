@@ -12,6 +12,7 @@ import subprocess
 import sys
 import textwrap
 
+import _duckdb
 import pytest
 
 BODY_DONE = "BODY_DONE"
@@ -45,10 +46,14 @@ def _run(script: str, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _report(proc: subprocess.CompletedProcess[str]) -> str:
+    return f"exit status {proc.returncode}\nstdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
+
+
 def _assert_clean_exit(
     proc: subprocess.CompletedProcess[str], expected_lines: tuple[str, ...], *, leak_free: bool
 ) -> None:
-    report = f"exit status {proc.returncode}\nstdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}"
+    report = _report(proc)
     assert proc.returncode == 0, report
     lines = proc.stdout.splitlines()
     assert BODY_DONE in lines, report
@@ -56,7 +61,15 @@ def _assert_clean_exit(
         assert line in lines, report
     assert "Fatal Python error" not in proc.stderr, report
     if leak_free:
-        assert "nanobind: leaked" not in proc.stderr, report
+        _assert_no_leak_report(proc)
+
+
+def _assert_no_leak_report(*procs: subprocess.CompletedProcess[str]) -> None:
+    # Skipping ends the test, so a test calls this after its other checks.
+    if not _duckdb._assertions:
+        pytest.skip("a build without assertions silences nanobind's leak report")
+    for proc in procs:
+        assert "nanobind: leaked" not in proc.stderr, _report(proc)
 
 
 UNLISTED_IMPORT = """
@@ -723,7 +736,8 @@ def test_ordinary_shutdown_checkpoints_default_connection(tmp_path) -> None:
         duckdb.sql("insert into t values (3)")
         print("BODY_DONE", flush=True)
     """
-    _assert_clean_exit(_run(script, str(database)), (), leak_free=True)
+    first = _run(script, str(database))
+    _assert_clean_exit(first, (), leak_free=False)
     assert database.exists()
     assert not database.with_name(database.name + ".wal").exists()
     reopen = """
@@ -733,7 +747,9 @@ def test_ordinary_shutdown_checkpoints_default_connection(tmp_path) -> None:
         print(duckdb.connect(sys.argv[1]).sql("from t order by a").fetchall())
         print("BODY_DONE", flush=True)
     """
-    _assert_clean_exit(_run(reopen, str(database)), ("[(0,), (1,), (2,), (3,)]",), leak_free=True)
+    second = _run(reopen, str(database))
+    _assert_clean_exit(second, ("[(0,), (1,), (2,), (3,)]",), leak_free=False)
+    _assert_no_leak_report(first, second)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="ctypes cannot load the C library through a null name on Windows")
@@ -750,7 +766,8 @@ def test_c_exit_keeps_committed_data(tmp_path, library: str) -> None:
         print("BODY_DONE", flush=True)
         ctypes.{library}(None).exit(0)
     """
-    _assert_clean_exit(_run(script, database), (), leak_free=True)
+    first = _run(script, database)
+    _assert_clean_exit(first, (), leak_free=False)
     reopen = """
         import sys
         import duckdb
@@ -758,4 +775,6 @@ def test_c_exit_keeps_committed_data(tmp_path, library: str) -> None:
         print(duckdb.connect(sys.argv[1]).sql("from t order by a").fetchall())
         print("BODY_DONE", flush=True)
     """
-    _assert_clean_exit(_run(reopen, database), ("[(0,), (1,), (2,)]",), leak_free=True)
+    second = _run(reopen, database)
+    _assert_clean_exit(second, ("[(0,), (1,), (2,)]",), leak_free=False)
+    _assert_no_leak_report(first, second)

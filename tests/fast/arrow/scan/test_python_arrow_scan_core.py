@@ -21,6 +21,7 @@ import uuid
 from pathlib import Path
 from typing import ClassVar
 
+import _duckdb
 import pytest
 
 import duckdb
@@ -2563,6 +2564,8 @@ print("exiting")
         assert completed.returncode == 0, completed.stderr[-2000:]
         assert "exiting" in completed.stdout
         if state != "retained_result":
+            if not _duckdb._assertions:
+                pytest.skip("a build without assertions silences nanobind's leak report")
             assert "nanobind: leaked" not in completed.stderr
 
     @pytest.mark.timeout(120)

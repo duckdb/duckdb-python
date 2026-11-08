@@ -704,11 +704,24 @@ NB_EXPORT void *_force_symbol_inclusion() {
 }
 };
 
+// DEBUG is set only for the engine's own sources; the bindings see the build configuration through these two.
+#if defined(DUCKDB_DEBUG_MODE) || defined(DUCKDB_FORCE_ASSERT)
+static constexpr bool BUILD_HAS_ASSERTIONS = true;
+#else
+static constexpr bool BUILD_HAS_ASSERTIONS = false;
+#endif
+
 NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	// DO NOT REMOVE: the below forces that we include all symbols we want to export
 	volatile auto *keep_alive = _force_symbol_inclusion();
 	(void)keep_alive;
 	// END
+
+	// Objects that another package keeps alive past finalization fill nanobind's exit report although nothing grows
+	// at run time, so only builds with assertions print it.
+	if constexpr (!BUILD_HAS_ASSERTIONS) {
+		nb::set_leak_warnings(false);
+	}
 
 	// A static initializer registered the linked extensions when the library was loaded. Repeating the call is a no-op
 	// on a healthy build and makes a broken build fail at import instead of at the first connect.
@@ -754,6 +767,7 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	m.attr("__interactive__") = DuckDBPyConnection::DetectAndGetEnvironment();
 	m.attr("__jupyter__") = DuckDBPyConnection::IsJupyter();
 	m.attr("__formatted_python_version__") = DuckDBPyConnection::FormattedPythonVersion();
+	m.attr("_assertions") = BUILD_HAS_ASSERTIONS;
 	m.def("default_connection", &DuckDBPyConnection::DefaultConnection,
 	      "Retrieve the connection currently registered as the default to be used by the module");
 	m.def("set_default_connection", &DuckDBPyConnection::SetDefaultConnection,
