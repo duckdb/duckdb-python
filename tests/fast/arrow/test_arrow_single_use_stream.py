@@ -17,6 +17,7 @@ import sys
 import time
 from collections import Counter
 
+import _duckdb
 import pytest
 
 import duckdb
@@ -614,6 +615,8 @@ class TestConsumedReaderRecord:
         assert "first 3" in completed.stdout
         assert "second raised True" in completed.stdout
         assert "already registered" not in completed.stderr
+        if not _duckdb._assertions:
+            pytest.skip("a build without assertions silences nanobind's leak report")
         assert "nanobind: leaked" not in completed.stderr
 
 
