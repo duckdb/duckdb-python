@@ -1,6 +1,9 @@
 # Instruction-count (Callgrind) perf gate vs a committed benchmarks/baseline.json; no CodSpeed account needed
 # (compare_baseline.py parses the raw callgrind dumps). Rationale in benchmarks/README.md and benchmarks/PLAN.md.
 # workflow_dispatch input `regen`: false compares (report only), true writes baseline.json and uploads it.
+# The schedule runs on the default branch only, so the nightly measures every release line from here: one job per
+# ref in the matrix below (the branch of each line that still ships releases), each checking out its own ref and
+# comparing against that ref's committed baseline. A dispatch measures the ref it was dispatched on.
 
 name: Benchmarks
 
@@ -20,7 +23,13 @@ concurrency:
 
 jobs:
   benchmarks:
+    name: benchmarks (${{ matrix.ref }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # the env context is not available in strategy, so the list of nightly refs is a literal here
+        ref: ${{ github.event_name == 'schedule' && fromJSON('["main", "v2.0-cyanoptera"]') || fromJSON(format('["{0}"]', github.ref_name)) }}
     timeout-minutes: 90 # ~25 min sweep (BENCH_SCALE=10) + ~10 min cold build, plus margin
     permissions:
       contents: read
@@ -32,16 +41,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ matrix.ref }}
           submodules: recursive
           # the package version needs only HEAD, but DuckDB's own version script
           # counts the submodule's commits and a shallow clone would label the
           # engine v2.0.0-dev1
           fetch-depth: 0
 
-      - name: Resolve DuckDB submodule SHA
+      - name: Resolve the measured commit and its DuckDB submodule SHA
         id: duckdb_sha
-        # sccache key + compare_baseline.py engine-bump guard
-        run: echo "sha=$(git rev-parse HEAD:external/duckdb)" >> "$GITHUB_OUTPUT"
+        # sccache key + compare_baseline.py engine-bump guard; the ingest of the nightly reads both lines from the log
+        run: |
+          echo "measured ref ${{ matrix.ref }} at $(git rev-parse HEAD), engine $(git rev-parse HEAD:external/duckdb)"
+          echo "sha=$(git rev-parse HEAD:external/duckdb)" >> "$GITHUB_OUTPUT"
+          echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.0
@@ -117,12 +130,12 @@ jobs:
         run: |
           uv run --no-sync python benchmarks/compare_baseline.py regen \
             --profiles profiles --out benchmarks/baseline.json --gate-list gate_list.txt \
-            --git-commit "${{ github.sha }}" --submodule-sha "${{ steps.duckdb_sha.outputs.sha }}" \
+            --git-commit "${{ steps.duckdb_sha.outputs.head }}" --submodule-sha "${{ steps.duckdb_sha.outputs.sha }}" \
             --pins benchmarks/requirements-bench.txt
 
       - name: Upload regenerated baseline
         if: ${{ inputs.regen }}
         uses: actions/upload-artifact@v4
         with:
-          name: baseline-update
+          name: baseline-update-${{ matrix.ref }}
           path: benchmarks/baseline.json
