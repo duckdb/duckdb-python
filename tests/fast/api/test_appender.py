@@ -1435,6 +1435,9 @@ class TestFlushFailures:
 
     def test_a_flush_refused_while_another_thread_runs_a_statement_keeps_the_rows(self, con, held):
         running, release = held
+        # A worker thread can start the UDF between execute submitting the statement and claiming the connection
+        # again to run it, where the flush meets the open result refusal instead; on one thread it cannot.
+        con.execute("SET threads = 1")
         app = con.appender("t")
         app.append_row(1, "a")
         outcome = []
