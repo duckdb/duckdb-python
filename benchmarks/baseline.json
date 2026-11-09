@@ -1,10 +1,10 @@
 {
   "meta": {
     "schema_version": 1,
-    "generated_at_utc": "2026-07-02T10:39:31+00:00",
-    "git_commit": "ddd71963ded733c0d70841cf0a27ce3efbdb8c6f",
-    "duckdb_submodule_sha": "1da5b6c8cf6ce50ff8089aa59eb028bae8044f08",
-    "requirements_bench_sha256": "2bdfd6a766947a61559afb2799c54f0ea173b9325f55082ad809bf7b97b2c659",
+    "generated_at_utc": "2026-11-09T09:47:27+00:00",
+    "git_commit": "c2556eddc0609205380fb608be67525853cc0ef8",
+    "duckdb_submodule_sha": "29b26cb10605e45d7dac7237bce34423ebba4512",
+    "requirements_bench_sha256": "f54318c37c877b516dc1d57e99d0c5e518d7a2fbaa88e7a75cfd723537bcbe2c",
     "measurement": {
       "tool": "valgrind callgrind",
       "event": "Ir",
@@ -20,7 +20,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 13234377,
+      "instructions": 8882992,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -28,7 +28,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 12899099,
+      "instructions": 7889469,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -36,7 +36,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 16808671,
+      "instructions": 12057962,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -44,7 +44,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 6654121,
+      "instructions": 2610186,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -52,7 +52,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 7788904,
+      "instructions": 3578674,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -60,7 +60,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 16318265,
+      "instructions": 11871014,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -68,7 +68,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 35184533,
+      "instructions": 15046613,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -76,7 +76,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 34891957,
+      "instructions": 15070695,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -84,7 +84,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 32861083,
+      "instructions": 27755247,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -92,7 +92,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 35112605,
+      "instructions": 15430188,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -100,7 +100,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 34730605,
+      "instructions": 29909202,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -108,7 +108,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 51734481,
+      "instructions": 22431764,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -116,7 +116,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 33850667,
+      "instructions": 6157657,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -124,7 +124,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 32217517,
+      "instructions": 4606504,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -132,7 +132,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 71513957,
+      "instructions": 40521097,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -140,7 +140,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 66950208,
+      "instructions": 36756628,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -148,7 +148,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 34404751,
+      "instructions": 6180722,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -156,7 +156,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 31383134,
+      "instructions": 3270932,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -164,7 +164,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 103824509,
+      "instructions": 71457595,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -172,7 +172,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 43074317,
+      "instructions": 13258290,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -180,7 +180,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 32401442,
+      "instructions": 4608949,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -188,7 +188,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 31416581,
+      "instructions": 3797663,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -196,7 +196,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 55048499,
+      "instructions": 22922768,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -204,7 +204,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 3633775,
+      "instructions": 1536470,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -212,7 +212,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 3632023,
+      "instructions": 1531822,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -220,7 +220,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 3211889,
+      "instructions": 1191042,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -228,7 +228,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 37557571,
+      "instructions": 14219172,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -236,7 +236,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 36895059,
+      "instructions": 34904579,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -244,7 +244,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 6055741,
+      "instructions": 4437264,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -252,7 +252,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 54059510,
+      "instructions": 47565528,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -260,7 +260,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 271638006,
+      "instructions": 190344567,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -268,7 +268,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 33349249,
+      "instructions": 26377678,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -276,7 +276,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 22345385,
+      "instructions": 22410515,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -284,7 +284,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 3724222,
+      "instructions": 2834823,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -292,7 +292,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 340003609,
+      "instructions": 266283703,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -300,7 +300,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 702796711,
+      "instructions": 578055278,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -308,7 +308,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 21094700,
+      "instructions": 19114762,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -316,7 +316,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 21409422,
+      "instructions": 21424509,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -324,7 +324,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 41836625,
+      "instructions": 40156986,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -332,7 +332,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 390785984,
+      "instructions": 179045645,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_fetch_perf.py::test_fetchall_timetz": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 187566472,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -340,7 +348,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 52492693,
+      "instructions": 44235323,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -348,7 +356,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 64211821,
+      "instructions": 55017231,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -356,7 +364,31 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 22773135475,
+      "instructions": 27525141021,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_binary[bytearray]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 157265151,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_binary[bytes]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 92927379,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_binary[memoryview]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 115802086,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -364,7 +396,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 7011565008,
+      "instructions": 6705370672,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -372,7 +404,47 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 4830766039,
+      "instructions": 4875300833,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_temporal[date]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 93873204,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_temporal[datetime]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 111960361,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_temporal[datetime_tz]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 198914238,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_temporal[time]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 95639098,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_ingest_native_perf.py::test_ingest_values_temporal[timedelta]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 167744853,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -380,7 +452,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 5805088896,
+      "instructions": 5766575644,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -388,7 +460,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 22592113,
+      "instructions": 3031357,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -396,7 +468,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 6448389,
+      "instructions": 2802115,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -404,7 +476,23 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 4939556,
+      "instructions": 2414981,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_ingest_numpy_perf.py::test_read_numpy_ma_int": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 2440378,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_ingest_numpy_perf.py::test_read_numpy_ma_object_string": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 12192352,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -412,7 +500,15 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 4834310,
+      "instructions": 2537490,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_ingest_numpy_perf.py::test_read_numpy_object_mixed_types": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 21645298,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -420,7 +516,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 80120985,
+      "instructions": 13072158,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -428,7 +524,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 6644414,
+      "instructions": 2533218,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -436,7 +532,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 16303697,
+      "instructions": 11868101,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -444,7 +540,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 7031838,
+      "instructions": 3096587,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -452,7 +548,231 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 32692229,
+      "instructions": 14949635,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_object_datetime[aware]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 333245060,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_object_datetime[naive]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 196615619,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-no_nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 18209594,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-no_nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 18802324,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-no_nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 27434024,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 151049119,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 151658184,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1-nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 159573893,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-no_nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 18024200,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-no_nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 18609758,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-no_nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 27238048,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 36726237,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 37326239,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[10-nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 45245981,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-no_nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 2770480,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-no_nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 3352616,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-no_nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 7182243,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 2768708,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 3348804,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[100-nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 7098966,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-no_nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 1398195,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-no_nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 1986949,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-no_nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 5671963,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-nulls-bind]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 1409254,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-nulls-sum_i]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 1987878,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_str_chunked[1000-nulls-sum_length]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 5515684,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_string_dtype[python]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 13464420,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_pandas_perf.py::test_read_pandas_string_dtype[str]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 10650270,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -460,7 +780,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 35531575,
+      "instructions": 15830074,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -468,7 +788,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 33395666,
+      "instructions": 28527344,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -476,7 +796,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 35262927,
+      "instructions": 16291194,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -484,7 +804,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 45978557,
+      "instructions": 27621588,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -492,7 +812,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 76064352,
+      "instructions": 75237949,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -500,7 +820,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 25492525,
+      "instructions": 27374782,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -508,7 +828,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 14746792,
+      "instructions": 7705108,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -516,7 +836,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 7995031,
+      "instructions": 6759375,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -524,7 +844,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 35256355,
+      "instructions": 16281343,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -532,7 +852,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 45939193,
+      "instructions": 27553719,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -540,7 +860,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 75962963,
+      "instructions": 75054138,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -548,7 +868,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 25473843,
+      "instructions": 27352419,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -556,7 +876,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 220298436,
+      "instructions": 216479567,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -564,7 +884,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 49712218,
+      "instructions": 29210755,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -572,7 +892,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 33944853,
+      "instructions": 14969013,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -580,7 +900,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 40658168,
+      "instructions": 22316786,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -588,7 +908,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 69063552,
+      "instructions": 186545252,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -596,7 +916,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 3940908,
+      "instructions": 2874182,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -604,7 +924,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 5917219,
+      "instructions": 4631614,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -612,7 +932,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 13682653,
+      "instructions": 6427004,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -620,7 +940,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 6989466,
+      "instructions": 5607398,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -628,7 +948,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 14807454,
+      "instructions": 6783679,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -636,7 +956,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 7044278,
+      "instructions": 5545357,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -644,7 +964,15 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 2720419,
+      "instructions": 2085120,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_arrow_table[interval]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 4451807,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -652,7 +980,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 12925581,
+      "instructions": 7979132,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -660,7 +988,15 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 5744664,
+      "instructions": 3763278,
+      "binding_fraction": null,
+      "threshold_pct": null
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_arrow_table[time]": {
+      "marker": "informational",
+      "source_marker": "informational",
+      "auto_moved": false,
+      "instructions": 6051843,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -668,7 +1004,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 12021064,
+      "instructions": 12200160,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -676,7 +1012,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 13392814,
+      "instructions": 11443890,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -684,7 +1020,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 28029946,
+      "instructions": 22795863,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -692,7 +1028,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 14498290,
+      "instructions": 12302829,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -700,7 +1036,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 3965864,
+      "instructions": 2880675,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -708,15 +1044,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 7406654,
-      "binding_fraction": 0.5094,
+      "instructions": 6069480,
+      "binding_fraction": 0.7469,
       "threshold_pct": 5.0
     },
     "benchmarks/test_types_roundtrip_perf.py::test_out_col_df[decimal128]": {
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 14746031,
+      "instructions": 7719560,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -724,7 +1060,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 7331242,
+      "instructions": 6097920,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -732,15 +1068,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 15690529,
-      "binding_fraction": 0.7684,
+      "instructions": 7254960,
+      "binding_fraction": 0.7882,
       "threshold_pct": 5.0
     },
     "benchmarks/test_types_roundtrip_perf.py::test_out_col_df[hugeint]": {
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 7998654,
+      "instructions": 6763531,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -748,15 +1084,23 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 2957718,
+      "instructions": 2432693,
       "binding_fraction": null,
       "threshold_pct": null
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_col_df[interval]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 6513218,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
     },
     "benchmarks/test_types_roundtrip_perf.py::test_out_col_df[list]": {
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 99033627,
+      "instructions": 87400780,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -764,7 +1108,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 125117218,
+      "instructions": 96427811,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_col_df[time]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 30072887,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -772,7 +1124,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 12351561,
+      "instructions": 12644671,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -780,7 +1132,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 220313633,
+      "instructions": 216526832,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -788,7 +1140,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 47128590,
+      "instructions": 43655354,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -796,7 +1148,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 31366014,
+      "instructions": 29961175,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -804,7 +1156,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 21042553,
+      "instructions": 21258689,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -812,7 +1164,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 27286189,
+      "instructions": 39689696,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -820,7 +1172,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 271217448,
+      "instructions": 190560482,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -828,7 +1180,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 25532489,
+      "instructions": 25297760,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -836,7 +1188,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 33290221,
+      "instructions": 26566754,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -844,7 +1196,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 184865901,
+      "instructions": 148018857,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -852,7 +1204,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 22382107,
+      "instructions": 22663918,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_row_fetchall[interval]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 150502022,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -860,7 +1220,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 172332344,
+      "instructions": 130036280,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -868,7 +1228,15 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 134136017,
+      "instructions": 107107955,
+      "binding_fraction": null,
+      "threshold_pct": 5.0
+    },
+    "benchmarks/test_types_roundtrip_perf.py::test_out_row_fetchall[time]": {
+      "marker": "gate",
+      "source_marker": "gate",
+      "auto_moved": false,
+      "instructions": 40229255,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -876,7 +1244,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 35722888,
+      "instructions": 50553445,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -884,7 +1252,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 234289800,
+      "instructions": 232141899,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -892,7 +1260,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 59326464,
+      "instructions": 52909321,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -900,7 +1268,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 39627192,
+      "instructions": 38154559,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -908,7 +1276,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 113267549,
+      "instructions": 35548987,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -916,7 +1284,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 55495884,
+      "instructions": 15870441,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -924,7 +1292,7 @@
       "marker": "informational",
       "source_marker": "informational",
       "auto_moved": false,
-      "instructions": 73488819,
+      "instructions": 27069988,
       "binding_fraction": null,
       "threshold_pct": null
     },
@@ -932,7 +1300,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 47311728,
+      "instructions": 36134192,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -940,7 +1308,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 40500454,
+      "instructions": 35888895,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -948,7 +1316,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 56305063,
+      "instructions": 49555567,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -956,7 +1324,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 30843428,
+      "instructions": 24552459,
       "binding_fraction": null,
       "threshold_pct": 5.0
     },
@@ -964,7 +1332,7 @@
       "marker": "gate",
       "source_marker": "gate",
       "auto_moved": false,
-      "instructions": 105343681,
+      "instructions": 64377805,
       "binding_fraction": null,
       "threshold_pct": 5.0
     }
