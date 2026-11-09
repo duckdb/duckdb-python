@@ -10,6 +10,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -53,6 +54,8 @@ struct DuckDBPyModuleState {
 	//! Held rather than imported on use, since an import fails once the package has left sys.modules
 	unique_ptr<PyObjectHolder> arrow_sources_adapt;
 	unique_ptr<PyObjectHolder> arrow_sources_nodes;
+	//! duckdb._extension_directories.search_path, which picks the extension directories of every database opened
+	unique_ptr<PyObjectHolder> extension_search_path;
 	PythonEnvironmentType environment = PythonEnvironmentType::NORMAL;
 	std::string formatted_python_version;
 };
@@ -1667,6 +1670,43 @@ bool IsDefaultConnectionString(const string &database, bool read_only, identifie
 	return true;
 }
 
+// Runs after SetOptionsByName, so the hook sees the list as the engine parsed it; the result stays out of the user
+// options, which the instance cache compares when a second connect opens the same file.
+static void ApplyExtensionSearchPath(DBConfig &config) {
+	auto &holder = GetModuleState().extension_search_path;
+	// While the interpreter finalizes, the module globals the hook needs may already be cleared.
+	if (!holder || InterpreterIsFinalizing()) {
+		return;
+	}
+	// Held here, since the hook may register another one while it runs.
+	auto hook = holder->obj;
+	nb::list configured;
+	for (auto &directory : config.options.extension_directories) {
+		configured.append(nb::str(directory.c_str(), directory.size()));
+	}
+	auto deprecated_directory = Settings::Get<ExtensionDirectorySetting>(config);
+	auto result = hook(configured, nb::str(deprecated_directory.c_str(), deprecated_directory.size()));
+	if (result.is_none()) {
+		return;
+	}
+	auto invalid = [&hook]() {
+		auto message = "the extension search path hook " + nb::cast<std::string>(nb::repr(hook)) +
+		               " must return a list of str or None";
+		return nb::type_error(message.c_str());
+	};
+	if (!nb::isinstance<nb::list>(result)) {
+		throw invalid();
+	}
+	vector<string> directories;
+	for (auto directory : nb::borrow<nb::list>(result)) {
+		if (!nb::isinstance<nb::str>(directory)) {
+			throw invalid();
+		}
+		directories.emplace_back(nb::cast<std::string>(directory));
+	}
+	config.options.extension_directories = std::move(directories);
+}
+
 static string GetPathString(const nb::object &path) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	const bool is_path = duckdb::PyUtil::IsInstance(path, import_cache.pathlib.Path());
@@ -1702,6 +1742,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const nb::object
 		config_dict["duckdb_api"] = Value("python/" + DuckDBPyConnection::FormattedPythonVersion() + " jupyter");
 	}
 	config.SetOptionsByName(config_dict);
+	ApplyExtensionSearchPath(config);
 
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->con.GetConnection().context;
@@ -1766,6 +1807,10 @@ void DuckDBPyConnection::SetArrowSources(const nb::object &sources) {
 	auto &state = GetModuleState();
 	state.arrow_sources_adapt = make_uniq<PyObjectHolder>(std::move(adapt));
 	state.arrow_sources_nodes = make_uniq<PyObjectHolder>(std::move(nodes));
+}
+
+void DuckDBPyConnection::SetExtensionSearchPath(const nb::object &hook) {
+	GetModuleState().extension_search_path = make_uniq<PyObjectHolder>(hook);
 }
 
 static nb::object ArrowSourcesPart(const unique_ptr<PyObjectHolder> &part) {
@@ -1860,6 +1905,7 @@ void DuckDBPyConnection::Cleanup() {
 	GetModuleState().consumed_arrow_readers.reset();
 	GetModuleState().arrow_sources_adapt.reset();
 	GetModuleState().arrow_sources_nodes.reset();
+	GetModuleState().extension_search_path.reset();
 }
 
 bool DuckDBPyConnection::IsPandasDataframe(const nb::object &object) {
