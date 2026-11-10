@@ -218,12 +218,6 @@ shared_ptr<ClientContext> Result::TryGetContext() const {
 	return context;
 }
 
-void Result::Retain(const InterruptCheck &check) {
-	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	auto claim = ClaimWhileRunning();
-	RetainClaimed(check);
-}
-
 void Result::CloseAfterFailure(std::exception_ptr error) noexcept {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
 	{
@@ -279,12 +273,6 @@ void Result::RetainClaimed(const InterruptCheck &check) {
 		throw;
 	}
 	state = State::RETAINED;
-}
-
-void Result::Settle(const InterruptCheck &check) {
-	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	auto claim = ClaimWhileRunning();
-	SettleClaimed(check);
 }
 
 void Result::SettleClaimed(const InterruptCheck &check) {
@@ -375,10 +363,16 @@ unique_ptr<ArrowArrayWrapper> Result::FetchArray(const InterruptCheck &check) {
 
 unique_ptr<ColumnDataCollection> Result::TakeChunks(const InterruptCheck &check) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	D_ASSERT(!format.IsArrow());
 	ThrowIfFailed();
 	// Claimed only while the query can still run engine work: rows already in the client need no connection
 	auto claim = ClaimWhileRunning();
+	return TakeChunksClaimed(check);
+}
+
+unique_ptr<ColumnDataCollection> Result::TakeChunksClaimed(const InterruptCheck &check) {
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
+	D_ASSERT(!format.IsArrow());
+	ThrowIfFailed();
 	if (state == State::PENDING) {
 		RetainClaimed(check);
 	}
@@ -448,9 +442,13 @@ void Result::CopyArrowSchema(ArrowSchema &out) const {
 }
 
 void Result::BuildArrowSchema(const vector<string> &schema_names, ArrowSchema &out) const {
+	ConnectionClaim claim(*connection_state, *TryGetContext());
+	BuildArrowSchemaClaimed(schema_names, out);
+}
+
+void Result::BuildArrowSchemaClaimed(const vector<string> &schema_names, ArrowSchema &out) const {
 	auto context = TryGetContext();
 	auto properties = client_properties;
-	ConnectionClaim claim(*connection_state, *context);
 	context->RunFunctionInTransaction(
 	    [&]() { ArrowConverter::ToArrowSchema(&out, Types(), schema_names, properties); });
 }

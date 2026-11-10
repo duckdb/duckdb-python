@@ -181,7 +181,7 @@ void DbapiResult::Supersede() {
 	}
 }
 
-unique_ptr<ColumnDataCollection> DbapiResult::TakeRows(vector<Identifier> &names) {
+unique_ptr<ColumnDataCollection> DbapiResult::TakeRowsClaimed(vector<Identifier> &names) {
 	if (!result) {
 		return nullptr;
 	}
@@ -189,7 +189,7 @@ unique_ptr<ColumnDataCollection> DbapiResult::TakeRows(vector<Identifier> &names
 	// failure must leave the result read out rather than reporting its error at every later fetch
 	auto taken = std::move(result);
 	names = taken->ResultNames();
-	return taken->TakeRows(DuckDBPyConnection::CheckSignals);
+	return taken->TakeRowsClaimed(DuckDBPyConnection::CheckSignals);
 }
 
 void DbapiResult::Abort() {
@@ -627,7 +627,7 @@ void DuckDBPyConnection::SupersedeResult(bool cancel) {
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::object &query, nb::object params_p) {
 	nb::gil_scoped_acquire gil;
-	ConnectionLockGuard conn_lock(*this);
+	ConnectionLockGuard conn_lock(*this, IfHeld::REFUSE);
 	if (params_p.is_none()) {
 		params_p = nb::list();
 	}
@@ -768,6 +768,31 @@ identifier_map_t<BoundParameterData> TransformPreparedParameters(ClientContext &
 	return named_values;
 }
 
+//! Submits through submit under the claim the caller holds, then runs the result to its first unit or, when
+//! retain is set, to its end; a statement that expanded to nothing refuses the parameters it was given. A failure
+//! ends the query here, with the GIL released, since ending a pending query waits for its tasks
+template <class SUBMIT>
+static shared_ptr<engine::Result> SubmitAndDrive(engine::StatementGroup &statements, bool parameters_given, bool retain,
+                                                 SUBMIT &&submit) {
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
+	shared_ptr<engine::Result> res = submit();
+	try {
+		if (parameters_given && ExpandedToNothing(*res)) {
+			statements.RefuseParametersClaimed();
+		}
+		statements.ReleaseIfReplaced(*res);
+		if (retain) {
+			res->RetainClaimed(DuckDBPyConnection::CheckSignals);
+		} else {
+			res->SettleClaimed(DuckDBPyConnection::CheckSignals);
+		}
+	} catch (...) {
+		res->Close();
+		throw;
+	}
+	return res;
+}
+
 engine::Prepared DuckDBPyConnection::PrepareQuery(unique_ptr<SQLStatement> statement) {
 	auto session = EngineSession();
 	engine::Prepared prep;
@@ -801,38 +826,10 @@ shared_ptr<engine::Result> DuckDBPyConnection::ExecuteInternal(engine::Prepared 
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-
-		res = session.Submit(prep, named_values, engine::Format::Chunks());
-		if (parameters_given && ExpandedToNothing(*res)) {
-			try {
-				statements.RefuseParameters();
-			} catch (...) {
-				// Ended here, with the GIL released, since ending the pending query waits for its tasks
-				res->Close();
-				throw;
-			}
-		}
-		statements.ReleaseIfReplaced(*res);
-		res->Retain(CheckSignals);
-	}
-	return res;
-}
-
-shared_ptr<engine::Result> DuckDBPyConnection::PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-                                                                        nb::object params) {
-	if (params.is_none()) {
-		params = nb::list();
-	}
-	auto session = EngineSession();
-
-	auto named_values = TransformPreparedParameters(session.Context(), params);
-
-	shared_ptr<engine::Result> res;
-	{
-		DUCKDB_PY_ASSERT_GIL_HELD();
-		nb::gil_scoped_release release;
-		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-		res = session.Submit(std::move(statement), named_values, engine::Format::Chunks());
+		// One claim from submission to the end of the run, so no other call finds the statement pending
+		auto claim = session.Claim();
+		res = SubmitAndDrive(statements, parameters_given, true,
+		                     [&]() { return session.SubmitClaimed(prep, named_values, engine::Format::Chunks()); });
 	}
 	return res;
 }
@@ -875,7 +872,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
 	nb::gil_scoped_acquire gil;
-	ConnectionLockGuard conn_lock(*this);
+	ConnectionLockGuard conn_lock(*this, IfHeld::REFUSE);
 
 	auto statements = GetStatements(query);
 	auto parameters_given = HasParameters(params);
@@ -886,27 +883,25 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 	}
 	shared_ptr<engine::Result> res;
 	if (last_statement) {
-		res = PrepareAndSubmitInternal(std::move(last_statement), std::move(params));
-		if (parameters_given && ExpandedToNothing(*res)) {
-			try {
-				RefuseParameters(statements);
-			} catch (...) {
-				// Ending the pending query waits for its tasks, so the GIL is released for it
-				duckdb::PyUtil::GilReleaseIfHeld release;
-				res->Close();
-				throw;
-			}
+		if (params.is_none()) {
+			params = nb::list();
 		}
-	}
-	{
+		auto session = EngineSession();
+		auto named_values = TransformPreparedParameters(session.Context(), params);
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-		if (res) {
-			statements.ReleaseIfReplaced(*res);
-			res->Settle(CheckSignals);
-		}
+		// One claim from submission to settling, so no other call finds the statement pending
+		auto claim = session.Claim();
+		res = SubmitAndDrive(statements, parameters_given, false, [&]() {
+			return session.SubmitClaimed(std::move(last_statement), named_values, engine::Format::Chunks());
+		});
 		res = statements.Choose(std::move(res));
+	} else {
+		DUCKDB_PY_ASSERT_GIL_HELD();
+		nb::gil_scoped_release release;
+		unique_lock<std::recursive_mutex> lock(py_connection_lock);
+		res = statements.Choose(nullptr);
 	}
 	if (!res) {
 		// TODO: should we throw?
@@ -1513,8 +1508,19 @@ nb::dict DuckDBPyConnection::FetchTF() {
 	return result.FetchTF();
 }
 
+//! Releases an Arrow schema that was never handed over, after a throw before the import into pyarrow, which takes the
+//! schema over even when it fails
+struct ArrowSchemaHolder {
+	ArrowSchema schema {};
+	~ArrowSchemaHolder() {
+		if (schema.release) {
+			schema.release(&schema);
+		}
+	}
+};
+
 nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
-	ConnectionLockGuard conn_lock(*this);
+	ConnectionLockGuard conn_lock(*this, IfHeld::REFUSE);
 	// Asked before the result, so a closed connection reports itself and not the slot its close emptied
 	auto session = EngineSession();
 	if (!con.HasResult()) {
@@ -1534,41 +1540,53 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 	// Imported before the engine checks, so no Python code runs between what they find and the take
 	nb::module_::import_("pyarrow");
 	auto held = con.GetResult().EngineResult();
+	unique_ptr<DuckDBPyResult> converted;
+	ArrowSchemaHolder schema;
 	{
-		DUCKDB_PY_ASSERT_GIL_HELD();
-		nb::gil_scoped_release release;
+		// One claim from the checks through the take of the rows, the statement over them, its settle or retain and
+		// the schema build, so a refusal comes before the rows are taken and never loses them. The claim is a flag
+		// that never waits, so holding it while the GIL is held is safe
 		auto claim = session.Claim();
-		// The engine refuses an aborted transaction here under its own lock, and a running result keeps its
-		// transaction active, so the empty function neither begins nor commits anything the result depends on
-		session.Context().RunFunctionInTransaction([] {});
-		// Another open result, a relation's reader for one, would refuse the statement over the rows after the take;
-		// a running DB-API result is itself the one open result and the take drains it
-		if (held && !held->Running()) {
-			engine::VerifyNoOpenResult(session.Context());
+		{
+			DUCKDB_PY_ASSERT_GIL_HELD();
+			nb::gil_scoped_release release;
+			// The engine refuses an aborted transaction here under its own lock, and a running result keeps its
+			// transaction active, so the empty function neither begins nor commits anything the result depends on
+			session.Context().RunFunctionInTransaction([] {});
+			// Another open result, a relation's reader for one, would refuse the statement over the rows after the
+			// take; a running DB-API result is itself the one open result and the take drains it
+			if (held && !held->Running()) {
+				engine::VerifyNoOpenResult(session.Context());
+			}
 		}
-	}
 
-	vector<Identifier> names;
-	auto rows = con.GetResult().TakeRows(names);
-	if (!rows) {
-		return nb::none();
-	}
-	shared_ptr<engine::Result> arrow;
-	{
-		DUCKDB_PY_ASSERT_GIL_HELD();
-		nb::gil_scoped_release release;
-		arrow = session.Submit(std::move(rows), names, format);
-		if (reader) {
-			arrow->Settle(DuckDBPyConnection::CheckSignals);
-		} else {
-			arrow->Retain(DuckDBPyConnection::CheckSignals);
+		vector<Identifier> names;
+		auto rows = con.GetResult().TakeRowsClaimed(names);
+		if (!rows) {
+			return nb::none();
 		}
+		shared_ptr<engine::Result> arrow;
+		{
+			DUCKDB_PY_ASSERT_GIL_HELD();
+			nb::gil_scoped_release release;
+			arrow = session.SubmitClaimed(std::move(rows), names, format);
+			if (reader) {
+				arrow->SettleClaimed(DuckDBPyConnection::CheckSignals);
+			} else {
+				arrow->RetainClaimed(DuckDBPyConnection::CheckSignals);
+			}
+		}
+		converted = make_uniq<DuckDBPyResult>(std::move(arrow), std::move(names));
+		// The converter reads the connection's settings and its catalog's types, so the schema is built here
+		converted->BuildArrowSchemaClaimed(schema.schema);
 	}
-	DuckDBPyResult converted(std::move(arrow), std::move(names));
+	// The rows are retained, or the stream is settled, so the conversion into pyarrow holds the connection no longer
+	// and refuses no other call
+	conn_lock.DropSubmittingMark();
 	if (reader) {
-		return nb::cast(converted.FetchRecordBatchReader(batch_size));
+		return nb::cast(converted->FetchRecordBatchReader(schema.schema, batch_size));
 	}
-	return nb::cast(converted.FetchArrowTable(batch_size, false));
+	return nb::cast(converted->FetchArrowTable(schema.schema));
 }
 
 identifier_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {

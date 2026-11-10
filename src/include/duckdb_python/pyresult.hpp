@@ -76,6 +76,12 @@ public:
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
+	//! The two fetches above over a schema built with BuildArrowSchemaClaimed, which they take over
+	duckdb::pyarrow::Table FetchArrowTable(ArrowSchema &schema);
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(ArrowSchema &schema, idx_t rows_per_batch);
+	//! The result's Arrow schema under the names the Python layer reports, for a caller that holds the connection's
+	//! claim; out is the caller's to release until a fetch takes it over
+	void BuildArrowSchemaClaimed(ArrowSchema &out);
 	nb::object FetchArrowCapsule(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
 	static void CheckBatchSize(idx_t rows_per_batch);
 
@@ -89,8 +95,8 @@ public:
 
 	unique_ptr<DataChunk> FetchChunk();
 	//! Every row the result still holds, the rows buffered from a partial fetch first; the result is empty
-	//! afterwards. Call with the GIL held.
-	unique_ptr<ColumnDataCollection> TakeRows(const engine::InterruptCheck &check);
+	//! afterwards. Call with the GIL held and the connection's claim.
+	unique_ptr<ColumnDataCollection> TakeRowsClaimed(const engine::InterruptCheck &check);
 	//! The names the Python layer reports, which are names_override when that is set.
 	const vector<Identifier> &ResultNames() const;
 	//! The rows a completed DML statement changed, -1 otherwise
@@ -123,8 +129,11 @@ private:
 
 	template <typename T>
 	T RunWithArrowSchema(const std::function<T(const ArrowSchema &)> &fun, bool dedup_col_names);
+	duckdb::pyarrow::Table ConvertToArrowTable(const ArrowSchema &schema);
+	duckdb::pyarrow::RecordBatchReader ImportRecordBatchReader(ArrowSchema *prebuilt, idx_t rows_per_batch);
 	//! The stream's private data owns the result, and its callbacks run without the GIL.
-	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch);
+	//! prebuilt, when given, becomes the stream's schema; otherwise the result's own is copied or built
+	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch, ArrowSchema *prebuilt);
 
 private:
 	shared_ptr<engine::Result> result;

@@ -1,3 +1,4 @@
+import contextlib
 import gc
 import importlib.util
 import re
@@ -6,6 +7,7 @@ import sys
 import textwrap
 import threading
 import time
+from collections.abc import Iterator
 
 import pytest
 
@@ -577,7 +579,10 @@ class TestOpenResultIsExclusive:
         assert INSIDE_A_QUERY in output
         assert "usable after: [(42,)]" in output
 
-    def test_another_thread_is_refused_while_a_statement_runs(self, con):
+    def test_another_thread_is_refused_while_a_statement_runs(self):
+        # At the default thread count the engine runs the statement from its submission on, so the other thread
+        # may land right after the submission as well as during the settling
+        con = duckdb.connect()
         running, release = threading.Event(), threading.Event()
 
         def hold(x):
@@ -602,8 +607,159 @@ class TestOpenResultIsExclusive:
         thread.start()
         assert con.execute("SELECT hold(i) FROM range(1) t(i)").fetchall() == [(0,)]
         thread.join(10)
+        con.close()
         assert len(outcome) == 1
         assert BUSY in outcome[0]
+
+    @pytest.mark.timeout(120)
+    def test_a_second_execute_is_refused_instead_of_waiting(self):
+        # A collision refuses at once. An execute that passes the busy check while the other thread's statement is
+        # already submitted would wait for that statement instead, and a second execute never waits for one
+        code, output = run_isolated(
+            f"""
+            import collections
+            import threading
+            import time
+            import duckdb
+            from duckdb.sqltypes import BIGINT
+            con = duckdb.connect()
+            # Workers are what runs the statement from its submission on, so a one-CPU host must still get some
+            con.execute("SET threads = 4")
+            gates = []
+            def hold(x):
+                gates[-1].wait(3)
+                return x
+            con.create_function("hold", hold, [BIGINT], BIGINT)
+            outcomes = collections.Counter()
+            submitted = 0
+            print("started", flush=True)
+            overall = time.monotonic() + 40
+            while submitted < 20 and time.monotonic() < overall:
+                go, release = threading.Event(), threading.Event()
+                gates.append(release)
+                def execute_two_hundred_times():
+                    # Started as the first thread enters its execute, so that call is the one under way; the
+                    # statement is held until the attempts are over, so a call of this thread can replace the
+                    # first thread's result only by waiting for it
+                    go.wait(10)
+                    try:
+                        for attempt in range(200):
+                            began = time.monotonic()
+                            try:
+                                con.execute("SELECT 7")
+                            except duckdb.ResourceInUseException as error:
+                                if {BUSY!r} not in str(error):
+                                    outcomes[str(error)] += 1
+                            if time.monotonic() - began > 1:
+                                outcomes["waited"] += 1
+                    finally:
+                        release.set()
+                thread = threading.Thread(target=execute_two_hundred_times)
+                thread.start()
+                go.set()
+                deadline = time.monotonic() + 1
+                got_through = False
+                while time.monotonic() < deadline:
+                    try:
+                        con.execute("SELECT hold(i) + 10 FROM range(1) t(i)")
+                        submitted += 1
+                        got_through = True
+                        break
+                    except duckdb.ResourceInUseException as error:
+                        if {BUSY!r} not in str(error):
+                            outcomes["execute: " + str(error)] += 1
+                thread.join(10)
+                if got_through:
+                    rows = con.fetchall()
+                    if rows != [(10,)]:
+                        outcomes[f"first thread read {{rows}}"] += 1
+            print("submitted:", submitted)
+            print("outcomes:", sorted(outcomes))
+            """,
+            timeout=90,
+        )
+        assert code == 0, output
+        assert "submitted: 20" in output, output
+        assert "outcomes: []" in output, output
+
+    def test_a_second_execute_during_parameter_conversion_is_refused_at_once(self):
+        # The first thread holds the connection mutex and no claim while its parameters are read, so a second
+        # execute reaches the mutex; it is refused there, and does not wait for the first call and replace its result
+        con = duckdb.connect()
+        inside, done = threading.Event(), threading.Event()
+        timed_out = []
+
+        class Params:
+            def __len__(self) -> int:
+                return 1
+
+            def __iter__(self) -> Iterator[int]:
+                inside.set()
+                # The second thread ends the wait once its call returned; a call that waits for this one never does
+                timed_out.append(not done.wait(5))
+                return iter([1])
+
+        outcome = []
+
+        def second():
+            assert inside.wait(10)
+            try:
+                con.execute("SELECT 2")
+                outcome.append("ran")
+            except duckdb.ResourceInUseException as error:
+                outcome.append(str(error))
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=second)
+        thread.start()
+        try:
+            con.execute("SELECT ?::INTEGER", Params())
+            rows = con.fetchall()
+        finally:
+            thread.join(10)
+            con.close()
+        assert timed_out == [False], outcome
+        assert len(outcome) == 1, outcome
+        assert BUSY in outcome[0], outcome
+        assert rows == [(1,)]
+
+    def test_a_thread_reading_the_description_does_not_make_execute_fail(self):
+        # A reader holds the connection mutex while it waits for the GIL back; an execute on another thread waits for
+        # such a holder as every call did, and is refused only behind another call that submits a statement
+        con = duckdb.connect()
+        con.execute("SELECT 1")
+        stop = threading.Event()
+
+        def read_until_stopped():
+            while not stop.is_set():
+                with contextlib.suppress(duckdb.ResourceInUseException):
+                    con.description  # noqa: B018
+                time.sleep(0.0005)
+
+        def execute_once():
+            try:
+                con.execute("SELECT 1")
+            except duckdb.ResourceInUseException:
+                return False
+            return True
+
+        thread = threading.Thread(target=read_until_stopped)
+        thread.start()
+        ran, refused = 0, 0
+        deadline = time.monotonic() + 1
+        try:
+            while time.monotonic() < deadline:
+                if execute_once():
+                    ran += 1
+                else:
+                    refused += 1
+        finally:
+            stop.set()
+            thread.join(10)
+            con.close()
+        assert refused == 0, (ran, refused)
+        assert ran > 0
 
     @pytest.mark.timeout(60)
     def test_progress_and_interrupt_reach_a_running_statement(self, con):

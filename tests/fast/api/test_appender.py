@@ -1757,6 +1757,83 @@ class TestOneCallerAtATime:
         app.flush()
         assert table_rows(con) == [(1, "a")]
 
+    @pytest.mark.timeout(120)
+    def test_a_flush_that_collides_with_a_submitted_statement_is_refused_as_busy(self):
+        # The engine starts a statement as soon as another thread submits it, so a flush that lands right after the
+        # submission collides with a running statement: it is refused as busy, like one that lands later, instead
+        # of getting the engine's refusal or hanging the statement
+        code, output = run_isolated(
+            f"""
+            import collections
+            import threading
+            import time
+            import duckdb
+            from duckdb.sqltypes import BIGINT
+            con = duckdb.connect()
+            con.execute("CREATE TABLE t (k INTEGER, v VARCHAR)")
+            con.execute("CREATE TABLE log (k BIGINT)")
+            # Workers are what runs the statement from its submission on, so a one-CPU host must still get some
+            con.execute("SET threads = 4")
+            gates = []
+            def hold(x):
+                gates[-1].wait(3)
+                return x
+            con.create_function("hold", hold, [BIGINT], BIGINT)
+            app = con.appender("t")
+            flushed = 0
+            refusals = collections.Counter()
+            submitted = 0
+            print("started", flush=True)
+            overall = time.monotonic() + 40
+            while submitted < 20 and time.monotonic() < overall:
+                go, stop, release = threading.Event(), threading.Event(), threading.Event()
+                gates.append(release)
+                def flush_until_stopped():
+                    global flushed
+                    # Started as the first thread enters its execute, so that call is the one under way; the
+                    # statement is held through the first attempts and released while the attempts go on
+                    go.wait(10)
+                    attempts = 0
+                    try:
+                        while not stop.is_set():
+                            app.append_row(flushed, "a")
+                            try:
+                                app.flush()
+                                flushed += 1
+                            except duckdb.ResourceInUseException as error:
+                                refusals["busy" if {BUSY!r} in str(error) else str(error)] += 1
+                                app.clear()
+                            attempts += 1
+                            if attempts == 200:
+                                release.set()
+                    finally:
+                        release.set()
+                thread = threading.Thread(target=flush_until_stopped)
+                thread.start()
+                go.set()
+                deadline = time.monotonic() + 1
+                while time.monotonic() < deadline:
+                    try:
+                        con.execute("INSERT INTO log SELECT hold(i) FROM range(1) t(i)")
+                        submitted += 1
+                        break
+                    except duckdb.ResourceInUseException as error:
+                        if {BUSY!r} not in str(error):
+                            refusals["execute: " + str(error)] += 1
+                stop.set()
+                thread.join(10)
+            print("submitted:", submitted)
+            print("refusals:", sorted(refusals))
+            kept = con.execute("SELECT count(*) = ? FROM t", [flushed]).fetchall()
+            print("rows:", kept + con.execute("SELECT count(*) FROM log").fetchall())
+            """,
+            timeout=90,
+        )
+        assert code == 0, output
+        assert "submitted: 20" in output, output
+        assert "refusals: ['busy']" in output, output
+        assert "rows: [(True,), (20,)]" in output, output
+
     @pytest.mark.parametrize("call", ["app.append_row(9, 'z')", "app.flush()", "app.clear()"])
     def test_a_callback_during_its_flush_is_refused(self, call):
         code, output = run_isolated(
