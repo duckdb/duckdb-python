@@ -398,8 +398,8 @@ class ProfilingInfo:
         except RecursionError as e:
             # An operator nests two JSON levels. Python 3.11's decoder counts them against the recursion limit of
             # 1000, so about 500 operators; 3.12 and 3.13 against the platform's C recursion limit, about 5000
-            # operators on Linux and macOS, about 1500 on Windows and about 500 on Windows ARM64; 3.14 checks the
-            # stack itself and reads 20000 and more.
+            # operators on Linux and macOS, about 1500 on Windows (also ARM64 with 3.12) and about 500 on Windows
+            # ARM64 with 3.13; 3.14 is bounded by the thread's stack, 20000 and more in the main thread on Linux.
             msg = f"{source} nests its operators deeper than this Python's JSON decoder can read"
             raise ValueError(msg) from e
         if not isinstance(profile, dict):

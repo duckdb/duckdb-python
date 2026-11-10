@@ -108,7 +108,9 @@ class RenderedTree(HTMLParser):
 
     Each node is a two element list [headline, children]. A browser closes an open li when the next li starts with
     no ul open inside it, and a new li belongs to the li that owns the innermost open ul; a parser that only follows
-    li tags would nest B under A in <li>A<ul></ul><li>B</li></li>, where a browser shows B beside A.
+    li tags would nest B under A in <li>A<ul></ul><li>B</li></li>, where a browser shows B beside A. End tags follow
+    the browser too: a </li> is ignored while a ul is still open inside the li (so <li>A<ul><li>B</li></li> leaves
+    A's list open and the next li lands under A), and a </ul> is ignored when no ul is open.
     """
 
     def __init__(self) -> None:
@@ -139,13 +141,11 @@ class RenderedTree(HTMLParser):
         if tag == "b":
             self.in_headline = False
         elif tag == "li":
-            while self.stack:
-                if self.stack.pop() is not None:
-                    break
-        elif tag == "ul":
-            while self.stack:
-                if self.stack.pop() is None:
-                    break
+            if self.stack and self.stack[-1] is not None:
+                self.stack.pop()
+        elif tag == "ul" and None in self.stack:
+            while self.stack.pop() is not None:
+                pass
 
 
 def rendered_tree(html: str) -> list:
@@ -403,8 +403,9 @@ class TestQueryGraphRenderer:
         assert tree == [["PROJECTION", []]]
 
     def test_deep_operator_chain_file_renders(self, tmp_path):
-        # 300 operators nest 600 JSON levels, well within what every supported Python's JSON decoder reads: the
-        # smallest limit is Windows ARM64's C recursion limit of 1000 on 3.13, and pytest's own frames take some.
+        # 300 operators nest 600 JSON levels, well within what every supported Python's JSON decoder reads. The
+        # tightest case is 3.11, whose limit of 1000 also counts pytest's own frames (about 944 levels remain inside
+        # pytest with xdist); Windows ARM64 with 3.13 has the same 1000 for the decoder alone.
         depth = 300
         text = chain_profile_text(depth)
         assert json.loads(text) == chain_profile(depth)
@@ -419,8 +420,9 @@ class TestQueryGraphRenderer:
         assert tree == [["PROJECTION", []]]
 
     def test_profile_too_deep_for_the_json_decoder_raises_the_module_error(self, tmp_path, monkeypatch):
-        # Python 3.11's decoder raises RecursionError from about 500 operators; 3.12 and later read a few thousand,
-        # and their decoder does not follow sys.setrecursionlimit, so the failure is forced here on every version.
+        # Python 3.11's decoder raises RecursionError from about 500 operators; from 3.12 on the bound is the
+        # platform's C recursion limit (about 500 operators on Windows ARM64 with 3.13, about 5000 on Linux), and
+        # that decoder does not follow sys.setrecursionlimit, so the failure is forced here on every version.
         def too_deep(text):
             msg = "maximum recursion depth exceeded while decoding a JSON object"
             raise RecursionError(msg)
