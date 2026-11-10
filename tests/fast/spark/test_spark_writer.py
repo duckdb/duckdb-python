@@ -6,7 +6,7 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.errors import AnalysisException, IllegalArgumentException, error_condition
+from spark_namespace.errors import AnalysisException, IllegalArgumentException, ParseException, error_condition
 
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
@@ -136,14 +136,28 @@ class TestRepeatedColumnNames:
         # Backticks quote a name part, as in Spark, and spark.table reads the same spelling back.
         df = spark.createDataFrame([(1,)], ["a"])
         spark.sql("CREATE SCHEMA IF NOT EXISTS s")
-        for name in ["`x.y`", "s.t", "`a``b`"]:
+        for name in ["s.t", "`t1`", "`s`.`t2`"]:
             df.write.saveAsTable(name)
             assert [tuple(r) for r in spark.table(name).collect()] == [(1,)]
-        with pytest.raises(Exception, match=r"attribute name|PARSE_SYNTAX_ERROR|syntax error"):
+        with pytest.raises((AnalysisException, ParseException)):
             df.write.saveAsTable("t.")
         if not USE_ACTUAL_SPARK:
             rows = spark.sql("SELECT schema_name, table_name FROM duckdb_tables() ORDER BY ALL").collect()
-            assert [(r.schema_name, r.table_name) for r in rows] == [("main", "a`b"), ("main", "x.y"), ("s", "t")]
+            assert [(r.schema_name, r.table_name) for r in rows] == [("main", "t1"), ("s", "t"), ("s", "t2")]
+
+    def test_save_as_table_takes_a_dot_or_a_backtick_in_a_quoted_name(self, spark):
+        # Spark refuses these as table names (INVALID_SCHEMA_OR_RELATION_NAME); the shim takes a quoted part as it is.
+        df = spark.createDataFrame([(1,)], ["a"])
+        spark.sql("CREATE SCHEMA IF NOT EXISTS x")
+        if USE_ACTUAL_SPARK:
+            with pytest.raises(AnalysisException):
+                df.write.saveAsTable("`x.y`")
+            return
+        for name in ["`x.y`", "`a``b`"]:
+            df.write.saveAsTable(name)
+            assert [tuple(r) for r in spark.table(name).collect()] == [(1,)]
+        rows = spark.sql("SELECT schema_name, table_name FROM duckdb_tables() ORDER BY ALL").collect()
+        assert [(r.schema_name, r.table_name) for r in rows] == [("main", "a`b"), ("main", "x.y")]
 
 
 class TestCsvOutput:

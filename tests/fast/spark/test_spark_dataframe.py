@@ -935,8 +935,10 @@ class TestRepeatedColumnNames:
             ]
 
     def test_temp_view_name_is_read_with_spark_quoting(self, spark):
-        # Backticks quote a name part, as in Spark; double quotes are ordinary characters of the name.
+        # Backticks quote a name part, as in Spark; double quotes are ordinary characters of the name. With a schema
+        # x present, `x.y` read as two parts would miss the view.
         df = spark.createDataFrame([(1,)], ["a"])
+        spark.sql("CREATE SCHEMA IF NOT EXISTS x")
         for name in ["`v`", "`x.y`", "`a``b`", "`select`", "plain"]:
             df.createOrReplaceTempView(name)
             assert spark.table(name).collect() == [Row(a=1)]

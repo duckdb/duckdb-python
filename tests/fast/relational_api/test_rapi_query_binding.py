@@ -86,6 +86,17 @@ class TestQueryBindsItsNameOnce:
         reuse_name(con, "v")
         assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
 
+    @pytest.mark.parametrize("text", ["pragma \"\u017fhow\"('t')", "pragma \u017fhow('t')"], ids=["quoted", "bare"])
+    def test_pragma_show_with_a_long_s_is_refused_like_sql(self, text):
+        # The keyword is ASCII letters only: a look-alike letter is no pragma show, here and in SQL.
+        con = duckdb.connect()
+        con.execute("create table t(o varchar)")
+        with pytest.raises(duckdb.Error) as from_sql:
+            con.sql(text).fetchall()
+        with pytest.raises(type(from_sql.value)) as from_query:
+            con.sql("select 1 as a").query("t", text).fetchall()
+        assert str(from_query.value).split("\n")[0] == str(from_sql.value).split("\n")[0]
+
     @pytest.mark.parametrize("space", ["\u00a0", "\u3000"], ids=["no_break_space", "ideographic_space"])
     def test_pragma_show_with_a_unicode_space_describes_the_relation(self, space):
         # The engine's parser reads these as spaces, so the pragma is rewritten as with an ASCII space.
