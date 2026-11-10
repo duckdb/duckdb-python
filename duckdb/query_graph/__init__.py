@@ -343,7 +343,8 @@ def _detail_value(value: object) -> str:
 
 
 SCAN_KEYS = ("rows_scanned", "row_groups_scanned", "total_row_groups_to_scan", "bytes_scanned")
-# Every flat profile has the operator tree under a top level "children" list; the other keys name its metrics.
+# Every flat profile, whatever is tracked, has its operator tree under a top level "children" list, which alone
+# decides; the other keys are the flat names of the first operator and of the query time, kept as a belt.
 FLAT_FORMAT_KEYS = ("children", "latency", "operator_type", "operator_timing")
 
 
@@ -395,8 +396,10 @@ class ProfilingInfo:
             msg = f"{source} is not a JSON profile: {e}"
             raise ValueError(msg) from e
         except RecursionError as e:
-            # Python 3.11's JSON decoder counts every nesting level against the recursion limit of 1000, so a plan
-            # about 500 operators deep cannot be read there; 3.12 and later read a few thousand.
+            # An operator nests two JSON levels. Python 3.11's decoder counts them against the recursion limit of
+            # 1000, so about 500 operators; 3.12 and 3.13 against the platform's C recursion limit, about 5000
+            # operators on Linux and macOS, about 1500 on Windows and about 500 on Windows ARM64; 3.14 checks the
+            # stack itself and reads 20000 and more.
             msg = f"{source} nests its operators deeper than this Python's JSON decoder can read"
             raise ValueError(msg) from e
         if not isinstance(profile, dict):

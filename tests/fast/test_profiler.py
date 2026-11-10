@@ -104,37 +104,54 @@ def chain_profile_text(depth: int) -> str:
 
 
 class RenderedTree(HTMLParser):
-    """Rebuilds the operator tree of a page: each node is (headline, children), read from the li and ul nesting."""
+    """Rebuilds the operator tree of a page as a browser would nest it.
+
+    Each node is a two element list [headline, children]. A browser closes an open li when the next li starts with
+    no ul open inside it, and a new li belongs to the li that owns the innermost open ul; a parser that only follows
+    li tags would nest B under A in <li>A<ul></ul><li>B</li></li>, where a browser shows B beside A.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.roots: list[tuple] = []
-        self.open_nodes: list[list] = []
+        self.roots: list[list] = []
+        self.stack: list[list | None] = []  # an open li as its node, an open ul as None
         self.in_headline = False
 
     def handle_starttag(self, tag, attrs):
-        if tag == "li":
-            node = ["", []]
-            (self.open_nodes[-1][1] if self.open_nodes else self.roots).append(node)
-            self.open_nodes.append(node)
-        elif tag == "b" and self.open_nodes and not self.open_nodes[-1][0]:
+        if tag == "ul":
+            self.stack.append(None)
+        elif tag == "li":
+            if self.stack and self.stack[-1] is not None:
+                self.stack.pop()
+            innermost_ul = max((i for i, entry in enumerate(self.stack) if entry is None), default=-1)
+            owner = next((entry for entry in reversed(self.stack[:innermost_ul]) if entry is not None), None)
+            node: list = ["", []]
+            (self.roots if owner is None else owner[1]).append(node)
+            self.stack.append(node)
+        elif tag == "b" and self.stack and self.stack[-1] is not None and not self.stack[-1][0]:
             self.in_headline = True
 
     def handle_data(self, data):
         if self.in_headline:
-            self.open_nodes[-1][0] += data
+            self.stack[-1][0] += data
 
     def handle_endtag(self, tag):
         if tag == "b":
             self.in_headline = False
         elif tag == "li":
-            self.open_nodes.pop()
+            while self.stack:
+                if self.stack.pop() is not None:
+                    break
+        elif tag == "ul":
+            while self.stack:
+                if self.stack.pop() is None:
+                    break
 
 
 def rendered_tree(html: str) -> list:
     parser = RenderedTree()
     parser.feed(html)
-    assert parser.open_nodes == []
+    assert parser.stack == []
     return parser.roots
 
 
@@ -386,8 +403,9 @@ class TestQueryGraphRenderer:
         assert tree == [["PROJECTION", []]]
 
     def test_deep_operator_chain_file_renders(self, tmp_path):
-        # 400 operators nest 800 JSON levels, within what every supported Python's JSON decoder reads.
-        depth = 400
+        # 300 operators nest 600 JSON levels, well within what every supported Python's JSON decoder reads: the
+        # smallest limit is Windows ARM64's C recursion limit of 1000 on 3.13, and pytest's own frames take some.
+        depth = 300
         text = chain_profile_text(depth)
         assert json.loads(text) == chain_profile(depth)
 
