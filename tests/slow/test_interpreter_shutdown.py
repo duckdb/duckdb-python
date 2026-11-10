@@ -331,6 +331,46 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import atexit
+        import threading
+
+        state = {}
+        opens = []
+
+        def late():
+            sql = "SELECT count(*) FROM read_csv('memory://exit/*.csv')"
+            print("atexit", state["con"].execute(sql).fetchall(), flush=True)
+            print("opened off the exit thread", any(ident != threading.get_ident() for ident in opens), flush=True)
+            # The registered file system reaches these globals through recording_open, a cycle only closing breaks.
+            state.pop("con").close()
+
+        atexit.register(late)
+        import duckdb
+        import fsspec
+
+        fs = fsspec.filesystem("memory")
+        for i in range(16):
+            with fs.open(f"memory://exit/f{i}.csv", "wb") as f:
+                f.write(b"a\\n" + b"".join(b"%d\\n" % j for j in range(2000)))
+        open_file = fs._open
+
+        def recording_open(*args, **kwargs):
+            opens.append(threading.get_ident())
+            return open_file(*args, **kwargs)
+
+        # Worker threads open most of these files, admitted after the exit hook only through the opener's connection.
+        fs._open = recording_open
+        state["con"] = duckdb.connect(config={"threads": 8})
+        state["con"].register_filesystem(fs)
+        print("BODY_DONE", flush=True)
+        """,
+        ("atexit [(32000,)]", "opened off the exit thread True"),
+        True,
+        id="atexit_handler_registered_before_import_reads_through_fsspec",
+        marks=_needs("fsspec"),
+    ),
+    pytest.param(
+        """
+        import atexit
         import duckdb
         import pyarrow as pa
 

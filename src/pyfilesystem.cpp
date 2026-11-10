@@ -2,6 +2,7 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/context.hpp"
 #include "duckdb_python/exceptions.hpp"
 #include "duckdb_python/nb/casters.hpp"
 
@@ -15,6 +16,10 @@ static auto CallPython(FUN &&fun) -> decltype(fun()) {
 	} catch (nb::python_error &error) {
 		throw AsDuckDBError(error);
 	}
+}
+
+static optional_ptr<ClientContext> ClientOf(optional_ptr<FileOpener> opener) {
+	return Context::TryGetClientContext(FileOpener::TryGetContext(opener));
 }
 
 PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const nb::object &handle,
@@ -85,7 +90,7 @@ string PythonFilesystem::DecodeFlags(FileOpenFlags flags) {
 
 unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFlags flags,
                                                   optional_ptr<FileOpener> opener) {
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	return CallPython([&]() -> unique_ptr<FileHandle> {
 		if (flags.Compression() != FileCompressionType::UNCOMPRESSED) {
 			throw IOException("Compression not supported");
@@ -164,7 +169,7 @@ bool PythonFilesystem::FileExists(const string &filename, optional_ptr<FileOpene
 	return Exists(filename, "isfile", opener);
 }
 bool PythonFilesystem::Exists(const string &filename, const char *func_name, optional_ptr<FileOpener> opener) const {
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	return CallPython([&]() -> bool { return nb::cast<bool>(filesystem.attr(func_name)(filename)); });
 }
 // fsspec writes a Windows path as file://C:/..., with the drive where a URI's host goes, and the engine reads only the
@@ -178,7 +183,7 @@ static string WithDriveLetterAsPath(string uri) {
 }
 
 vector<OpenFileInfo> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	return CallPython([&]() -> vector<OpenFileInfo> {
 		if (path.empty()) {
 			return {path};
@@ -224,7 +229,7 @@ bool PythonFilesystem::CanHandleFile(const string &fpath) {
 }
 void PythonFilesystem::MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	CallPython([&]() -> void {
 		auto move = filesystem.attr("mv");
 		move(nb::str(source.c_str(), source.size()), nb::str(dest.c_str(), dest.size()));
@@ -232,7 +237,7 @@ void PythonFilesystem::MoveFile(const string &source, const string &dest, option
 }
 void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	CallPython([&]() -> void {
 		auto remove = filesystem.attr("rm");
 		remove(nb::str(filename.c_str(), filename.size()));
@@ -280,18 +285,18 @@ bool PythonFilesystem::DirectoryExists(const string &directory, optional_ptr<Fil
 }
 void PythonFilesystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	CallPython([&]() -> void { filesystem.attr("rm")(directory, nb::arg("recursive") = true); });
 }
 void PythonFilesystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	CallPython([&]() -> void { filesystem.attr("mkdir")(nb::str(directory.c_str(), directory.size())); });
 }
 bool PythonFilesystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                                  FileOpener *opener) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	PyUtil::QueryGil gil(FileOpener::TryGetClientContext(opener));
+	PyUtil::QueryGil gil(ClientOf(opener));
 	return CallPython([&]() -> bool {
 		bool nonempty = false;
 

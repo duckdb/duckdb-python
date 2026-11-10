@@ -77,6 +77,8 @@ PandasScanFunction::PandasScanFunction()
 	deserialize = PandasDeserialize;
 	projection_pushdown = true;
 	get_virtual_columns = PandasScanGetVirtualColumns;
+	// Converting object columns runs Python code, which may have side effects, on every execution
+	stability = FunctionStability::VOLATILE;
 }
 
 virtual_column_map_t PandasScanFunction::PandasScanGetVirtualColumns(ClientContext &context,

@@ -450,9 +450,10 @@ class TestSingleUseReaderScannedTwice:
         with pytest.raises(duckdb.InvalidInputException, match=CONSUMED):
             scan.run("SELECT (SELECT count(*) FROM src), (SELECT count(*) FROM src)")
 
-    def test_recursive_cte_raises(self, duckdb_cursor, make_reader):
+    @pytest.mark.parametrize("entry", ["register", "replacement"])
+    def test_recursive_cte_raises(self, duckdb_cursor, make_reader, entry):
         # The recursive step scans the reader again on every iteration.
-        scan = Replaced(duckdb_cursor, make_reader())
+        scan = ENTRY_POINTS[entry](duckdb_cursor, make_reader())
         sql = """
             WITH RECURSIVE r(i) AS (
                 SELECT 0 UNION ALL SELECT i + 1 FROM r JOIN src ON src.id = 1 WHERE i < 3

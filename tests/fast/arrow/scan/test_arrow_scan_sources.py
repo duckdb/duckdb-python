@@ -517,6 +517,12 @@ PUSHED = [
     "n BETWEEN 3 AND 6",
     "n > 1 AND n < 8",
     "CAST(ts AS DATE) = DATE '2021-01-01'",
+    # The engine drops a cast that is invertible for equality, so these reach the source as comparisons on the column.
+    "n::VARCHAR = '5'",
+    "n::VARCHAR <> '5'",
+    "n::VARCHAR IN ('5', '8')",
+    "n::VARCHAR NOT IN ('5', '8')",
+    "n::BIGINT IN (1, 5000000000)",
     "tz > TIMESTAMPTZ '2021-01-01 04:00:00+00'",
     "tz IN (TIMESTAMPTZ '2020-01-01 00:00:00+00', TIMESTAMPTZ '2021-01-01 09:00:00+00')",
     "dec > 2.00",
@@ -577,6 +583,23 @@ def register_lazy_pair(con, typed_dir):
 
 PAIRS = [pytest.param(register_dataset_pair, id="dataset"), pytest.param(register_lazy_pair, id="lazyframe")]
 
+
+def register_narrow_pair(con, over):
+    """TINYINT and REAL columns with NULL, NaN and the TINYINT limits, as `pushed` over `over` and as table `plain`."""
+    table = pa.table(
+        {
+            "id": list(range(6)),
+            "ti": pa.array([1, 5, -128, 127, None, 1], pa.int8()),
+            "r": pa.array([1.5, 2.5, float("nan"), None, -1.5, 0.1], pa.float32()),
+        }
+    )
+    obj = ds.dataset(table) if over == "dataset" else pytest.importorskip("polars").from_arrow(table).lazy()
+    source = wrapped(Pushing, obj)
+    con._register_arrow_source("pushed", source)
+    native(con, "plain", table)
+    return source
+
+
 # A Dataset, and a LazyFrame over files, prune row groups by their minimum and maximum before filtering, and those
 # leave NaN out, so on a float column they take only predicates that NaN, the greatest value to the engine, cannot
 # satisfy.
@@ -622,6 +645,39 @@ class TestPushdown:
         assert source.applied == [[]], where
         _, filter_above = scan_of(con, f"SELECT n FROM pushed WHERE {where}")
         assert filter_above, where
+
+    @pytest.mark.parametrize("over", ["dataset", "lazyframe"])
+    @pytest.mark.parametrize(
+        ("where", "applied"),
+        [
+            ("ti IN (1, 300)", '("ti" IN (1))'),
+            ("ti NOT IN (1, 300)", '(NOT ("ti" IN (1)))'),
+            ("ti IN (127, 128)", '("ti" IN (127))'),
+            ("ti IN (-128, -129)", '("ti" IN (-128))'),
+            ("ti::VARCHAR = '5'", '("ti" = 5)'),
+            ("r::DOUBLE = 1.5", '("r" = 1.5::DOUBLE)'),
+        ],
+    )
+    def test_a_cast_the_engine_drops_from_a_narrow_column_is_pushed(self, con, over, where, applied):
+        source = register_narrow_pair(con, over)
+        expected = rows(con, f"SELECT id FROM plain WHERE {where} ORDER BY id")
+        assert rows(con, f"SELECT id FROM pushed WHERE {where} ORDER BY id") == expected
+        assert expected
+        assert source.applied == [[applied]]
+        _, filter_above = scan_of(con, f"SELECT id FROM pushed WHERE {where}")
+        assert not filter_above, where
+
+    @pytest.mark.parametrize("over", ["dataset", "lazyframe"])
+    def test_a_float_inequality_the_engine_uncasts_stays_with_the_engine(self, con, over):
+        # NaN satisfies it, so it falls under the float rule of NAN_MAY_SATISFY.
+        source = register_narrow_pair(con, over)
+        where = "r::DOUBLE <> 1.5"
+        expected = rows(con, f"SELECT id FROM plain WHERE {where} ORDER BY id")
+        assert rows(con, f"SELECT id FROM pushed WHERE {where} ORDER BY id") == expected
+        assert expected == [(1,), (2,), (4,), (5,)]
+        assert source.applied == [[]]
+        _, filter_above = scan_of(con, f"SELECT id FROM pushed WHERE {where}")
+        assert filter_above
 
     @pytest.mark.parametrize("register_pair", PAIRS)
     def test_a_predicate_nothing_satisfies_yields_no_rows(self, con, typed_dir, register_pair):

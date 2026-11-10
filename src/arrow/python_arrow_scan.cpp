@@ -824,6 +824,8 @@ void RegisterPythonArrowScan(DatabaseInstance &db) {
 	function.projection_pushdown = true;
 	function.filter_pushdown = false;
 	function.filter_prune = false;
+	// A Python source can hand out a one-shot stream or count its exports, so every execution reads it again
+	function.stability = FunctionStability::VOLATILE;
 
 	TableFunctionSet set(function.name);
 	set.AddFunction(std::move(function));

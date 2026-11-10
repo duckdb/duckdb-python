@@ -974,6 +974,23 @@ class TestSchemaProbing:
         assert rows(con, "SELECT count(*) FROM (SELECT * FROM src UNION ALL SELECT * FROM src)") == [(20,)]
         assert source.exports == 2
 
+    def test_a_recursive_step_exports_a_repeatable_object_on_every_iteration(self, con):
+        class Stamping(WithSchemaAttribute):
+            def __arrow_c_stream__(self, requested_schema=None) -> object:
+                self.exports += 1
+                return pa.table({"id": [1, 2, 3], "export": [self.exports] * 3}).__arrow_c_stream__()
+
+        con.register("src", Stamping(pa.table({"id": [1, 2, 3], "export": [0, 0, 0]})))
+        sql = """
+            WITH RECURSIVE r(i, exports) AS (
+                SELECT 0, []::BIGINT[]
+                UNION ALL
+                SELECT r.i + 1, list_append(r.exports, src.export) FROM r JOIN src ON src.id = 1 WHERE r.i < 3
+            )
+            SELECT len(list_distinct(exports)) FROM r WHERE i = 3
+        """
+        assert rows(con, sql) == [(3,)]
+
 
 class TestNamesAndShadowing:
     def test_duplicate_column_names_are_renamed_minimally(self, con):

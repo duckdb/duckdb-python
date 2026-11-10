@@ -100,10 +100,24 @@ SHAPES = [
     p("n > 1 + 1", ("(n > 2)", '("n" > 2)'), id="folded-constant"),
     p("b = true", ("(b = true)", '("b" = TRUE)'), id="boolean"),
     p("s LIKE 'abc'", ("(s = 'abc')", "(\"s\" = 'abc')"), id="like-without-wildcards"),
+    # a cast the engine drops from an equality, an inequality or an IN, because it is invertible there
+    p("n::VARCHAR = '5'", ("(n = 5)", '("n" = 5)'), id="text-cast-equality-dropped"),
+    p("n::VARCHAR <> '5'", ("(n != 5)", '("n" != 5)'), id="text-cast-inequality-dropped"),
+    p("n::VARCHAR IN ('5', '7')", ("(n IN (5, 7))", '("n" IN (5, 7))'), id="text-cast-in-dropped"),
+    p("n::VARCHAR NOT IN ('5', '7')", ("(NOT (n IN (5, 7)))", '(NOT ("n" IN (5, 7)))'), id="text-cast-not-in-dropped"),
+    p("n::BIGINT IN (1, 2)", ("(n IN (1, 2))", '("n" IN (1, 2))'), id="widening-cast-in-dropped"),
+    p("ti IN (1, 300)", ("(ti IN (1))", '("ti" IN (1))'), id="widening-cast-in-dropped-with-its-out-of-range-member"),
+    p(
+        "ti NOT IN (1, 300)",
+        ("(NOT (ti IN (1)))", '(NOT ("ti" IN (1)))'),
+        id="widening-cast-not-in-dropped-with-its-out-of-range-member",
+    ),
+    p("r::DOUBLE = 1.5", ("(r = 1.5)", '("r" = 1.5::DOUBLE)'), id="float-widening-cast-equality-dropped"),
+    p("r::DOUBLE <> 1.5", ("(r != 1.5)", '("r" != 1.5::DOUBLE)'), id="float-widening-cast-inequality-dropped"),
     # BETWEEN, read through the bound inclusivity flags
     p("n BETWEEN 3 AND 6", ("(n BETWEEN 3 AND 6)", '(("n" >= 3) AND ("n" <= 6))'), id="between"),
-    p("n > 1 AND n < 8", ("(n BETWEEN 1 AND 8)", '(("n" > 1) AND ("n" < 8))'), id="exclusive-range-folded"),
-    p("n >= 1 AND n < 8", ("(n BETWEEN 1 AND 8)", '(("n" >= 1) AND ("n" < 8))'), id="half-open-range-folded"),
+    p("n > 1 AND n < 8", ("((n > 1) AND (n < 8))", '(("n" > 1) AND ("n" < 8))'), id="exclusive-range-folded"),
+    p("n >= 1 AND n < 8", ("((n >= 1) AND (n < 8))", '(("n" >= 1) AND ("n" < 8))'), id="half-open-range-folded"),
     p("n BETWEEN 1 AND 1", ("(n = 1)", '("n" = 1)'), id="between-one-value"),
     p("n NOT BETWEEN 3 AND 6", ("((n < 3) OR (n > 6))", '(("n" < 3) OR ("n" > 6))'), id="not-between"),
     p(
@@ -115,7 +129,7 @@ SHAPES = [
     p(
         "CAST(ts AS DATE) = DATE '2024-01-01'",
         (
-            "(ts BETWEEN '2024-01-01 00:00:00'::TIMESTAMP AND '2024-01-02 00:00:00'::TIMESTAMP)",
+            "((ts >= '2024-01-01 00:00:00'::TIMESTAMP) AND (ts < '2024-01-02 00:00:00'::TIMESTAMP))",
             "((\"ts\" >= TIMESTAMP '2024-01-01 00:00:00') AND (\"ts\" < TIMESTAMP '2024-01-02 00:00:00'))",
         ),
         id="date-cast-equality-rewritten",
@@ -123,7 +137,7 @@ SHAPES = [
     p(
         "date_trunc('day', ts) = TIMESTAMP '2024-01-01'",
         (
-            "(ts BETWEEN '2024-01-01 00:00:00'::TIMESTAMP AND '2024-01-02 00:00:00'::TIMESTAMP)",
+            "((ts >= '2024-01-01 00:00:00'::TIMESTAMP) AND (ts < '2024-01-02 00:00:00'::TIMESTAMP))",
             "((\"ts\" >= TIMESTAMP '2024-01-01 00:00:00') AND (\"ts\" < TIMESTAMP '2024-01-02 00:00:00'))",
         ),
         id="date-trunc-equality-rewritten",
@@ -220,7 +234,9 @@ REFUSALS = [
     p("s NOT LIKE 'a%'", ("(NOT prefix(s, 'a'))", REFUSED), id="not-like"),
     # casts around the column, and functions
     p("n > 3.5", ("(CAST(n AS DECIMAL(11,1)) > 3.5)", REFUSED), id="cast-to-decimal"),
-    p("ti = 300", ("(CAST(ti AS INTEGER) = 300)", REFUSED), id="cast-to-a-wider-integer"),
+    p("ti > 300", ("(CAST(ti AS INTEGER) > 300)", REFUSED), id="cast-to-a-wider-integer"),
+    p("ti = 300", ("constant_or_null(false, ti)", REFUSED), id="out-of-range-equality-folded"),
+    p("n::VARCHAR = '05'", ("constant_or_null(false, n)", REFUSED), id="text-cast-equality-no-integer-matches-folded"),
     p("dec = 1.505", ("(CAST(dec AS DECIMAL(11,3)) = 1.505)", REFUSED), id="cast-to-a-wider-decimal"),
     p(
         "tms > TIMESTAMP '2024-05-06'",
