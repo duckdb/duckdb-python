@@ -38,9 +38,10 @@ class TestWindowsAbsPath:
         del res
         del con
 
-    def test_windows_abs_path(self):
-        # setup paths to test with
-        dbpath = Path.cwd() / "test.db"
+    def test_windows_abs_path(self, tmp_path, monkeypatch):
+        # A path without its drive letter resolves on the current drive, which must be the temp directory's.
+        monkeypatch.chdir(tmp_path)
+        dbpath = tmp_path / "test.db"
         abspath = str(dbpath.resolve())
         assert abspath[1] == ":"
         no_drive_path = abspath[2:]
