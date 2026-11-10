@@ -334,6 +334,36 @@ def test_name_with_an_empty_part_reads_the_file_not_the_table_its_parts_name():
         assert con.table("./people.csv").fetchall() == [("file people.csv",)]
 
 
+STRAY_QUOTES = [
+    WRITES,
+    "CREATE SCHEMA s",
+    "CREATE TABLE abc AS SELECT 'abc' AS k",
+    "CREATE TABLE ab AS SELECT 'ab' AS k",
+    "CREATE TABLE s.ab AS SELECT 's.ab' AS k",
+    """CREATE TABLE "a""b""c" AS SELECT 'table a"b"c' AS k""",
+    """CREATE TABLE \"\"\"a\"\"b" AS SELECT 'table "a"b' AS k""",
+    """CREATE TABLE "s.""a""b" AS SELECT 'table s."a"b' AS k""",
+    """CREATE VIEW "v""w" AS SELECT 'view v"w' AS k""",
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "row"),
+    [
+        pytest.param('a"b"c', 'table a"b"c', id="quote_inside_a_bare_part"),
+        pytest.param('"a"b', 'table "a"b', id="text_after_a_closing_quote"),
+        pytest.param('s."a"b', 'table s."a"b', id="text_after_a_closing_quote_in_the_second_part"),
+    ],
+)
+def test_name_with_a_stray_quote_reads_the_literal_name(name, row):
+    # SQL refuses the spelling, so the whole string is one name, as for a file path; neither abc nor s.ab is read.
+    with connect(STRAY_QUOTES) as con:
+        assert con.table(name).fetchall() == [(row,)]
+        assert con.sql(f'FROM "{name.replace(chr(34), chr(34) * 2)}"').fetchall() == [(row,)]
+    with connect(STRAY_QUOTES) as con:
+        assert con.view('v"w').fetchall() == [('view v"w',)]
+
+
 def test_module_function_reads_a_qualified_view():
     with connect(BASE) as con:
         assert duckdb.table("s.v", connection=con).fetchall() == [("s.v",)]

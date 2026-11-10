@@ -130,6 +130,19 @@ class TestQueryBindsItsNameOnce:
             con.sql("select 1 as a").query("v", "pragma \"show\"('')")
         assert str(from_query.value) == message
 
+    @pytest.mark.parametrize("name", ['a"b"c', '"a"b', 's."a"b'])
+    def test_pragma_show_of_a_name_with_a_stray_quote_raises_like_sql(self, name):
+        con = duckdb.connect()
+        con.execute(
+            "create table abc(o varchar); create table ab(o varchar); create schema s; create table s.ab(o varchar)"
+        )
+        with pytest.raises(duckdb.ParserException) as from_sql:
+            con.sql(f"pragma \"show\"('{name}')")
+        message = str(from_sql.value).split("\n")[0]
+        with pytest.raises(duckdb.ParserException) as from_query:
+            con.sql("select 1 as a").query("v", f"pragma \"show\"('{name}')")
+        assert str(from_query.value) == message
+
     @pytest.mark.parametrize(
         "sql", ["select column_name from pragma_show('v')", "select name from pragma_table_info('v')"]
     )

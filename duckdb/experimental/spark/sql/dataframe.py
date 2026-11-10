@@ -748,7 +748,7 @@ class DataFrame:  # noqa: D101
         names = _distinct_names(self.columns)
         if list(map(_name_key, relation.columns)) != list(map(_name_key, names)):
             relation = self._relation_named(names)
-        relation.create_view(name, True)
+        relation.create_view((name,), True)
 
     def createGlobalTempView(self, name: str) -> None:  # noqa: D102
         raise NotImplementedError

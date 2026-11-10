@@ -917,6 +917,15 @@ class TestRepeatedColumnNames:
         expected = ["x", "x", "x_1"] if USE_ACTUAL_SPARK else ["x", "x_2", "x_1"]
         assert spark.table("repeated_input_view").columns == expected
 
+    def test_temp_view_with_a_dotted_name_is_one_name(self, spark):
+        if USE_ACTUAL_SPARK:
+            pytest.skip("Spark refuses a multi-part temporary view name")
+        spark.sql("CREATE SCHEMA IF NOT EXISTS x")
+        spark.createDataFrame([(1,)], ["a"]).createOrReplaceTempView("x.y")
+        assert spark.sql('SELECT a FROM "x.y"').collect() == [Row(a=1)]
+        in_schema_x = spark.sql("SELECT count(*) AS n FROM duckdb_views() WHERE schema_name = 'x'").collect()
+        assert in_schema_x == [Row(n=0)]
+
     def test_repeat_beside_a_name_of_another_join_input(self, spark):
         a = spark.createDataFrame([(10, 20)], ["x", "x"]).alias("a")
         b = spark.createDataFrame([(30,)], ["x_1"]).alias("b")
