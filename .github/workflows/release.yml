@@ -379,7 +379,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
 
         run: |
-          aws s3 cp artifacts ${{ needs.workflow_state.outputs.s3_url }} --recursive
+          # AWS CLI 2.38 made the CRT transfer client the default on every host, and against
+          # the staging endpoint it failed uploads that the classic client never failed.
+          aws configure set default.s3.preferred_transfer_client classic
+          for attempt in 1 2 3; do
+            if aws s3 cp artifacts "${{ needs.workflow_state.outputs.s3_url }}" --recursive; then
+              exit 0
+            fi
+            echo "::warning::S3 upload attempt ${attempt} of 3 failed"
+            if [[ ${attempt} -lt 3 ]]; then sleep $((attempt * 30)); fi
+          done
+          echo "::error::S3 upload failed 3 times"
+          exit 1
 
   publish_pypi:
     name: Publish Artifacts to PyPI
