@@ -21,7 +21,6 @@ import uuid
 from pathlib import Path
 from typing import ClassVar
 
-import _duckdb
 import pytest
 
 import duckdb
@@ -2544,6 +2543,8 @@ spec = importlib.util.spec_from_file_location("scan_core", {str(Path(__file__))!
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 import duckdb, pyarrow as pa
+import _duckdb
+_duckdb._set_leak_report(True)
 table = pa.table({{"i": list(range(50_000))}})
 con = duckdb.connect(config={{"threads": 4}})
 if {state!r} in ("registered_reader", "reader_read_with_limit"):
@@ -2564,8 +2565,6 @@ print("exiting")
         assert completed.returncode == 0, completed.stderr[-2000:]
         assert "exiting" in completed.stdout
         if state != "retained_result":
-            if not _duckdb._assertions:
-                pytest.skip("a build without assertions silences nanobind's leak report")
             assert "nanobind: leaked" not in completed.stderr
 
     @pytest.mark.timeout(120)

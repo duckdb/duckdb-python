@@ -17,7 +17,6 @@ import sys
 import time
 from collections import Counter
 
-import _duckdb
 import pytest
 
 import duckdb
@@ -172,6 +171,8 @@ import pyarrow as pa
 
 with mock.patch.dict(sys.modules):
     import duckdb
+    import _duckdb
+    _duckdb._set_leak_report(True)
 table = pa.table({{"id": [1, 2, 3]}})
 sink = io.BytesIO()
 with pa.ipc.new_stream(sink, table.schema) as writer:
@@ -615,8 +616,6 @@ class TestConsumedReaderRecord:
         assert "first 3" in completed.stdout
         assert "second raised True" in completed.stdout
         assert "already registered" not in completed.stderr
-        if not _duckdb._assertions:
-            pytest.skip("a build without assertions silences nanobind's leak report")
         assert "nanobind: leaked" not in completed.stderr
 
 
