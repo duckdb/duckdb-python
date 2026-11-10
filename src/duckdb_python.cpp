@@ -717,8 +717,9 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	(void)keep_alive;
 	// END
 
-	// Objects that another package keeps alive past finalization fill nanobind's exit report although nothing grows
-	// at run time, so only builds with assertions print it.
+	// nanobind's exit report names duckdb objects alive after finalization: a connection in a global of a module
+	// whose dict something else keeps alive, as typing's overload registry does once numpy is imported. Only builds
+	// with assertions print it.
 	if constexpr (!BUILD_HAS_ASSERTIONS) {
 		nb::set_leak_warnings(false);
 	}

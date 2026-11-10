@@ -1,36 +1,71 @@
 # ruff: noqa: D101, D104, D105, D107, ANN401
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from duckdb.sqltypes import (
-    BIGINT,
-    BIT,
-    BLOB,
-    BOOLEAN,
-    DATE,
-    DOUBLE,
-    FLOAT,
-    HUGEINT,
-    INTEGER,
-    INTERVAL,
-    SMALLINT,
-    SQLNULL,
-    TIME,
-    TIME_TZ,
-    TIMESTAMP,
-    TIMESTAMP_MS,
-    TIMESTAMP_NS,
-    TIMESTAMP_S,
-    TIMESTAMP_TZ,
-    TINYINT,
-    UBIGINT,
-    UHUGEINT,
-    UINTEGER,
-    USMALLINT,
-    UTINYINT,
-    UUID,
-    VARCHAR,
-    DuckDBPyType,
+from duckdb import sqltypes
+from duckdb.sqltypes import DuckDBPyType
+
+# A type constant bound in this module would sit in a dict that the Value classes' functions keep alive past
+# finalization, so the names resolve through sqltypes at access time; only type checkers see them as imports.
+_TYPE_CONSTANTS = (
+    "BIGINT",
+    "BIT",
+    "BLOB",
+    "BOOLEAN",
+    "DATE",
+    "DOUBLE",
+    "FLOAT",
+    "HUGEINT",
+    "INTEGER",
+    "INTERVAL",
+    "SMALLINT",
+    "SQLNULL",
+    "TIME",
+    "TIME_TZ",
+    "TIMESTAMP",
+    "TIMESTAMP_MS",
+    "TIMESTAMP_NS",
+    "TIMESTAMP_S",
+    "TIMESTAMP_TZ",
+    "TINYINT",
+    "UBIGINT",
+    "UHUGEINT",
+    "UINTEGER",
+    "USMALLINT",
+    "UTINYINT",
+    "UUID",
+    "VARCHAR",
 )
+
+if TYPE_CHECKING:
+    from duckdb.sqltypes import (  # noqa: F401
+        BIGINT,
+        BIT,
+        BLOB,
+        BOOLEAN,
+        DATE,
+        DOUBLE,
+        FLOAT,
+        HUGEINT,
+        INTEGER,
+        INTERVAL,
+        SMALLINT,
+        SQLNULL,
+        TIME,
+        TIME_TZ,
+        TIMESTAMP,
+        TIMESTAMP_MS,
+        TIMESTAMP_NS,
+        TIMESTAMP_S,
+        TIMESTAMP_TZ,
+        TINYINT,
+        UBIGINT,
+        UHUGEINT,
+        UINTEGER,
+        USMALLINT,
+        UTINYINT,
+        UUID,
+        VARCHAR,
+    )
 
 
 class Value:
@@ -47,12 +82,12 @@ class Value:
 
 class NullValue(Value):
     def __init__(self) -> None:
-        super().__init__(None, SQLNULL)
+        super().__init__(None, sqltypes.SQLNULL)
 
 
 class BooleanValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, BOOLEAN)
+        super().__init__(object, sqltypes.BOOLEAN)
 
 
 # Unsigned numerics
@@ -60,22 +95,22 @@ class BooleanValue(Value):
 
 class UnsignedBinaryValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, UTINYINT)
+        super().__init__(object, sqltypes.UTINYINT)
 
 
 class UnsignedShortValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, USMALLINT)
+        super().__init__(object, sqltypes.USMALLINT)
 
 
 class UnsignedIntegerValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, UINTEGER)
+        super().__init__(object, sqltypes.UINTEGER)
 
 
 class UnsignedLongValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, UBIGINT)
+        super().__init__(object, sqltypes.UBIGINT)
 
 
 # Signed numerics
@@ -83,32 +118,32 @@ class UnsignedLongValue(Value):
 
 class BinaryValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TINYINT)
+        super().__init__(object, sqltypes.TINYINT)
 
 
 class ShortValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, SMALLINT)
+        super().__init__(object, sqltypes.SMALLINT)
 
 
 class IntegerValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, INTEGER)
+        super().__init__(object, sqltypes.INTEGER)
 
 
 class LongValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, BIGINT)
+        super().__init__(object, sqltypes.BIGINT)
 
 
 class HugeIntegerValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, HUGEINT)
+        super().__init__(object, sqltypes.HUGEINT)
 
 
 class UnsignedHugeIntegerValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, UHUGEINT)
+        super().__init__(object, sqltypes.UHUGEINT)
 
 
 # Fractional
@@ -116,12 +151,12 @@ class UnsignedHugeIntegerValue(Value):
 
 class FloatValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, FLOAT)
+        super().__init__(object, sqltypes.FLOAT)
 
 
 class DoubleValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, DOUBLE)
+        super().__init__(object, sqltypes.DOUBLE)
 
 
 class DecimalValue(Value):
@@ -137,22 +172,22 @@ class DecimalValue(Value):
 
 class StringValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, VARCHAR)
+        super().__init__(object, sqltypes.VARCHAR)
 
 
 class UUIDValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, UUID)
+        super().__init__(object, sqltypes.UUID)
 
 
 class BitValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, BIT)
+        super().__init__(object, sqltypes.BIT)
 
 
 class BlobValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, BLOB)
+        super().__init__(object, sqltypes.BLOB)
 
 
 # Temporal
@@ -160,47 +195,47 @@ class BlobValue(Value):
 
 class DateValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, DATE)
+        super().__init__(object, sqltypes.DATE)
 
 
 class IntervalValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, INTERVAL)
+        super().__init__(object, sqltypes.INTERVAL)
 
 
 class TimestampValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIMESTAMP)
+        super().__init__(object, sqltypes.TIMESTAMP)
 
 
 class TimestampSecondValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIMESTAMP_S)
+        super().__init__(object, sqltypes.TIMESTAMP_S)
 
 
 class TimestampMillisecondValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIMESTAMP_MS)
+        super().__init__(object, sqltypes.TIMESTAMP_MS)
 
 
 class TimestampNanosecondValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIMESTAMP_NS)
+        super().__init__(object, sqltypes.TIMESTAMP_NS)
 
 
 class TimestampTimeZoneValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIMESTAMP_TZ)
+        super().__init__(object, sqltypes.TIMESTAMP_TZ)
 
 
 class TimeValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIME)
+        super().__init__(object, sqltypes.TIME)
 
 
 class TimeTimeZoneValue(Value):
     def __init__(self, object: Any) -> None:
-        super().__init__(object, TIME_TZ)
+        super().__init__(object, sqltypes.TIME_TZ)
 
 
 class ListValue(Value):
@@ -233,6 +268,18 @@ class UnionType(Value):
 
         union_type = duckdb.union_type(members)
         super().__init__(object, union_type)
+
+
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> DuckDBPyType:
+        if name in _TYPE_CONSTANTS:
+            return getattr(sqltypes, name)
+        msg = f"module {__name__!r} has no attribute {name!r}"
+        raise AttributeError(msg)
+
+    def __dir__() -> list[str]:
+        return sorted([*globals(), *_TYPE_CONSTANTS])
 
 
 # TODO: add EnumValue once `duckdb.enum_type` is added  # noqa: TD002, TD003

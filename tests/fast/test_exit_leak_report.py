@@ -1,16 +1,21 @@
 """What nanobind prints at interpreter exit about module objects that Python never freed.
 
-A package that keeps a module's globals alive past finalization leaves a fixed set of duckdb objects behind, which
-nanobind reports as leaked. Builds without assertions, every wheel among them, stay silent; Debug builds and builds
-with FORCE_ASSERT keep the report so that a real leak stays visible there. The private switch
-``_duckdb._set_leak_report`` turns the report on or off in any build, and the module's own nanobind domain keeps the
-flag apart from other nanobind extensions in the process.
+The report names duckdb objects that are still alive after finalization. CPython does not clear a module dict that a
+function still reachable at exit keeps alive, and such a function is easily kept: typing's overload registry survives
+once numpy is imported, a polars cache holds a relation type. A ``DuckDBPyType`` instance bound in such a dict, or in a
+class level cache a function of the module reaches, would be reported, so the constants live in the two ``sqltypes``
+modules only and every other module reads them at use time; a program that keeps a connection itself is reported for
+that one instance. Builds without assertions, every wheel among them, stay silent; Debug builds and builds with
+FORCE_ASSERT keep the report. The private switch ``_duckdb._set_leak_report`` turns the report on or off in any build,
+and the module's own nanobind domain keeps the flag apart from other nanobind extensions in the process.
 """
 
 from __future__ import annotations
 
 import ctypes
+import importlib
 import importlib.util
+import pkgutil
 import platform
 import subprocess
 import sys
@@ -55,12 +60,12 @@ def _run(*parts: str) -> subprocess.CompletedProcess[str]:
     if sys.platform != "win32":
         parts = (NO_CORE_DUMP, *parts)
     return subprocess.run(
-        [sys.executable, "-c", _join(*parts)], capture_output=True, text=True, timeout=60, check=False
+        [sys.executable, "-c", _join(*parts)], capture_output=True, text=True, timeout=120, check=False
     )
 
 
-# With numpy imported, typing's globals outlive finalization, and so does the overload registry that holds these
-# signatures.
+# With numpy or torch imported, typing's globals outlive finalization, and so does the overload registry that holds
+# these signatures.
 OVERLOAD_SIGNATURE_WITH_NUMPY = """
     from typing import overload
 
@@ -74,6 +79,8 @@ OVERLOAD_SIGNATURE_WITH_NUMPY = """
     def connect(database):
         return None if database is None else duckdb.connect(database)
     """
+
+OVERLOAD_SIGNATURE_WITH_TORCH = OVERLOAD_SIGNATURE_WITH_NUMPY.replace("import numpy", "import torch")
 
 POLARS_FRAME_FROM_RELATION = """
     import duckdb
@@ -98,9 +105,37 @@ CONNECTION_KEPT = """
     ctypes.pythonapi.Py_IncRef(ctypes.py_object(duckdb.connect(config={"threads": 1})))
     """
 
-HELD_BY_CONSTRUCTION = [
+SQLTYPES_MODULES = ("duckdb.sqltypes", "_duckdb._sqltypes")
+
+# Every module of the package imported, and every module dict but the two sqltypes modules' kept alive.
+EVERY_MODULE_DICT_KEPT = """
+    import ctypes
+    import importlib
+    import pkgutil
+    import sys
+
+    import duckdb
+
+    for info in pkgutil.walk_packages(duckdb.__path__, "duckdb."):
+        try:
+            importlib.import_module(info.name)
+        except ModuleNotFoundError as error:
+            if error.name is None or error.name.partition(".")[0] in ("duckdb", "_duckdb"):
+                raise
+    for name, module in list(sys.modules.items()):
+        if module is None or name in SQLTYPES_MODULES:
+            continue
+        if name == "duckdb" or name.startswith(("duckdb.", "_duckdb")):
+            ctypes.pythonapi.Py_IncRef(ctypes.py_object(vars(module)))
+    """.replace("SQLTYPES_MODULES", repr(SQLTYPES_MODULES))
+
+# These keep a type, a function or a module of duckdb alive, and nothing duckdb instantiates.
+NOTHING_OF_DUCKDBS_OWN_KEPT = [
+    pytest.param(EVERY_MODULE_DICT_KEPT, id="every_module_dict_kept"),
+    pytest.param(OVERLOAD_SIGNATURE_WITH_NUMPY, id="overload_signature_with_numpy", marks=_needs("numpy")),
+    pytest.param(OVERLOAD_SIGNATURE_WITH_TORCH, id="overload_signature_with_torch", marks=_needs("torch")),
+    pytest.param(POLARS_FRAME_FROM_RELATION, id="polars_frame_from_relation", marks=_needs("polars")),
     pytest.param(CONNECTION_TYPE_KEPT, id="connection_type_kept"),
-    pytest.param(CONNECTION_KEPT, id="connection_kept"),
 ]
 
 no_report_on_a_free_threaded_build = pytest.mark.skipif(
@@ -108,16 +143,29 @@ no_report_on_a_free_threaded_build = pytest.mark.skipif(
 )
 
 
+@pytest.mark.parametrize("script", NOTHING_OF_DUCKDBS_OWN_KEPT)
+def test_held_types_and_functions_leave_no_instance_behind(script):
+    proc = _run(REPORT_ON, script)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert REPORT not in proc.stderr, proc.stderr[-2000:]
+
+
+def _assert_one_connection_reported(proc: subprocess.CompletedProcess[str]) -> None:
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert "nanobind: leaked 1 instances!" in proc.stderr, proc.stderr[-2000:]
+    # nanobind lists the instances only outside the limited API, so an abi3 module prints the count alone.
+    instances = [line for line in proc.stderr.splitlines() if "leaked instance" in line]
+    assert all('"_duckdb.DuckDBPyConnection"' in line for line in instances), proc.stderr[-2000:]
+
+
+@no_report_on_a_free_threaded_build
+def test_a_kept_connection_is_reported_as_the_one_instance_it_is():
+    _assert_one_connection_reported(_run(REPORT_ON, CONNECTION_KEPT))
+
+
 @pytest.mark.skipif(_duckdb._assertions, reason="a build with assertions keeps nanobind's leak report")
-@pytest.mark.parametrize(
-    "script",
-    [
-        pytest.param(OVERLOAD_SIGNATURE_WITH_NUMPY, id="overload_signature_with_numpy", marks=_needs("numpy")),
-        pytest.param(POLARS_FRAME_FROM_RELATION, id="polars_frame_from_relation", marks=_needs("polars")),
-        *HELD_BY_CONSTRUCTION,
-    ],
-)
-def test_objects_held_past_finalization_are_not_reported(script):
+@pytest.mark.parametrize("script", [*NOTHING_OF_DUCKDBS_OWN_KEPT, pytest.param(CONNECTION_KEPT, id="connection_kept")])
+def test_nothing_is_reported_without_assertions(script):
     proc = _run(script)
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert REPORT not in proc.stderr, proc.stderr[-2000:]
@@ -125,26 +173,42 @@ def test_objects_held_past_finalization_are_not_reported(script):
 
 @pytest.mark.skipif(not _duckdb._assertions, reason="a build without assertions silences nanobind's leak report")
 @no_report_on_a_free_threaded_build
-@pytest.mark.parametrize("script", HELD_BY_CONSTRUCTION)
-def test_objects_held_past_finalization_are_reported_with_assertions(script):
-    proc = _run(script)
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    assert REPORT in proc.stderr, proc.stderr[-2000:]
+def test_a_kept_connection_is_reported_with_assertions():
+    _assert_one_connection_reported(_run(CONNECTION_KEPT))
 
 
-@no_report_on_a_free_threaded_build
-@pytest.mark.parametrize("script", HELD_BY_CONSTRUCTION)
-def test_the_switch_turns_the_report_on_in_every_build(script):
-    proc = _run(REPORT_ON, script)
-    assert proc.returncode == 0, proc.stderr[-2000:]
-    assert REPORT in proc.stderr, proc.stderr[-2000:]
-
-
-@pytest.mark.parametrize("script", HELD_BY_CONSTRUCTION)
-def test_the_switch_turns_the_report_off_in_every_build(script):
-    proc = _run(REPORT_OFF, script)
+def test_the_switch_turns_the_report_off_in_every_build():
+    proc = _run(REPORT_OFF, CONNECTION_KEPT)
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert REPORT not in proc.stderr, proc.stderr[-2000:]
+
+
+def _import_or_say_why_not(info: pkgutil.ModuleInfo) -> str | None:
+    try:
+        importlib.import_module(info.name)
+    except ModuleNotFoundError as error:
+        if error.name is None or error.name.partition(".")[0] in ("duckdb", "_duckdb"):
+            raise
+        return f"{info.name} ({error.name} is not installed)"
+    return None
+
+
+def test_no_module_binds_a_type_constant_by_name_outside_sqltypes():
+    # A static guard for the module level bindings; the every_module_dict_kept child above checks the whole dict.
+    import duckdb
+
+    skipped = [
+        reason for reason in map(_import_or_say_why_not, pkgutil.walk_packages(duckdb.__path__, "duckdb.")) if reason
+    ]
+    print("not imported:", ", ".join(skipped) or "none")
+    holders = {}
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == "duckdb" or name.startswith(("duckdb.", "_duckdb"))):
+            continue
+        bound = sorted(key for key, value in vars(module).items() if isinstance(value, _duckdb._sqltypes.DuckDBPyType))
+        if bound and name not in SQLTYPES_MODULES:
+            holders[name] = bound
+    assert holders == {}
 
 
 def _nanobind_internals_keys() -> list[str]:

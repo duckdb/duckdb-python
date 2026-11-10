@@ -33,8 +33,9 @@ from duckdb import (
     FunctionExpression,
     LambdaExpression,
     SQLExpression,
+    sqltypes,
 )
-from duckdb.sqltypes import BLOB, DOUBLE, TIMESTAMP_TZ, VARCHAR, DuckDBPyType
+from duckdb.sqltypes import DuckDBPyType
 
 __all__ = ["Column"]
 
@@ -359,14 +360,14 @@ def _constant(value: Any) -> Expression:  # noqa: ANN401
     # ConstantExpression converts a float NaN to NULL, because Python value conversion treats NaN as missing data,
     # also inside a list, so lists are built from their elements.
     if isinstance(value, float) and math.isnan(value):
-        return ConstantExpression("NaN").cast(DOUBLE)
+        return ConstantExpression("NaN").cast(sqltypes.DOUBLE)
     if isinstance(value, (list, tuple)):
         return FunctionExpression("list_value", *(_constant(v) for v in value))
     if isinstance(value, dict):
         msg = f"[UNSUPPORTED_FEATURE.LITERAL_TYPE] The feature is not supported: Literal for {value!r} of class dict."
         raise SparkRuntimeException(message=msg)
     if isinstance(value, datetime.datetime) and value.tzinfo is None:
-        return ConstantExpression(value).cast(TIMESTAMP_TZ)
+        return ConstantExpression(value).cast(sqltypes.TIMESTAMP_TZ)
     return ConstantExpression(value)
 
 
@@ -421,7 +422,7 @@ def _truncate(value: Expression, target: DuckDBPyType) -> Expression:
     """
     source_type = FunctionExpression("typeof", value)
     is_string = source_type == ConstantExpression("VARCHAR")
-    text = value.cast(VARCHAR)
+    text = value.cast(sqltypes.VARCHAR)
     is_number = FunctionExpression(
         "regexp_full_match", text, ConstantExpression(r"\s*[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)\s*")
     )
@@ -433,7 +434,7 @@ def _truncate(value: Expression, target: DuckDBPyType) -> Expression:
             f'\' of the type "STRING" cannot be cast to "{_sql_type_name(target)}" because it is malformed.'
         ),
     )
-    as_double = value.cast(DOUBLE)
+    as_double = value.cast(sqltypes.DOUBLE)
     truncated = FunctionExpression("trunc", as_double)
     # A decimal or a string can have a fraction that its nearest double drops, so its whole part is cut from its text;
     # the leading 0 keeps a bare sign or an empty whole part a valid integer.
@@ -454,7 +455,9 @@ def _truncate(value: Expression, target: DuckDBPyType) -> Expression:
 def _to_binary(value: Expression) -> Expression:
     """Cast to binary like Spark, which takes a string's UTF-8 bytes where DuckDB reads escape sequences."""
     is_string = FunctionExpression("typeof", value) == ConstantExpression("VARCHAR")
-    return CaseExpression(is_string, FunctionExpression("encode", value.cast(VARCHAR))).otherwise(value.cast(BLOB))
+    return CaseExpression(is_string, FunctionExpression("encode", value.cast(sqltypes.VARCHAR))).otherwise(
+        value.cast(sqltypes.BLOB)
+    )
 
 
 def _children(dtype: DuckDBPyType) -> list[DuckDBPyType]:
