@@ -1,5 +1,6 @@
 """A relation built by rel.query(name, sql) reads the relation it came from, whatever is registered under name later."""
 
+import enum
 import gc
 import io
 import re
@@ -118,6 +119,26 @@ class TestQueryBindsItsNameOnce:
             con.sql(sql)
         with pytest.raises(duckdb.BinderException, match=re.escape(str(from_sql.value))):
             con.sql("select 1 as a").query("v", sql)
+
+    def test_a_str_subclass_name_is_read_by_its_value(self):
+        class Names(str, enum.Enum):
+            VIEW = "tv"
+
+        con = duckdb.connect()
+        assert con.sql("select 1 as a").query(Names.VIEW, "select a from tv").fetchall() == [(1,)]
+        # Beside a catalog view of the same name, the name is taken as it is for a plain string: the call's own
+        # entry is not made, and pragma show describes the relation.
+        con.execute("create temp view tv as select 'x' as s")
+        rel = con.sql("select 1 as a").query(Names.VIEW, "pragma \"show\"('tv')")
+        assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
+        assert con.execute("select s from tv").fetchall() == [("x",)]
+
+    def test_pragma_show_of_a_trailing_dot_reads_like_sql(self):
+        con = duckdb.connect()
+        con.execute("create table other(o varchar)")
+        assert con.sql("pragma \"show\"('other.')").fetchall() == [("o", "VARCHAR", "YES", None, None, None)]
+        rel = con.sql("select 1 as a").query("v", "pragma \"show\"('other.')")
+        assert rel.fetchall() == [("o", "VARCHAR", "YES", None, None, None)]
 
     def test_pragma_show_of_an_empty_name_raises_like_sql(self):
         con = duckdb.connect()

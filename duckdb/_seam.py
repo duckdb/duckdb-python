@@ -228,6 +228,17 @@ def column_reference(text: str) -> list[str] | None:
     return _duckdb._column_reference(text)
 
 
+def name_components(text: str) -> list[str]:
+    """The parts of a qualified name string, read by the engine's own reader of such strings.
+
+    The reader the appender and pragma show use: the string is split at the dots outside double quotes; a part in
+    double quotes may hold dots, and a doubled quote inside it is one quote; a trailing dot is dropped; every part is
+    taken verbatim, case, whitespace and keywords included; an empty part, an unterminated quote or a quote in the
+    wrong place raise the engine's ParserException.
+    """
+    return _duckdb._name_components(text)
+
+
 def parse_expressions(text: str) -> list[str]:
     """The expressions of a comma separated list, each rendered back by the engine's parser with its alias kept."""
     return _duckdb._parse_expressions(text)

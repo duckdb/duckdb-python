@@ -3,6 +3,7 @@
 The name is a dotted string or a tuple of its parts, of any depth: a nested schema path or an attached database.
 """
 
+import enum
 import gc
 
 import pytest
@@ -477,36 +478,62 @@ class TestTupleNames:
     @pytest.mark.parametrize("method", WRITE_METHODS)
     def test_empty_tuple_refused(self, method):
         con = connect(FLAT_SETUP)
+        before = table_count(con)
         with pytest.raises(duckdb.InvalidInputException, match="A name must have at least one part"):
             getattr(source(con), method)(())
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        assert table_count(con) == before
         assert view_paths(con) == []
 
     @pytest.mark.parametrize("method", WRITE_METHODS)
     def test_non_string_part_refused(self, method):
         con = connect(FLAT_SETUP)
+        before = table_count(con)
         with pytest.raises(duckdb.InvalidInputException, match="Every part of a name must be a string"):
             getattr(source(con), method)(("s", 1))
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        assert table_count(con) == before
         assert view_paths(con) == []
 
     @pytest.mark.parametrize("method", WRITE_METHODS)
     @pytest.mark.parametrize("name", [None, 5])
     def test_other_type_refused(self, method, name):
         con = connect(FLAT_SETUP)
+        before = table_count(con)
         with pytest.raises(duckdb.InvalidInputException) as error:
             getattr(source(con), method)(name)
         assert str(error.value) == "Invalid Input Error: A name is given as a string, or as a tuple of its parts"
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        assert table_count(con) == before
         assert view_paths(con) == []
 
     @pytest.mark.parametrize("method", WRITE_METHODS)
-    def test_empty_part_refused(self, method):
+    @pytest.mark.parametrize(("name", "rendered"), [(("s", ""), '"s".""'), (("",), '""'), (("", "t"), '""."t"')])
+    def test_empty_part_refused(self, method, name, rendered):
         con = connect(FLAT_SETUP)
-        with pytest.raises(duckdb.ParserException, match="zero-length delimited identifier"):
-            getattr(source(con), method)(("s", ""))
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        before = table_count(con)
+        with pytest.raises(duckdb.ParserException) as error:
+            getattr(source(con), method)(name)
+        assert str(error.value) == f"Parser Error: Zero-length identifier in qualified name! (input: {rendered})"
+        assert table_count(con) == before
         assert view_paths(con) == []
+
+    @pytest.mark.parametrize("method", WRITE_METHODS)
+    def test_str_subclass_part_is_read_by_its_value(self, method):
+        class Names(str, enum.Enum):
+            SCHEMA = "s"
+            TABLE = "t"
+            NEW = "sub"
+
+        con = connect(FLAT_SETUP)
+        target = Names.TABLE if method == "insert_into" else Names.NEW
+        getattr(source(con), method)((Names.SCHEMA, target))
+        assert con.sql(f"FROM s.{target.value}").fetchall() == [(42,)]
+        if method != "insert_into":
+            assert stored_as(con, method, "sub") == [("s", "sub")]
+        # The seam's own reading of the parts, which create_view reaches with plain strings
+        assert duckdb._seam.table_kind(con, (Names.SCHEMA, Names.TABLE)) == "table"
+        assert duckdb._seam.table_kind(con, Names.TABLE) == "table"
+        read = con.table((Names.SCHEMA, Names.TABLE))
+        assert read.fetchall() == [(42,)] if method == "insert_into" else read.fetchall() == []
+        assert type(read.alias) is str
 
     def test_annotation(self):
         relation = duckdb.DuckDBPyRelation
@@ -518,7 +545,7 @@ class TestTupleNames:
 
 class TestEmptyViewNamePart:
     @pytest.mark.parametrize("method", VIEW_METHODS)
-    @pytest.mark.parametrize("name", ["", "s..v", ".v", '""', 's.""'])
+    @pytest.mark.parametrize("name", ["", "s..v", ".v"])
     def test_create_view_refused(self, method, name):
         con = connect(FLAT_SETUP)
         with pytest.raises(duckdb.ParserException) as error:
@@ -527,17 +554,30 @@ class TestEmptyViewNamePart:
         assert view_paths(con) == []
 
     @pytest.mark.parametrize("method", WRITE_METHODS)
-    @pytest.mark.parametrize("name", ['"', 's."v'])
-    def test_unterminated_quote_refused(self, method, name):
+    @pytest.mark.parametrize("name", ['""', 's.""'])
+    def test_empty_quoted_part_refused(self, method, name):
         con = connect(FLAT_SETUP)
+        before = table_count(con)
         with pytest.raises(duckdb.ParserException) as error:
             getattr(source(con), method)(name)
-        assert str(error.value) == f"Parser Error: Unterminated quoted identifier in qualified name! (input: {name})"
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        message = f"Parser Error: Zero-length delimited identifier in qualified name! (input: {name})"
+        assert str(error.value) == message
+        assert table_count(con) == before
         assert view_paths(con) == []
 
     @pytest.mark.parametrize("method", WRITE_METHODS)
-    @pytest.mark.parametrize("name", ["s..v", 'a"b"c'])
+    @pytest.mark.parametrize("name", ['"', 's."v'])
+    def test_unterminated_quote_refused(self, method, name):
+        con = connect(FLAT_SETUP)
+        before = table_count(con)
+        with pytest.raises(duckdb.ParserException) as error:
+            getattr(source(con), method)(name)
+        assert str(error.value) == f"Parser Error: Unterminated quote in qualified name! (input: {name})"
+        assert table_count(con) == before
+        assert view_paths(con) == []
+
+    @pytest.mark.parametrize("method", WRITE_METHODS)
+    @pytest.mark.parametrize("name", ["s..v", 'a"b"c', ("s", ""), ("",)])
     def test_refusal_keeps_the_transaction_usable(self, method, name):
         con = connect(FLAT_SETUP)
         con.execute("BEGIN")
@@ -616,8 +656,79 @@ class TestNameSpellingRefused:
     )
     def test_refused(self, method, name, message):
         con = connect(FLAT_SETUP)
+        before = table_count(con)
         with pytest.raises(duckdb.ParserException) as error:
             getattr(source(con), method)(name)
         assert str(error.value) == f"Parser Error: {message} (input: {name})"
-        assert table_count(con) == table_count(connect(FLAT_SETUP))
+        assert table_count(con) == before
         assert view_paths(con) == []
+
+
+SPELLING_SETUP = [
+    *FLAT_SETUP,
+    'CREATE TABLE "select"(i INTEGER)',
+    "CREATE SCHEMA sp",
+    'CREATE TABLE sp." t"(i INTEGER)',
+    'CREATE TABLE sp."T"(i INTEGER)',
+]
+SPELLING_TABLES = [*FLAT_TABLES, 'memory.main."select"', 'memory.sp." t"', 'memory.sp."T"']
+
+
+def stored_as(con, method, stored):
+    """The (schema, name) rows of the catalog listing the method writes to whose name has exactly this spelling."""
+    listing, column = ("duckdb_views()", "view_name") if method in VIEW_METHODS else ("duckdb_tables()", "table_name")
+    return con.sql(
+        f"SELECT schema_name, {column} FROM {listing} WHERE {column} = ? ORDER BY ALL", params=[stored]
+    ).fetchall()
+
+
+class TestReaderRules:
+    """What a read alone cannot show: a trailing dot is dropped, whitespace and case are kept, a keyword is a name."""
+
+    @pytest.mark.parametrize("method", ["create", "to_table", "create_view", "to_view"])
+    @pytest.mark.parametrize(
+        ("name", "schema", "stored"),
+        [
+            ("s.new.", "s", "new"),
+            ("new.", "main", "new"),
+            ("s. new", "s", " new"),
+            ("S.New", "s", "New"),
+            ("select", "main", "select"),
+            (("s", " new"), "s", " new"),
+            (("S", "New"), "s", "New"),
+            (("select",), "main", "select"),
+        ],
+    )
+    def test_created_spelling(self, method, name, schema, stored):
+        con = connect(FLAT_SETUP)
+        getattr(source(con), method)(name)
+        assert stored_as(con, method, stored) == [(schema, stored)]
+        if stored != stored.strip().lower():
+            assert stored_as(con, method, stored.strip().lower()) == []
+
+    @pytest.mark.parametrize(
+        ("name", "target"),
+        [
+            ("s.t.", "memory.s.t"),
+            ("t.", "memory.main.t"),
+            ("sp. t", 'memory.sp." t"'),
+            ("SP.T", 'memory.sp."T"'),
+            ("select", 'memory.main."select"'),
+            (("sp", " t"), 'memory.sp." t"'),
+            (("SP", "T"), 'memory.sp."T"'),
+            (("select",), 'memory.main."select"'),
+        ],
+    )
+    def test_insert_into(self, name, target):
+        con = connect(SPELLING_SETUP)
+        source(con).insert_into(name)
+        expected = {table: [(42,)] if table == target else [] for table in SPELLING_TABLES}
+        assert contents(con, SPELLING_TABLES) == expected
+
+    def test_appender_reads_a_trailing_dot_the_same_way(self):
+        con = connect(SPELLING_SETUP)
+        appender = con.appender("s.t.")
+        appender.append_row(7)
+        appender.flush()
+        source(con).insert_into("s.t.")
+        assert con.sql("FROM s.t ORDER BY i").fetchall() == [(7,), (42,)]

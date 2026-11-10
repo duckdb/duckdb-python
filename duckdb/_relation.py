@@ -25,7 +25,16 @@ from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 import _duckdb
 
 from duckdb import _seam
-from duckdb._expression import PendingCase, _is_value, constant, fold_name, plain_value, quote, text_tokens
+from duckdb._expression import (
+    PendingCase,
+    _is_value,
+    constant,
+    fold_name,
+    identifier,
+    plain_value,
+    quote,
+    text_tokens,
+)
 from duckdb._sql_keywords import KEYWORDS
 
 if TYPE_CHECKING:
@@ -64,7 +73,9 @@ _REMOVED_METHODS = {
     "execute": "rel.materialize() to run it once and keep its rows, or a method such as fetchall()",
 }
 _BARE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_SHOW_PRAGMA = re.compile(r"""^\s*pragma\s+(?:"show"|show)\s*\(\s*'((?:[^']|'')*)'\s*\)\s*;?\s*$""", re.IGNORECASE)
+_SHOW_PRAGMA = re.compile(
+    r"""^\s*pragma\s+(?:"show"|show)\s*\(\s*'((?:[^']|'')*)'\s*\)\s*;?\s*$""", re.IGNORECASE | re.ASCII
+)
 _ERROR_NAMES = {
     "InvalidInputException": "Invalid Input",
     "BinderException": "Binder",
@@ -364,48 +375,6 @@ def _stand_in_type(type_: DuckDBPyType) -> str:
         key, value = (cast("DuckDBPyType", child) for _, child in children)
         return f"MAP({_stand_in_type(key)}, {_stand_in_type(value)})"
     return str(type_)
-
-
-def _split_qualified(text: str) -> list[str]:
-    """The parts of a dotted name, each taken verbatim; a part in double quotes may hold dots and doubled quotes.
-
-    The engine's own reader of a qualified name string (QualifiedName::ParseComponents) follows the same rules, with
-    its own messages; the one difference is that a trailing dot is kept here as an empty last part, for the caller to
-    refuse. A quote inside a bare part, or anything but a dot after a closing quote, is refused as SQL refuses it.
-    """
-    parts: list[str] = []
-    index = 0
-    while True:
-        current: list[str] = []
-        if index < len(text) and text[index] == '"':
-            index += 1
-            while True:
-                if index >= len(text):
-                    message = f"Unterminated quoted identifier in qualified name! (input: {text})"
-                    raise _error(_duckdb.ParserException, message)
-                char = text[index]
-                index += 1
-                if char != '"':
-                    current.append(char)
-                elif index < len(text) and text[index] == '"':
-                    current.append('"')
-                    index += 1
-                else:
-                    break
-            if index < len(text) and text[index] != ".":
-                message = f"Unexpected character after a quoted identifier in a qualified name! (input: {text})"
-                raise _error(_duckdb.ParserException, message)
-        else:
-            while index < len(text) and text[index] != ".":
-                if text[index] == '"':
-                    message = f"Unexpected quote in the middle of a qualified name component! (input: {text})"
-                    raise _error(_duckdb.ParserException, message)
-                current.append(text[index])
-                index += 1
-        parts.append("".join(current))
-        if index >= len(text):
-            return parts
-        index += 1
 
 
 def _split_list(text: str) -> list[str]:
@@ -1567,13 +1536,16 @@ class DuckDBPyRelation:
     """A query built a step at a time; it runs only when a method reads its rows, and runs again on every read.
 
     A table or view name given to create, to_table, insert_into, create_view or to_view is a string or a tuple of
-    strings. A string is split at the dots outside double quotes into catalog, schema path and name, however deep the
-    schema path; a part in double quotes may hold dots, and a doubled quote inside it is one quote
-    ('"my.schema"."my table"'). Every part is then one identifier taken verbatim: no case folding, no trimming of
+    strings. A string is read by the engine's own reader of a qualified name string, the one the appender and
+    pragma show use: it is split at the dots outside double quotes into catalog, schema path and name, however deep
+    the schema path; a part in double quotes may hold dots, and a doubled quote inside it is one quote
+    ('"my.schema"."my table"'); a trailing dot is dropped; an empty part, an unterminated quote or a quote in the
+    wrong place is refused. Every part is then one identifier taken verbatim: no case folding, no trimming of
     whitespace, a keyword or a name with a space accepted quoted or not, and a single quote or a backtick an ordinary
-    character. These are the engine's rules for a qualified name string, not the SQL lexer's. A tuple of strings is
-    the parts themselves, outermost first (("my.schema", "my table")). An unqualified name follows the connection's
-    search path, as in SQL.
+    character. These are the engine's rules for such a string, not the SQL lexer's. A tuple of strings is the parts
+    themselves, outermost first (("my.schema", "my table")), each read by its text, so a str subclass counts by its
+    value. An unqualified name follows the connection's search path, as in SQL. The connection's table() and view()
+    read a name the same way, except that a string the reader refuses, such as a file path, is one name.
     """
 
     __slots__ = (
@@ -2735,6 +2707,9 @@ class DuckDBPyRelation:
         expression writes, runs at the call and the relation holds what it returned.
         """
         _ensure_open(self._con)
+        if isinstance(virtual_table_name, str):
+            # The text of the name, so a str subclass such as an Enum member counts by its value everywhere below
+            virtual_table_name = str.__str__(virtual_table_name)
         text = _strip_semicolons(sql_query)
         if _seam.statement_count(self._con, text) != 1:
             raise _error(_duckdb.InvalidInputException, "'DuckDBPyRelation.query' only accepts a single statement")
@@ -2744,7 +2719,7 @@ class DuckDBPyRelation:
         shown = _SHOW_PRAGMA.match(text)
         if shown is not None:
             literal = shown.group(1).replace("''", "'")
-            text = "DESCRIBE " + _name_text_sql(_name_path(self._con, literal))
+            text = "DESCRIBE " + identifier(_name_path(self._con, literal))
         _refresh(self)
         with _reading_as(self, virtual_table_name):
             _, last, kind, _ = _seam.prepare_script_parsed(self._con, text, None)
@@ -2790,7 +2765,7 @@ class DuckDBPyRelation:
 
         The name is a dotted string or a tuple of its parts, read as the class notes on names say.
         """
-        target = _name_text_sql(_name_path(self._con, table_name))
+        target = identifier(_name_path(self._con, table_name))
         self._write(f"CREATE TABLE {target} AS ")
 
     to_table = create
@@ -2800,7 +2775,7 @@ class DuckDBPyRelation:
 
         The name is a dotted string or a tuple of its parts, read as the class notes on names say.
         """
-        target = _name_text_sql(_name_path(self._con, table_name))
+        target = identifier(_name_path(self._con, table_name))
         self._write(f"INSERT INTO {target} ")
 
     def insert(self, values: object) -> None:
@@ -3167,25 +3142,24 @@ def _ensure_open(con: _duckdb.DuckDBPyConnection) -> None:
 
 
 def _name_path(con: _duckdb.DuckDBPyConnection, name: str | tuple[str, ...]) -> tuple[str, ...]:
-    """The parts of a table or view name, outermost first: a string split as SQL reads it, a tuple as given."""
+    """The parts of a table or view name, outermost first: a string as the engine reads one, a tuple as given."""
     _ensure_open(con)
-    if isinstance(name, str):
-        parts = tuple(_split_qualified(name))
-        if any(not part for part in parts):
-            raise _error(_duckdb.ParserException, f"Zero-length identifier in qualified name! (input: {name})")
-        return parts
+    return tuple(_seam.name_components(name)) if isinstance(name, str) else _name_tuple(name)
+
+
+def _name_tuple(name: object) -> tuple[str, ...]:
+    """The parts of a name given as a tuple, each the text of its string, refused as the seam refuses them."""
     if not isinstance(name, (tuple, list)):
         raise _error(_duckdb.InvalidInputException, "A name is given as a string, or as a tuple of its parts")
     if not name:
         raise _error(_duckdb.InvalidInputException, "A name must have at least one part")
     if not all(isinstance(part, str) for part in name):
         raise _error(_duckdb.InvalidInputException, "Every part of a name must be a string")
-    return tuple(name)
-
-
-def _name_text_sql(parts: tuple[str, ...]) -> str:
-    """A name's parts as SQL text, every part quoted."""
-    return ".".join(quote(part) for part in parts)
+    parts = tuple(str.__str__(part) for part in name)
+    if not all(parts):
+        message = f"Zero-length identifier in qualified name! (input: {identifier(parts)})"
+        raise _error(_duckdb.ParserException, message)
+    return parts
 
 
 def _string_option(options: list[tuple[str, str]], method: str, argument: str, value: object, option: str) -> None:
@@ -3527,13 +3501,17 @@ def sql(
     return _run_now(con, text, params, alias, kept)
 
 
-def _name_parts(name: str) -> tuple[str, ...]:
-    """The parts of a dotted name, or the whole name as one part when it cannot be one (a path such as ./x.csv)."""
+def _name_parts(name: str | tuple[str, ...]) -> tuple[str, ...]:
+    """The parts of a name: a tuple as given, a string as the engine reads one, or whole when the engine refuses it.
+
+    A string the engine's reader refuses, such as the path ./x.csv, is one name.
+    """
+    if not isinstance(name, str):
+        return _name_tuple(name)
     try:
-        parts = tuple(_split_qualified(name))
+        return tuple(_seam.name_components(name))
     except _duckdb.ParserException:
         return (name,)
-    return (name,) if any(not part for part in parts) else parts
 
 
 def _catalog_source(
@@ -3559,27 +3537,30 @@ def _catalog_source(
     return DuckDBPyRelation._make(con, step, alias=alias, schema=schema, return_type=signature.return_type)
 
 
-def _catalog_relation(con: _duckdb.DuckDBPyConnection, name: str, step_class: type[Table]) -> DuckDBPyRelation:
+def _catalog_relation(
+    con: _duckdb.DuckDBPyConnection, name: str | tuple[str, ...], step_class: type[Table]
+) -> DuckDBPyRelation:
     """A relation reading a catalog entry or a file by name.
 
-    A dotted name is qualified when its first part names a schema or a database, as SQL reads it, and is one name
-    otherwise.
+    A dotted string is qualified when its first part names a schema or a database, as SQL reads it, and is one name
+    otherwise; a tuple is the parts of the name.
     """
+    _ensure_open(con)
     parts = _name_parts(name)
-    if len(parts) > 1 and _seam.name_scope(con, parts[0]) == "none":
+    if isinstance(name, str) and len(parts) > 1 and _seam.name_scope(con, parts[0]) == "none":
         relation = _catalog_source(con, (name,), step_class, qualified=False)
         relation._alias = name
         return relation
     return _catalog_source(con, parts, step_class)
 
 
-def table(con: _duckdb.DuckDBPyConnection, table_name: str) -> DuckDBPyRelation:
-    """A relation reading a table, a view or a file by name."""
+def table(con: _duckdb.DuckDBPyConnection, table_name: str | tuple[str, ...]) -> DuckDBPyRelation:
+    """A relation reading a table, a view or a file by name; a tuple is the parts of a qualified name."""
     return _catalog_relation(con, table_name, Table)
 
 
-def view(con: _duckdb.DuckDBPyConnection, view_name: str) -> DuckDBPyRelation:
-    """A relation reading a view by name."""
+def view(con: _duckdb.DuckDBPyConnection, view_name: str | tuple[str, ...]) -> DuckDBPyRelation:
+    """A relation reading a view by name; a tuple is the parts of a qualified name."""
     return _catalog_relation(con, view_name, View)
 
 
@@ -4490,12 +4471,16 @@ def module_sql(
 module_sql.__doc__ = _SQL_DOC
 
 
-def module_table(table_name: str, *, connection: _duckdb.DuckDBPyConnection | None = None) -> DuckDBPyRelation:
+def module_table(
+    table_name: str | tuple[str, ...], *, connection: _duckdb.DuckDBPyConnection | None = None
+) -> DuckDBPyRelation:
     """Create a relation object for the named table."""
     return table(_connection(connection), table_name)
 
 
-def module_view(view_name: str, *, connection: _duckdb.DuckDBPyConnection | None = None) -> DuckDBPyRelation:
+def module_view(
+    view_name: str | tuple[str, ...], *, connection: _duckdb.DuckDBPyConnection | None = None
+) -> DuckDBPyRelation:
     """Create a relation object for the named view."""
     return view(_connection(connection), view_name)
 

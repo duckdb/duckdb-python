@@ -917,14 +917,30 @@ class TestRepeatedColumnNames:
         expected = ["x", "x", "x_1"] if USE_ACTUAL_SPARK else ["x", "x_2", "x_1"]
         assert spark.table("repeated_input_view").columns == expected
 
-    def test_temp_view_with_a_dotted_name_is_one_name(self, spark):
-        if USE_ACTUAL_SPARK:
-            pytest.skip("Spark refuses a multi-part temporary view name")
-        spark.sql("CREATE SCHEMA IF NOT EXISTS x")
-        spark.createDataFrame([(1,)], ["a"]).createOrReplaceTempView("x.y")
-        assert spark.sql('SELECT a FROM "x.y"').collect() == [Row(a=1)]
-        in_schema_x = spark.sql("SELECT count(*) AS n FROM duckdb_views() WHERE schema_name = 'x'").collect()
-        assert in_schema_x == [Row(n=0)]
+    def test_temp_view_with_a_dotted_name_is_refused(self, spark):
+        df = spark.createDataFrame([(1,)], ["a"])
+        with pytest.raises(AnalysisException, match="single-part view names") as error:
+            df.createOrReplaceTempView("x.y")
+        assert error_condition(error.value) == "TEMP_VIEW_NAME_TOO_MANY_NAME_PARTS"
+        with pytest.raises((AnalysisException, ParseException)):
+            df.createOrReplaceTempView("x.")
+        df.createOrReplaceTempView("xy")
+        assert spark.table("xy").collect() == [Row(a=1)]
+        if not USE_ACTUAL_SPARK:
+            assert spark.sql("SELECT count(*) AS n FROM duckdb_views() WHERE view_name IN ('x.y', 'x.')").collect() == [
+                Row(n=0)
+            ]
+
+    def test_temp_view_name_is_read_with_spark_quoting(self, spark):
+        # Backticks quote a name part, as in Spark; double quotes are ordinary characters of the name.
+        df = spark.createDataFrame([(1,)], ["a"])
+        df.createOrReplaceTempView("`x.y`")
+        assert spark.sql("SELECT a FROM `x.y`").collect() == [Row(a=1)]
+        if not USE_ACTUAL_SPARK:
+            df.createOrReplaceTempView('"x"')
+            assert spark.sql('SELECT a FROM `"x"`').collect() == [Row(a=1)]
+            names = spark.sql("SELECT view_name FROM duckdb_views() WHERE view_name IN ('x.y', '\"x\"') ORDER BY 1")
+            assert [row.view_name for row in names.collect()] == ['"x"', "x.y"]
 
     def test_repeat_beside_a_name_of_another_join_input(self, spark):
         a = spark.createDataFrame([(10, 20)], ["x", "x"]).alias("a")
