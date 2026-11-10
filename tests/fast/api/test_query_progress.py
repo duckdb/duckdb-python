@@ -79,7 +79,7 @@ class Shell:
 
 ipython.get_ipython = Shell
 display = types.ModuleType("IPython.display")
-# Like IPython's, this display keeps the widgets it shows, so the engine never drops the last reference.
+# Stands in for the ipywidgets registry, which keeps every widget until it is closed, so none is freed by the engine.
 display.display = shown.append
 ipython.display = display
 widgets = types.ModuleType("ipywidgets")

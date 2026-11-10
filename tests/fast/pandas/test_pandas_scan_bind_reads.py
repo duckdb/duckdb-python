@@ -380,20 +380,15 @@ def test_object_column_is_converted_again_on_every_iteration_of_a_recursive_step
             return str(next(conversions))
 
     source = pd.DataFrame({"id": [1, 2, 3], "o": pd.Series([Stamp(), Stamp(), Stamp()], dtype=object)})
-    if path == "register":
-        duckdb_cursor.register("registered_source", source)
-        name = "registered_source"
-    else:
-        name = "source"
-    sql = f"""
+    sql = """
         WITH RECURSIVE r(i, seen) AS (
             SELECT 0, []::VARCHAR[]
             UNION ALL
-            SELECT r.i + 1, list_append(r.seen, s.o) FROM r JOIN {name} s ON s.id = 1 WHERE r.i < 3
+            SELECT r.i + 1, list_append(r.seen, s.o) FROM r JOIN {source} s ON s.id = 1 WHERE r.i < 3
         )
         SELECT len(list_distinct(seen)) FROM r WHERE i = 3
     """
-    assert duckdb_cursor.execute(sql).fetchall() == [(3,)]
+    assert _execute(duckdb_cursor, source, path, sql).fetchall() == [(3,)]
 
 
 _CHANGED_REGISTERED_DICT = """
