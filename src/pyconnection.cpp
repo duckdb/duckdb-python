@@ -1642,36 +1642,9 @@ void InstantiateNewInstance(DuckDB &db) {
 	RegisterPythonArrowScan(db_instance);
 }
 
-static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
-	auto res = std::make_shared<DuckDBPyConnection>();
-	bool cache_instance = database_path != ":memory:" && !database_path.empty();
-	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
-	{
-		DUCKDB_PY_ASSERT_GIL_HELD();
-		nb::gil_scoped_release release;
-		unique_lock<std::recursive_mutex> lock(res->py_connection_lock);
-		auto database = GetModuleState().instance_cache.GetOrCreateInstance(database_path, config, cache_instance,
-		                                                                    InstantiateNewInstance);
-		res->con.SetDatabase(std::move(database));
-		res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
-	}
-	return res;
-}
-
-bool IsDefaultConnectionString(const string &database, bool read_only, identifier_map_t<Value> &config) {
-	bool is_default = StringUtil::CIEquals(database, ":default:");
-	if (!is_default) {
-		return false;
-	}
-	// Only allow fetching the default connection when no options are passed
-	if (read_only == true || !config.empty()) {
-		throw InvalidInputException("Default connection fetching is only allowed without additional options");
-	}
-	return true;
-}
-
-// Runs after SetOptionsByName, so the hook sees the list as the engine parsed it; the result stays out of the user
-// options, which the instance cache compares when a second connect opens the same file.
+// Runs after SetOptionsByName, so the hook sees the list as the engine parsed it, and only for a database about to be
+// created: the instance cache compares the user options, which the result never enters, so a connect to an open file
+// gets that database with the list it was opened with.
 static void ApplyExtensionSearchPath(DBConfig &config) {
 	auto &holder = GetModuleState().extension_search_path;
 	// While the interpreter finalizes, the module globals the hook needs may already be cleared.
@@ -1705,6 +1678,43 @@ static void ApplyExtensionSearchPath(DBConfig &config) {
 		directories.emplace_back(nb::cast<std::string>(directory));
 	}
 	config.options.extension_directories = std::move(directories);
+}
+
+static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
+	auto res = std::make_shared<DuckDBPyConnection>();
+	bool cache_instance = database_path != ":memory:" && !database_path.empty();
+	config.replacement_scans.emplace_back(PythonReplacementScan::Replace);
+	DUCKDB_PY_ASSERT_GIL_HELD();
+	auto &instance_cache = GetModuleState().instance_cache;
+	shared_ptr<DuckDB> database;
+	if (cache_instance) {
+		nb::gil_scoped_release release;
+		database = instance_cache.GetInstance(database_path, config);
+	}
+	if (!database) {
+		ApplyExtensionSearchPath(config);
+		nb::gil_scoped_release release;
+		database = instance_cache.GetOrCreateInstance(database_path, config, cache_instance, InstantiateNewInstance);
+	}
+	{
+		nb::gil_scoped_release release;
+		unique_lock<std::recursive_mutex> lock(res->py_connection_lock);
+		res->con.SetDatabase(std::move(database));
+		res->con.SetConnection(make_uniq<Connection>(res->con.GetDatabase()));
+	}
+	return res;
+}
+
+bool IsDefaultConnectionString(const string &database, bool read_only, identifier_map_t<Value> &config) {
+	bool is_default = StringUtil::CIEquals(database, ":default:");
+	if (!is_default) {
+		return false;
+	}
+	// Only allow fetching the default connection when no options are passed
+	if (read_only == true || !config.empty()) {
+		throw InvalidInputException("Default connection fetching is only allowed without additional options");
+	}
+	return true;
 }
 
 static string GetPathString(const nb::object &path) {
@@ -1742,7 +1752,6 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const nb::object
 		config_dict["duckdb_api"] = Value("python/" + DuckDBPyConnection::FormattedPythonVersion() + " jupyter");
 	}
 	config.SetOptionsByName(config_dict);
-	ApplyExtensionSearchPath(config);
 
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->con.GetConnection().context;

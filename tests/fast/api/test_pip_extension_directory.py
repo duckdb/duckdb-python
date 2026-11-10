@@ -2,11 +2,13 @@
 
 Each test builds a stand-in for site-packages in a temporary directory: the duckdb distribution's metadata, first on
 sys.path and taken as the place the imported package lives, and next to it the .duckdb_extensions directory the
-extension wheels create. Nothing here installs or downloads an extension.
+extension wheels create. The interpreter's own site directories are kept out, and a test that needs more of them
+declares them through the site module. Nothing here installs or downloads an extension.
 """
 
 import errno
 import os
+import site as site_module
 import subprocess
 import sys
 import textwrap
@@ -21,6 +23,9 @@ from duckdb import _extension_directories
 DEFAULT_DIRECTORY = "~/.duckdb/extensions"
 SETTING = "SELECT current_setting('extension_directories')"
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX file names and descriptors")
+not_root = pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root bypasses directory permissions"
+)
 
 
 def directories(connection):
@@ -39,16 +44,46 @@ def place_package_in(site, monkeypatch):
     monkeypatch.setattr(_extension_directories, "_PACKAGE_PARENT", str(site))
 
 
-def assert_engine_lists_a_file_in(connection, directory):
+def make_extension_site(path):
+    """A site directory holding .duckdb_extensions and no duckdb metadata, as one that got only extension wheels."""
+    (path / ".duckdb_extensions").mkdir(parents=True)
+    return str(path / ".duckdb_extensions")
+
+
+def on_sys_path(monkeypatch, *paths):
+    for path in reversed(paths):
+        monkeypatch.syspath_prepend(str(path))
+
+
+def last_on_sys_path(monkeypatch, path):
+    monkeypatch.setattr(sys, "path", [*sys.path, str(path)])
+
+
+def site_packages_are(monkeypatch, *paths):
+    monkeypatch.setattr(site_module, "getsitepackages", lambda prefixes=None: [str(path) for path in paths])
+
+
+def user_site_is(monkeypatch, path, enabled=True):
+    monkeypatch.setattr(site_module, "getusersitepackages", lambda: str(path))
+    monkeypatch.setattr(site_module, "ENABLE_USER_SITE", enabled)
+
+
+def place_stand_in(connection, directory, name):
+    """Write a file where an extension wheel puts its binary, and return its path."""
     version, source_id = connection.execute("SELECT library_version, source_id FROM pragma_version()").fetchone()
     platform = connection.execute("PRAGMA platform").fetchone()[0]
     installed = Path(directory, source_id if "-dev" in version else version, platform)
     installed.mkdir(parents=True)
-    (installed / "fakeext.duckdb_extension").write_bytes(b"\0" * 1024)
+    (installed / f"{name}.duckdb_extension").write_bytes(b"\0" * 1024)
+    return installed / f"{name}.duckdb_extension"
+
+
+def assert_engine_lists_a_file_in(connection, directory):
+    stand_in = place_stand_in(connection, directory, "fakeext")
     rows = connection.execute(
         "SELECT installed, install_path FROM duckdb_extensions() WHERE extension_name = 'fakeext'"
     ).fetchall()
-    assert [(flag, Path(path)) for flag, path in rows] == [(True, installed / "fakeext.duckdb_extension")]
+    assert [(flag, Path(path)) for flag, path in rows] == [(True, stand_in)]
 
 
 def fail_creates_in(directory, monkeypatch, error):
@@ -92,9 +127,16 @@ def watch_probe_descriptors(directory, monkeypatch, on_close):
 
 @pytest.fixture(autouse=True)
 def located_afresh():
-    _extension_directories._pip_directory.cache_clear()
+    _extension_directories._pip_directories.cache_clear()
     yield
-    _extension_directories._pip_directory.cache_clear()
+    _extension_directories._pip_directories.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def no_site_directories(monkeypatch):
+    """The interpreter's own site directories stay out, so a .duckdb_extensions of the machine's cannot reach a test."""
+    site_packages_are(monkeypatch)
+    monkeypatch.setattr(site_module, "ENABLE_USER_SITE", False)
 
 
 @pytest.fixture(autouse=True)
@@ -130,7 +172,7 @@ def test_read_only_directory_comes_last(pip_directory, monkeypatch):
 
 
 @posix_only
-@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes into a read-only directory")
+@not_root
 def test_directory_without_write_permission_comes_last(pip_directory):
     Path(pip_directory).chmod(0o555)
     try:
@@ -213,6 +255,9 @@ EXIT_SCRIPT = """
     SETTING = "SELECT current_setting('extension_directories')"
     sys.path.insert(0, sys.argv[1])
     _extension_directories._PACKAGE_PARENT = sys.argv[1]
+    import site
+    site.getsitepackages = lambda prefixes=None: []
+    site.ENABLE_USER_SITE = False
 
     # Module globals may already be gone when the finalizer runs, so everything the report needs is bound here.
     def report(label, write=os.write, connect=duckdb.connect, setting=SETTING):
@@ -263,7 +308,21 @@ def test_file_in_place_of_the_directory_changes_nothing(site):
     assert directories(duckdb.connect()) == []
 
 
-def test_without_duckdb_metadata_on_sys_path_nothing_changes(monkeypatch):
+@posix_only
+@not_root
+def test_symlink_into_an_unsearchable_directory_changes_nothing(site, tmp_path):
+    (site / ".duckdb_extensions").rmdir()
+    locked = tmp_path / "locked"
+    (locked / "inner").mkdir(parents=True)
+    (site / ".duckdb_extensions").symlink_to(locked / "inner")
+    locked.chmod(0)
+    try:
+        assert directories(duckdb.connect()) == []
+    finally:
+        locked.chmod(0o755)
+
+
+def test_without_duckdb_metadata_on_sys_path_nothing_changes(site, monkeypatch):
     monkeypatch.setattr(sys, "path", [entry for entry in sys.path if not any(Path(entry).glob("duckdb-*.dist-info"))])
     assert directories(duckdb.connect()) == []
 
@@ -315,6 +374,135 @@ class TestLocation:
         monkeypatch.setattr(_extension_directories, "_PACKAGE_PARENT", str(tmp_path / "site-packages"))
         expected = str(Path.cwd() / "site-packages" / ".duckdb_extensions")
         assert directories(duckdb.connect()) == [expected, DEFAULT_DIRECTORY]
+
+
+class TestSiteDirectories:
+    """Extension wheels installed into another site directory of the interpreter than the one holding duckdb."""
+
+    def test_user_site_holding_the_directory_while_duckdb_sits_elsewhere(self, site, tmp_path, monkeypatch):
+        (site / ".duckdb_extensions").rmdir()
+        user = tmp_path / "user-site"
+        pip_directory = make_extension_site(user)
+        user_site_is(monkeypatch, user)
+        on_sys_path(monkeypatch, user)
+        connection = duckdb.connect()
+        assert directories(connection) == [pip_directory, DEFAULT_DIRECTORY]
+        assert_engine_lists_a_file_in(connection, pip_directory)
+
+    def test_disabled_user_site_is_not_searched(self, site, tmp_path, monkeypatch):
+        (site / ".duckdb_extensions").rmdir()
+        user = tmp_path / "user-site"
+        make_extension_site(user)
+        user_site_is(monkeypatch, user, enabled=False)
+        on_sys_path(monkeypatch, user)
+        assert directories(duckdb.connect()) == []
+
+    def test_site_directory_off_sys_path_is_not_searched(self, site, tmp_path, monkeypatch):
+        (site / ".duckdb_extensions").rmdir()
+        other = tmp_path / "other-site"
+        make_extension_site(other)
+        site_packages_are(monkeypatch, other)
+        assert directories(duckdb.connect()) == []
+
+    @pytest.mark.parametrize("writable", [True, False], ids=["writable", "read-only"])
+    def test_directories_follow_sys_path_order(self, site, tmp_path, monkeypatch, writable):
+        (site / ".duckdb_extensions").rmdir()
+        first, second = tmp_path / "first", tmp_path / "second"
+        a, b = make_extension_site(first), make_extension_site(second)
+        site_packages_are(monkeypatch, second, first)
+        on_sys_path(monkeypatch, first, second)
+        if not writable:
+            deny_creates_in(a, monkeypatch)
+            deny_creates_in(b, monkeypatch)
+        expected = [a, b, DEFAULT_DIRECTORY] if writable else [DEFAULT_DIRECTORY, a, b]
+        assert directories(duckdb.connect()) == expected
+
+    def test_writable_directories_come_first_and_read_only_ones_last(self, site, tmp_path, monkeypatch):
+        (site / ".duckdb_extensions").rmdir()
+        system, venv = tmp_path / "system-site", tmp_path / "venv-site"
+        read_only, writable = make_extension_site(system), make_extension_site(venv)
+        site_packages_are(monkeypatch, system, venv)
+        on_sys_path(monkeypatch, system, venv)
+        deny_creates_in(read_only, monkeypatch)
+        assert directories(duckdb.connect()) == [writable, DEFAULT_DIRECTORY, read_only]
+        connection = duckdb.connect(config={"extension_directories": ["/a"]})
+        assert directories(connection) == [writable, "/a", read_only]
+
+    def test_directory_named_several_times_is_one(self, site, pip_directory, monkeypatch):
+        site_packages_are(monkeypatch, site, str(site) + os.sep)
+        user_site_is(monkeypatch, site)
+        assert directories(duckdb.connect()) == [pip_directory, DEFAULT_DIRECTORY]
+
+    @posix_only
+    def test_directory_reached_through_a_symlink_is_one(self, site, tmp_path, monkeypatch):
+        alias = tmp_path / "lib64-site-packages"
+        alias.symlink_to(site, target_is_directory=True)
+        site_packages_are(monkeypatch, alias, site)
+        on_sys_path(monkeypatch, alias)
+        assert directories(duckdb.connect()) == [str(alias / ".duckdb_extensions"), DEFAULT_DIRECTORY]
+
+    def test_site_directory_spelled_through_a_parent_step_is_found(self, site, tmp_path, monkeypatch):
+        (site / ".duckdb_extensions").rmdir()
+        other = tmp_path / "other-site"
+        pip_directory = make_extension_site(other)
+        site_packages_are(monkeypatch, tmp_path / "elsewhere" / ".." / "other-site")
+        on_sys_path(monkeypatch, other)
+        assert directories(duckdb.connect()) == [pip_directory, DEFAULT_DIRECTORY]
+
+    def test_distribution_directory_keeps_its_sys_path_position(self, site, pip_directory, tmp_path, monkeypatch):
+        later = tmp_path / "later-site"
+        other = make_extension_site(later)
+        site_packages_are(monkeypatch, later)
+        last_on_sys_path(monkeypatch, later)
+        assert directories(duckdb.connect()) == [pip_directory, other, DEFAULT_DIRECTORY]
+
+    def test_distribution_reported_from_outside_sys_path_counts_last(self, site, pip_directory, tmp_path, monkeypatch):
+        import importlib.metadata
+
+        elsewhere = tmp_path / "elsewhere"
+        make_site(elsewhere)
+
+        class Finder:
+            @staticmethod
+            def find_spec(name, path=None, target=None) -> None:
+                return None
+
+            @staticmethod
+            def find_distributions(context=None) -> list[importlib.metadata.Distribution]:
+                return [importlib.metadata.PathDistribution(elsewhere / "duckdb-0.0.0.dist-info")]
+
+        monkeypatch.setattr(sys, "meta_path", [Finder, *sys.meta_path])
+        monkeypatch.setattr(_extension_directories, "_PACKAGE_PARENT", str(elsewhere))
+        site_packages_are(monkeypatch, site)
+        assert directories(duckdb.connect()) == [
+            pip_directory,
+            str(elsewhere / ".duckdb_extensions"),
+            DEFAULT_DIRECTORY,
+        ]
+
+    @pytest.mark.parametrize("how", ["missing", "raising"])
+    @pytest.mark.parametrize("function", ["getsitepackages", "getusersitepackages"])
+    def test_site_module_that_cannot_name_its_directories_adds_none(self, pip_directory, monkeypatch, function, how):
+        monkeypatch.setattr(site_module, "ENABLE_USER_SITE", True)
+        failure = OSError("site lookup failed")
+        if how == "missing":
+            monkeypatch.delattr(site_module, function)
+        else:
+
+            def failing(*args):
+                raise failure
+
+            monkeypatch.setattr(site_module, function, failing)
+        assert directories(duckdb.connect()) == [pip_directory, DEFAULT_DIRECTORY]
+
+    def test_user_list_naming_two_directories_holds_each_once(self, site, pip_directory, tmp_path, monkeypatch):
+        user = tmp_path / "user-site"
+        other = make_extension_site(user)
+        user_site_is(monkeypatch, user)
+        on_sys_path(monkeypatch, user)
+        deny_creates_in(other, monkeypatch)
+        connection = duckdb.connect(config={"extension_directories": [other, DEFAULT_DIRECTORY, pip_directory]})
+        assert directories(connection) == [pip_directory, DEFAULT_DIRECTORY, other]
 
 
 class TestPaths:
@@ -396,8 +584,15 @@ class TestEveryConnection:
         first = duckdb.connect(path)
         attempts = deny_creates_in(pip_directory, monkeypatch)
         second = duckdb.connect(path)
-        assert len(attempts) == 1
+        assert attempts == []
         assert directories(second) == directories(first) == [pip_directory, DEFAULT_DIRECTORY]
+
+    def test_connect_after_the_file_is_closed_probes_again(self, pip_directory, tmp_path, monkeypatch):
+        path = str(tmp_path / "file.duckdb")
+        duckdb.connect(path).close()
+        attempts = deny_creates_in(pip_directory, monkeypatch)
+        assert directories(duckdb.connect(path)) == [DEFAULT_DIRECTORY, pip_directory]
+        assert len(attempts) == 1
 
     def test_cursor(self, pip_directory):
         cursor = duckdb.connect().cursor()
@@ -412,3 +607,29 @@ class TestEveryConnection:
 
     def test_engine_lists_an_extension_file_in_the_directory(self, pip_directory):
         assert_engine_lists_a_file_in(duckdb.connect(), pip_directory)
+
+
+class TestAutoload:
+    """The order rule exists for autoload: the engine installs into, and checks, the first directory only."""
+
+    @pytest.mark.parametrize("writable", [True, False], ids=["writable", "read-only"])
+    def test_autoload_takes_the_pip_copy_without_an_install(self, pip_directory, tmp_path, monkeypatch, writable):
+        if not writable:
+            deny_creates_in(pip_directory, monkeypatch)
+        repository = tmp_path / "empty-repository"
+        repository.mkdir()
+        connection = duckdb.connect(config={"autoinstall_extension_repository": str(repository)})
+        linked = connection.execute(
+            "SELECT install_mode = 'STATICALLY_LINKED' FROM duckdb_extensions() WHERE extension_name = 'tpch'"
+        ).fetchone()
+        if linked and linked[0]:
+            pytest.skip("tpch is linked into this build")
+        place_stand_in(connection, pip_directory, "tpch")
+        # The stand-in is opened only when the engine finds it in the first directory and skips the install; with the
+        # pip directory last, the install from the empty repository into the first directory fails instead.
+        expected = "is not a DuckDB extension" if writable else "Failed to install local extension"
+        with pytest.raises(duckdb.Error, match=expected):
+            connection.execute("SELECT count(*) FROM tpch_queries()")
+        if not writable:
+            with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
+                connection.execute("LOAD tpch")
