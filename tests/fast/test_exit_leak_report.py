@@ -109,7 +109,8 @@ CONNECTION_KEPT = """
 SQLTYPES_MODULES = ("duckdb.sqltypes", "_duckdb._sqltypes")
 
 # The modules that may hold DuckDBPyType instances: CPython clears their dicts at finalization, and no function of
-# theirs keeps the dict alive past that.
+# theirs keeps the dict alive past that. A cache dict in the spark types module instead of the third would be reported
+# by the child that uses spark types and then keeps every module dict.
 TYPE_STORES = (*SQLTYPES_MODULES, "duckdb.experimental.spark.sql._type_cache")
 
 # Every module of the package imported, then every module dict but the type stores' kept alive while the module
@@ -172,6 +173,10 @@ SPARK_TYPES_USED_AND_FUNCTION_KEPT = """
 NOTHING_OF_DUCKDBS_OWN_KEPT = [
     pytest.param(EVERY_MODULE_DICT_KEPT, id="every_module_dict_kept"),
     pytest.param(SPARK_TYPES_USED_AND_FUNCTION_KEPT, id="spark_types_used_and_function_kept"),
+    pytest.param(
+        _join(SPARK_TYPES_USED_AND_FUNCTION_KEPT, EVERY_MODULE_DICT_KEPT),
+        id="spark_types_used_then_every_module_dict_kept",
+    ),
     pytest.param(OVERLOAD_SIGNATURE_WITH_NUMPY, id="overload_signature_with_numpy", marks=_needs("numpy")),
     pytest.param(OVERLOAD_SIGNATURE_WITH_TORCH, id="overload_signature_with_torch", marks=_needs("torch")),
     pytest.param(POLARS_FRAME_FROM_RELATION, id="polars_frame_from_relation", marks=_needs("polars")),

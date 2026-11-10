@@ -71,17 +71,18 @@ __all__ = [
 class DataType:
     """Base class for data types."""
 
-    def __init__(self, duckdb_type_name: str) -> None:  # noqa: D107
-        self._duckdb_type_name = duckdb_type_name
+    def __init__(self, duckdb_type: DuckDBPyType | str) -> None:  # noqa: D107
+        # A name is parsed on the default connection, so it is parsed here, once, and never on a read; the type goes
+        # into a dict another module owns, because one held here would sit in the singleton cache, which outlives
+        # finalization.
+        key = duckdb_type if isinstance(duckdb_type, str) else str(duckdb_type)
+        if key not in _type_cache.TYPES:
+            _type_cache.TYPES[key] = DuckDBPyType(key) if isinstance(duckdb_type, str) else duckdb_type
+        self._duckdb_type_key = key
 
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        # Parsing a name runs on the default connection, so each name is parsed once, into a dict another module
-        # owns: one held here would sit in the singleton cache, which outlives finalization.
-        name = self._duckdb_type_name
-        if name not in _type_cache.TYPES:
-            _type_cache.TYPES[name] = DuckDBPyType(name)
-        return _type_cache.TYPES[name]
+        return _type_cache.TYPES[self._duckdb_type_key]
 
     def __repr__(self) -> str:  # noqa: D105
         return self.__class__.__name__ + "()"
@@ -376,7 +377,7 @@ class DecimalType(FractionalType):
     """
 
     def __init__(self, precision: int = 10, scale: int = 0) -> None:  # noqa: D107
-        super().__init__(str(duckdb.decimal_type(precision, scale)))
+        super().__init__(duckdb.decimal_type(precision, scale))
         self.precision = precision
         self.scale = scale
         self.hasPrecisionInfo = True  # this is a public API
@@ -599,7 +600,7 @@ class DayTimeIntervalType(AtomicType):
         if (self.startField, self.endField) != (DayTimeIntervalType.DAY, DayTimeIntervalType.SECOND):
             msg = f"The Spark type {self.simpleString()} is not supported"
             raise ContributionsAcceptedError(msg)
-        return DuckDBPyType("INTERVAL")
+        return duckdb.sqltypes.INTERVAL
 
     def _str_repr(self) -> str:
         fields = DayTimeIntervalType._fields
@@ -647,13 +648,10 @@ class ArrayType(DataType):
     """
 
     def __init__(self, elementType: DataType, containsNull: bool = True) -> None:  # noqa: D107
+        super().__init__(duckdb.list_type(elementType.duckdb_type))
         assert isinstance(elementType, DataType), f"elementType {elementType} should be an instance of {DataType}"
         self.elementType = elementType
         self.containsNull = containsNull
-
-    @property
-    def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        return duckdb.list_type(self.elementType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"array<{self.elementType.simpleString()}>"
@@ -707,15 +705,12 @@ class MapType(DataType):
     """
 
     def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True) -> None:  # noqa: D107
+        super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
         assert isinstance(keyType, DataType), f"keyType {keyType} should be an instance of {DataType}"
         assert isinstance(valueType, DataType), f"valueType {valueType} should be an instance of {DataType}"
         self.keyType = keyType
         self.valueType = valueType
         self.valueContainsNull = valueContainsNull
-
-    @property
-    def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        return duckdb.map_type(self.keyType.duckdb_type, self.valueType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"map<{self.keyType.simpleString()},{self.valueType.simpleString()}>"
@@ -855,8 +850,11 @@ class StructType(DataType):
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
         if self.names and not any(self.names):
-            # The struct DuckDB builds without field names, such as the elements of list_zip.
-            return DuckDBPyType(f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})")
+            # The struct DuckDB builds without field names, such as the elements of list_zip; parsed once per text.
+            text = f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})"
+            if text not in _type_cache.TYPES:
+                _type_cache.TYPES[text] = DuckDBPyType(text)
+            return _type_cache.TYPES[text]
         folded = [name.casefold() for name in self.names]
         if len(set(folded)) < len(folded):
             # DuckDB matches struct field names case insensitively, so it cannot hold two fields with one name.
@@ -1193,6 +1191,13 @@ class UserDefinedType(DataType):
     def __eq__(self, other: object) -> bool:
         return type(self) is type(other)
 
+
+# Every singleton is built while the module imports, as sixteen of them always were, so that building one later
+# parses nothing on the default connection.
+for _singleton in [
+    value for value in list(globals().values()) if isinstance(value, DataTypeSingleton) and "__init__" in vars(value)
+]:
+    _singleton()
 
 _atomic_types: list[type[DataType]] = [
     StringType,

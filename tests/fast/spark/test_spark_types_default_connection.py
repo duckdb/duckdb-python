@@ -1,9 +1,13 @@
-"""A spark type read once keeps answering while duckdb's default connection is busy or in a failed transaction.
+"""Spark types keep answering while duckdb's default connection is busy or in a failed transaction.
 
-The DuckDBPyType behind a spark type is parsed on the default connection the first time its name is read; a session
-has a connection of its own, so later reads and casts must not depend on the default connection's state.
+The DuckDBPyType behind a spark type is parsed on the default connection when the types module is imported, which
+builds every singleton, and never when a type is read; decimals and containers are composed without a connection. A
+session has a connection of its own, so a type built while the default connection was idle and first read while it is
+busy, a type built while it is busy, and the session's casts and frames must not depend on the default connection's
+state.
 """
 
+import datetime
 import threading
 
 import pytest
@@ -14,24 +18,54 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
-from spark_namespace.sql.types import ArrayType, DecimalType, IntegerType, StructField, StructType
+from spark_namespace.sql.types import (
+    ArrayType,
+    DayTimeIntervalType,
+    DecimalType,
+    LongType,
+    MapType,
+    StringType,
+    StructField,
+    StructType,
+    UnsignedIntegerType,
+    UnsignedShortType,
+)
 
 pytestmark = pytest.mark.skipif(USE_ACTUAL_SPARK, reason="pyspark has no duckdb default connection")
-
-
-def _cast_and_build(spark):
-    schema = StructType([StructField("a", IntegerType()), StructField("b", ArrayType(IntegerType()))])
-    assert str(IntegerType().duckdb_type) == "INTEGER"
-    assert str(DecimalType(10, 2).duckdb_type) == "DECIMAL(10,2)"
-    assert str(F.col("a").cast(IntegerType())) == "Column<'CAST(a AS INT)'>"
-    assert spark.createDataFrame([(2, [3])], schema).collect()[0].b == [3]
-
 
 WAIT = 60
 
 
-def test_reads_and_casts_while_the_default_connection_runs_a_query_on_another_thread(spark):
-    _cast_and_build(spark)
+def _built_while_idle():
+    # Constructed, never read: the first read happens inside the state the test puts the default connection in.
+    return {
+        "decimal": DecimalType(17, 4),
+        "array_of_intervals": ArrayType(DayTimeIntervalType()),
+        "map_of_intervals": MapType(StringType(), DayTimeIntervalType()),
+        "array_of_unnamed_structs": ArrayType(StructType([StructField("", UnsignedShortType())])),
+    }
+
+
+def _first_reads_and_casts(spark, built):
+    assert str(UnsignedShortType().duckdb_type) == "USMALLINT"
+    assert str(LongType().duckdb_type) == "BIGINT"
+    assert str(built["decimal"].duckdb_type) == "DECIMAL(17,4)"
+    assert str(built["array_of_intervals"].duckdb_type) == "INTERVAL[]"
+    assert str(built["map_of_intervals"].duckdb_type) == "MAP(VARCHAR, INTERVAL)"
+    assert str(built["array_of_unnamed_structs"].duckdb_type) == "TUPLE(USMALLINT)[]"
+    assert built["array_of_intervals"].duckdb_type is built["array_of_intervals"].duckdb_type
+    assert str(DecimalType(14, 4).duckdb_type) == "DECIMAL(14,4)"
+    assert str(ArrayType(DayTimeIntervalType()).duckdb_type) == "INTERVAL[]"
+    assert str(F.col("a").cast(UnsignedIntegerType())) == "Column<'CAST(a AS UINTEGER)'>"
+    second = datetime.timedelta(seconds=1)
+    schema = StructType([StructField("a", UnsignedIntegerType()), StructField("b", ArrayType(DayTimeIntervalType()))])
+    frame = spark.createDataFrame([(2, [second])], schema)
+    assert frame.collect()[0].b == [second]
+    assert frame.select(F.col("a").cast(DecimalType(14, 4)).alias("d")).collect()[0].d == 2
+
+
+def test_first_reads_and_casts_while_the_default_connection_runs_a_query_on_another_thread(spark):
+    built = _built_while_idle()
     gate, held = threading.Event(), threading.Event()
 
     def wait_for_gate(x: int) -> int:
@@ -47,7 +81,7 @@ def test_reads_and_casts_while_the_default_connection_runs_a_query_on_another_th
         assert held.wait(WAIT), "the query on the other thread did not reach the function"
         with pytest.raises(duckdb.ResourceInUseException):
             duckdb.sql("select 1").fetchall()
-        _cast_and_build(spark)
+        _first_reads_and_casts(spark, built)
     finally:
         gate.set()
         worker.join(WAIT)
@@ -55,14 +89,14 @@ def test_reads_and_casts_while_the_default_connection_runs_a_query_on_another_th
     assert not worker.is_alive()
 
 
-def test_reads_and_casts_after_a_statement_failed_in_the_default_connections_transaction(spark):
-    _cast_and_build(spark)
+def test_first_reads_and_casts_after_a_statement_failed_in_the_default_connections_transaction(spark):
+    built = _built_while_idle()
     duckdb.execute("BEGIN")
     try:
         with pytest.raises(duckdb.Error):
             duckdb.execute("SELECT error('boom')")
         with pytest.raises(duckdb.TransactionException):
             duckdb.sql("select 1").fetchall()
-        _cast_and_build(spark)
+        _first_reads_and_casts(spark, built)
     finally:
         duckdb.execute("ROLLBACK")
