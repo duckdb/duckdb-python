@@ -28,7 +28,8 @@ def search_path(configured: list[str], deprecated_directory: str) -> list[str] |
         deprecated_directory: The extension_directory from the same config, empty when not set.
 
     Returns:
-        The configured directories as given, then each pip directory they do not name, or None when there is none.
+        The configured directories as given, or the engine default when there are none, then each pip directory they
+        do not name; None when no pip directory exists.
     """
     # Path.is_dir raises on a lookup error, such as a symlink into an unsearchable directory, and would fail connect.
     directories = [directory for directory in _pip_directories() if os.path.isdir(directory)]  # noqa: PTH112
@@ -69,11 +70,13 @@ def _site_directories() -> list[str]:
 
     entries: dict[str, tuple[int, str]] = {}
     for index, entry in enumerate(sys.path):
-        entry = str(Path(entry).absolute())
-        entries.setdefault(_normalized(entry), (index, entry))
+        absolute = _absolute(entry)
+        if absolute is not None:
+            entries.setdefault(_normalized(absolute), (index, absolute))
     placed: list[tuple[int, str]] = []
     for candidate in _site_candidates(site):
-        entry_found = entries.get(_normalized(str(Path(candidate).absolute())))
+        absolute = _absolute(candidate)
+        entry_found = entries.get(_normalized(absolute)) if absolute is not None else None
         if entry_found is not None:
             placed.append(entry_found)
     distribution_site = _site_directory()
@@ -88,6 +91,14 @@ def _site_directories() -> list[str]:
             seen.add(identity)
             directories.append(directory)
     return directories
+
+
+def _absolute(path: str) -> str | None:
+    try:
+        return str(Path(path).absolute())
+    except OSError:
+        # An empty entry stands for the working directory, which may be gone; the import system skips it then too.
+        return None
 
 
 def _site_candidates(site: ModuleType) -> list[str]:

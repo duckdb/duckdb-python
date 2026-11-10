@@ -13,6 +13,7 @@ import site as site_module
 import subprocess
 import sys
 import textwrap
+import threading
 from pathlib import Path
 
 import _duckdb
@@ -23,7 +24,7 @@ from duckdb import _extension_directories
 
 DEFAULT_DIRECTORY = "~/.duckdb/extensions"
 SETTING = "SELECT current_setting('extension_directories')"
-posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX file names and descriptors")
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX file names and symlinks")
 not_root = pytest.mark.skipif(
     hasattr(os, "geteuid") and os.geteuid() == 0, reason="root bypasses directory permissions"
 )
@@ -256,6 +257,35 @@ def test_symlink_into_an_unsearchable_directory_changes_nothing(site, tmp_path):
         assert directories(duckdb.connect()) == []
     finally:
         locked.chmod(0o755)
+
+
+REMOVED_CWD_SCRIPT = """
+    import os, site, sys, tempfile
+    gone = tempfile.mkdtemp(dir=sys.argv[2])
+    os.chdir(gone)
+    os.rmdir(gone)
+    sys.path.insert(0, "")
+    sys.path.insert(1, sys.argv[1])
+    site.getsitepackages = lambda prefixes=None: []
+    site.ENABLE_USER_SITE = False
+    import duckdb
+    from duckdb import _extension_directories
+    _extension_directories._PACKAGE_PARENT = sys.argv[1]
+    print("list", duckdb.connect().execute("SELECT current_setting('extension_directories')").fetchone()[0])
+"""
+
+
+def test_removed_working_directory_on_sys_path_is_skipped(pip_directory, site, tmp_path):
+    proc = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(REMOVED_CWD_SCRIPT), str(site), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    reports = [line for line in proc.stdout.splitlines() if line.startswith("list ")]
+    assert reports == [f"list {[DEFAULT_DIRECTORY, pip_directory]}"]
 
 
 def test_without_duckdb_metadata_on_sys_path_nothing_changes(site, monkeypatch):
@@ -514,6 +544,40 @@ class TestEveryConnection:
         assert directories(duckdb.connect(path)) == [DEFAULT_DIRECTORY, pip_directory]
         assert len(lookups) == 1
 
+    def test_database_created_by_another_connect_during_the_lookup_is_shared(self, tmp_path):
+        """The hook runs between the cache lookup and the creation, so the creation must look in the cache again."""
+        path = str(tmp_path / "file.duckdb")
+        created_elsewhere = threading.Event()
+        connections = {}
+        first_thread = threading.current_thread()
+
+        def connect_elsewhere():
+            connections["other"] = duckdb.connect(path)
+            created_elsewhere.set()
+
+        def hook(configured, deprecated_directory):
+            if threading.current_thread() is not first_thread:
+                return ["/by-the-other-thread"]
+            other = threading.Thread(target=connect_elsewhere)
+            other.start()
+            assert created_elsewhere.wait(30)
+            other.join(30)
+            return ["/by-the-first-connect"]
+
+        _duckdb._set_extension_search_path(hook)
+        try:
+            first = duckdb.connect(path)
+        finally:
+            _duckdb._set_extension_search_path(_extension_directories.search_path)
+        other = connections["other"]
+        try:
+            first.execute("CREATE TABLE t AS SELECT 1 AS i")
+            assert other.execute("SELECT i FROM t").fetchall() == [(1,)]
+            assert directories(first) == directories(other) == ["/by-the-other-thread"]
+        finally:
+            first.close()
+            other.close()
+
     def test_cursor(self, pip_directory):
         cursor = duckdb.connect().cursor()
         assert directories(cursor) == [DEFAULT_DIRECTORY, pip_directory]
@@ -544,12 +608,27 @@ class TestEngineUse:
         skip_unless_loadable(connection, "tpch")
         return connection
 
-    def test_autoload_of_a_wheel_extension_attempts_an_install_but_load_finds_it(self, pip_directory, connection):
+    def test_load_finds_the_wheel_copy(self, pip_directory, connection):
         place_stand_in(connection, pip_directory, "tpch")
-        with pytest.raises(duckdb.Error, match="Failed to install local extension"):
-            connection.execute("SELECT count(*) FROM tpch_queries()")
         with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
             connection.execute("LOAD tpch")
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="autoload installs into the first directory before it looks for a copy in the others; drop the mark "
+        "when the engine looks in every configured directory",
+    )
+    def test_autoload_finds_the_wheel_copy(self, pip_directory, connection):
+        place_stand_in(connection, pip_directory, "tpch")
+        with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
+            connection.execute("SELECT count(*) FROM tpch_queries()")
+
+    def test_autoload_without_autoinstall_finds_the_wheel_copy(self, pip_directory, tmp_path):
+        connection = duckdb.connect(config={"autoinstall_known_extensions": False})
+        skip_unless_loadable(connection, "tpch")
+        place_stand_in(connection, pip_directory, "tpch")
+        with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
+            connection.execute("SELECT count(*) FROM tpch_queries()")
 
     def test_copy_in_the_default_directory_wins_a_load(self, pip_directory, home, connection):
         place_stand_in(connection, pip_directory, "tpch", size=16)
