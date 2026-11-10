@@ -164,7 +164,7 @@ class TestReadParquet:
             duckdb_cursor.read_parquet(str(missing)).fetchall()
 
     def test_empty_list(self, duckdb_cursor):
-        with pytest.raises(duckdb.InvalidInputException, match="non-empty list of paths or file-like objects"):
+        with pytest.raises(duckdb.InvalidInputException, match="non-empty list or tuple of paths or file-like objects"):
             duckdb_cursor.read_parquet([])
 
     def test_filelike_exception(self, duckdb_cursor):

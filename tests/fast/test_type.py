@@ -1,4 +1,8 @@
+import datetime
+import gc
 import sys
+import warnings
+import weakref
 
 import pytest
 
@@ -260,3 +264,199 @@ class TestType:
         assert DuckDBPyType("INTEGER[2]").children == [("child", DuckDBPyType("INTEGER")), ("size", 2)]
         assert DuckDBPyType("INTEGER[2][3]").children == [("child", DuckDBPyType("INTEGER[2]")), ("size", 3)]
         assert DuckDBPyType("ENUM('a', 'b', 'c')").children == [("values", ["a", "b", "c"])]
+
+
+CONSTRUCTED = []
+
+
+class Interrupting:
+    def __init__(self) -> None:
+        CONSTRUCTED.append(type(self).__name__)
+        raise KeyboardInterrupt
+
+
+class Failing:
+    def __init__(self) -> None:
+        CONSTRUCTED.append(type(self).__name__)
+        msg = "raised by the constructor"
+        raise RuntimeError(msg)
+
+
+class Plain:
+    def __init__(self) -> None:
+        CONSTRUCTED.append(type(self).__name__)
+
+
+class WithADtype:
+    """An instance would carry a dtype as a numpy scalar does, which is no reason to read the class as one."""
+
+    dtype = "int32"
+
+    def __init__(self) -> None:
+        CONSTRUCTED.append(type(self).__name__)
+
+
+class RaisingName:
+    """A dict key whose str() raises, so converting a dict that holds it runs code that raises."""
+
+    def __init__(self, error: type[BaseException]) -> None:
+        self.error = error
+
+    def __str__(self) -> str:
+        raise self.error
+
+
+def annotated(annotation):
+    """A function whose one parameter carries the annotation, for create_function to convert."""
+
+    def identity(x):
+        return x
+
+    identity.__annotations__ = {"x": annotation}
+    return identity
+
+
+def outcome(call):
+    """What a call returned or raised, so an interrupt that escapes fails the test instead of ending the session."""
+    try:
+        return call()
+    except BaseException as error:
+        return error
+
+
+UNKNOWN_CLASSES = [Interrupting, Failing, Plain, WithADtype]
+
+
+class TestAClassThatIsNoType:
+    """A class that is neither a builtin the conversion knows nor a numpy scalar type is refused without a call."""
+
+    @pytest.mark.parametrize("cls", UNKNOWN_CLASSES)
+    @pytest.mark.parametrize(
+        ("compare", "expected"),
+        [
+            pytest.param(lambda cls: INTEGER == cls, False, id="eq"),  # noqa: SIM300
+            pytest.param(lambda cls: INTEGER != cls, True, id="ne"),  # noqa: SIM300
+            pytest.param(lambda cls: INTEGER == {"a": cls}, False, id="eq_struct_field"),  # noqa: SIM300
+        ],
+    )
+    def test_comparing_with_it_does_not_call_it(self, cls, compare, expected):
+        CONSTRUCTED.clear()
+        assert outcome(lambda: compare(cls)) is expected
+        assert CONSTRUCTED == []
+
+    @pytest.mark.parametrize("cls", UNKNOWN_CLASSES)
+    @pytest.mark.parametrize(
+        ("convert", "error"),
+        [
+            pytest.param(lambda con, cls: DuckDBPyType(cls), TypeError, id="constructor"),
+            pytest.param(lambda con, cls: con.list_type(cls), TypeError, id="list_type"),
+            pytest.param(lambda con, cls: con.struct_type({"a": cls}), duckdb.InvalidInputException, id="struct_type"),
+            pytest.param(
+                lambda con, cls: con.execute("SELECT ?", [duckdb.Value(1, cls)]),
+                duckdb.InvalidInputException,
+                id="value_type",
+            ),
+            pytest.param(
+                lambda con, cls: con.create_function("f", lambda x: x, [cls], BIGINT), TypeError, id="udf_parameter"
+            ),
+        ],
+    )
+    def test_converting_it_is_refused_without_calling_it(self, cls, convert, error):
+        con = duckdb.connect()
+        CONSTRUCTED.clear()
+        assert isinstance(outcome(lambda: convert(con, cls)), error)
+        assert CONSTRUCTED == []
+
+    def test_a_class_whose_constructor_needs_arguments_gets_the_conversion_s_refusal(self):
+        with pytest.raises(TypeError, match="Could not convert from unknown 'type' to DuckDBPyType"):
+            DuckDBPyType(datetime.date)
+
+    def test_a_numpy_scalar_type_still_converts(self):
+        np = pytest.importorskip("numpy")
+
+        class Subclassed(np.int32):
+            pass
+
+        assert DuckDBPyType(np.int32) == INTEGER
+        assert DuckDBPyType(Subclassed) == INTEGER
+        assert INTEGER == np.int32  # noqa: SIM300
+        assert INTEGER != np.int64  # noqa: SIM300
+
+    @pytest.mark.parametrize(
+        ("name", "subclassed"),
+        [
+            pytest.param("str_", False, id="str_"),
+            pytest.param("object_", False, id="object_"),
+            pytest.param("datetime64", False, id="datetime64"),
+            pytest.param("void", False, id="void"),
+            pytest.param("generic", False, id="generic"),
+            pytest.param("integer", False, id="integer"),
+            pytest.param("integer", True, id="subclass_of_integer"),
+            pytest.param("generic", True, id="subclass_of_generic"),
+        ],
+    )
+    def test_a_numpy_scalar_type_without_a_duckdb_type_is_refused(self, name, subclassed):
+        np = pytest.importorskip("numpy")
+        scalar = getattr(np, name)
+        if subclassed:
+            scalar = type(f"SubclassOf{name}", (scalar,), {})
+        # Warnings are recorded, not raised, so a numpy that converts these with a warning (1.x) fails on either.
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            with pytest.raises(TypeError, match="Could not convert from unknown 'type' to DuckDBPyType"):
+                DuckDBPyType(scalar)
+        assert [str(warning.message) for warning in caught] == []
+
+
+class TestKeptNumpyScalarTypes:
+    """numpy's own scalar classes are converted once and kept; a subclass of one is converted each time and not kept."""
+
+    @pytest.mark.parametrize(("name", "expected"), [("int32", INTEGER), ("intc", INTEGER), ("longlong", BIGINT)])
+    def test_a_kept_class_converts_the_same_again(self, name, expected):
+        np = pytest.importorskip("numpy")
+        scalar = getattr(np, name)
+        assert [DuckDBPyType(scalar) for _ in range(3)] == [expected] * 3
+        assert expected == scalar
+        assert expected == scalar
+
+    def test_a_converted_subclass_can_be_collected(self):
+        np = pytest.importorskip("numpy")
+        enabled = gc.isenabled()
+        gc.disable()
+        try:
+            subclassed = type("Collectable", (np.int16,), {})
+            assert DuckDBPyType(subclassed) == SMALLINT
+            assert SMALLINT == subclassed  # noqa: SIM300
+            alive = weakref.ref(subclassed)
+            del subclassed
+            gc.collect()
+            assert alive() is None
+        finally:
+            if enabled:
+                gc.enable()
+
+
+class TestConvertingATypeOperand:
+    """Converting an operand to a type refuses on an Exception and lets every other BaseException through."""
+
+    @pytest.mark.parametrize("error", [KeyboardInterrupt, SystemExit])
+    @pytest.mark.parametrize(
+        "convert",
+        [
+            pytest.param(lambda con, fields: INTEGER == fields, id="eq"),  # noqa: SIM300
+            pytest.param(lambda con, fields: INTEGER != fields, id="ne"),  # noqa: SIM300
+            pytest.param(lambda con, fields: con.struct_type({"a": fields}), id="struct_type_field"),
+            pytest.param(lambda con, fields: con.execute("SELECT ?", [duckdb.Value(1, fields)]), id="value_type"),
+            pytest.param(lambda con, fields: con.create_function("f", annotated(fields)), id="udf_annotation"),
+        ],
+    )
+    def test_an_interrupt_reaches_the_caller(self, convert, error):
+        con = duckdb.connect()
+        with pytest.raises(error):
+            convert(con, {RaisingName(error): int})
+        assert con.execute("SELECT 42").fetchone() == (42,)
+
+    def test_an_exception_makes_the_comparison_false(self):
+        fields = {RaisingName(RuntimeError): int}
+        assert (INTEGER == fields) is False  # noqa: SIM300
+        assert (INTEGER != fields) is True  # noqa: SIM300

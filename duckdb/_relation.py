@@ -1803,7 +1803,7 @@ class DuckDBPyRelation:
             if replacement is not None:
                 msg = (
                     f"Relations no longer have {name}(): a relation keeps no result between calls, so every call "
-                    f"runs it again. Use {replacement} instead."
+                    f"runs it again. Use {replacement} instead"
                 )
                 raise AttributeError(msg)
             msg = f"This relation does not contain a column by the name of '{name}'"
@@ -3541,6 +3541,8 @@ def _catalog_relation(con: _duckdb.DuckDBPyConnection, name: str, step_class: ty
     A dotted name is qualified when its first part names a schema or a database, as SQL reads it, and is one name
     otherwise.
     """
+    if isinstance(name, str):
+        _encodable(name)
     parts = _name_parts(name)
     if len(parts) > 1 and _seam.name_scope(con, parts[0]) == "none":
         relation = _catalog_source(con, (name,), step_class, qualified=False)
@@ -3649,9 +3651,11 @@ def _files(con: _duckdb.DuckDBPyConnection, source: object) -> tuple[str, tuple[
         handles.append(handle)
         return handle.name
 
-    if isinstance(source, list):
+    if isinstance(source, (list, tuple)):
         if not source:
-            raise _error(_duckdb.InvalidInputException, "Please provide a non-empty list of paths or file-like objects")
+            raise _error(
+                _duckdb.InvalidInputException, "Please provide a non-empty list or tuple of paths or file-like objects"
+            )
         paths = [one(item) for item in source]
         return _option_literal(paths), tuple(handles)
     return _option_literal(one(source)), tuple(handles)

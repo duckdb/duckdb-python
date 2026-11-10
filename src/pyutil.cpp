@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb_python/engine/connection.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,16 @@ bool PyUtil::GilCheck() {
 #endif
 }
 #endif
+
+std::string PyUtil::CastToString(nb::handle obj) {
+	if (nb::bytes::check_(obj)) {
+		return nb::cast<std::string>(obj.attr("decode")("utf-8"));
+	}
+	if (nb::str::check_(obj)) {
+		return TransformPythonString(obj);
+	}
+	return TransformPythonString(nb::str(obj));
+}
 
 bool PyUtil::IsListLike(nb::handle obj) {
 	if (nb::isinstance<nb::str>(obj) || nb::isinstance<nb::bytes>(obj)) {

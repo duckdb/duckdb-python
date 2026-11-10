@@ -41,7 +41,10 @@ public:
 public:
 	NumpyCacheItem()
 	    : PythonImportCacheItem("numpy"), ma(this), ndarray("ndarray", this), datetime64("datetime64", this),
-	      generic("generic", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
+	      generic("generic", this), number("number", this), integer("integer", this),
+	      signedinteger("signedinteger", this), unsignedinteger("unsignedinteger", this), inexact("inexact", this),
+	      floating("floating", this), complexfloating("complexfloating", this), flexible("flexible", this),
+	      character("character", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
 	      ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
 	      uintc("uintc", this), int_("int_", this), uint("uint", this), longlong("longlong", this),
 	      ulonglong("ulonglong", this), half("half", this), float16("float16", this), single("single", this),
@@ -55,6 +58,15 @@ public:
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;
 	PythonImportCacheItem generic;
+	PythonImportCacheItem number;
+	PythonImportCacheItem integer;
+	PythonImportCacheItem signedinteger;
+	PythonImportCacheItem unsignedinteger;
+	PythonImportCacheItem inexact;
+	PythonImportCacheItem floating;
+	PythonImportCacheItem complexfloating;
+	PythonImportCacheItem flexible;
+	PythonImportCacheItem character;
 	PythonImportCacheItem int64;
 	PythonImportCacheItem bool_;
 	PythonImportCacheItem byte;

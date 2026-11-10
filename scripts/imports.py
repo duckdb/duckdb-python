@@ -84,6 +84,15 @@ numpy.ma.masked_array
 numpy.ndarray
 numpy.datetime64
 numpy.generic
+numpy.number
+numpy.integer
+numpy.signedinteger
+numpy.unsignedinteger
+numpy.inexact
+numpy.floating
+numpy.complexfloating
+numpy.flexible
+numpy.character
 numpy.int64
 numpy.bool_
 numpy.byte

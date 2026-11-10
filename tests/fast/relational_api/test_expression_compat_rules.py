@@ -1,8 +1,11 @@
 """Expressions built through the old constructor names, used in relation verbs and checked against direct SQL."""
 
 import decimal
+import importlib.util
 import math
 import re
+import subprocess
+import sys
 
 import pytest
 
@@ -407,7 +410,8 @@ class TestIntegerLiteralTypes:
 
 class TestThePublicAnnotations:
     def test_mypy_accepts_the_supported_calls(self, tmp_path):
-        api = pytest.importorskip("mypy.api")
+        if importlib.util.find_spec("mypy") is None:
+            pytest.skip("mypy is not installed")
         snippet = tmp_path / "calls.py"
         snippet.write_text(
             "from duckdb import CaseExpression, Expression, when\n\n"
@@ -417,7 +421,15 @@ class TestThePublicAnnotations:
         )
         dash = "-" * 2
         flags = [f"{dash}{flag}" for flag in ("strict", "no-incremental", "follow-imports=silent")]
-        report, errors, status = api.run([str(snippet), *flags, f"{dash}cache-dir", str(tmp_path)])
+        # A process of its own, since mypy raises the recursion limit of the process it runs in.
+        checked = subprocess.run(
+            [sys.executable, "-I", "-m", "mypy", str(snippet), *flags, f"{dash}cache-dir", str(tmp_path)],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        report, errors, status = checked.stdout, checked.stderr, checked.returncode
         assert status == 0, report + errors
 
 

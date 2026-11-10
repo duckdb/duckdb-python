@@ -47,15 +47,8 @@ struct PyUtil {
 
 	// Lenient string conversion: str as is, bytes UTF-8 decoded, anything else via str().
 	// nanobind's cast<std::string> rejects bytes/scalars. For identifier/param-key/separator sites.
-	static std::string CastToString(nb::handle obj) {
-		if (nb::bytes::check_(obj)) {
-			return nb::cast<std::string>(obj.attr("decode")("utf-8"));
-		}
-		if (nb::str::check_(obj)) {
-			return nb::cast<std::string>(obj);
-		}
-		return nb::cast<std::string>(nb::str(obj));
-	}
+	// A str that UTF-8 cannot encode raises the InvalidInputException naming its first surrogate.
+	static std::string CastToString(nb::handle obj);
 
 #ifndef Py_LIMITED_API
 	// Whether this thread holds the GIL. The stable ABI has no way to ask, so the asserts below exist only in
