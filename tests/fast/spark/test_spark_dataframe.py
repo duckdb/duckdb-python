@@ -922,8 +922,11 @@ class TestRepeatedColumnNames:
         with pytest.raises(AnalysisException, match="single-part view names") as error:
             df.createOrReplaceTempView("x.y")
         assert error_condition(error.value) == "TEMP_VIEW_NAME_TOO_MANY_NAME_PARTS"
+        assert error.value.getSqlState() == "428EK"
         with pytest.raises((AnalysisException, ParseException)):
             df.createOrReplaceTempView("x.")
+        with pytest.raises((AnalysisException, ParseException)):
+            df.createOrReplaceTempView("")
         df.createOrReplaceTempView("xy")
         assert spark.table("xy").collect() == [Row(a=1)]
         if not USE_ACTUAL_SPARK:
@@ -934,8 +937,11 @@ class TestRepeatedColumnNames:
     def test_temp_view_name_is_read_with_spark_quoting(self, spark):
         # Backticks quote a name part, as in Spark; double quotes are ordinary characters of the name.
         df = spark.createDataFrame([(1,)], ["a"])
-        df.createOrReplaceTempView("`x.y`")
+        for name in ["`v`", "`x.y`", "`a``b`", "`select`", "plain"]:
+            df.createOrReplaceTempView(name)
+            assert spark.table(name).collect() == [Row(a=1)]
         assert spark.sql("SELECT a FROM `x.y`").collect() == [Row(a=1)]
+        assert spark.sql("SELECT a FROM `a``b`").collect() == [Row(a=1)]
         if not USE_ACTUAL_SPARK:
             df.createOrReplaceTempView('"x"')
             assert spark.sql('SELECT a FROM `"x"`').collect() == [Row(a=1)]

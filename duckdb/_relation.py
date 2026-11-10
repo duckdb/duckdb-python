@@ -73,8 +73,10 @@ _REMOVED_METHODS = {
     "execute": "rel.materialize() to run it once and keep its rows, or a method such as fetchall()",
 }
 _BARE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# The keywords match ASCII letters only, so a look-alike letter is not a keyword; the whitespace stays Unicode, as the
+# engine's parser reads a no-break space between the words as a space.
 _SHOW_PRAGMA = re.compile(
-    r"""^\s*pragma\s+(?:"show"|show)\s*\(\s*'((?:[^']|'')*)'\s*\)\s*;?\s*$""", re.IGNORECASE | re.ASCII
+    r"""^\s*(?a:pragma)\s+(?:"(?a:show)"|(?a:show))\s*\(\s*'((?:[^']|'')*)'\s*\)\s*;?\s*$""", re.IGNORECASE
 )
 _ERROR_NAMES = {
     "InvalidInputException": "Invalid Input",
@@ -1545,7 +1547,8 @@ class DuckDBPyRelation:
     character. These are the engine's rules for such a string, not the SQL lexer's. A tuple of strings is the parts
     themselves, outermost first (("my.schema", "my table")), each read by its text, so a str subclass counts by its
     value. An unqualified name follows the connection's search path, as in SQL. The connection's table() and view()
-    read a name the same way, except that a string the reader refuses, such as a file path, is one name.
+    read a name the same way, except that a string is one name, a file path for instance, when the reader refuses it
+    or when its first part names neither a schema nor a database.
     """
 
     __slots__ = (
@@ -4355,12 +4358,12 @@ def _connection_sql(
 _connection_sql.__doc__ = _SQL_DOC
 
 
-def _connection_table(self: _duckdb.DuckDBPyConnection, table_name: str) -> DuckDBPyRelation:
+def _connection_table(self: _duckdb.DuckDBPyConnection, table_name: str | tuple[str, ...]) -> DuckDBPyRelation:
     """Create a relation object for the named table."""
     return table(self, table_name)
 
 
-def _connection_view(self: _duckdb.DuckDBPyConnection, view_name: str) -> DuckDBPyRelation:
+def _connection_view(self: _duckdb.DuckDBPyConnection, view_name: str | tuple[str, ...]) -> DuckDBPyRelation:
     """Create a relation object for the named view."""
     return view(self, view_name)
 

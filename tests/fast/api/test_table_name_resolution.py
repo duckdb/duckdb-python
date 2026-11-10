@@ -411,6 +411,13 @@ class TestTupleNames:
         with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
             con.view(name)
 
+    def test_parts_are_not_one_literal_name(self):
+        # A string whose first part names neither a schema nor a database is one name; a tuple says its parts.
+        with connect(BASE) as con:
+            assert con.table("a.b").fetchall() == [("table a.b",)]
+            with pytest.raises(duckdb.CatalogException, match=r'schema "a" does not exist'):
+                con.table(("a", "b"))
+
     def test_parts_are_never_joined(self):
         # With a table st beside s.t, the tuple reads s.t.
         with connect([*BASE, "CREATE TABLE st AS SELECT 'joined' AS k"]) as con:

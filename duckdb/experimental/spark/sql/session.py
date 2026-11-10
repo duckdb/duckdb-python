@@ -18,7 +18,7 @@ from ..conf import SparkConf
 from ..context import SparkContext
 from ..errors import IllegalArgumentException, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
-from .column import _is_numpy
+from .column import _is_numpy, _name_parts
 from .conf import RuntimeConfig
 from .dataframe import DataFrame, _source_frame
 from .readwriter import DataFrameReader
@@ -295,7 +295,8 @@ class SparkSession:  # noqa: D101
         self._context.stop()
 
     def table(self, tableName: str) -> DataFrame:  # noqa: D102
-        relation = self.conn.table(tableName)
+        # The name is read with Spark's rules, as createOrReplaceTempView reads the name it creates a view under.
+        relation = self.conn.table(_name_parts(tableName))
         return DataFrame(relation, self)
 
     def getActiveSession(self) -> "SparkSession":  # noqa: D102

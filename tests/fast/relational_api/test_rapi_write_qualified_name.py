@@ -1,10 +1,12 @@
-"""Relation writes and views land where SQL puts the same name, and refuse a name as SQL does.
+"""Relation writes and views land where the engine's reader of a qualified name puts the same name.
 
-The name is a dotted string or a tuple of its parts, of any depth: a nested schema path or an attached database.
+The name is a dotted string or a tuple of its parts, of any depth: a nested schema path or an attached database. The
+reader is the engine's own for such a string, so a few spellings read otherwise than in SQL text (TestReaderRules).
 """
 
 import enum
 import gc
+import re
 
 import pytest
 
@@ -612,6 +614,32 @@ class TestViewOwnsItsSources:
         with pytest.raises(duckdb.InvalidInputException, match=r'Cannot create the view "s"\."v": it reads rows held'):
             con.values([42]).create_view("s.v")
         assert view_paths(con) == []
+
+    @pytest.mark.parametrize(("name", "quoted_path"), [("f.v", '"f"."v"'), (("f", "main", "v2"), '"f"."main"."v2"')])
+    def test_frame_into_an_attached_file_database_refused(self, tmp_path, name, quoted_path):
+        # The database the name resolves to decides: a file cannot hold a Python object, whatever the default is.
+        con = duckdb.connect()
+        con.execute(f"ATTACH '{tmp_path / 'f.db'}' AS f")
+        before = view_paths(con)
+        message = rf"Cannot create the view {re.escape(quoted_path)}: it reads a Python object"
+        with pytest.raises(duckdb.InvalidInputException, match=message):
+            frame_source(con).create_view(name)
+        assert view_paths(con) == before
+        frame_source(con).create_view("v3")
+        assert con.sql("FROM v3").fetchall() == [(42,)]
+
+    @pytest.mark.parametrize("name", ["m.v", ("m", "main", "v2")])
+    def test_frame_into_an_attached_memory_database_from_a_file(self, tmp_path, name):
+        con = duckdb.connect(str(tmp_path / "d.db"))
+        con.execute("ATTACH ':memory:' AS m")
+        frame_source(con).create_view(name)
+        gc.collect()
+        target = name if isinstance(name, str) else ".".join(name)
+        assert con.sql(f"FROM {target}").fetchall() == [(42,)]
+        with pytest.raises(
+            duckdb.InvalidInputException, match=r'Cannot create the view "v3": it reads a Python object'
+        ):
+            frame_source(con).create_view("v3")
 
 
 class TestUseInEffect:

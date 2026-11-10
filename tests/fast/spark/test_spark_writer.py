@@ -132,6 +132,19 @@ class TestRepeatedColumnNames:
             spark.createDataFrame([(1, 2)], names).write.saveAsTable("repeated_names_table")
         assert error_condition(error.value) == "COLUMN_ALREADY_EXISTS"
 
+    def test_save_as_table_reads_the_name_with_spark_quoting(self, spark):
+        # Backticks quote a name part, as in Spark, and spark.table reads the same spelling back.
+        df = spark.createDataFrame([(1,)], ["a"])
+        spark.sql("CREATE SCHEMA IF NOT EXISTS s")
+        for name in ["`x.y`", "s.t", "`a``b`"]:
+            df.write.saveAsTable(name)
+            assert [tuple(r) for r in spark.table(name).collect()] == [(1,)]
+        with pytest.raises(Exception, match=r"attribute name|PARSE_SYNTAX_ERROR|syntax error"):
+            df.write.saveAsTable("t.")
+        if not USE_ACTUAL_SPARK:
+            rows = spark.sql("SELECT schema_name, table_name FROM duckdb_tables() ORDER BY ALL").collect()
+            assert [(r.schema_name, r.table_name) for r in rows] == [("main", "a`b"), ("main", "x.y"), ("s", "t")]
+
 
 class TestCsvOutput:
     def test_quotes_and_backslashes(self, spark, tmp_path):

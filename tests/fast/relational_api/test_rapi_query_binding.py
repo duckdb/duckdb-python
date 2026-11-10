@@ -86,6 +86,14 @@ class TestQueryBindsItsNameOnce:
         reuse_name(con, "v")
         assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
 
+    @pytest.mark.parametrize("space", ["\u00a0", "\u3000"], ids=["no_break_space", "ideographic_space"])
+    def test_pragma_show_with_a_unicode_space_describes_the_relation(self, space):
+        # The engine's parser reads these as spaces, so the pragma is rewritten as with an ASCII space.
+        con = duckdb.connect()
+        con.execute("create table v(o varchar)")
+        rel = con.sql("select 1 as a").query("v", f"pragma{space}\"show\"('v')")
+        assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
+
     def test_pragma_show_describes_the_relation_over_a_catalog_view_of_the_name(self):
         # Inside the call the name is the relation, so it shadows a view of that name.
         con = duckdb.connect()
