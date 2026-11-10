@@ -1508,17 +1508,6 @@ nb::dict DuckDBPyConnection::FetchTF() {
 	return result.FetchTF();
 }
 
-//! Releases an Arrow schema that was never handed over, after a throw before the import into pyarrow, which takes the
-//! schema over even when it fails
-struct ArrowSchemaHolder {
-	ArrowSchema schema {};
-	~ArrowSchemaHolder() {
-		if (schema.release) {
-			schema.release(&schema);
-		}
-	}
-};
-
 nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 	ConnectionLockGuard conn_lock(*this, IfHeld::REFUSE);
 	// Asked before the result, so a closed connection reports itself and not the slot its close emptied
@@ -1540,8 +1529,10 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 	// Imported before the engine checks, so no Python code runs between what they find and the take
 	nb::module_::import_("pyarrow");
 	auto held = con.GetResult().EngineResult();
-	unique_ptr<DuckDBPyResult> converted;
-	ArrowSchemaHolder schema;
+	shared_ptr<engine::Result> arrow;
+	vector<Identifier> names;
+	// Released by the wrapper when a throw before the import into pyarrow leaves it unused; the import takes it over
+	ArrowSchemaWrapper schema;
 	{
 		// One claim from the checks through the take of the rows, the statement over them, its settle or retain and
 		// the schema build, so a refusal comes before the rows are taken and never loses them. The claim is a flag
@@ -1560,12 +1551,14 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 			}
 		}
 
-		vector<Identifier> names;
 		auto rows = con.GetResult().TakeRowsClaimed(names);
 		if (!rows) {
 			return nb::none();
 		}
-		shared_ptr<engine::Result> arrow;
+		vector<string> schema_names;
+		for (auto &name : names) {
+			schema_names.push_back(name.GetIdentifierName());
+		}
 		{
 			DUCKDB_PY_ASSERT_GIL_HELD();
 			nb::gil_scoped_release release;
@@ -1575,18 +1568,18 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 			} else {
 				arrow->RetainClaimed(DuckDBPyConnection::CheckSignals);
 			}
+			// The converter reads the connection's settings and its catalog's types, so the schema is built here
+			arrow->BuildArrowSchemaClaimed(schema_names, schema.arrow_schema);
 		}
-		converted = make_uniq<DuckDBPyResult>(std::move(arrow), std::move(names));
-		// The converter reads the connection's settings and its catalog's types, so the schema is built here
-		converted->BuildArrowSchemaClaimed(schema.schema);
 	}
 	// The rows are retained, or the stream is settled, so the conversion into pyarrow holds the connection no longer
 	// and refuses no other call
 	conn_lock.DropSubmittingMark();
+	DuckDBPyResult converted(std::move(arrow), std::move(names));
 	if (reader) {
-		return nb::cast(converted->FetchRecordBatchReader(schema.schema, batch_size));
+		return nb::cast(converted.FetchRecordBatchReader(schema.arrow_schema, batch_size));
 	}
-	return nb::cast(converted->FetchArrowTable(schema.schema));
+	return nb::cast(converted.FetchArrowTable(schema.arrow_schema));
 }
 
 identifier_map_t<Value> TransformPyConfigDict(const nb::dict &py_config_dict) {

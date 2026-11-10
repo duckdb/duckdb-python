@@ -86,6 +86,10 @@ public:
 	bool AdmittedDuringExit() const {
 		return admitted_during_exit;
 	}
+	//! Whether a call holds the connection's claim right now
+	bool Claimed() const {
+		return busy;
+	}
 
 private:
 	friend class ConnectionClaim;

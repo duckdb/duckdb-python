@@ -76,12 +76,9 @@ public:
 
 	duckdb::pyarrow::Table FetchArrowTable(idx_t rows_per_batch, bool to_polars);
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
-	//! The two fetches above over a schema built with BuildArrowSchemaClaimed, which they take over
+	//! The two fetches above over a schema the caller built for the result's names, which they take over
 	duckdb::pyarrow::Table FetchArrowTable(ArrowSchema &schema);
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(ArrowSchema &schema, idx_t rows_per_batch);
-	//! The result's Arrow schema under the names the Python layer reports, for a caller that holds the connection's
-	//! claim; out is the caller's to release until a fetch takes it over
-	void BuildArrowSchemaClaimed(ArrowSchema &out);
 	nb::object FetchArrowCapsule(idx_t rows_per_batch = DEFAULT_ARROW_BATCH_SIZE);
 	static void CheckBatchSize(idx_t rows_per_batch);
 

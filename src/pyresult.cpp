@@ -495,11 +495,6 @@ T DuckDBPyResult::RunWithArrowSchema(const std::function<T(const ArrowSchema &)>
 	return fun(arrow_schema);
 }
 
-void DuckDBPyResult::BuildArrowSchemaClaimed(ArrowSchema &out) {
-	D_ASSERT(!Empty());
-	result->BuildArrowSchemaClaimed(IdentifiersToStrings(ResultNames()), out);
-}
-
 duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(const idx_t rows_per_batch, const bool to_polars) {
 	if (Empty()) {
 		throw InvalidInputException("There is no query result");

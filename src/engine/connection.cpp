@@ -346,6 +346,7 @@ ConnectionClaim Session::Claim() {
 
 shared_ptr<Result> Session::SubmitClaimed(unique_ptr<SQLStatement> statement,
                                           identifier_map_t<BoundParameterData> &values, const Format &format) {
+	D_ASSERT(state->Claimed());
 	auto written_type = statement->type;
 	registry->CountStatement(written_type);
 	auto handle = context->Submit(std::move(statement), values, QueryParameters(format.EngineFormat()));
@@ -357,6 +358,7 @@ shared_ptr<Result> Session::SubmitClaimed(unique_ptr<SQLStatement> statement,
 
 shared_ptr<Result> Session::SubmitClaimed(Prepared &prepared, identifier_map_t<BoundParameterData> &values,
                                           const Format &format) {
+	D_ASSERT(state->Claimed());
 	registry->CountStatement(prepared.statement->GetStatementType());
 	unique_ptr<QueryResult> handle;
 	{
@@ -371,6 +373,7 @@ shared_ptr<Result> Session::SubmitClaimed(Prepared &prepared, identifier_map_t<B
 
 shared_ptr<Result> Session::SubmitClaimed(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
                                           const Format &format) {
+	D_ASSERT(state->Claimed());
 	// The binder rejects duplicate column names; the caller keeps the originals
 	auto deduplicated_names = names;
 	QueryResult::DeduplicateColumns(deduplicated_names);

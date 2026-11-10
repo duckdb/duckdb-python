@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include <thread>
 #include "duckdb.hpp"
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
@@ -267,13 +269,15 @@ private:
 	};
 
 public:
-	//! What a call does when another thread holds the connection mutex
+	//! What a call does about other calls on the connection mutex
 	enum class IfHeld : uint8_t {
-		//! Waits for it, with the GIL released: the holder may be inside a native call that needs the GIL back
+		//! Waits for the mutex, with the GIL released: the holder may be inside a native call that needs the GIL back
 		WAIT,
-		//! For the calls that submit a statement. Refused as busy when the holder is such a call too, since it may be
-		//! between two claims of its statement and a caller that passed the busy check would otherwise wait for the
-		//! whole call and then replace its result; behind any other holder it waits as every call did
+		//! For the calls that submit a statement. One of them is in flight at a time: a second one arriving is refused
+		//! as busy at once, before any wait, since the first may be in the stretch of its call outside any claim
+		//! (parsing, superseding the old result, converting its parameters, installing the result), where a caller
+		//! that passed the busy check would otherwise wait for the whole call and then replace its result. Behind
+		//! any other holder of the mutex it waits as every call does
 		REFUSE
 	};
 
@@ -286,21 +290,12 @@ public:
 			DUCKDB_PY_ASSERT_GIL_HELD();
 			// The holder of the mutex may be running a query that is waiting for this very call
 			conn.con.ThrowIfBusy();
-			if (if_held == IfHeld::WAIT) {
-				WaitForMutex(false);
-				return;
-			}
-			// The count moves whenever a submitting call takes the mutex, so a change across the wait below says one
-			// held it meanwhile, however briefly the flag was read
-			auto entries_before = conn.submitting_entries.load();
-			if (lock_.try_lock()) {
+			if (if_held == IfHeld::REFUSE) {
 				MarkSubmitting();
-				return;
 			}
-			if (conn.mutex_held_by_submitting_call.load()) {
-				engine::ThrowBusy();
-			}
-			WaitForMutex(true, entries_before);
+			nb::gil_scoped_release release;
+			DUCKDB_PY_ASSERT_GIL_RELEASED();
+			lock_.lock();
 		}
 		~ConnectionLockGuard() {
 			DropSubmittingMark();
@@ -310,30 +305,24 @@ public:
 		//! while it still holds the mutex, so the rest of the call is waited for like any other holder
 		void DropSubmittingMark() {
 			if (marks_submitting_call) {
-				conn.mutex_held_by_submitting_call = false;
+				conn.submitting_thread.store(std::thread::id());
 				marks_submitting_call = false;
 			}
 		}
 
 	private:
-		void WaitForMutex(bool submitting, idx_t entries_before = 0) {
-			nb::gil_scoped_release release;
-			DUCKDB_PY_ASSERT_GIL_RELEASED();
-			lock_.lock();
-			if (!submitting) {
+		//! Decided on arrival, before any wait, so the loser never waits for the winner's call; a nested call of the
+		//! submitting thread itself passes, as it does the recursive mutex
+		void MarkSubmitting() {
+			std::thread::id nobody;
+			auto self = std::this_thread::get_id();
+			if (conn.submitting_thread.compare_exchange_strong(nobody, self)) {
+				marks_submitting_call = true;
 				return;
 			}
-			if (conn.submitting_entries.load() != entries_before) {
-				lock_.unlock();
+			if (nobody != self) {
 				engine::ThrowBusy();
 			}
-			// Marked before the GIL is retaken, so no contender reads the mutex as held by a waiting call
-			MarkSubmitting();
-		}
-		void MarkSubmitting() {
-			// A nested guard of the same thread leaves the flag to the outermost one
-			marks_submitting_call = !conn.mutex_held_by_submitting_call.exchange(true);
-			conn.submitting_entries++;
 		}
 
 		DuckDBPyConnection &conn;
@@ -347,10 +336,8 @@ public:
 	//! freed result (duckdb-python#435). Recursive, so the lock taken at the top of execute and the fetches does not
 	//! deadlock against the one PrepareQuery and ExecuteInternal take after releasing the GIL
 	std::recursive_mutex py_connection_lock;
-	//! Whether the thread holding py_connection_lock is inside a call that submits a statement (IfHeld::REFUSE)
-	std::atomic<bool> mutex_held_by_submitting_call {false};
-	//! How many times a submitting call has taken py_connection_lock
-	std::atomic<idx_t> submitting_entries {0};
+	//! The thread whose call that submits a statement (IfHeld::REFUSE) is in flight, or no thread
+	std::atomic<std::thread::id> submitting_thread {std::thread::id()};
 	//! The database's store of file-like objects for reading, kept once this connection has found it
 	shared_ptr<ObjectStore> object_store;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;

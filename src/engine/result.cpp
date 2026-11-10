@@ -265,6 +265,7 @@ void Result::RetainClaimed(const InterruptCheck &check) {
 	if (state != State::PENDING) {
 		return;
 	}
+	D_ASSERT(connection_state->Claimed());
 	try {
 		Complete(*handle, check);
 		CaptureMetadata();
@@ -280,6 +281,7 @@ void Result::SettleClaimed(const InterruptCheck &check) {
 	if (state != State::PENDING) {
 		return;
 	}
+	D_ASSERT(connection_state->Claimed());
 	if (CompletesBeforeReturning()) {
 		RetainClaimed(check);
 		return;

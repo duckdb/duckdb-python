@@ -441,7 +441,7 @@ class TestOpenResultIsExclusive:
         )
         assert code == 0, output
         assert "refused:" in output
-        assert re.search(REFUSED, output)
+        assert BUSY in output, output
         assert "usable after: [(42,)]" in output
 
     def test_a_udf_that_reenters_its_connection_errors(self):
@@ -580,9 +580,11 @@ class TestOpenResultIsExclusive:
         assert "usable after: [(42,)]" in output
 
     def test_another_thread_is_refused_while_a_statement_runs(self):
-        # At the default thread count the engine runs the statement from its submission on, so the other thread
-        # may land right after the submission as well as during the settling
+        # With worker threads the engine runs the statement from its submission on, so the other thread may land
+        # right after the submission as well as during the settling. It contends through a relation, which takes
+        # the connection's claim and not the mutex, so it sees the claim and nothing else
         con = duckdb.connect()
+        con.execute("SET threads = 4")
         running, release = threading.Event(), threading.Event()
 
         def hold(x):
@@ -596,7 +598,7 @@ class TestOpenResultIsExclusive:
         def contend():
             running.wait(10)
             try:
-                con.execute("SELECT 1")
+                con.sql("SELECT 1")
                 outcome.append("ran")
             except duckdb.ResourceInUseException as error:
                 outcome.append(str(error))
@@ -682,10 +684,65 @@ class TestOpenResultIsExclusive:
         assert "submitted: 20" in output, output
         assert "outcomes: []" in output, output
 
+    @pytest.mark.timeout(120)
+    def test_a_refused_arrow_fetch_keeps_its_rows(self):
+        # The DB-API Arrow fetch takes the rows out of the result and runs a statement over them; a second thread
+        # that takes the connection's claim between the two would make the fetch fail after the take, and a retry
+        # would then find no rows. The fetch holds one claim across both, so a refusal always comes before the take
+        code, output = run_isolated(
+            f"""
+            import collections
+            import sys
+            import threading
+            import time
+            import duckdb
+            con = duckdb.connect()
+            con.execute("SET threads = 4")
+            # A short switch interval hands the GIL to the other thread often, as a busy program does
+            sys.setswitchinterval(0.0001)
+            stop = threading.Event()
+            def bind_until_stopped():
+                while not stop.is_set():
+                    try:
+                        con.sql("SELECT 1")
+                    except duckdb.ResourceInUseException:
+                        pass
+            thread = threading.Thread(target=bind_until_stopped)
+            thread.start()
+            counts = collections.Counter()
+            print("started", flush=True)
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline and counts["retried"] < 50:
+                try:
+                    con.execute("SELECT * FROM range(5) t(i)")
+                except duckdb.ResourceInUseException:
+                    continue
+                for attempt in range(1000):
+                    try:
+                        table = con.to_arrow_table()
+                        break
+                    except duckdb.ResourceInUseException as error:
+                        if {BUSY!r} not in str(error):
+                            counts["refused: " + str(error)] += 1
+                rows = None if table is None else table.num_rows
+                if attempt:
+                    counts["retried"] += 1
+                if rows != 5:
+                    counts[f"rows {{rows}}" + (" after a refusal" if attempt else "")] += 1
+            stop.set()
+            thread.join(10)
+            print("counts:", sorted(counts))
+            """,
+            timeout=90,
+        )
+        assert code == 0, output
+        assert "counts: ['retried']" in output or "counts: []" in output, output
+
     def test_a_second_execute_during_parameter_conversion_is_refused_at_once(self):
         # The first thread holds the connection mutex and no claim while its parameters are read, so a second
         # execute reaches the mutex; it is refused there, and does not wait for the first call and replace its result
         con = duckdb.connect()
+        con.execute("SET threads = 4")
         inside, done = threading.Event(), threading.Event()
         timed_out = []
 
@@ -728,6 +785,7 @@ class TestOpenResultIsExclusive:
         # A reader holds the connection mutex while it waits for the GIL back; an execute on another thread waits for
         # such a holder as every call did, and is refused only behind another call that submits a statement
         con = duckdb.connect()
+        con.execute("SET threads = 4")
         con.execute("SELECT 1")
         stop = threading.Event()
 
@@ -760,6 +818,105 @@ class TestOpenResultIsExclusive:
             con.close()
         assert refused == 0, (ran, refused)
         assert ran > 0
+
+    def test_a_submitting_call_beside_a_reader_is_refused_at_once(self):
+        # A reader holding the mutex puts two submitting calls in line for it; the refusal of the second is decided
+        # when it arrives, so it never waits for the first one's statement and is then refused
+        con = duckdb.connect()
+        con.execute("SET threads = 4")
+        # The held statement lasts well over any scheduling stall, so only a wait for it crosses the bound below
+        con.create_function("hold", lambda x: time.sleep(0.3) or x, [BIGINT], BIGINT)
+        stop = threading.Event()
+        waited = []
+
+        def read_until_stopped():
+            while not stop.is_set():
+                with contextlib.suppress(duckdb.ResourceInUseException):
+                    con.description  # noqa: B018
+
+        def run_held_statements():
+            while not stop.is_set():
+                with contextlib.suppress(duckdb.ResourceInUseException):
+                    con.execute("SELECT hold(i) FROM range(1) t(i)")
+
+        def execute_once():
+            began = time.monotonic()
+            with contextlib.suppress(duckdb.ResourceInUseException):
+                con.execute("SELECT 7")
+            return time.monotonic() - began
+
+        threads = [threading.Thread(target=read_until_stopped), threading.Thread(target=run_held_statements)]
+        for thread in threads:
+            thread.start()
+        deadline = time.monotonic() + 4
+        try:
+            while time.monotonic() < deadline:
+                took = execute_once()
+                if took > 0.15:
+                    waited.append(took)
+        finally:
+            stop.set()
+            for thread in threads:
+                thread.join(10)
+            con.close()
+        assert waited == []
+
+    def test_other_calls_run_while_a_result_is_converted_to_arrow(self):
+        # The Arrow fetch holds the connection only until the rows are taken and the schema is built; the conversion
+        # into pyarrow that follows holds the mutex and no claim, so a relation runs during it and an execute waits
+        # for it instead of being refused. Small batches make the conversion the long part of the fetch
+        con = duckdb.connect()
+        con.execute("SET threads = 4")
+        con.execute("CREATE TABLE t (k INTEGER)")
+        converting = threading.Event()
+        marks = {}
+        attempts = []
+        outcome = {}
+
+        def attempt(call):
+            try:
+                call()
+            except duckdb.ResourceInUseException as error:
+                return str(error)
+            return "ran"
+
+        def second():
+            assert converting.wait(10)
+            deadline = time.monotonic() + 20
+            while time.monotonic() < deadline and "done" not in marks:
+                began = time.monotonic()
+                kind = attempt(lambda: con.table("t"))
+                attempts.append((began, kind))
+                # A relation admitted after the take was refused ran during the conversion; an execute then too
+                if kind == "ran" and any(k != "ran" for _, k in attempts):
+                    outcome["execute during the conversion"] = attempt(lambda: con.execute("SELECT 1"))
+                    break
+
+        def fetch_or_none():
+            try:
+                return con.to_arrow_table(200)
+            except duckdb.ResourceInUseException:
+                return None
+
+        thread = threading.Thread(target=second)
+        thread.start()
+        try:
+            con.execute("SELECT i, i::VARCHAR AS s FROM range(1000000) t(i)")
+            converting.set()
+            table = None
+            while table is None:
+                table = fetch_or_none()
+            marks["done"] = time.monotonic()
+        finally:
+            marks.setdefault("done", time.monotonic())
+            thread.join(30)
+            con.close()
+        assert table.num_rows == 1000000
+        refused = [t for t, k in attempts if k != "ran"]
+        assert refused, attempts[:5]
+        ran_after_take = [t for t, k in attempts if k == "ran" and t > max(refused) and t < marks["done"]]
+        assert ran_after_take, (len(attempts), max(refused), marks["done"])
+        assert outcome == {"execute during the conversion": "ran"}, outcome
 
     @pytest.mark.timeout(60)
     def test_progress_and_interrupt_reach_a_running_statement(self, con):
