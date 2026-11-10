@@ -18,6 +18,8 @@ namespace duckdb {
 
 MapFunction::MapFunction() : TableFunction("python_map_function", {LogicalType::TABLE}, nullptr, MapFunctionBind) {
 	in_out_function = MapFunctionExec;
+	// The mapped function is user Python code that may have side effects on every call
+	stability = FunctionStability::VOLATILE;
 }
 
 struct MapFunctionData : public TableFunctionData {

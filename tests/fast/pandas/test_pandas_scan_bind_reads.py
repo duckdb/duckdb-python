@@ -4,6 +4,7 @@ import collections
 import datetime
 import decimal
 import importlib.util
+import itertools
 import json
 import re
 import subprocess
@@ -368,6 +369,31 @@ def test_each_column_is_read_once_per_query(duckdb_cursor, path, make_source):
     reads.clear()
     duckdb_cursor.execute(f"SELECT k FROM {name}").fetchall()
     assert dict(reads) == {"k": 1, "o": 1, "f": 1}
+
+
+@pytest.mark.parametrize("path", PATHS)
+def test_object_column_is_converted_again_on_every_iteration_of_a_recursive_step(duckdb_cursor, path):
+    conversions = itertools.count(1)
+
+    class Stamp:
+        def __str__(self) -> str:
+            return str(next(conversions))
+
+    source = pd.DataFrame({"id": [1, 2, 3], "o": pd.Series([Stamp(), Stamp(), Stamp()], dtype=object)})
+    if path == "register":
+        duckdb_cursor.register("registered_source", source)
+        name = "registered_source"
+    else:
+        name = "source"
+    sql = f"""
+        WITH RECURSIVE r(i, seen) AS (
+            SELECT 0, []::VARCHAR[]
+            UNION ALL
+            SELECT r.i + 1, list_append(r.seen, s.o) FROM r JOIN {name} s ON s.id = 1 WHERE r.i < 3
+        )
+        SELECT len(list_distinct(seen)) FROM r WHERE i = 3
+    """
+    assert duckdb_cursor.execute(sql).fetchall() == [(3,)]
 
 
 _CHANGED_REGISTERED_DICT = """

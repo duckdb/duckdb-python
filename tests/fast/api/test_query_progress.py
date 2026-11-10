@@ -1,5 +1,7 @@
 import contextlib
 import platform
+import subprocess
+import sys
 import threading
 import time
 
@@ -61,3 +63,49 @@ class TestQueryProgress:
         conn.close()
         with pytest.raises(duckdb.ConnectionException):
             conn.query_progress()
+
+
+_JUPYTER_KERNEL = """
+import sys
+import types
+
+shown = []
+ipython = types.ModuleType("IPython")
+
+
+class Shell:
+    config = {"IPKernelApp": {}}
+
+
+ipython.get_ipython = Shell
+display = types.ModuleType("IPython.display")
+# Like IPython's, this display keeps the widgets it shows, so the engine never drops the last reference.
+display.display = shown.append
+ipython.display = display
+widgets = types.ModuleType("ipywidgets")
+
+
+class FloatProgress:
+    def __init__(self, **kwargs):
+        self.layout = types.SimpleNamespace(width=None)
+        self.value = None
+
+
+widgets.FloatProgress = FloatProgress
+sys.modules.update({"IPython": ipython, "IPython.display": display, "ipywidgets": widgets})
+import duckdb
+
+con = duckdb.connect()
+con.execute("SET progress_bar_time = 0")
+con.execute("SELECT sum(a.range * b.range) FROM range(1000000) a, range(4) b").fetchall()
+print("shown", [type(widget).__name__ for widget in shown])
+"""
+
+
+def test_a_jupyter_kernel_shows_the_progress_bar_as_a_widget():
+    # The client detects a kernel at import, from a __main__ without __file__ and the shell's config.
+    child = subprocess.run(
+        [sys.executable, "-c", _JUPYTER_KERNEL], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert child.returncode == 0, child.stderr
+    assert "shown ['FloatProgress']" in child.stdout.splitlines(), child.stdout

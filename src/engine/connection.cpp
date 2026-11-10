@@ -1,5 +1,6 @@
 #include "duckdb_python/engine/connection.hpp"
 
+#include "duckdb/main/context.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "duckdb/planner/statement_preprocessor.hpp"
@@ -17,7 +18,7 @@ namespace duckdb {
 namespace engine {
 
 shared_ptr<ConnectionState> ConnectionState::Get(ClientContext &context) {
-	return context.registered_state->GetOrCreate<ConnectionState>("python_connection_state");
+	return context.GetContext().GetRegisteredState().GetOrCreate<ConnectionState>("python_connection_state");
 }
 
 static constexpr const char *BUSY_ERROR =

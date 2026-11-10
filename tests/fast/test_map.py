@@ -151,6 +151,24 @@ class TestMap:
         with pytest.raises(duckdb.InvalidInputException, match="Need a DataFrame with at least one column"):
             testrel.map(return_empty_df).df()
 
+    def test_map_runs_again_on_every_iteration_of_a_recursive_step(self, duckdb_cursor):
+        calls = itertools.count()
+
+        def stamp(df):
+            df["call"] = next(calls)
+            return df
+
+        duckdb_cursor.register("src", duckdb_cursor.sql("SELECT * FROM (VALUES (1), (2), (3)) t(id)").map(stamp))
+        sql = """
+            WITH RECURSIVE r(i, calls) AS (
+                SELECT 0, []::BIGINT[]
+                UNION ALL
+                SELECT r.i + 1, list_append(r.calls, src.call) FROM r JOIN src ON src.id = 1 WHERE r.i < 3
+            )
+            SELECT len(list_distinct(calls)) FROM r WHERE i = 3
+        """
+        assert duckdb_cursor.execute(sql).fetchall() == [(3,)]
+
     def test_map_with_object_column(self, duckdb_cursor):
         def return_with_no_modification(df):
             return df
