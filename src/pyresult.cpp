@@ -225,15 +225,11 @@ void DuckDBPyResult::FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversi
 	if (GetTypes()[col_idx].id() == LogicalTypeId::ENUM) {
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		auto pandas_categorical = import_cache.pandas.Categorical();
-		auto categorical_dtype = import_cache.pandas.CategoricalDtype();
-		if (!pandas_categorical || !categorical_dtype) {
+		if (!pandas_categorical) {
 			throw InvalidInputException("'pandas' is required for this operation but it was not installed");
 		}
-
-		// first we (might) need to create the categorical type
 		if (categories_type.find(col_idx) == categories_type.end()) {
-			// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-			categories_type[col_idx] = categorical_dtype(categories[col_idx], true);
+			categories_type[col_idx] = EnumCategoricalDtype(GetTypes()[col_idx]);
 		}
 		// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
 		res[name] = pandas_categorical.attr("from_codes")(conversion.ToArray(col_idx),
@@ -243,22 +239,6 @@ void DuckDBPyResult::FillNumpy(nb::dict &res, idx_t col_idx, NumpyResultConversi
 		}
 	} else {
 		res[name] = conversion.ToArray(col_idx);
-	}
-}
-
-void InsertCategory(const vector<LogicalType> &types, unordered_map<idx_t, nb::list> &categories) {
-	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		auto &type = types[col_idx];
-		if (type.id() == LogicalTypeId::ENUM) {
-			// It's an ENUM type, in addition to converting the codes we must convert the categories
-			if (categories.find(col_idx) == categories.end()) {
-				auto &categories_list = EnumType::GetValuesInsertOrder(type);
-				auto categories_size = EnumType::GetSize(type);
-				for (idx_t i = 0; i < categories_size; i++) {
-					categories[col_idx].append(nb::cast(categories_list.GetValue(i).ToString()));
-				}
-			}
-		}
 	}
 }
 
@@ -313,7 +293,6 @@ nb::dict DuckDBPyResult::FetchNumpyInternal(bool chunked, idx_t vectors_per_chun
 			}
 			conversion.Append(*chunk);
 		}
-		InsertCategory(GetTypes(), categories);
 
 		// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or
 		// categorical types

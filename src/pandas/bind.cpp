@@ -125,7 +125,8 @@ std::unique_ptr<RegisteredArray> RegisterMask(nb::handle mask) {
 }
 
 static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p, PandasColumnBindData &bind_data,
-                              idx_t row_count, const LogicalType &declared_type) {
+                              idx_t row_count, const LogicalType &declared_type,
+                              const vector<PandasEnumDtype> &enum_dtypes) {
 	const string counted_from = "the frame";
 	LogicalType column_type;
 	auto &column = column_p.handle;
@@ -142,6 +143,18 @@ static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p
 	nb::object data;
 
 	if (bind_data.numpy_type.type == NumpyNullableType::CATEGORY) {
+		auto column_categories = enum_dtypes.empty() ? nb::object() : nb::object(column_p.type.attr("categories"));
+		for (auto &known : enum_dtypes) {
+			// A categories index is immutable, so this object still holds the enum's values, and reading them again
+			// would cost a string per category on every call; pandas 2 builds a new dtype around the same index
+			if (column_categories.is(known.categories)) {
+				data = column.attr("cat").attr("codes").attr("to_numpy")();
+				bind_data.internal_categorical_type = nb::cast<std::string>(nb::str(nb::object(data.attr("dtype"))));
+				CheckColumnArray(bind_data.name, data, row_count, counted_from);
+				bind_data.pandas_col = std::make_unique<PandasNumpyColumn>(NumpyArray(std::move(data)));
+				return known.type;
+			}
+		}
 		// for category types, we create an ENUM type for string or use the converted numpy type for the rest
 		D_ASSERT(nb::hasattr(column, "cat"));
 		D_ASSERT(nb::hasattr(column.attr("cat"), "categories"));
@@ -228,7 +241,7 @@ static LogicalType BindColumn(ClientContext &context, PandasBindColumn &column_p
 
 idx_t Pandas::Bind(ClientContext &context, nb::handle df_p, vector<PandasColumnBindData> &bind_columns,
                    vector<LogicalType> &return_types, vector<Identifier> &names,
-                   const vector<LogicalType> &declared_types) {
+                   const vector<LogicalType> &declared_types, const vector<PandasEnumDtype> &enum_dtypes) {
 
 	PandasDataFrameBind df(df_p);
 	idx_t column_count = nb::len(df.names);
@@ -261,8 +274,9 @@ idx_t Pandas::Bind(ClientContext &context, nb::handle df_p, vector<PandasColumnB
 		bind_data.name = column_names[col_idx];
 		names.emplace_back(bind_data.name);
 		auto column = df[col_idx];
-		auto column_type = BindColumn(context, column, bind_data, row_count,
-		                              declared_types.empty() ? LogicalType::INVALID : declared_types[col_idx]);
+		auto column_type =
+		    BindColumn(context, column, bind_data, row_count,
+		               declared_types.empty() ? LogicalType::INVALID : declared_types[col_idx], enum_dtypes);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));

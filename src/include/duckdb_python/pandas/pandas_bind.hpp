@@ -40,13 +40,27 @@ struct PandasColumnBindData {
 	PythonObjectContainer object_str_val;
 	//! The caller declared the column's type: each value converts into it as the appender converts a row
 	bool declared = false;
+	//! Of a declared column: the caller implied the type rather than stating it, so a cell is read only when it is of
+	//! the type's kind, since a cast could change what it was
+	bool implied_type = false;
+	//! Of a declared column map() reads: a cell holding bytes where the type holds a BIT is refused, since df() hands
+	//! a BIT value to the function as its storage bytes
+	bool bit_storage_refused = false;
+};
+
+//! The categories of a CategoricalDtype the caller built from an ENUM's values, in order
+struct PandasEnumDtype {
+	nb::handle categories;
+	LogicalType type;
 };
 
 struct Pandas {
-	//! Returns the frame's row count; declared_types, when given, hold one type per column, INVALID where none
+	//! Returns the frame's row count; declared_types, when given, hold one type per column, INVALID where none; a
+	//! categorical column whose categories are those of one of enum_dtypes, that very object, reads its codes as that
+	//! ENUM
 	static idx_t Bind(ClientContext &config, nb::handle df, vector<PandasColumnBindData> &out,
 	                  vector<LogicalType> &return_types, vector<Identifier> &names,
-	                  const vector<LogicalType> &declared_types = {});
+	                  const vector<LogicalType> &declared_types = {}, const vector<PandasEnumDtype> &enum_dtypes = {});
 };
 
 } // namespace duckdb
