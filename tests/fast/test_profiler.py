@@ -3,6 +3,7 @@ import re
 import subprocess
 import sys
 import webbrowser
+from html.parser import HTMLParser
 
 import pytest
 
@@ -46,8 +47,9 @@ class TestProfiler:
     def test_profiler_html_output(self, profiling_connection, tmp_path_factory):
         tmp_dir = tmp_path_factory.mktemp("profiler", numbered=True)
         profiling_info = ProfilingInfo(profiling_connection)
-        # Test HTML execution works, nothing to assert!
-        profiling_info.to_html(output_file=f"{tmp_dir}/profiler_output.html")
+        page = profiling_info.to_html(output_file=f"{tmp_dir}/profiler_output.html")
+        assert page == (tmp_dir / "profiler_output.html").read_text(encoding="utf8")
+        assert "SELECT 42" in page
 
 
 JOIN_SQL = "SELECT a.i, b.j\nFROM range(100) a(i) JOIN range(50) b(j) ON a.i = b.j\nWHERE a.i % 2 = 0\nORDER BY 1"
@@ -75,9 +77,76 @@ def engine_profile(sql: str, *settings: str) -> dict:
         con.close()
 
 
-def walk(node: dict, depth: int = 0) -> list[tuple[dict, int]]:
+def walk(node: dict) -> list[tuple[dict, int]]:
     """The operator and its descendants with their depth, in the order the engine wrote them."""
-    return [(node, depth), *[entry for child in node.get("children", []) for entry in walk(child, depth + 1)]]
+    result = []
+    stack = [(node, 0)]
+    while stack:
+        current, depth = stack.pop()
+        result.append((current, depth))
+        stack.extend((child, depth + 1) for child in reversed(current.get("children", [])))
+    return result
+
+
+def chain_profile(depth: int) -> dict:
+    """A plan of PROJECTION operators nested depth deep, as a dict."""
+    root: dict = {"type": "PROJECTION", "name": "PROJECTION", "timing": 0.001, "extra_info": {}}
+    for _ in range(depth - 1):
+        root = {"type": "PROJECTION", "name": "PROJECTION", "timing": 0.001, "extra_info": {}, "children": [root]}
+    return {"query": {"total_time": 1.0, "cpu_time": 1.0, "sql": "deep"}, "operator": [root]}
+
+
+def chain_profile_text(depth: int) -> str:
+    """The JSON text of chain_profile(depth), built without recursive encoding so any depth can be written."""
+    node = '{"type": "PROJECTION", "name": "PROJECTION", "timing": 0.001, "extra_info": {}'
+    opening = (node + ', "children": [') * (depth - 1) + node + "}"
+    return '{"query": {"total_time": 1.0, "cpu_time": 1.0, "sql": "deep"}, "operator": [' + opening + "]}" * depth
+
+
+class RenderedTree(HTMLParser):
+    """Rebuilds the operator tree of a page: each node is (headline, children), read from the li and ul nesting."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.roots: list[tuple] = []
+        self.open_nodes: list[list] = []
+        self.in_headline = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "li":
+            node = ["", []]
+            (self.open_nodes[-1][1] if self.open_nodes else self.roots).append(node)
+            self.open_nodes.append(node)
+        elif tag == "b" and self.open_nodes and not self.open_nodes[-1][0]:
+            self.in_headline = True
+
+    def handle_data(self, data):
+        if self.in_headline:
+            self.open_nodes[-1][0] += data
+
+    def handle_endtag(self, tag):
+        if tag == "b":
+            self.in_headline = False
+        elif tag == "li":
+            self.open_nodes.pop()
+
+
+def rendered_tree(html: str) -> list:
+    parser = RenderedTree()
+    parser.feed(html)
+    assert parser.open_nodes == []
+    return parser.roots
+
+
+def expected_tree(node: dict) -> list:
+    """The (headline, children) shape of a profile's operator, built without recursion."""
+    shapes: dict[int, list] = {}
+    for current, _ in reversed(walk(node)):
+        shapes[id(current)] = [
+            current.get("type", current.get("name", "OPERATOR")).replace("_", " "),
+            [shapes[id(child)] for child in current.get("children", [])],
+        ]
+    return shapes[id(node)]
 
 
 def operators(node: dict) -> list[dict]:
@@ -162,6 +231,7 @@ class TestQueryGraphRenderer:
 
         assert html.count("<li>") == len(ops)
         assert headlines(html) == [op["type"].replace("_", " ") for op in ops]
+        assert rendered_tree(html) == [expected_tree(join_profile["operator"][0])]
         # the two scans are leaves: each sits in its own nested list under the join
         assert html.count("<ul>") == 1 + sum(1 for op in ops if op.get("children"))
         assert html.count("</ul>") == html.count("<ul>")
@@ -298,19 +368,60 @@ class TestQueryGraphRenderer:
         assert "<table" not in block
         assert html.count("<li>") == len(operators(profile["operator"][0]))
 
-    def test_deep_operator_chain_renders(self, tmp_path):
+    def test_deep_operator_chain_renders_without_recursion(self):
+        # The dict goes straight to the renderer: Python 3.11's JSON decoder cannot read a chain this deep.
         depth = 1000
-        root: dict = {"type": "PROJECTION", "name": "PROJECTION", "timing": 0.001, "extra_info": {}}
-        for _ in range(depth - 1):
-            root = {"type": "PROJECTION", "name": "PROJECTION", "timing": 0.001, "extra_info": {}, "children": [root]}
-        profile = {"query": {"total_time": 1.0, "cpu_time": 1.0, "sql": "deep"}, "operator": [root]}
+        profile = chain_profile(depth)
 
-        html = render(profile, tmp_path)
+        html = ProfilingInfo()._render_page(profile)
 
         assert html.count("<li>") == depth
-        assert html.count("</li>") == depth
         assert f"Show {depth} nodes" in html
         assert f"↳ Depth {depth - 1}</td>" in html
+        tree = rendered_tree(html)
+        for _ in range(depth - 1):
+            assert len(tree) == 1
+            assert tree[0][0] == "PROJECTION"
+            tree = tree[0][1]
+        assert tree == [["PROJECTION", []]]
+
+    def test_deep_operator_chain_file_renders(self, tmp_path):
+        # 400 operators nest 800 JSON levels, within what every supported Python's JSON decoder reads.
+        depth = 400
+        text = chain_profile_text(depth)
+        assert json.loads(text) == chain_profile(depth)
+
+        html = render(text, tmp_path)
+
+        assert html.count("<li>") == depth
+        tree = rendered_tree(html)
+        for _ in range(depth - 1):
+            assert len(tree) == 1
+            tree = tree[0][1]
+        assert tree == [["PROJECTION", []]]
+
+    def test_profile_too_deep_for_the_json_decoder_raises_the_module_error(self, tmp_path, monkeypatch):
+        # Python 3.11's decoder raises RecursionError from about 500 operators; 3.12 and later read a few thousand,
+        # and their decoder does not follow sys.setrecursionlimit, so the failure is forced here on every version.
+        def too_deep(text):
+            msg = "maximum recursion depth exceeded while decoding a JSON object"
+            raise RecursionError(msg)
+
+        monkeypatch.setattr(json, "loads", too_deep)
+
+        with pytest.raises(ValueError, match=r"profile\.json nests its operators deeper"):
+            render(chain_profile_text(1000), tmp_path)
+
+    def test_profile_a_thousand_deep_never_leaks_a_recursion_error(self, tmp_path):
+        # How deep the JSON decoder reads differs by Python version and platform; the invariant is the outcome:
+        # a rendered page or the module's error, never a RecursionError.
+        depth = 1000
+        try:
+            html = render(chain_profile_text(depth), tmp_path)
+        except ValueError as e:
+            assert "nests its operators deeper" in str(e)  # noqa: PT017
+        else:
+            assert html.count("<li>") == depth
 
     def test_profile_without_timing_metrics_renders_tree(self, tmp_path):
         profile = engine_profile(JOIN_SQL, "SET tracked_metrics = ['operator.type', 'operator.name']")
@@ -351,6 +462,7 @@ class TestQueryGraphRenderer:
         assert grid_value(html, "Execution Time (s)") == f"{profile['query']['total_time']:.4f}"
         assert JOIN_SQL in sql_block(html)
         assert "<li>" not in html
+        assert "The profile holds no operator metrics" in html
 
     def test_profile_with_only_system_metrics_renders_its_boxes(self, tmp_path):
         profile = engine_profile(JOIN_SQL, "SET tracked_metrics = ['system.*']")
@@ -395,13 +507,61 @@ class TestQueryGraphRenderer:
         with pytest.raises(ValueError, match="connection or a file"):
             ProfilingInfo().to_html(output_file=str(tmp_path / "out.html"))
 
-    def test_legacy_flat_format_is_rejected_with_a_clear_message(self, tmp_path):
-        profile = engine_profile(JOIN_SQL, "SET legacy_metrics_format = true")
-        assert "latency" in profile
-        assert "children" in profile
+    @pytest.mark.parametrize(
+        ("settings", "present", "absent"),
+        [
+            pytest.param(("SET legacy_metrics_format = true",), ("latency", "children"), (), id="legacy-all-metrics"),
+            pytest.param(
+                ("SET legacy_metrics_format = true", "SET tracked_metrics = ['operator.*']"),
+                ("children",),
+                ("latency",),
+                id="legacy-operator-metrics-only",
+            ),
+        ],
+    )
+    def test_legacy_flat_format_is_rejected_with_a_clear_message(self, settings, present, absent, tmp_path):
+        profile = engine_profile(JOIN_SQL, *settings)
+        for key in present:
+            assert key in profile
+        for key in absent:
+            assert key not in profile
 
-        with pytest.raises(ValueError, match="legacy_metrics_format"):
+        with pytest.raises(ValueError, match=r"flat profiling format of DuckDB 1\.x.*legacy_metrics_format"):
             render(profile, tmp_path)
+
+    def test_profile_written_by_duckdb_1x_is_rejected(self, tmp_path):
+        # Shortened from what the DuckDB 1.5.6 wheel wrote for SELECT 42.
+        profile_1x = {
+            "query_name": "SELECT 42",
+            "cpu_time": 0.000947039,
+            "latency": 0.005966684,
+            "children": [
+                {
+                    "operator_type": "PROJECTION",
+                    "operator_name": "PROJECTION",
+                    "operator_timing": 7.4e-06,
+                    "operator_cardinality": 1,
+                    "result_set_size": 4,
+                    "cpu_time": 9.933e-06,
+                    "extra_info": {"Projections": "42", "Estimated Cardinality": "1"},
+                    "children": [
+                        {
+                            "operator_type": "DUMMY_SCAN",
+                            "operator_name": "DUMMY_SCAN",
+                            "operator_timing": 2.533e-06,
+                            "operator_cardinality": 1,
+                            "result_set_size": 4,
+                            "cpu_time": 2.533e-06,
+                            "extra_info": {},
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+        }
+
+        with pytest.raises(ValueError, match=r"flat profiling format of DuckDB 1\.x"):
+            render(profile_1x, tmp_path)
 
 
 class TestQueryGraphCommandLine:
@@ -443,12 +603,41 @@ class TestQueryGraphCommandLine:
         assert browser_calls == [out_file.resolve().as_uri()]
 
     def test_cli_default_output_path_replaces_json_suffix(self, join_profile, tmp_path, monkeypatch, browser_calls):
-        profile_file = self.write_profile(join_profile, tmp_path / "profile.json")
+        # The directory name holds .json too; only the suffix of the file changes.
+        directory = tmp_path / "runs.json"
+        directory.mkdir()
+        profile_file = self.write_profile(join_profile, directory / "profile.json")
 
         self.run_cli(monkeypatch, "--profile_input", profile_file)
 
-        assert (tmp_path / "profile.html").exists()
+        assert (directory / "profile.html").exists()
+        assert not (tmp_path / "runs.html").exists()
         assert len(browser_calls) == 1
+
+    def test_cli_refuses_a_profile_without_json_suffix_when_no_output_is_named(
+        self, join_profile, tmp_path, monkeypatch, browser_calls, capsys
+    ):
+        profile_file = self.write_profile(join_profile, tmp_path / "profile.txt")
+
+        with pytest.raises(SystemExit) as exc:
+            self.run_cli(monkeypatch, profile_file, "--no-open")
+
+        assert exc.value.code == 1
+        assert ".json" in capsys.readouterr().err
+        assert list(tmp_path.glob("*.html")) == []
+        assert browser_calls == []
+
+    def test_cli_positional_path_and_profile_input_must_agree(self, join_profile, tmp_path, monkeypatch, browser_calls):
+        profile_file = self.write_profile(join_profile, tmp_path / "profile.json")
+        other_file = self.write_profile(join_profile, tmp_path / "other.json")
+
+        with pytest.raises(SystemExit) as exc:
+            self.run_cli(monkeypatch, profile_file, "--profile_input", other_file, "--no-open")
+        assert exc.value.code == 2
+
+        self.run_cli(monkeypatch, profile_file, "--profile_input", profile_file, "--no-open")
+        assert (tmp_path / "profile.html").exists()
+        assert browser_calls == []
 
     def test_cli_no_open_writes_the_file_without_a_browser(self, join_profile, tmp_path, monkeypatch, browser_calls):
         profile_file = self.write_profile(join_profile, tmp_path / "profile.json")
@@ -477,13 +666,15 @@ class TestQueryGraphCommandLine:
         assert not out_file.exists()
         assert browser_calls == []
 
-    def test_cli_rejects_output_without_html_suffix(self, join_profile, tmp_path, monkeypatch, browser_calls):
+    @pytest.mark.parametrize("out_name", ["graph.txt", "graph.html.txt"])
+    def test_cli_rejects_output_without_html_suffix(self, out_name, join_profile, tmp_path, monkeypatch, browser_calls):
         profile_file = self.write_profile(join_profile, tmp_path / "profile.json")
 
         with pytest.raises(SystemExit) as exc:
-            self.run_cli(monkeypatch, profile_file, "--out", str(tmp_path / "graph.txt"))
+            self.run_cli(monkeypatch, profile_file, "--out", str(tmp_path / out_name))
 
         assert exc.value.code == 1
+        assert not (tmp_path / out_name).exists()
         assert browser_calls == []
 
     def test_cli_refuses_an_output_path_equal_to_the_input(
@@ -512,16 +703,17 @@ class TestQueryGraphCommandLine:
         assert str(directory) in err
 
     def test_cli_names_the_file_it_could_not_write(self, join_profile, tmp_path, monkeypatch, browser_calls, capsys):
+        # The output path is given relative and not in normal form, as a user types it.
         profile_file = self.write_profile(join_profile, tmp_path / "profile.json")
-        out_file = tmp_path / "missing" / "graph.html"
+        monkeypatch.chdir(tmp_path)
 
         with pytest.raises(SystemExit) as exc:
-            self.run_cli(monkeypatch, profile_file, "--out", str(out_file))
+            self.run_cli(monkeypatch, profile_file, "--out", "./missing/graph.html")
 
         assert exc.value.code == 1
         err = capsys.readouterr().err
-        assert "write the output file" in err
-        assert str(out_file) in err
+        assert "write the output file ./missing/graph.html" in err
+        assert "read the profile" not in err
         assert browser_calls == []
 
     def test_cli_module_run_does_not_warn_about_double_import(self, join_profile, tmp_path):

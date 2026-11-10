@@ -329,13 +329,11 @@ def _operators(roots: list[Node]) -> list[tuple[Node, int]]:
 
 def _headline(node: Node) -> str:
     label = node.get("type", node.get("name"))
-    if label is None:
-        return "OPERATOR"
-    return "BRIDGE" if label == "INVALID" else str(label).replace("_", " ")
+    return "OPERATOR" if label is None else str(label).replace("_", " ")
 
 
-# The compressed materialization optimizer names its functions __internal_compress_integral_<type>; the headline
-# of a projection full of them reads better short, and no other text is touched.
+# The compressed materialization optimizer names its functions __internal_compress_integral_<type>; a details line
+# full of them reads better short, and no other text is touched.
 _ENGINE_COMPRESS_FUNCTION = re.compile(r"\b__internal_((?:de)?compress)_integral_(\w+)\(")
 
 
@@ -345,6 +343,8 @@ def _detail_value(value: object) -> str:
 
 
 SCAN_KEYS = ("rows_scanned", "row_groups_scanned", "total_row_groups_to_scan", "bytes_scanned")
+# Every flat profile has the operator tree under a top level "children" list; the other keys name its metrics.
+FLAT_FORMAT_KEYS = ("children", "latency", "operator_type", "operator_timing")
 
 
 class ProfilingInfo:
@@ -371,15 +371,18 @@ class ProfilingInfo:
 
     def to_html(self, output_file: str = "profile.html") -> str:
         """Write the profile as an HTML page to output_file and return the page text."""
+        page = self._render_html()
+        with open_utf8(output_file, "w") as f:
+            f.write(page)
+        return page
+
+    def _render_html(self) -> str:
         try:
             text = self.to_json()
         except UnicodeDecodeError as e:
             msg = f"{self._source_name()} is not a UTF-8 text file: {e}"
             raise ValueError(msg) from e
-        page = self._render_page(self._parse_profile(text))
-        with open_utf8(output_file, "w") as f:
-            f.write(page)
-        return page
+        return self._render_page(self._parse_profile(text))
 
     def _source_name(self) -> str:
         return self.from_file if self.from_file is not None else "the connection's profiling output"
@@ -391,13 +394,18 @@ class ProfilingInfo:
         except json.JSONDecodeError as e:
             msg = f"{source} is not a JSON profile: {e}"
             raise ValueError(msg) from e
+        except RecursionError as e:
+            # Python 3.11's JSON decoder counts every nesting level against the recursion limit of 1000, so a plan
+            # about 500 operators deep cannot be read there; 3.12 and later read a few thousand.
+            msg = f"{source} nests its operators deeper than this Python's JSON decoder can read"
+            raise ValueError(msg) from e
         if not isinstance(profile, dict):
             msg = f"{source} is not a profile: expected a JSON object, got {type(profile).__name__}"
             raise ValueError(msg)  # noqa: TRY004
-        if "latency" in profile or "children" in profile or "operator_type" in profile:
+        if any(key in profile for key in FLAT_FORMAT_KEYS):
             msg = (
-                f"{source} is in the flat profiling format of DuckDB 1.x, written with legacy_metrics_format=true; "
-                "reset legacy_metrics_format and profile the query again"
+                f"{source} is in the flat profiling format of DuckDB 1.x, which a 2.x engine writes only with "
+                "legacy_metrics_format = true; profile the query with a 2.x engine's default format to render it"
             )
             raise ValueError(msg)
         if set(profile) == {"result"}:
@@ -435,9 +443,7 @@ class ProfilingInfo:
         return f"""
         <details><summary><b>SQL Query</b></summary>
         <div class="chart sql-block">
-            <pre><code>
-    {_escape(sql) if sql is not None else "N/A"}
-            </code></pre>
+            <pre><code>{_escape(sql) if sql is not None else "N/A"}</code></pre>
         </div>
         </details><br>
         """
@@ -661,12 +667,16 @@ def main() -> None:
         _fail(f"the output path {output_path} is the input profile; choose another --out")
 
     try:
-        ProfilingInfo(from_file=profile_path).to_html(output_file=output_path)
+        page = ProfilingInfo(from_file=profile_path)._render_html()
     except ValueError as e:
         _fail(str(e))
     except OSError as e:
-        action = "write the output file" if e.filename == output_path else "read the profile"
-        _fail(f"could not {action} {e.filename or profile_path}: {e.strerror or e}")
+        _fail(f"could not read the profile {profile_path}: {e.strerror or e}")
+    try:
+        with open_utf8(output_path, "w") as f:
+            f.write(page)
+    except OSError as e:
+        _fail(f"could not write the output file {output_path}: {e.strerror or e}")
 
     print(f"query_graph: wrote {output_path}")
     if args.open:
