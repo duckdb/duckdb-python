@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 import duckdb
-from duckdb import InvalidInputException, NotImplementedException
+from duckdb import InvalidInputException, NotImplementedException, sqltypes
 from duckdb.sqltypes import (
     BIGINT,
     BIT,
@@ -189,3 +189,39 @@ class TestValue:
         else:
             with pytest.raises((NotImplementedException, InvalidInputException)):
                 work()
+
+
+class TestTypeConstantForwarding:
+    """The value module binds no type constant, yet still answers for the 27 names it once imported."""
+
+    def test_the_27_names_resolve_to_the_sqltypes_objects(self):
+        import duckdb.value.constant as constant
+
+        names = constant._TYPE_CONSTANTS
+        assert len(names) == 27
+        assert all(getattr(constant, name) is getattr(sqltypes, name) for name in names)
+        assert not any(isinstance(value, sqltypes.DuckDBPyType) for value in vars(constant).values())
+
+    def test_a_name_imports_from_the_module(self):
+        from duckdb.value.constant import INTEGER as forwarded_integer
+        from duckdb.value.constant import VARCHAR as forwarded_varchar
+
+        assert forwarded_integer is sqltypes.INTEGER
+        assert forwarded_varchar is sqltypes.VARCHAR
+
+    def test_dir_lists_the_names_and_the_star_import_is_unchanged(self):
+        import duckdb.value.constant as constant
+
+        listed = dir(constant)
+        assert all(name in listed for name in constant._TYPE_CONSTANTS)
+        assert all(name in listed for name in constant.__all__)
+        namespace: dict[str, object] = {}
+        exec("from duckdb.value.constant import *", namespace)
+        assert sorted(name for name in namespace if name != "__builtins__") == sorted(constant.__all__)
+
+    @pytest.mark.parametrize("name", ["TIME_NS", "VARIANT", "NotAName"])
+    def test_other_names_raise(self, name):
+        import duckdb.value.constant as constant
+
+        with pytest.raises(AttributeError, match=name):
+            getattr(constant, name)

@@ -20,6 +20,7 @@ from duckdb.sqltypes import DuckDBPyType
 
 from ..errors import ParseException, PySparkNotImplementedError, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
+from . import _type_cache
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -75,8 +76,12 @@ class DataType:
 
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        # Built on access: an instance held here would sit in the singleton cache, which outlives finalization.
-        return DuckDBPyType(self._duckdb_type_name)
+        # Parsing a name runs on the default connection, so each name is parsed once, into a dict another module
+        # owns: one held here would sit in the singleton cache, which outlives finalization.
+        name = self._duckdb_type_name
+        if name not in _type_cache.TYPES:
+            _type_cache.TYPES[name] = DuckDBPyType(name)
+        return _type_cache.TYPES[name]
 
     def __repr__(self) -> str:  # noqa: D105
         return self.__class__.__name__ + "()"

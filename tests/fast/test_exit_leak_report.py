@@ -3,9 +3,10 @@
 The report names duckdb objects that are still alive after finalization. CPython does not clear a module dict that a
 function still reachable at exit keeps alive, and such a function is easily kept: typing's overload registry survives
 once numpy is imported, a polars cache holds a relation type. A ``DuckDBPyType`` instance bound in such a dict, or in a
-class level cache a function of the module reaches, would be reported, so the constants live in the two ``sqltypes``
-modules only and every other module reads them at use time; a program that keeps a connection itself is reported for
-that one instance. Builds without assertions, every wheel among them, stay silent; Debug builds and builds with
+class level cache a function of the module reaches, would be reported, so the instances live only in modules that
+define no function (the two ``sqltypes`` modules and the spark type cache), whose dicts CPython clears at finalization,
+and every other module reads them at use time; a program that keeps a connection itself is reported for that one
+instance. Builds without assertions, every wheel among them, stay silent; Debug builds and builds with
 FORCE_ASSERT keep the report. The private switch ``_duckdb._set_leak_report`` turns the report on or off in any build,
 and the module's own nanobind domain keeps the flag apart from other nanobind extensions in the process.
 """
@@ -107,7 +108,12 @@ CONNECTION_KEPT = """
 
 SQLTYPES_MODULES = ("duckdb.sqltypes", "_duckdb._sqltypes")
 
-# Every module of the package imported, and every module dict but the two sqltypes modules' kept alive.
+# The modules that may hold DuckDBPyType instances: CPython clears their dicts at finalization, and no function of
+# theirs keeps the dict alive past that.
+TYPE_STORES = (*SQLTYPES_MODULES, "duckdb.experimental.spark.sql._type_cache")
+
+# Every module of the package imported, then every module dict but the type stores' kept alive while the module
+# objects leave sys.modules and die: what happens to a module whose function something holds past finalization.
 EVERY_MODULE_DICT_KEPT = """
     import ctypes
     import importlib
@@ -122,16 +128,50 @@ EVERY_MODULE_DICT_KEPT = """
         except ModuleNotFoundError as error:
             if error.name is None or error.name.partition(".")[0] in ("duckdb", "_duckdb"):
                 raise
-    for name, module in list(sys.modules.items()):
-        if module is None or name in SQLTYPES_MODULES:
-            continue
-        if name == "duckdb" or name.startswith(("duckdb.", "_duckdb")):
-            ctypes.pythonapi.Py_IncRef(ctypes.py_object(vars(module)))
-    """.replace("SQLTYPES_MODULES", repr(SQLTYPES_MODULES))
+    kept = [name for name, module in sys.modules.items() if module is not None and name not in TYPE_STORES
+            and (name == "duckdb" or name.startswith("duckdb."))]
+    for name in kept:
+        ctypes.pythonapi.Py_IncRef(ctypes.py_object(vars(sys.modules[name])))
+    for name in sorted(kept, reverse=True):
+        parent, _, child = name.rpartition(".")
+        if parent in sys.modules:
+            sys.modules[parent].__dict__.pop(child, None)
+        del sys.modules[name]
+    del duckdb
+    """.replace("TYPE_STORES", repr(TYPE_STORES))
+
+# A type constant planted in the value module, which the child above must then report.
+PLANTED_IN_THE_VALUE_MODULE = """
+    import duckdb.value.constant
+    from duckdb import sqltypes
+
+    duckdb.value.constant.planted = sqltypes.INTEGER
+    """
+
+# A program that casts to spark types and builds a nested frame, then keeps a spark function alive.
+SPARK_TYPES_USED_AND_FUNCTION_KEPT = """
+    import ctypes
+
+    import duckdb
+    from duckdb.experimental.spark.sql import SparkSession
+    from duckdb.experimental.spark.sql import functions as F
+    from duckdb.experimental.spark.sql.types import ArrayType, DecimalType, IntegerType, StringType
+    from duckdb.experimental.spark.sql.types import StructField, StructType
+
+    F.col("a").cast(IntegerType())
+    F.col("b").cast(StringType())
+    F.col("c").cast(DecimalType(10, 2))
+    spark = SparkSession.builder.getOrCreate()
+    spark.conn.execute("SET threads = 1")
+    schema = StructType([StructField("a", IntegerType()), StructField("b", ArrayType(IntegerType()))])
+    assert spark.createDataFrame([(1, [2, 3])], schema).collect()[0].b == [2, 3]
+    ctypes.pythonapi.Py_IncRef(ctypes.py_object(F.length))
+    """
 
 # These keep a type, a function or a module of duckdb alive, and nothing duckdb instantiates.
 NOTHING_OF_DUCKDBS_OWN_KEPT = [
     pytest.param(EVERY_MODULE_DICT_KEPT, id="every_module_dict_kept"),
+    pytest.param(SPARK_TYPES_USED_AND_FUNCTION_KEPT, id="spark_types_used_and_function_kept"),
     pytest.param(OVERLOAD_SIGNATURE_WITH_NUMPY, id="overload_signature_with_numpy", marks=_needs("numpy")),
     pytest.param(OVERLOAD_SIGNATURE_WITH_TORCH, id="overload_signature_with_torch", marks=_needs("torch")),
     pytest.param(POLARS_FRAME_FROM_RELATION, id="polars_frame_from_relation", marks=_needs("polars")),
@@ -148,6 +188,15 @@ def test_held_types_and_functions_leave_no_instance_behind(script):
     proc = _run(REPORT_ON, script)
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert REPORT not in proc.stderr, proc.stderr[-2000:]
+
+
+@no_report_on_a_free_threaded_build
+def test_the_module_dict_child_reports_a_planted_type_constant():
+    proc = _run(REPORT_ON, PLANTED_IN_THE_VALUE_MODULE, EVERY_MODULE_DICT_KEPT)
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    assert "nanobind: leaked 1 instances!" in proc.stderr, proc.stderr[-2000:]
+    instances = [line for line in proc.stderr.splitlines() if "leaked instance" in line]
+    assert all('"_duckdb._sqltypes.DuckDBPyType"' in line for line in instances), proc.stderr[-2000:]
 
 
 def _assert_one_connection_reported(proc: subprocess.CompletedProcess[str]) -> None:
@@ -194,7 +243,8 @@ def _import_or_say_why_not(info: pkgutil.ModuleInfo) -> str | None:
 
 
 def test_no_module_binds_a_type_constant_by_name_outside_sqltypes():
-    # A static guard for the module level bindings; the every_module_dict_kept child above checks the whole dict.
+    # A static guard for the module level bindings, readable in a failure; the every_module_dict_kept child above
+    # catches a type reachable from any module dict.
     import duckdb
 
     skipped = [
@@ -206,7 +256,7 @@ def test_no_module_binds_a_type_constant_by_name_outside_sqltypes():
         if module is None or not (name == "duckdb" or name.startswith(("duckdb.", "_duckdb"))):
             continue
         bound = sorted(key for key, value in vars(module).items() if isinstance(value, _duckdb._sqltypes.DuckDBPyType))
-        if bound and name not in SQLTYPES_MODULES:
+        if bound and name not in TYPE_STORES:
             holders[name] = bound
     assert holders == {}
 
