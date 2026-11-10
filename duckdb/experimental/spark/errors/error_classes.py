@@ -924,6 +924,12 @@ ERROR_CLASSES_JSON = """
     },
     "sqlState" : "0A000"
   },
+  "TEMP_VIEW_NAME_TOO_MANY_NAME_PARTS" : {
+    "message" : [
+      "CREATE TEMPORARY VIEW or the corresponding Dataset APIs only accept single-part view names, but got: <actualName>."
+    ],
+    "sqlState" : "428EK"
+  },
   "UNSUPPORTED_JOIN_TYPE" : {
     "message" : [
       "Unsupported join type: <join_type>. Supported join types include: \\"inner\\", \\"outer\\", \\"full\\", \\"fullouter\\", \\"full_outer\\", \\"leftouter\\", \\"left\\", \\"left_outer\\", \\"rightouter\\", \\"right\\", \\"right_outer\\", \\"leftsemi\\", \\"left_semi\\", \\"semi\\", \\"leftanti\\", \\"left_anti\\", \\"anti\\", \\"cross\\"."

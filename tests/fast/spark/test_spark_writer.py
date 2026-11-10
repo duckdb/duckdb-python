@@ -1,12 +1,15 @@
 import datetime
+import pathlib
 import re
+import shutil
+from urllib.parse import urlparse
 
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
-from spark_namespace.errors import AnalysisException, IllegalArgumentException, error_condition
+from spark_namespace.errors import AnalysisException, IllegalArgumentException, ParseException, error_condition
 
 from duckdb.experimental.spark.exception import ContributionsAcceptedError
 
@@ -131,6 +134,56 @@ class TestRepeatedColumnNames:
         with pytest.raises(AnalysisException) as error:
             spark.createDataFrame([(1, 2)], names).write.saveAsTable("repeated_names_table")
         assert error_condition(error.value) == "COLUMN_ALREADY_EXISTS"
+
+    @pytest.fixture
+    def saved_tables(self, spark):
+        # The session is shared by the whole run and Spark keeps a managed table under spark-warehouse in the working
+        # directory, so what a test saves is dropped afterwards, and the location Spark writes for a name it then
+        # refuses is removed, or the next run finds LOCATION_ALREADY_EXISTS.
+        yield
+        for name in ["s.t", "t1", "s.t2", "`x.y`", "`a``b`"]:
+            spark.sql(f"DROP TABLE IF EXISTS {name}")
+        for schema in ["s", "x"]:
+            spark.sql(f"DROP SCHEMA IF EXISTS {schema}")
+        if USE_ACTUAL_SPARK:
+            warehouse = spark.conf.get("spark.sql.warehouse.dir")
+            root = pathlib.Path(
+                urlparse(warehouse).path if "://" in warehouse or warehouse.startswith("file:") else warehouse
+            )
+            for leftover in ["x.y", "a`b"]:
+                shutil.rmtree(root / leftover, ignore_errors=True)
+
+    def test_save_as_table_reads_the_name_with_spark_quoting(self, spark, saved_tables):
+        # Backticks quote a name part, as in Spark, and spark.table reads the same spelling back.
+        df = spark.createDataFrame([(1,)], ["a"])
+        spark.sql("CREATE SCHEMA IF NOT EXISTS s")
+        for name in ["s.t", "`t1`", "`s`.`t2`"]:
+            df.write.saveAsTable(name)
+            assert [tuple(r) for r in spark.table(name).collect()] == [(1,)]
+        with pytest.raises((AnalysisException, ParseException)):
+            df.write.saveAsTable("t.")
+        if not USE_ACTUAL_SPARK:
+            rows = spark.sql("SELECT schema_name, table_name FROM duckdb_tables() ORDER BY ALL").collect()
+            assert [(r.schema_name, r.table_name) for r in rows] == [("main", "t1"), ("s", "t"), ("s", "t2")]
+
+    def test_save_as_table_takes_a_dot_or_a_backtick_in_a_quoted_name(self, spark, saved_tables):
+        # Spark refuses a dot in a table name (INVALID_SCHEMA_OR_RELATION_NAME, from SessionCatalog.validateName) and a
+        # backtick in it (INVALID_ATTRIBUTE_NAME_SYNTAX, from its name parser); the shim takes a quoted part as it is.
+        df = spark.createDataFrame([(1,)], ["a"])
+        spark.sql("CREATE SCHEMA IF NOT EXISTS x")
+        if USE_ACTUAL_SPARK:
+            with pytest.raises(AnalysisException) as dotted:
+                df.write.saveAsTable("`x.y`")
+            assert error_condition(dotted.value) == "INVALID_SCHEMA_OR_RELATION_NAME"
+            with pytest.raises(AnalysisException) as backtick:
+                df.write.saveAsTable("`a``b`")
+            assert error_condition(backtick.value) == "INVALID_ATTRIBUTE_NAME_SYNTAX"
+            return
+        for name in ["`x.y`", "`a``b`"]:
+            df.write.saveAsTable(name)
+            assert [tuple(r) for r in spark.table(name).collect()] == [(1,)]
+        rows = spark.sql("SELECT schema_name, table_name FROM duckdb_tables() ORDER BY ALL").collect()
+        assert [(r.schema_name, r.table_name) for r in rows] == [("main", "a`b"), ("main", "x.y")]
 
 
 class TestCsvOutput:

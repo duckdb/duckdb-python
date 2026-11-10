@@ -9,7 +9,7 @@ from duckdb.sqltypes import DuckDBPyType
 
 from ..errors import AnalysisException, IllegalArgumentException, PySparkNotImplementedError, PySparkTypeError
 from ..exception import ContributionsAcceptedError
-from .column import Column, _quoted_identifier
+from .column import Column, _name_parts, _quoted_identifier
 from .functions import _parse_datetime, _tokenize_datetime_pattern, _translate_datetime_pattern_field
 from .type_utils import convert_type
 from .types import (
@@ -390,7 +390,8 @@ class DataFrameWriter:  # noqa: D101
 
     def saveAsTable(self, table_name: str) -> None:  # noqa: D102
         _check_unique_names(self.dataframe.columns)
-        self.dataframe.relation.create(table_name)
+        # The name is read with Spark's rules, as spark.table reads it back.
+        self.dataframe.relation.create(_name_parts(table_name))
 
     def parquet(  # noqa: D102
         self,

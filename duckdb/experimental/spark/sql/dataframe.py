@@ -44,6 +44,7 @@ from .column import (
     _column_name,
     _column_reference,
     _convert,
+    _invalid_attribute_name,
     _java_float_string,
     _name_key,
     _name_parts,
@@ -744,11 +745,18 @@ class DataFrame:  # noqa: D101
         True
 
         """
+        parts = _name_parts(name)
+        if len(parts) > 1:
+            raise AnalysisException(
+                error_class="TEMP_VIEW_NAME_TOO_MANY_NAME_PARTS", message_parameters={"actualName": name}
+            )
+        if not parts[0]:
+            raise _invalid_attribute_name(name)
         relation = self.relation
         names = _distinct_names(self.columns)
         if list(map(_name_key, relation.columns)) != list(map(_name_key, names)):
             relation = self._relation_named(names)
-        relation.create_view(name, True)
+        relation.create_view((parts[0],), True)
 
     def createGlobalTempView(self, name: str) -> None:  # noqa: D102
         raise NotImplementedError

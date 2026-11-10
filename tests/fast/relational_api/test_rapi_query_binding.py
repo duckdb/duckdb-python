@@ -1,5 +1,6 @@
 """A relation built by rel.query(name, sql) reads the relation it came from, whatever is registered under name later."""
 
+import enum
 import gc
 import io
 import re
@@ -85,6 +86,25 @@ class TestQueryBindsItsNameOnce:
         reuse_name(con, "v")
         assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
 
+    @pytest.mark.parametrize("text", ["pragma \"\u017fhow\"('t')", "pragma \u017fhow('t')"], ids=["quoted", "bare"])
+    def test_pragma_show_with_a_long_s_is_refused_like_sql(self, text):
+        # The keyword is ASCII letters only: a look-alike letter is no pragma show, here and in SQL.
+        con = duckdb.connect()
+        con.execute("create table t(o varchar)")
+        with pytest.raises(duckdb.Error) as from_sql:
+            con.sql(text).fetchall()
+        with pytest.raises(type(from_sql.value)) as from_query:
+            con.sql("select 1 as a").query("t", text).fetchall()
+        assert str(from_query.value).split("\n")[0] == str(from_sql.value).split("\n")[0]
+
+    @pytest.mark.parametrize("space", ["\u00a0", "\u3000"], ids=["no_break_space", "ideographic_space"])
+    def test_pragma_show_with_a_unicode_space_describes_the_relation(self, space):
+        # The engine's parser reads these as spaces, so the pragma is rewritten as with an ASCII space.
+        con = duckdb.connect()
+        con.execute("create table v(o varchar)")
+        rel = con.sql("select 1 as a").query("v", f"pragma{space}\"show\"('v')")
+        assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
+
     def test_pragma_show_describes_the_relation_over_a_catalog_view_of_the_name(self):
         # Inside the call the name is the relation, so it shadows a view of that name.
         con = duckdb.connect()
@@ -119,6 +139,26 @@ class TestQueryBindsItsNameOnce:
         with pytest.raises(duckdb.BinderException, match=re.escape(str(from_sql.value))):
             con.sql("select 1 as a").query("v", sql)
 
+    def test_a_str_subclass_name_is_read_by_its_value(self):
+        class Names(str, enum.Enum):
+            VIEW = "tv"
+
+        con = duckdb.connect()
+        assert con.sql("select 1 as a").query(Names.VIEW, "select a from tv").fetchall() == [(1,)]
+        # Beside a catalog view of the same name, the name is taken as it is for a plain string: the call's own
+        # entry is not made, and pragma show describes the relation.
+        con.execute("create temp view tv as select 'x' as s")
+        rel = con.sql("select 1 as a").query(Names.VIEW, "pragma \"show\"('tv')")
+        assert rel.fetchall() == [("a", "INTEGER", "YES", None, None, None)]
+        assert con.execute("select s from tv").fetchall() == [("x",)]
+
+    def test_pragma_show_of_a_trailing_dot_reads_like_sql(self):
+        con = duckdb.connect()
+        con.execute("create table other(o varchar)")
+        assert con.sql("pragma \"show\"('other.')").fetchall() == [("o", "VARCHAR", "YES", None, None, None)]
+        rel = con.sql("select 1 as a").query("v", "pragma \"show\"('other.')")
+        assert rel.fetchall() == [("o", "VARCHAR", "YES", None, None, None)]
+
     def test_pragma_show_of_an_empty_name_raises_like_sql(self):
         con = duckdb.connect()
         with pytest.raises(duckdb.ParserException) as from_sql:
@@ -128,6 +168,19 @@ class TestQueryBindsItsNameOnce:
         message = str(from_sql.value).split("\n")[0]
         with pytest.raises(duckdb.ParserException) as from_query:
             con.sql("select 1 as a").query("v", "pragma \"show\"('')")
+        assert str(from_query.value) == message
+
+    @pytest.mark.parametrize("name", ['a"b"c', '"a"b', 's."a"b'])
+    def test_pragma_show_of_a_name_with_a_stray_quote_raises_like_sql(self, name):
+        con = duckdb.connect()
+        con.execute(
+            "create table abc(o varchar); create table ab(o varchar); create schema s; create table s.ab(o varchar)"
+        )
+        with pytest.raises(duckdb.ParserException) as from_sql:
+            con.sql(f"pragma \"show\"('{name}')")
+        message = str(from_sql.value).split("\n")[0]
+        with pytest.raises(duckdb.ParserException) as from_query:
+            con.sql("select 1 as a").query("v", f"pragma \"show\"('{name}')")
         assert str(from_query.value) == message
 
     @pytest.mark.parametrize(

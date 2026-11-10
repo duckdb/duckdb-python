@@ -184,8 +184,8 @@ def register_filelike(con: _duckdb.DuckDBPyConnection, obj: object) -> SourceHan
     return con._register_filelike(obj)
 
 
-def create_view(con: _duckdb.DuckDBPyConnection, name: str, sql: str, *, replace: bool) -> None:
-    """Create the persistent view `name` over the SELECT in `sql`, the view owning what the registry names it reads."""
+def create_view(con: _duckdb.DuckDBPyConnection, name: tuple[str, ...], sql: str, *, replace: bool) -> None:
+    """Create the persistent view at the path `name` over the SELECT in `sql`; it owns the Python objects it reads."""
     con._create_view(name, sql, replace=replace)
 
 
@@ -226,6 +226,17 @@ def value_literal(value: object) -> str:
 def column_reference(text: str) -> list[str] | None:
     """The parts of the column reference `text` is, as the engine's parser reads it, or None when it is not one."""
     return _duckdb._column_reference(text)
+
+
+def name_components(text: str) -> list[str]:
+    """The parts of a qualified name string, read by the engine's own reader of such strings.
+
+    The reader the appender and pragma show use: the string is split at the dots outside double quotes; a part in
+    double quotes may hold dots, and a doubled quote inside it is one quote; a trailing dot is dropped; every part is
+    taken verbatim, case, whitespace and keywords included; an empty part, an unterminated quote or a quote in the
+    wrong place raise the engine's ParserException.
+    """
+    return _duckdb._name_components(text)
 
 
 def parse_expressions(text: str) -> list[str]:
