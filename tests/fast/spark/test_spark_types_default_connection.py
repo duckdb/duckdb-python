@@ -27,26 +27,32 @@ def _cast_and_build(spark):
     assert spark.createDataFrame([(2, [3])], schema).collect()[0].b == [3]
 
 
+WAIT = 60
+
+
 def test_reads_and_casts_while_the_default_connection_runs_a_query_on_another_thread(spark):
     _cast_and_build(spark)
-    gate, started = threading.Event(), threading.Event()
-    duckdb.create_function("wait_for_gate", lambda x: (gate.wait(), x)[1], [int], int)
+    gate, held = threading.Event(), threading.Event()
+
+    def wait_for_gate(x: int) -> int:
+        # Runs inside the query, so the default connection is held once this is reached.
+        held.set()
+        gate.wait(WAIT)
+        return x
+
+    duckdb.create_function("wait_for_gate", wait_for_gate, [int], int)
+    worker = threading.Thread(target=lambda: duckdb.sql("select wait_for_gate(1)").fetchall())
     try:
-
-        def occupy():
-            started.set()
-            duckdb.sql("select wait_for_gate(1)").fetchall()
-
-        worker = threading.Thread(target=occupy)
         worker.start()
-        started.wait()
+        assert held.wait(WAIT), "the query on the other thread did not reach the function"
         with pytest.raises(duckdb.ResourceInUseException):
             duckdb.sql("select 1").fetchall()
         _cast_and_build(spark)
     finally:
         gate.set()
-        worker.join()
+        worker.join(WAIT)
         duckdb.remove_function("wait_for_gate")
+    assert not worker.is_alive()
 
 
 def test_reads_and_casts_after_a_statement_failed_in_the_default_connections_transaction(spark):
