@@ -889,6 +889,9 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 		}
 		auto session = EngineSession();
 		auto named_values = TransformPreparedParameters(session.Context(), params);
+		// Converting the parameters runs their Python code, which may have run its own statement on this connection
+		// from this thread; that result gives way to this call's, as any earlier result does
+		SupersedeResult(false);
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
@@ -918,7 +921,8 @@ bool DuckDBPyConnection::RegisterResult(shared_ptr<engine::Result> res) {
 	if (!res) {
 		return false;
 	}
-	// The result the call superseded is gone already, so nothing that needs the GIL is destroyed here
+	// The call superseded the earlier result, and the one its parameter code may have registered, before the claim,
+	// so nothing that needs the GIL is destroyed here
 	D_ASSERT(!con.HasResult());
 	con.SetResult(make_uniq<DbapiResult>(std::make_shared<DuckDBPyResult>(std::move(res))));
 	return true;
