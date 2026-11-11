@@ -68,21 +68,31 @@ __all__ = [
 ]
 
 
+def _parsed(text: str) -> DuckDBPyType:
+    # Parsing runs on the default connection, so each text is parsed once, into a dict another module owns: a type held
+    # by a singleton would outlive finalization.
+    if text not in _type_cache.TYPES:
+        _type_cache.TYPES[text] = DuckDBPyType(text)
+    return _type_cache.TYPES[text]
+
+
 class DataType:
     """Base class for data types."""
 
     def __init__(self, duckdb_type: DuckDBPyType | str) -> None:  # noqa: D107
-        # A name is parsed on the default connection, so it is parsed here, once, and never on a read; the type goes
-        # into a dict another module owns, because one held here would sit in the singleton cache, which outlives
-        # finalization.
-        key = duckdb_type if isinstance(duckdb_type, str) else str(duckdb_type)
-        if key not in _type_cache.TYPES:
-            _type_cache.TYPES[key] = DuckDBPyType(key) if isinstance(duckdb_type, str) else duckdb_type
-        self._duckdb_type_key = key
+        # A name is parsed here, once, and read from the cache; a type a subclass composed needs no parse and stays on
+        # the instance, which is never a singleton.
+        if isinstance(duckdb_type, str):
+            self._duckdb_type_name, self._duckdb_type = duckdb_type, None
+            _parsed(duckdb_type)
+        else:
+            self._duckdb_type_name, self._duckdb_type = None, duckdb_type
 
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        return _type_cache.TYPES[self._duckdb_type_key]
+        if self._duckdb_type is not None:
+            return self._duckdb_type
+        return _type_cache.TYPES[self._duckdb_type_name]
 
     def __repr__(self) -> str:  # noqa: D105
         return self.__class__.__name__ + "()"
@@ -382,6 +392,10 @@ class DecimalType(FractionalType):
         self.scale = scale
         self.hasPrecisionInfo = True  # this is a public API
 
+    def __reduce__(self) -> tuple[type["DecimalType"], tuple[int, int]]:  # noqa: D105
+        # The engine type does not pickle; it is composed again where the pickle is loaded.
+        return DecimalType, (self.precision, self.scale)
+
     def simpleString(self) -> str:  # noqa: D102
         return f"decimal({int(self.precision):d},{int(self.scale):d})"
 
@@ -653,6 +667,10 @@ class ArrayType(DataType):
         self.elementType = elementType
         self.containsNull = containsNull
 
+    def __reduce__(self) -> tuple[type["ArrayType"], tuple[DataType, bool]]:  # noqa: D105
+        # The engine type does not pickle; it is composed again where the pickle is loaded.
+        return ArrayType, (self.elementType, self.containsNull)
+
     def simpleString(self) -> str:  # noqa: D102
         return f"array<{self.elementType.simpleString()}>"
 
@@ -711,6 +729,10 @@ class MapType(DataType):
         self.keyType = keyType
         self.valueType = valueType
         self.valueContainsNull = valueContainsNull
+
+    def __reduce__(self) -> tuple[type["MapType"], tuple[DataType, DataType, bool]]:  # noqa: D105
+        # The engine type does not pickle; it is composed again where the pickle is loaded.
+        return MapType, (self.keyType, self.valueType, self.valueContainsNull)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"map<{self.keyType.simpleString()},{self.valueType.simpleString()}>"
@@ -846,15 +868,25 @@ class StructType(DataType):
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
+        self._parse_unnamed()
+
+    def _unnamed_text(self) -> str | None:
+        # The struct DuckDB builds without field names, such as the elements of list_zip, has no typed constructor.
+        if self.names and not any(self.names):
+            return f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})"
+        return None
+
+    def _parse_unnamed(self) -> None:
+        text = self._unnamed_text()
+        if text is not None:
+            _parsed(text)
 
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        if self.names and not any(self.names):
-            # The struct DuckDB builds without field names, such as the elements of list_zip; parsed once per text.
-            text = f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})"
-            if text not in _type_cache.TYPES:
-                _type_cache.TYPES[text] = DuckDBPyType(text)
-            return _type_cache.TYPES[text]
+        text = self._unnamed_text()
+        if text is not None:
+            # Parsed when the struct was built or a field added; a read parses only after fields changed in place.
+            return _parsed(text)
         folded = [name.casefold() for name in self.names]
         if len(set(folded)) < len(folded):
             # DuckDB matches struct field names case insensitively, so it cannot hold two fields with one name.
@@ -936,6 +968,7 @@ class StructType(DataType):
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
+        self._parse_unnamed()
         return self
 
     def __iter__(self) -> Iterator[StructField]:
@@ -1192,8 +1225,7 @@ class UserDefinedType(DataType):
         return type(self) is type(other)
 
 
-# Every singleton is built while the module imports, as sixteen of them always were, so that building one later
-# parses nothing on the default connection.
+# Every singleton is built here, so that building one later parses nothing on the default connection.
 for _singleton in [
     value for value in list(globals().values()) if isinstance(value, DataTypeSingleton) and "__init__" in vars(value)
 ]:
