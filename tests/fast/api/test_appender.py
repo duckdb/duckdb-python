@@ -1836,7 +1836,9 @@ class TestOneCallerAtATime:
 
     @pytest.mark.timeout(120)
     def test_a_flush_that_collides_with_a_submitted_executemany_is_refused_as_busy(self):
-        # As above, with the statement submitted by executemany, which runs it once per parameter set
+        # As above, with the statement submitted by executemany, which runs it once per parameter set. Between two
+        # sets the connection is free, so a flush landing there runs and the executemany is refused at its next set;
+        # that is allowed, and the main thread retries it, so the second thread stops after its attempts
         code, output = run_isolated(
             f"""
             import collections
@@ -1859,18 +1861,17 @@ class TestOneCallerAtATime:
             refusals = collections.Counter()
             submitted = 0
             print("started", flush=True)
-            overall = time.monotonic() + 40
+            overall = time.monotonic() + 60
             while submitted < 20 and time.monotonic() < overall:
-                go, stop, release = threading.Event(), threading.Event(), threading.Event()
+                go, release = threading.Event(), threading.Event()
                 gates.append(release)
-                def flush_until_stopped():
+                def flush_two_hundred_times():
                     global flushed
-                    # Started as the first thread enters its execute, so that call is the one under way; the
+                    # Started as the first thread enters its executemany, so that call is the one under way; the
                     # statement is held through the first attempts and released while the attempts go on
                     go.wait(10)
-                    attempts = 0
                     try:
-                        while not stop.is_set():
+                        for attempt in range(200):
                             app.append_row(flushed, "a")
                             try:
                                 app.flush()
@@ -1878,31 +1879,28 @@ class TestOneCallerAtATime:
                             except duckdb.ResourceInUseException as error:
                                 refusals["busy" if {BUSY!r} in str(error) else str(error)] += 1
                                 app.clear()
-                            attempts += 1
-                            if attempts == 200:
+                            if attempt == 100:
                                 release.set()
                     finally:
                         release.set()
-                thread = threading.Thread(target=flush_until_stopped)
+                thread = threading.Thread(target=flush_two_hundred_times)
                 thread.start()
                 go.set()
-                deadline = time.monotonic() + 1
-                while time.monotonic() < deadline:
+                while time.monotonic() < overall:
                     try:
                         con.executemany("INSERT INTO log SELECT hold(i + ?::BIGINT) FROM range(1) t(i)", [[1], [2]])
                         submitted += 1
                         break
                     except duckdb.ResourceInUseException as error:
                         if {BUSY!r} not in str(error):
-                            refusals["execute: " + str(error)] += 1
-                stop.set()
+                            refusals["executemany: " + str(error)] += 1
                 thread.join(10)
             print("submitted:", submitted)
             print("refusals:", sorted(refusals))
             kept = con.execute("SELECT count(*) = ? FROM t", [flushed]).fetchall()
-            # An executemany refused between its two parameter sets, which is allowed, has inserted its first row
-            # already and is retried in full, so the log holds at least two rows per submission
-            logged = con.execute("SELECT count(*) >= 40 FROM log").fetchall()
+            # An executemany refused between its two parameter sets has written its first row already and is retried
+            # in full, so the log holds at least two rows per submission
+            logged = con.execute("SELECT count(*) >= 2 * ? FROM log", [submitted]).fetchall()
             print("rows:", kept + logged)
             """,
             timeout=90,
