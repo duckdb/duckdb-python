@@ -1686,8 +1686,9 @@ static void AttachDatabase(DuckDBPyConnection &res, shared_ptr<DuckDB> database)
 	res.con.SetConnection(make_uniq<Connection>(res.con.GetDatabase()));
 }
 
-// A connect to an open database releases the GIL once and a creation twice: with another Python thread running, each
-// release waits a switch interval.
+// The GIL is released once for a connect to an open file or an in-memory creation and twice for the creation of a
+// file: with another Python thread running, each release waits a switch interval. The lookup must release it, since it
+// waits for a database of the same path that is shutting down, and that shutdown may run Python.
 static std::shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &database_path, DBConfig &config) {
 	auto res = std::make_shared<DuckDBPyConnection>();
 	bool cache_instance = database_path != ":memory:" && !database_path.empty();

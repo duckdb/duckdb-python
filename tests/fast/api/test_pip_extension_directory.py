@@ -24,7 +24,9 @@ from duckdb import _extension_directories
 
 DEFAULT_DIRECTORY = "~/.duckdb/extensions"
 SETTING = "SELECT current_setting('extension_directories')"
-posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX file names and symlinks")
+posix_only = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX file names, symlinks and a removable working directory"
+)
 not_root = pytest.mark.skipif(
     hasattr(os, "geteuid") and os.geteuid() == 0, reason="root bypasses directory permissions"
 )
@@ -134,12 +136,21 @@ def no_site_directories(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
-    """A home without extensions, so the default directory in the list holds nothing of the machine's."""
+    """A home without extensions, so the default directory in the list holds nothing of the machine's.
+
+    The environment reaches the engine on POSIX only; on Windows it reads USERPROFILE through its own C runtime, which
+    a change to os.environ does not update. A test that makes the engine use its default directory passes the home as
+    the home_directory setting (engine_config), which the engine reads before any environment variable.
+    """
     home = tmp_path / "home"
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
     return home
+
+
+def engine_config(home, **settings):
+    return {"home_directory": str(home), **settings}
 
 
 @pytest.fixture
@@ -275,6 +286,7 @@ REMOVED_CWD_SCRIPT = """
 """
 
 
+@posix_only
 def test_removed_working_directory_on_sys_path_is_skipped(pip_directory, site, tmp_path):
     proc = subprocess.run(
         [sys.executable, "-c", textwrap.dedent(REMOVED_CWD_SCRIPT), str(site), str(tmp_path)],
@@ -286,6 +298,75 @@ def test_removed_working_directory_on_sys_path_is_skipped(pip_directory, site, t
     assert proc.returncode == 0, proc.stdout + proc.stderr
     reports = [line for line in proc.stdout.splitlines() if line.startswith("list ")]
     assert reports == [f"list {[DEFAULT_DIRECTORY, pip_directory]}"]
+
+
+SHUTDOWN_SCRIPT = """
+    import os, sys, threading, time
+    import duckdb
+    from fsspec.implementations.memory import MemoryFileSystem
+
+    shutting_down = threading.Event()
+    closing_thread = None
+
+    class SlowToRelease:
+        \"\"\"A read handle whose last reference goes away slowly, but only when the closing thread drops it.\"\"\"
+
+        def __init__(self, handle):
+            self._handle = handle
+
+        def __getattr__(self, name):
+            return getattr(self._handle, name)
+
+        def __del__(self):
+            if threading.current_thread() is closing_thread:
+                shutting_down.set()
+                time.sleep(0.5)
+
+    class SlowlyReleasingFiles(MemoryFileSystem):
+        def _open(self, path, mode="rb", **kwargs):
+            handle = super()._open(path, mode, **kwargs)
+            return SlowToRelease(handle) if mode.startswith("r") else handle
+
+    CONFIG = {"memory_limit": "1GB", "threads": 2}
+    folder = sys.argv[1]
+    attached = os.path.join(folder, "attached.duckdb")
+    seed = duckdb.connect(attached, config=CONFIG)
+    seed.execute("CREATE TABLE t AS SELECT 1 AS i")
+    seed.close()
+    files = SlowlyReleasingFiles()
+    with open(attached, "rb") as source:
+        files.pipe("memory://attached.duckdb", source.read())
+    path = os.path.join(folder, "main.duckdb")
+    last = duckdb.connect(path, config=CONFIG)
+    last.register_filesystem(files)
+    last.execute("ATTACH 'memory://attached.duckdb' AS a (READ_ONLY)")
+    closing_thread = threading.Thread(target=last.close)
+    del last
+    closing_thread.start()
+    assert shutting_down.wait(30)
+    duckdb.connect(path, config=CONFIG).close()
+    closing_thread.join(30)
+    print("connected while shutting down", not closing_thread.is_alive())
+"""
+
+
+def test_connect_while_the_last_connection_of_the_file_shuts_down(tmp_path):
+    """The cache lookup waits for a dying database of the same path, whose shutdown may need the GIL.
+
+    The attached database is read through a Python filesystem, so closing the last connection drops a Python file
+    handle; with the lookup holding the GIL, the second connect and the shutdown would wait for each other.
+    """
+    pytest.importorskip("fsspec")
+    proc = subprocess.run(
+        [sys.executable, "-c", textwrap.dedent(SHUTDOWN_SCRIPT), str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    reports = [line for line in proc.stdout.splitlines() if line.startswith("connected while shutting down ")]
+    assert reports == ["connected while shutting down True"]
 
 
 def test_without_duckdb_metadata_on_sys_path_nothing_changes(site, monkeypatch):
@@ -596,15 +677,16 @@ class TestEveryConnection:
 class TestEngineUse:
     """What the engine does with the pip directory last: the first directory stays the install target and wins a load.
 
-    Every case is offline: autoinstall_extension_repository points at an empty local directory, and the extension
-    files are stand-ins. tpch is the extension, so these skip when it is linked into the build.
+    Every case is offline: the extension files are stand-ins, and a connection that may install points
+    autoinstall_extension_repository at an empty local directory. tpch is the extension, so these skip when it is
+    linked into the build.
     """
 
     @pytest.fixture
-    def connection(self, tmp_path):
+    def connection(self, tmp_path, home):
         repository = tmp_path / "empty-repository"
         repository.mkdir()
-        connection = duckdb.connect(config={"autoinstall_extension_repository": str(repository)})
+        connection = duckdb.connect(config=engine_config(home, autoinstall_extension_repository=str(repository)))
         skip_unless_loadable(connection, "tpch")
         return connection
 
@@ -613,8 +695,16 @@ class TestEngineUse:
         with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
             connection.execute("LOAD tpch")
 
+    def test_load_finds_the_wheel_copy_after_a_failed_autoload(self, pip_directory, connection):
+        place_stand_in(connection, pip_directory, "tpch")
+        with pytest.raises(duckdb.Error):
+            connection.execute("SELECT count(*) FROM tpch_queries()")
+        with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
+            connection.execute("LOAD tpch")
+
     @pytest.mark.xfail(
         strict=True,
+        raises=AssertionError,
         reason="autoload installs into the first directory before it looks for a copy in the others; drop the mark "
         "when the engine looks in every configured directory",
     )
@@ -623,8 +713,8 @@ class TestEngineUse:
         with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
             connection.execute("SELECT count(*) FROM tpch_queries()")
 
-    def test_autoload_without_autoinstall_finds_the_wheel_copy(self, pip_directory, tmp_path):
-        connection = duckdb.connect(config={"autoinstall_known_extensions": False})
+    def test_autoload_without_autoinstall_finds_the_wheel_copy(self, pip_directory, home):
+        connection = duckdb.connect(config=engine_config(home, autoinstall_known_extensions=False))
         skip_unless_loadable(connection, "tpch")
         place_stand_in(connection, pip_directory, "tpch")
         with pytest.raises(duckdb.Error, match="is not a DuckDB extension"):
@@ -645,7 +735,7 @@ class TestEngineUse:
 
     def test_install_writes_into_the_default_directory(self, pip_directory, home, tmp_path):
         connection = duckdb.connect(
-            config={"allow_unsigned_extensions": True, "allow_extensions_metadata_mismatch": True}
+            config=engine_config(home, allow_unsigned_extensions=True, allow_extensions_metadata_mismatch=True)
         )
         skip_unless_loadable(connection, "tpch")
         stand_in = tmp_path / "tpch.duckdb_extension"

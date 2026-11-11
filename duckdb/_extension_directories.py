@@ -28,8 +28,8 @@ def search_path(configured: list[str], deprecated_directory: str) -> list[str] |
         deprecated_directory: The extension_directory from the same config, empty when not set.
 
     Returns:
-        The configured directories as given, or the engine default when there are none, then each pip directory they
-        do not name; None when no pip directory exists.
+        The configured directories as given, or the engine default when neither the list nor the deprecated directory
+        is set, then each pip directory they do not name; None when no pip directory exists.
     """
     # Path.is_dir raises on a lookup error, such as a symlink into an unsearchable directory, and would fail connect.
     directories = [directory for directory in _pip_directories() if os.path.isdir(directory)]  # noqa: PTH112
