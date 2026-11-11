@@ -667,10 +667,12 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch, Arr
 	if (prebuilt) {
 		state->cached_schema = *prebuilt;
 		prebuilt->release = nullptr;
-	} else if (names_override.empty()) {
-		result->CopyArrowSchema(state->cached_schema);
 	} else {
-		result->BuildArrowSchema(IdentifiersToStrings(names_override), state->cached_schema);
+		// A result with its own names comes with a prebuilt schema, see ResultAsArrow
+		if (!names_override.empty()) {
+			throw InternalException("Arrow stream over a result with its own names and no schema built for them");
+		}
+		result->CopyArrowSchema(state->cached_schema);
 	}
 	state->result = std::move(result);
 	current_chunk.reset();

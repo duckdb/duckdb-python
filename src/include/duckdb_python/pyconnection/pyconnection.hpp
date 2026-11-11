@@ -282,7 +282,9 @@ public:
 	};
 
 	//! Holds the connection mutex (py_connection_lock below) for one call; the GIL is held on return. The mutex is
-	//! recursive, so a call from the thread that holds it enters either way once it passed the busy check
+	//! recursive, so a call from the thread that holds it enters once it passed the busy check; a submitting call
+	//! from that thread also needs the mark to be its own, which it is unless another thread's submitting call
+	//! arrived first and waits for the mutex
 	class ConnectionLockGuard {
 	public:
 		explicit ConnectionLockGuard(DuckDBPyConnection &conn_p, IfHeld if_held = IfHeld::WAIT)
@@ -415,6 +417,8 @@ public:
 	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
+	//! Makes the result the connection's DB-API result, under the caller's claim; false when there is none
+	bool RegisterResult(shared_ptr<engine::Result> res);
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	std::shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);

@@ -1803,6 +1803,9 @@ class TestOneCallerAtATime:
                             except duckdb.ResourceInUseException as error:
                                 refusals["busy" if {BUSY!r} in str(error) else str(error)] += 1
                                 app.clear()
+                            except Exception as error:
+                                refusals["second thread: " + type(error).__name__] += 1
+                                return
                             attempts += 1
                             if attempts == 200:
                                 release.set()
@@ -1879,6 +1882,9 @@ class TestOneCallerAtATime:
                             except duckdb.ResourceInUseException as error:
                                 refusals["busy" if {BUSY!r} in str(error) else str(error)] += 1
                                 app.clear()
+                            except Exception as error:
+                                refusals["second thread: " + type(error).__name__] += 1
+                                return
                             if attempt == 100:
                                 release.set()
                     finally:

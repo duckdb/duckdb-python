@@ -882,6 +882,7 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 		RefuseParameters(statements);
 	}
 	shared_ptr<engine::Result> res;
+	bool registered = false;
 	if (last_statement) {
 		if (params.is_none()) {
 			params = nb::list();
@@ -891,25 +892,36 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-		// One claim from submission to settling, so no other call finds the statement pending
+		// One claim from submission to settling and on to the registration of the result, so no other call finds
+		// the statement pending, and one that takes the claim next meets the registered result and gets the
+		// client's refusal
 		auto claim = session.Claim();
 		res = SubmitAndDrive(statements, parameters_given, false, [&]() {
 			return session.SubmitClaimed(std::move(last_statement), named_values, engine::Format::Chunks());
 		});
-		res = statements.Choose(std::move(res));
+		registered = RegisterResult(statements.Choose(std::move(res)));
 	} else {
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		unique_lock<std::recursive_mutex> lock(py_connection_lock);
-		res = statements.Choose(nullptr);
+		registered = RegisterResult(statements.Choose(nullptr));
 	}
-	if (!res) {
+	if (!registered) {
 		// TODO: should we throw?
 		return nullptr;
 	}
-	auto py_result = std::make_shared<DuckDBPyResult>(std::move(res));
-	con.SetResult(std::make_unique<DbapiResult>(std::move(py_result)));
 	return shared_from_this();
+}
+
+bool DuckDBPyConnection::RegisterResult(shared_ptr<engine::Result> res) {
+	DUCKDB_PY_ASSERT_GIL_RELEASED();
+	if (!res) {
+		return false;
+	}
+	// The result the call superseded is gone already, so nothing that needs the GIL is destroyed here
+	D_ASSERT(!con.HasResult());
+	con.SetResult(make_uniq<DbapiResult>(std::make_shared<DuckDBPyResult>(std::move(res))));
+	return true;
 }
 
 std::unique_ptr<DuckDBPyAppender> DuckDBPyConnection::CreateAppender(const string &table,
@@ -1573,7 +1585,8 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 		}
 	}
 	// The rows are retained, or the stream is settled, so the conversion into pyarrow holds the connection no longer
-	// and refuses no other call
+	// and refuses no submitting call; a settled stream stays the connection's open result until it is read out, as a
+	// relation's reader does
 	conn_lock.DropSubmittingMark();
 	DuckDBPyResult converted(std::move(arrow), std::move(names));
 	if (reader) {
