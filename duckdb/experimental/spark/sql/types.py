@@ -394,7 +394,7 @@ class DecimalType(FractionalType):
 
     def __reduce__(self) -> tuple[type["DecimalType"], tuple[int, int]]:  # noqa: D105
         # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return DecimalType, (self.precision, self.scale)
+        return type(self), (self.precision, self.scale)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"decimal({int(self.precision):d},{int(self.scale):d})"
@@ -669,7 +669,7 @@ class ArrayType(DataType):
 
     def __reduce__(self) -> tuple[type["ArrayType"], tuple[DataType, bool]]:  # noqa: D105
         # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return ArrayType, (self.elementType, self.containsNull)
+        return type(self), (self.elementType, self.containsNull)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"array<{self.elementType.simpleString()}>"
@@ -732,7 +732,7 @@ class MapType(DataType):
 
     def __reduce__(self) -> tuple[type["MapType"], tuple[DataType, DataType, bool]]:  # noqa: D105
         # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return MapType, (self.keyType, self.valueType, self.valueContainsNull)
+        return type(self), (self.keyType, self.valueType, self.valueContainsNull)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"map<{self.keyType.simpleString()},{self.valueType.simpleString()}>"
@@ -868,25 +868,14 @@ class StructType(DataType):
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
-        self._parse_unnamed()
-
-    def _unnamed_text(self) -> str | None:
-        # The struct DuckDB builds without field names, such as the elements of list_zip, has no typed constructor.
-        if self.names and not any(self.names):
-            return f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})"
-        return None
-
-    def _parse_unnamed(self) -> None:
-        text = self._unnamed_text()
-        if text is not None:
-            _parsed(text)
 
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
-        text = self._unnamed_text()
-        if text is not None:
-            # Parsed when the struct was built or a field added; a read parses only after fields changed in place.
-            return _parsed(text)
+        if self.names and not any(self.names):
+            # The struct DuckDB builds without field names, such as the elements of list_zip, is the one type parsed
+            # on a read: its text needs the engine's parser, and there is no constructor for it. Every DataFrame over a
+            # relation with a tuple column builds such a struct, so the parse waits for the first read of the text.
+            return _parsed(f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})")
         folded = [name.casefold() for name in self.names]
         if len(set(folded)) < len(folded):
             # DuckDB matches struct field names case insensitively, so it cannot hold two fields with one name.
@@ -968,7 +957,6 @@ class StructType(DataType):
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
-        self._parse_unnamed()
         return self
 
     def __iter__(self) -> Iterator[StructField]:

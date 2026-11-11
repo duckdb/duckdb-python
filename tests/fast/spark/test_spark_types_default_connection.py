@@ -1,10 +1,11 @@
 """The engine type behind a spark type: where it is built, that reads never parse, pickling and the cache.
 
-A name is parsed on duckdb's default connection when the types module is imported, which builds every singleton; the
-unnamed struct's text when such a struct is built; decimals, arrays and maps are composed without a connection and held
-by their instances; a read never parses. A session has a connection of its own, so a type built while the default
-connection was idle and first read while it is busy, a type built while it is busy, and the session's casts and frames
-must not depend on the default connection's state.
+A name is parsed on duckdb's default connection when the types module is imported, which builds every singleton;
+decimals, arrays and maps are composed without a connection and held by their instances; a read never parses, with one
+exception: a struct without field names, the shape DuckDB builds for a tuple, parses its text on the first read of that
+text, because the text needs the engine's parser and no constructor builds it. A session has a connection of its own,
+so a type built while the default connection was idle and first read while it is busy, a type built while it is busy,
+and the session's casts, frames and queries must not depend on the default connection's state.
 """
 
 import datetime
@@ -31,6 +32,7 @@ from spark_namespace.sql.types import (
     DoubleType,
     LongType,
     MapType,
+    ShortType,
     StringType,
     StructField,
     StructType,
@@ -42,7 +44,8 @@ pytestmark = pytest.mark.skipif(USE_ACTUAL_SPARK, reason="pyspark has no duckdb 
 
 WAIT = 60
 
-# Runs inside a query on the default connection, so the connection is held once the function is reached.
+# Runs inside a query on the default connection, so the connection is held once the function is reached, and the
+# connection then refuses another call.
 HOLD_THE_DEFAULT_CONNECTION = """
     import threading
 
@@ -59,12 +62,12 @@ HOLD_THE_DEFAULT_CONNECTION = """
     worker = threading.Thread(target=lambda: duckdb.sql("select wait_for_gate(1)").fetchall())
     worker.start()
     assert held.wait(WAIT)
-    """.replace("WAIT", str(WAIT))
-
-RELEASE_THE_DEFAULT_CONNECTION = """
-    gate.set()
-    worker.join(WAIT)
-    assert not worker.is_alive()
+    try:
+        duckdb.sql("select 1").fetchall()
+    except duckdb.ResourceInUseException:
+        pass
+    else:
+        raise SystemExit("the default connection did not refuse")
     """.replace("WAIT", str(WAIT))
 
 
@@ -78,37 +81,41 @@ def _run(*parts: str) -> subprocess.CompletedProcess[str]:
 
 
 def _built_while_idle():
-    # An array or map reads its element when it is built; the outer type's first read happens inside the state.
+    # Composed, never read; nothing built here shares a type text with what the state half builds.
+    unnamed = StructType([StructField("", UnsignedShortType())]).add("", LongType())
+    str(unnamed.duckdb_type)
     return {
         "decimal": DecimalType(17, 4),
-        "array_of_intervals": ArrayType(DayTimeIntervalType()),
-        "map_of_intervals": MapType(StringType(), DayTimeIntervalType()),
-        "unnamed_struct": StructType([StructField("", UnsignedShortType())]),
-        "array_of_unnamed_structs": ArrayType(StructType([StructField("", UnsignedShortType())])),
+        "array_of_shorts": ArrayType(ShortType()),
+        "map_of_doubles": MapType(StringType(), DoubleType()),
+        "unnamed_struct_read_once": unnamed,
     }
 
 
-def _first_reads_and_casts(spark, built):
+def _reads_casts_and_queries_inside_the_state(spark, built):
     assert str(UnsignedShortType().duckdb_type) == "USMALLINT"
-    assert str(LongType().duckdb_type) == "BIGINT"
     assert str(built["decimal"].duckdb_type) == "DECIMAL(17,4)"
-    assert str(built["array_of_intervals"].duckdb_type) == "INTERVAL[]"
-    assert str(built["map_of_intervals"].duckdb_type) == "MAP(VARCHAR, INTERVAL)"
-    assert str(built["unnamed_struct"].duckdb_type) == "TUPLE(USMALLINT)"
-    assert str(built["array_of_unnamed_structs"].duckdb_type) == "TUPLE(USMALLINT)[]"
-    for name in ("array_of_intervals", "map_of_intervals", "unnamed_struct"):
-        assert built[name].duckdb_type is built[name].duckdb_type
+    assert str(built["array_of_shorts"].duckdb_type) == "SMALLINT[]"
+    assert str(built["map_of_doubles"].duckdb_type) == "MAP(VARCHAR, DOUBLE)"
+    assert str(built["unnamed_struct_read_once"].duckdb_type) == "TUPLE(USMALLINT, BIGINT)"
+    for kind in built.values():
+        assert kind.duckdb_type is kind.duckdb_type
     assert str(DecimalType(14, 4).duckdb_type) == "DECIMAL(14,4)"
     assert str(ArrayType(DayTimeIntervalType()).duckdb_type) == "INTERVAL[]"
+    assert str(MapType(StringType(), DayTimeIntervalType()).duckdb_type) == "MAP(VARCHAR, INTERVAL)"
     assert str(F.col("a").cast(UnsignedIntegerType())) == "Column<'CAST(a AS UINTEGER)'>"
     second = datetime.timedelta(seconds=1)
     schema = StructType([StructField("a", UnsignedIntegerType()), StructField("b", ArrayType(DayTimeIntervalType()))])
     frame = spark.createDataFrame([(2, [second])], schema)
     assert frame.collect()[0].b == [second]
     assert frame.select(F.col("a").cast(DecimalType(14, 4)).alias("d")).collect()[0].d == 2
+    rows = spark.sql("select row(1, 2) r, 3 x")
+    assert rows.schema.names == ["r", "x"]
+    assert rows.select("x").collect()[0].x == 3
+    assert spark.sql("select row(1, 2) r").collect()[0].r == (1, 2)
 
 
-def test_first_reads_and_casts_while_the_default_connection_runs_a_query_on_another_thread(spark):
+def test_reads_casts_and_queries_while_the_default_connection_runs_a_query_on_another_thread(spark):
     built = _built_while_idle()
     gate, held = threading.Event(), threading.Event()
 
@@ -125,7 +132,7 @@ def test_first_reads_and_casts_while_the_default_connection_runs_a_query_on_anot
         assert held.wait(WAIT), "the query on the other thread did not reach the function"
         with pytest.raises(duckdb.ResourceInUseException):
             duckdb.sql("select 1").fetchall()
-        _first_reads_and_casts(spark, built)
+        _reads_casts_and_queries_inside_the_state(spark, built)
     finally:
         gate.set()
         worker.join(WAIT)
@@ -133,7 +140,7 @@ def test_first_reads_and_casts_while_the_default_connection_runs_a_query_on_anot
     assert not worker.is_alive()
 
 
-def test_first_reads_and_casts_after_a_statement_failed_in_the_default_connections_transaction(spark):
+def test_reads_casts_and_queries_after_a_statement_failed_in_the_default_connections_transaction(spark):
     built = _built_while_idle()
     duckdb.execute("BEGIN")
     try:
@@ -141,20 +148,21 @@ def test_first_reads_and_casts_after_a_statement_failed_in_the_default_connectio
             duckdb.execute("SELECT error('boom')")
         with pytest.raises(duckdb.TransactionException):
             duckdb.sql("select 1").fetchall()
-        _first_reads_and_casts(spark, built)
+        _reads_casts_and_queries_inside_the_state(spark, built)
     finally:
         duckdb.execute("ROLLBACK")
 
 
-def test_a_singleton_first_built_while_the_default_connection_is_held_was_parsed_at_import():
-    # A fresh interpreter, so that the only construction before the busy state is the import's.
+def test_types_first_built_while_the_default_connection_is_held_in_a_fresh_interpreter():
+    # Nothing ran before the import, so the singletons were built by the import alone and no type text was parsed.
     proc = _run(
         "import duckdb.experimental.spark.sql.types as T\n",
         HOLD_THE_DEFAULT_CONNECTION,
         """
         try:
-            long, timestamp, array = T.LongType(), T.TimestampNanosecondNTZType(), T.ArrayType(T.ShortType())
-            print(long.duckdb_type, timestamp.duckdb_type, array.duckdb_type)
+            array, decimal = T.ArrayType(T.DayTimeIntervalType()), T.DecimalType(9, 3)
+            built = (T.LongType(), T.TimestampNanosecondNTZType(), array, decimal)
+            print(*(kind.duckdb_type for kind in built))
         finally:
             gate.set()
             worker.join(WAIT)
@@ -162,18 +170,21 @@ def test_a_singleton_first_built_while_the_default_connection_is_held_was_parsed
         """.replace("WAIT", str(WAIT)),
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
-    assert proc.stdout.strip() == "BIGINT TIMESTAMP_NS SMALLINT[]"
+    assert proc.stdout.strip() == "BIGINT TIMESTAMP_NS INTERVAL[] DECIMAL(9,3)"
 
 
 def test_pickled_types_answer_in_a_fresh_interpreter(spark, tmp_path):
     types = {
         "decimal": DecimalType(17, 4),
-        "array": ArrayType(LongType()),
-        "map": MapType(StringType(), DoubleType()),
+        "array": ArrayType(LongType(), containsNull=False),
+        "map": MapType(StringType(), DoubleType(), valueContainsNull=False),
         "schema": StructType([StructField("a", DecimalType(17, 4)), StructField("b", ArrayType(LongType()))]),
     }
     rows = [(decimal.Decimal("1.5"), [2])]
-    expected = [f"{types[name].duckdb_type} {F.col('x').cast(types[name])}" for name in ("decimal", "array", "map")]
+    expected = [
+        f"{types[name]!r} {types[name].duckdb_type} {F.col('x').cast(types[name])}"
+        for name in ("decimal", "array", "map")
+    ]
     expected.append(str(spark.createDataFrame(rows, types["schema"]).collect()))
     path = tmp_path / "types.pkl"
     path.write_bytes(pickle.dumps(types))
@@ -189,7 +200,7 @@ def test_pickled_types_answer_in_a_fresh_interpreter(spark, tmp_path):
         spark = SparkSession.builder.getOrCreate()
         spark.conn.execute("SET threads = 1")
         for name in ("decimal", "array", "map"):
-            print(types[name].duckdb_type, F.col("x").cast(types[name]))
+            print(repr(types[name]), types[name].duckdb_type, F.col("x").cast(types[name]))
         print(spark.createDataFrame({rows!r}, types["schema"]).collect())
         """
     )
