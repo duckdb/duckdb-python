@@ -8,6 +8,7 @@ so a type built while the default connection was idle and first read while it is
 and the session's casts, frames and queries must not depend on the default connection's state.
 """
 
+import copy
 import datetime
 import decimal
 import os
@@ -27,9 +28,11 @@ from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import (
     ArrayType,
+    ByteType,
     DayTimeIntervalType,
     DecimalType,
     DoubleType,
+    FloatType,
     LongType,
     MapType,
     ShortType,
@@ -81,7 +84,8 @@ def _run(*parts: str) -> subprocess.CompletedProcess[str]:
 
 
 def _built_while_idle():
-    # Composed, never read; nothing built here shares a type text with what the state half builds.
+    # Composed and, but for the struct built through add, never read; nothing built here shares a type text with
+    # what the state half builds. The struct's one read here is what makes its reads inside the state parse nothing.
     unnamed = StructType([StructField("", UnsignedShortType())]).add("", LongType())
     str(unnamed.duckdb_type)
     return {
@@ -98,8 +102,11 @@ def _reads_casts_and_queries_inside_the_state(spark, built):
     assert str(built["array_of_shorts"].duckdb_type) == "SMALLINT[]"
     assert str(built["map_of_doubles"].duckdb_type) == "MAP(VARCHAR, DOUBLE)"
     assert str(built["unnamed_struct_read_once"].duckdb_type) == "TUPLE(USMALLINT, BIGINT)"
-    for kind in built.values():
+    for kind in (*built.values(), UnsignedShortType()):
         assert kind.duckdb_type is kind.duckdb_type
+    # Built, not read: the text of a struct without field names is parsed on its first read, never when it is built.
+    added = StructType().add("", ByteType()).add("", FloatType())
+    assert added.simpleString() == "struct<:tinyint,:float>"
     assert str(DecimalType(14, 4).duckdb_type) == "DECIMAL(14,4)"
     assert str(ArrayType(DayTimeIntervalType()).duckdb_type) == "INTERVAL[]"
     assert str(MapType(StringType(), DayTimeIntervalType()).duckdb_type) == "MAP(VARCHAR, INTERVAL)"
@@ -154,14 +161,15 @@ def test_reads_casts_and_queries_after_a_statement_failed_in_the_default_connect
 
 
 def test_types_first_built_while_the_default_connection_is_held_in_a_fresh_interpreter():
-    # Nothing ran before the import, so the singletons were built by the import alone and no type text was parsed.
+    # Nothing ran before the import, so the cache holds the singletons' names the import parsed and no other text.
     proc = _run(
         "import duckdb.experimental.spark.sql.types as T\n",
         HOLD_THE_DEFAULT_CONNECTION,
         """
         try:
             array, decimal = T.ArrayType(T.DayTimeIntervalType()), T.DecimalType(9, 3)
-            built = (T.LongType(), T.TimestampNanosecondNTZType(), array, decimal)
+            mapping = T.MapType(T.StringType(), T.DayTimeIntervalType())
+            built = (T.LongType(), T.TimestampNanosecondNTZType(), array, decimal, mapping)
             print(*(kind.duckdb_type for kind in built))
         finally:
             gate.set()
@@ -170,7 +178,7 @@ def test_types_first_built_while_the_default_connection_is_held_in_a_fresh_inter
         """.replace("WAIT", str(WAIT)),
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
-    assert proc.stdout.strip() == "BIGINT TIMESTAMP_NS INTERVAL[] DECIMAL(9,3)"
+    assert proc.stdout.strip() == "BIGINT TIMESTAMP_NS INTERVAL[] DECIMAL(9,3) MAP(VARCHAR, INTERVAL)"
 
 
 def test_pickled_types_answer_in_a_fresh_interpreter(spark, tmp_path):
@@ -206,6 +214,43 @@ def test_pickled_types_answer_in_a_fresh_interpreter(spark, tmp_path):
     )
     assert proc.returncode == 0, proc.stderr[-2000:]
     assert proc.stdout.splitlines() == expected
+
+
+class Money(DecimalType):
+    def __init__(self, currency: str = "EUR") -> None:
+        super().__init__(18, 2)
+        self.currency = currency
+
+
+class Tags(ArrayType):
+    def __init__(self) -> None:
+        super().__init__(StringType(), containsNull=False)
+
+
+class Lookup(MapType):
+    def __init__(self, note: str) -> None:
+        super().__init__(StringType(), DecimalType(9, 3))
+        self.note = note
+
+
+@pytest.mark.parametrize(
+    "original",
+    [
+        pytest.param(Money("USD"), id="decimal_subclass_with_its_own_constructor"),
+        pytest.param(Tags(), id="array_subclass_without_arguments"),
+        pytest.param(Lookup("kept"), id="map_subclass_with_an_attribute"),
+    ],
+)
+@pytest.mark.parametrize("duplicate", [copy.copy, copy.deepcopy, lambda kind: pickle.loads(pickle.dumps(kind))])
+def test_a_subclass_keeps_its_class_attributes_and_engine_type_through_a_copy(original, duplicate):
+    # pickle and copy restore the instance state and compose the engine type again, so a subclass's own constructor
+    # never runs and nothing it set is lost.
+    original.note = "set after construction"
+    twin = duplicate(original)
+    assert type(twin) is type(original)
+    assert twin == original
+    assert twin.__dict__ == original.__dict__
+    assert str(twin.duckdb_type) == str(original.duckdb_type)
 
 
 def test_building_many_distinct_decimals_arrays_and_maps_leaves_the_cache_as_it_was():

@@ -392,9 +392,13 @@ class DecimalType(FractionalType):
         self.scale = scale
         self.hasPrecisionInfo = True  # this is a public API
 
-    def __reduce__(self) -> tuple[type["DecimalType"], tuple[int, int]]:  # noqa: D105
-        # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return type(self), (self.precision, self.scale)
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.decimal_type(self.precision, self.scale)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"decimal({int(self.precision):d},{int(self.scale):d})"
@@ -667,9 +671,13 @@ class ArrayType(DataType):
         self.elementType = elementType
         self.containsNull = containsNull
 
-    def __reduce__(self) -> tuple[type["ArrayType"], tuple[DataType, bool]]:  # noqa: D105
-        # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return type(self), (self.elementType, self.containsNull)
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.list_type(self.elementType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"array<{self.elementType.simpleString()}>"
@@ -730,9 +738,13 @@ class MapType(DataType):
         self.valueType = valueType
         self.valueContainsNull = valueContainsNull
 
-    def __reduce__(self) -> tuple[type["MapType"], tuple[DataType, DataType, bool]]:  # noqa: D105
-        # The engine type does not pickle; it is composed again where the pickle is loaded.
-        return type(self), (self.keyType, self.valueType, self.valueContainsNull)
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.map_type(self.keyType.duckdb_type, self.valueType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"map<{self.keyType.simpleString()},{self.valueType.simpleString()}>"
