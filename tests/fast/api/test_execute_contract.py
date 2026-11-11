@@ -726,18 +726,24 @@ class TestOpenResultIsExclusive:
                         con.execute("SELECT * FROM range(5) t(i)")
                     except duckdb.ResourceInUseException:
                         continue
-                    table = None
-                    for attempt in range(1000):
+                    # Retried by time: the binding thread can refuse the fetch many times in a row under load
+                    table, admitted, attempt = None, False, 0
+                    give_up = time.monotonic() + 5
+                    while time.monotonic() < give_up:
                         try:
                             table = con.to_arrow_table()
+                            admitted = True
                             break
                         except duckdb.ResourceInUseException as error:
+                            attempt += 1
                             if {BUSY!r} not in str(error):
                                 counts["refused: " + str(error)] += 1
                     fetches += 1
                     if attempt:
                         retried += 1
-                    if table is None:
+                    if not admitted:
+                        counts["fetch never admitted in 5 s"] += 1
+                    elif table is None:
                         counts["no table" + (" after a refusal" if attempt else "")] += 1
                     elif table.num_rows != 5:
                         counts[f"rows {{table.num_rows}}" + (" after a refusal" if attempt else "")] += 1
@@ -802,7 +808,8 @@ class TestOpenResultIsExclusive:
     def test_a_nested_execute_from_the_submitting_thread_still_enters(self):
         # The thread whose submitting call is in flight may submit again from inside it, as the recursive mutex
         # admits it: a parameter object that runs a statement reads its row, and the outer call's result then
-        # supersedes the nested one, so the outer call returns its own row and the connection holds only that result
+        # supersedes the nested one, read out or left open, so the outer call returns its own row and the connection
+        # holds only that result
         con = duckdb.connect()
         con.execute("SET threads = 4")
         inner = []
@@ -815,17 +822,31 @@ class TestOpenResultIsExclusive:
                 inner.append(con.execute("SELECT 99 AS nested").fetchall())
                 return iter([1])
 
+        class UnreadParams:
+            def __len__(self) -> int:
+                return 1
+
+            def __iter__(self) -> Iterator[int]:
+                # Left open on purpose: the outer call supersedes it, where it used to be refused for it
+                con.execute("SELECT 99 AS nested")
+                return iter([2])
+
         try:
             con.execute("SELECT ?::INTEGER AS outer", Params())
             description = [column[0] for column in con.description]
             rows = con.fetchall()
             left = con.fetchall()
+            con.execute("SELECT ?::INTEGER AS outer", UnreadParams())
+            unread_description = [column[0] for column in con.description]
+            unread_rows = con.fetchall()
         finally:
             con.close()
         assert inner == [[(99,)]]
         assert description == ["outer"]
         assert rows == [(1,)]
         assert left == []
+        assert unread_description == ["outer"]
+        assert unread_rows == [(2,)]
 
     def test_a_reader_is_refused_while_a_statement_runs(self):
         # A call that waits for the mutex when a reader holds it is still refused outright while a statement holds

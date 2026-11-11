@@ -1796,8 +1796,8 @@ class TestOneCallerAtATime:
                     attempts = 0
                     try:
                         while not stop.is_set():
-                            app.append_row(flushed, "a")
                             try:
+                                app.append_row(flushed, "a")
                                 app.flush()
                                 flushed += 1
                             except duckdb.ResourceInUseException as error:
@@ -1875,8 +1875,8 @@ class TestOneCallerAtATime:
                     go.wait(10)
                     try:
                         for attempt in range(200):
-                            app.append_row(flushed, "a")
                             try:
+                                app.append_row(flushed, "a")
                                 app.flush()
                                 flushed += 1
                             except duckdb.ResourceInUseException as error:

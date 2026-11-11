@@ -129,7 +129,7 @@ private:
 	duckdb::pyarrow::Table ConvertToArrowTable(const ArrowSchema &schema);
 	duckdb::pyarrow::RecordBatchReader ImportRecordBatchReader(ArrowSchema *prebuilt, idx_t rows_per_batch);
 	//! The stream's private data owns the result, and its callbacks run without the GIL.
-	//! prebuilt, when given, becomes the stream's schema; otherwise the result's own is copied or built
+	//! prebuilt, when given, becomes the stream's schema; otherwise the result's own is copied
 	ArrowArrayStream FetchArrowArrayStream(idx_t rows_per_batch, ArrowSchema *prebuilt);
 
 private:

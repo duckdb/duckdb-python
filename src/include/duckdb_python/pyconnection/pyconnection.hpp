@@ -417,7 +417,7 @@ public:
 	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
-	//! Makes the result the connection's DB-API result, under the caller's claim; false when there is none
+	//! Makes the result the connection's DB-API result, with the GIL released; false when there is none
 	bool RegisterResult(shared_ptr<engine::Result> res);
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 

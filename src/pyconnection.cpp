@@ -1,5 +1,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
+#include "duckdb/common/identifier.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/types.hpp"
@@ -1571,10 +1573,7 @@ nb::object DuckDBPyConnection::ResultAsArrow(idx_t batch_size, bool reader) {
 		if (!rows) {
 			return nb::none();
 		}
-		vector<string> schema_names;
-		for (auto &name : names) {
-			schema_names.push_back(name.GetIdentifierName());
-		}
+		auto schema_names = IdentifiersToStrings(names);
 		{
 			DUCKDB_PY_ASSERT_GIL_HELD();
 			nb::gil_scoped_release release;
