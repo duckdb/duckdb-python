@@ -42,7 +42,7 @@ repos:
         pass_filenames: false
         args: [ duckdb, _duckdb-stubs ]
         files: ^(duckdb/|_duckdb-stubs/|pyproject\.toml$)
-        exclude: ^duckdb/(experimental|query_graph)/
+        exclude: ^duckdb/experimental/
         additional_dependencies: [ numpy, polars ]
 
   - repo: local
