@@ -123,7 +123,7 @@ from _duckdb import (
     unregister_filesystem,
 )
 
-from duckdb import _relation, _sources
+from duckdb import _extension_directories, _relation, _sources
 from duckdb._dbapi_type_object import (
     BINARY,
     DATETIME,
@@ -204,6 +204,7 @@ from duckdb.value.constant import (
 )
 
 _duckdb._set_arrow_sources(_sources)
+_duckdb._set_extension_search_path(_extension_directories.search_path)
 
 for _name, _method in _relation.CONNECTION_METHODS.items():
     setattr(DuckDBPyConnection, _name, _method)

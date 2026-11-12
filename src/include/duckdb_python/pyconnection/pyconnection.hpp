@@ -342,6 +342,8 @@ public:
 	static nb::object NumpyScalarTypes();
 	//! Keeps adapt and the nodes module of the duckdb._sources package the package passes in as it imports
 	static void SetArrowSources(const nb::object &sources);
+	//! Keeps duckdb._extension_directories.search_path, which Connect asks for the extension directories of a database
+	static void SetExtensionSearchPath(const nb::object &hook);
 	//! duckdb._sources.adapt; call with the GIL held
 	static nb::object ArrowSourcesAdapt();
 	//! The duckdb._sources.nodes module; call with the GIL held
