@@ -56,6 +56,8 @@ def _assert_clean_exit(
         assert line in lines, report
     assert "Fatal Python error" not in proc.stderr, report
     if leak_free:
+        # A build without assertions turns the report off; a child checked for it turns it back on after its import.
+        assert "_set_leak_report(True)" in proc.args[2], "the child did not turn nanobind's leak report on"
         assert "nanobind: leaked" not in proc.stderr, report
 
 
@@ -79,6 +81,9 @@ holder.module = duckdb
 DROP_CLEANUP_CAPSULE = """
 import sys
 import duckdb
+import _duckdb
+
+_duckdb._set_leak_report(True)
 
 before = duckdb.default_connection()
 del duckdb._clean_default_connection
@@ -168,6 +173,9 @@ def test_module_outside_sys_modules_keeps_committed_data(tmp_path) -> None:
     reopen = """
         import sys
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         print(duckdb.connect(sys.argv[1]).sql("from t").fetchall())
         print("BODY_DONE", flush=True)
@@ -242,6 +250,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         assert duckdb.sql("select 42").fetchall() == [(42,)]
         print("BODY_DONE", flush=True)
@@ -253,6 +264,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import pandas as pd
         import pyarrow as pa
 
@@ -278,6 +292,9 @@ ORDINARY_SHUTDOWN = [
 
         atexit.register(late)
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         duckdb.sql("select 1").fetchall()
         print("BODY_DONE", flush=True)
@@ -300,6 +317,9 @@ ORDINARY_SHUTDOWN = [
 
         atexit.register(late)
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         duckdb.sql("select 1").fetchall()
         print("BODY_DONE", flush=True)
@@ -313,6 +333,9 @@ ORDINARY_SHUTDOWN = [
         """
         import atexit
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import pyarrow as pa
 
         tbl = pa.table({"a": [1, 2, 3]})
@@ -332,6 +355,9 @@ ORDINARY_SHUTDOWN = [
         """
         import atexit
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import pyarrow as pa
 
         tbl = pa.table({"a": [1, 2, 3]})
@@ -377,6 +403,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         class Finalized:
             def __del__(self):
@@ -393,6 +422,9 @@ ORDINARY_SHUTDOWN = [
         """
         import builtins
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         class Finalized:
             def __del__(self):
@@ -408,6 +440,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         rel = duckdb.sql("select 42")
         con = duckdb.connect()
@@ -421,6 +456,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import pandas as pd
         import pyarrow as pa
 
@@ -441,6 +479,9 @@ ORDINARY_SHUTDOWN = [
         """
         import io
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         rel = duckdb.read_csv(io.BytesIO(b"a\\n1\\n2\\n"))
         assert rel.fetchall() == [(1,), (2,)]
@@ -488,6 +529,9 @@ ORDINARY_SHUTDOWN = [
         import atexit
         import threading
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import pyarrow as pa
 
         tbl = pa.table({"a": [1, 2, 3]})
@@ -512,6 +556,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import numpy as np
         import pandas as pd
 
@@ -541,6 +588,9 @@ ORDINARY_SHUTDOWN = [
         """
         import signal
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import numpy as np
         import pandas as pd
 
@@ -572,6 +622,9 @@ ORDINARY_SHUTDOWN = [
         """
         import signal
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import numpy as np
         import pandas as pd
         import pyarrow as pa
@@ -599,6 +652,9 @@ ORDINARY_SHUTDOWN = [
     pytest.param(
         """
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
         import numpy as np
         import pyarrow as pa
         import pyarrow.compute as pc
@@ -717,6 +773,9 @@ def test_ordinary_shutdown_checkpoints_default_connection(tmp_path) -> None:
     script = """
         import sys
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         duckdb.set_default_connection(duckdb.connect(sys.argv[1]))
         duckdb.sql("create table t as select range as a from range(3)")
@@ -729,6 +788,9 @@ def test_ordinary_shutdown_checkpoints_default_connection(tmp_path) -> None:
     reopen = """
         import sys
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         print(duckdb.connect(sys.argv[1]).sql("from t order by a").fetchall())
         print("BODY_DONE", flush=True)
@@ -750,10 +812,14 @@ def test_c_exit_keeps_committed_data(tmp_path, library: str) -> None:
         print("BODY_DONE", flush=True)
         ctypes.{library}(None).exit(0)
     """
-    _assert_clean_exit(_run(script, database), (), leak_free=True)
+    # The C exit skips Py_FinalizeEx, so nanobind's report never runs and a leak check here could not fail.
+    _assert_clean_exit(_run(script, database), (), leak_free=False)
     reopen = """
         import sys
         import duckdb
+        import _duckdb
+
+        _duckdb._set_leak_report(True)
 
         print(duckdb.connect(sys.argv[1]).sql("from t order by a").fetchall())
         print("BODY_DONE", flush=True)

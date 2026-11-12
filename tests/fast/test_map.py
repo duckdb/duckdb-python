@@ -712,6 +712,10 @@ import sys
 import threading
 
 import duckdb
+import _duckdb
+
+# A build without assertions turns nanobind's exit leak report off; the empty stderr check below wants it on.
+_duckdb._set_leak_report(True)
 
 stage = sys.argv[1]
 submitting = threading.get_ident()

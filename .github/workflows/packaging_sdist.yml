@@ -85,6 +85,8 @@ jobs:
           cd ${{ runner.temp }}
           uv venv
           uv pip install ${{ github.workspace }}/dist/duckdb-*.tar.gz
+          # an sdist install is a build without assertions, which keeps nanobind's exit leak report off
+          uv run python -c "import _duckdb; assert not _duckdb._assertions, 'the sdist was built with assertions'"
 
       - name: Test sdist
         if: ${{ inputs.testsuite != 'none' }}

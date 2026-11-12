@@ -251,7 +251,17 @@ jobs:
           testrun=$(uv run --no-project --python "$venv" python -c 'import tempfile; print(tempfile.mkdtemp(prefix="duckdb-testrun-"))')
           cp -r tests pyproject.toml "$testrun"
           cd "$testrun"
-          uv run --no-project --python "$venv" python -c "import duckdb, sys, os; print(duckdb.__version__, sys.version, os.getcwd())"
+          # A wheel built with assertions would print nanobind's exit leak report to every user.
+          uv run --no-project --python "$venv" python - <<'EOF'
+          import os
+          import sys
+
+          import _duckdb
+          import duckdb
+
+          print(duckdb.__version__, sys.version, os.getcwd())
+          assert not _duckdb._assertions, "the wheel was built with assertions"
+          EOF
           uv run --no-project --python "$venv" pytest --confcutdir=. --rootdir . -c pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
 
   test_pandas_2:

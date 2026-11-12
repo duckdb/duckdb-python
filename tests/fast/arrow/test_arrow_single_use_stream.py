@@ -171,6 +171,8 @@ import pyarrow as pa
 
 with mock.patch.dict(sys.modules):
     import duckdb
+    import _duckdb
+    _duckdb._set_leak_report(True)
 table = pa.table({{"id": [1, 2, 3]}})
 sink = io.BytesIO()
 with pa.ipc.new_stream(sink, table.schema) as writer:
