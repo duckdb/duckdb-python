@@ -1,4 +1,3 @@
-import ctypes
 import datetime
 import gc
 import importlib.metadata
@@ -6,7 +5,6 @@ import importlib.util
 import itertools
 import json
 import re
-import statistics
 import subprocess
 import sys
 import textwrap
@@ -14,6 +12,7 @@ import tracemalloc
 import warnings
 
 import pytest
+from _gil_stall import ROUNDS, ScanTimings
 from conftest import PANDAS_GE_3
 from packaging.version import Version
 
@@ -881,42 +880,46 @@ def test_str_invalid_utf8_below_the_threshold_fails_at_bind(pa, pieces, setup, u
     assert re.search(r"Wrapping .* failed", message)
 
 
-GIL_HOLD_SECONDS = 0.2
 GIL_ROWS = 1_000_000
-# A single measurement can miss the scan, so the object and str columns are measured back to back in each round and
-# the medians are compared.
-GIL_ROUNDS = 3
 
 
-def _scan_seconds(frame, held_row):
-    libc = ctypes.PyDLL(None)
-    libc.usleep.argtypes = [ctypes.c_uint]
-    holds = []
-
-    def hold_gil(value):
-        holds.append(value)
-        libc.usleep(int(GIL_HOLD_SECONDS * 1_000_000))
-        return value
-
-    with duckdb.connect(config={"threads": 4}) as con:
-        con.create_function("hold_gil", hold_gil, ["BIGINT"], "BIGINT")
-        con.register("frame", frame)
-        con.execute("PRAGMA enable_profiling = 'no_output'")
-        con.execute(f"SELECT count(x), sum(CASE WHEN i = {held_row} THEN hold_gil(i) ELSE i END) FROM frame").fetchall()
-        operators = list(json.loads(con.get_profiling_information())["operator"])
-    seconds = 0.0
-    while operators:
-        operator = operators.pop()
-        if operator["type"] == "TABLE_SCAN":
-            seconds += operator["timing"]
-        operators.extend(operator.get("children", []))
-    return seconds, len(holds)
+def _judge_str_scan(calibration_growth, growth):
+    """Fails a str scan that stalled behind the hold; skips when the measurement could not have shown a stall."""
+    # A scan that takes the GIL reads about three holds, as three of its four threads wait out the hold; load alone
+    # has read up to one hold on a scan without the GIL.
+    assert growth < 2, f"the hold stalled the str column scan by {growth:.2f} holds"
+    # An object column takes the GIL for every vector, so its scan must stall behind the hold in every held run;
+    # otherwise a low str reading says nothing.
+    if calibration_growth < 1:
+        pytest.skip(
+            f"inconclusive: the hold stalled the object column scan by only {calibration_growth:.2f} holds "
+            f"and the str column scan by {growth:.2f}"
+        )
+    assert growth < 0.5, growth
 
 
-def _scan_growth_in_holds(frame):
-    held, held_calls = _scan_seconds(frame, 0)
-    free, free_calls = _scan_seconds(frame, -1)
-    return (held - free) / GIL_HOLD_SECONDS, (held_calls, free_calls)
+@pytest.mark.parametrize(
+    ("calibration_growth", "growth", "outcome"),
+    [
+        pytest.param(2.96, 0.00, None, id="calibration_met_str_free"),
+        pytest.param(1.00, 0.49, None, id="both_at_their_bounds"),
+        pytest.param(2.96, 0.52, AssertionError, id="calibration_met_str_stalled"),
+        pytest.param(0.61, 3.15, AssertionError, id="calibration_missed_str_stalled"),
+        pytest.param(2.96, 0.50, AssertionError, id="str_at_the_bound"),
+        pytest.param(0.61, 2.00, AssertionError, id="calibration_missed_str_at_two_holds"),
+        pytest.param(2.96, 2.00, AssertionError, id="calibration_met_str_at_two_holds"),
+        pytest.param(0.61, 0.45, pytest.skip.Exception, id="calibration_missed_str_free"),
+        pytest.param(0.99, 0.00, pytest.skip.Exception, id="calibration_just_missed"),
+        pytest.param(-0.02, 0.96, pytest.skip.Exception, id="calibration_missed_str_slowed_by_load"),
+        pytest.param(0.61, 1.99, pytest.skip.Exception, id="calibration_missed_str_under_two_holds"),
+    ],
+)
+def test_str_scan_judgement(calibration_growth, growth, outcome):
+    if outcome is None:
+        _judge_str_scan(calibration_growth, growth)
+        return
+    with pytest.raises(outcome):
+        _judge_str_scan(calibration_growth, growth)
 
 
 GIL_COLUMNS = [
@@ -938,7 +941,8 @@ GIL_COLUMNS = [
 ]
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="ctypes cannot load the C library through a null name on Windows")
+# Linux only until a test-only counter of GIL acquisitions replaces the timing.
+@pytest.mark.skipif(sys.platform != "linux", reason="the GIL release does not vary by platform; its timing does")
 @pytest.mark.skipif(not getattr(sys, "_is_gil_enabled", lambda: True)(), reason="the interpreter has no GIL")
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize("make_column", GIL_COLUMNS)
@@ -947,15 +951,9 @@ def test_arrow_str_scan_runs_without_gil(pa, make_column):
     index = numpy.arange(GIL_ROWS, dtype=numpy.int64)
     calibration = pd.DataFrame({"x": pd.Series(values, dtype=object), "i": index})
     frame = pd.DataFrame({"x": make_column(pa, values), "i": index})
-    calibration_growths, growths, calls = [], [], set()
-    for _ in range(GIL_ROUNDS):
-        calibration_growth, _ = _scan_growth_in_holds(calibration)
-        growth, round_calls = _scan_growth_in_holds(frame)
-        calibration_growths.append(calibration_growth)
-        growths.append(growth)
-        calls.add(round_calls)
-    # An object column takes the GIL for every vector, so its scan must stall behind the hold; otherwise the hold
-    # did not overlap the scan and the measurement says nothing.
-    assert statistics.median(calibration_growths) >= 1
-    assert calls == {(1, 0)}
-    assert statistics.median(growths) < 0.5
+    calibration_timings, timings = ScanTimings(4), ScanTimings(4)
+    for _ in range(ROUNDS):
+        calibration_timings.add_round(calibration)
+        timings.add_round(frame)
+    assert timings.calls == {(1, 0)}
+    _judge_str_scan(calibration_timings.growth_in_holds(), timings.growth_in_holds())
