@@ -102,8 +102,8 @@ SHAPES = [
     p("s LIKE 'abc'", ("(s = 'abc')", "(\"s\" = 'abc')"), id="like-without-wildcards"),
     # BETWEEN, read through the bound inclusivity flags
     p("n BETWEEN 3 AND 6", ("(n BETWEEN 3 AND 6)", '(("n" >= 3) AND ("n" <= 6))'), id="between"),
-    p("n > 1 AND n < 8", ("(n BETWEEN 1 AND 8)", '(("n" > 1) AND ("n" < 8))'), id="exclusive-range-folded"),
-    p("n >= 1 AND n < 8", ("(n BETWEEN 1 AND 8)", '(("n" >= 1) AND ("n" < 8))'), id="half-open-range-folded"),
+    p("n > 1 AND n < 8", ("((n > 1) AND (n < 8))", '(("n" > 1) AND ("n" < 8))'), id="exclusive-range-folded"),
+    p("n >= 1 AND n < 8", ("((n >= 1) AND (n < 8))", '(("n" >= 1) AND ("n" < 8))'), id="half-open-range-folded"),
     p("n BETWEEN 1 AND 1", ("(n = 1)", '("n" = 1)'), id="between-one-value"),
     p("n NOT BETWEEN 3 AND 6", ("((n < 3) OR (n > 6))", '(("n" < 3) OR ("n" > 6))'), id="not-between"),
     p(
@@ -115,7 +115,7 @@ SHAPES = [
     p(
         "CAST(ts AS DATE) = DATE '2024-01-01'",
         (
-            "(ts BETWEEN '2024-01-01 00:00:00'::TIMESTAMP AND '2024-01-02 00:00:00'::TIMESTAMP)",
+            "((ts >= '2024-01-01 00:00:00'::TIMESTAMP) AND (ts < '2024-01-02 00:00:00'::TIMESTAMP))",
             "((\"ts\" >= TIMESTAMP '2024-01-01 00:00:00') AND (\"ts\" < TIMESTAMP '2024-01-02 00:00:00'))",
         ),
         id="date-cast-equality-rewritten",
@@ -123,7 +123,7 @@ SHAPES = [
     p(
         "date_trunc('day', ts) = TIMESTAMP '2024-01-01'",
         (
-            "(ts BETWEEN '2024-01-01 00:00:00'::TIMESTAMP AND '2024-01-02 00:00:00'::TIMESTAMP)",
+            "((ts >= '2024-01-01 00:00:00'::TIMESTAMP) AND (ts < '2024-01-02 00:00:00'::TIMESTAMP))",
             "((\"ts\" >= TIMESTAMP '2024-01-01 00:00:00') AND (\"ts\" < TIMESTAMP '2024-01-02 00:00:00'))",
         ),
         id="date-trunc-equality-rewritten",
