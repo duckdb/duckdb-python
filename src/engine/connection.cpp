@@ -65,12 +65,16 @@ bool CallbackScope::Inside(const ClientContext &context) {
 	return false;
 }
 
+void ThrowBusy() {
+	throw ResourceInUseException(BUSY_ERROR);
+}
+
 ConnectionClaim::ConnectionClaim(ConnectionState &state_p, const ClientContext &context) : state(state_p) {
 	if (CallbackScope::Inside(context)) {
 		throw ResourceInUseException(CALLBACK_ERROR);
 	}
 	if (state.busy.exchange(true)) {
-		throw ResourceInUseException(BUSY_ERROR);
+		ThrowBusy();
 	}
 	if (Exiting()) {
 		state.admitted_during_exit = OnExitThread();
@@ -89,7 +93,7 @@ void ConnectionState::ThrowIfBusy(const ClientContext &context) const {
 		throw ResourceInUseException(CALLBACK_ERROR);
 	}
 	if (busy) {
-		throw ResourceInUseException(BUSY_ERROR);
+		ThrowBusy();
 	}
 }
 
@@ -340,14 +344,9 @@ ConnectionClaim Session::Claim() {
 	return ConnectionClaim(*state, *context);
 }
 
-shared_ptr<Result> Session::Submit(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &values,
-                                   const Format &format) {
-	auto claim = Claim();
-	return SubmitClaimed(std::move(statement), values, format);
-}
-
 shared_ptr<Result> Session::SubmitClaimed(unique_ptr<SQLStatement> statement,
                                           identifier_map_t<BoundParameterData> &values, const Format &format) {
+	D_ASSERT(state->Claimed());
 	auto written_type = statement->type;
 	registry->CountStatement(written_type);
 	auto handle = context->Submit(std::move(statement), values, QueryParameters(format.EngineFormat()));
@@ -357,9 +356,9 @@ shared_ptr<Result> Session::SubmitClaimed(unique_ptr<SQLStatement> statement,
 	return result;
 }
 
-shared_ptr<Result> Session::Submit(Prepared &prepared, identifier_map_t<BoundParameterData> &values,
-                                   const Format &format) {
-	ConnectionClaim claim(*state, *context);
+shared_ptr<Result> Session::SubmitClaimed(Prepared &prepared, identifier_map_t<BoundParameterData> &values,
+                                          const Format &format) {
+	D_ASSERT(state->Claimed());
 	registry->CountStatement(prepared.statement->GetStatementType());
 	unique_ptr<QueryResult> handle;
 	{
@@ -372,8 +371,9 @@ shared_ptr<Result> Session::Submit(Prepared &prepared, identifier_map_t<BoundPar
 	return result;
 }
 
-shared_ptr<Result> Session::Submit(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
-                                   const Format &format) {
+shared_ptr<Result> Session::SubmitClaimed(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
+                                          const Format &format) {
+	D_ASSERT(state->Claimed());
 	// The binder rejects duplicate column names; the caller keeps the originals
 	auto deduplicated_names = names;
 	QueryResult::DeduplicateColumns(deduplicated_names);
@@ -386,7 +386,7 @@ shared_ptr<Result> Session::Submit(unique_ptr<ColumnDataCollection> collection, 
 	auto select = make_uniq<SelectStatement>();
 	select->node = std::move(select_node);
 	identifier_map_t<BoundParameterData> no_values;
-	return Submit(std::move(select), no_values, format);
+	return SubmitClaimed(std::move(select), no_values, format);
 }
 
 StatementSignature Session::Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables) {
@@ -557,6 +557,10 @@ shared_ptr<Result> StatementGroup::Choose(shared_ptr<Result> last) {
 
 void StatementGroup::RefuseParameters() {
 	auto claim = session.Claim();
+	RefuseParametersClaimed();
+}
+
+void StatementGroup::RefuseParametersClaimed() {
 	Fail(ErrorData(InvalidInputException("Parameters were given, but the last statement of the query takes none")));
 }
 
