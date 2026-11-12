@@ -47,6 +47,9 @@ static constexpr const char *BUSY_ERROR =
 static constexpr const char *BROKEN_ERROR =
     "a write into the appender's buffer failed, so it holds an unknown part of its rows; call clear() before using "
     "it again";
+static constexpr const char *CONNECTED_ERROR =
+    "An appender cannot be created or flushed while CONNECT-ed, since a flush is a statement over rows held on this "
+    "connection and the engine sends every statement but DISCONNECT to the connected database; DISCONNECT first";
 
 DuckDBPyAppender::Claim::Claim(DuckDBPyAppender &appender_p) : Claim(appender_p, std::nothrow) {
 	if (!held) {
@@ -313,12 +316,14 @@ DuckDBPyAppender::DuckDBPyAppender(std::shared_ptr<DuckDBPyConnection> connectio
 	staged.Initialize(Allocator::DefaultAllocator(), types);
 }
 
-// Checked before any lookup, so the refusal does not depend on whether a type name needed the transaction, and
-// again before the bind, because converting a name or a type can run Python code that aborts the transaction
-static void RefuseInsideAnAbortedTransaction(ClientContext &context) {
+// Checked before any lookup, so the refusal does not depend on whether a type name needed the transaction or parses
+// with the connected database's grammar, and again before the bind, because converting a name or a type can run
+// Python code that aborts the transaction or CONNECTs
+static void RefuseUnusableConnection(ClientContext &context) {
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
 	engine::ConnectionClaim claim(context);
+	engine::RefuseWhileConnected(context, CONNECTED_ERROR);
 	context.RunFunctionInTransaction([]() {}, true);
 }
 
@@ -334,14 +339,18 @@ std::unique_ptr<DuckDBPyAppender> DuckDBPyAppender::Create(std::shared_ptr<DuckD
                                                            shared_ptr<ClientContext> context, vector<Identifier> names,
                                                            vector<LogicalType> types, const string &source,
                                                            const string &dml) {
-	RefuseInsideAnAbortedTransaction(*context);
+	RefuseUnusableConnection(*context);
 	std::unique_ptr<DuckDBPyAppender> appender(
 	    new DuckDBPyAppender(std::move(connection), *context, std::move(names), std::move(types)));
 	engine::Session session(context);
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
+	// Another thread can CONNECT once the check above lets go of the claim, and the statement would then parse with
+	// the connected database's grammar, so the refusal, the parse and the bind share one claim
+	auto claim = session.Claim();
+	engine::RefuseWhileConnected(*context, CONNECTED_ERROR);
 	appender->statement = FlushStatement(*context, *appender->buffer, appender->names, source, dml);
-	auto signature = session.Bind(appender->statement->Copy(), appender->tables);
+	auto signature = session.BindClaimed(appender->statement->Copy(), appender->tables);
 	if (signature.properties.return_type == StatementReturnType::QUERY_RESULT) {
 		throw InvalidInputException("an appender's DML cannot return rows: a flush has nowhere to put them");
 	}
@@ -370,7 +379,7 @@ std::unique_ptr<DuckDBPyAppender> DuckDBPyAppender::ForTable(std::shared_ptr<Duc
                                                              const string &action_name,
                                                              const std::optional<nb::list> &key) {
 	Held held {connection->con.ShareDatabase(), connection->con.GetConnection().context};
-	RefuseInsideAnAbortedTransaction(*held.context);
+	RefuseUnusableConnection(*held.context);
 	auto requested = ListedNames(columns);
 	auto keyed = ListedNames(key);
 	RefuseClosed(*connection);
@@ -390,6 +399,7 @@ std::unique_ptr<DuckDBPyAppender> DuckDBPyAppender::ForTable(std::shared_ptr<Duc
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
 		engine::ConnectionClaim claim(*held.context);
+		engine::RefuseWhileConnected(*held.context, CONNECTED_ERROR);
 		resolved = ResolveTable(*held.context, table);
 	}
 	vector<reference<const ColumnDefinition>> key_columns;
@@ -418,7 +428,7 @@ std::unique_ptr<DuckDBPyAppender> DuckDBPyAppender::ForQuery(std::shared_ptr<Duc
                                                              const string &dml, const nb::dict &columns,
                                                              const std::optional<string> &source) {
 	Held held {connection->con.ShareDatabase(), connection->con.GetConnection().context};
-	RefuseInsideAnAbortedTransaction(*held.context);
+	RefuseUnusableConnection(*held.context);
 	// Converting a name or a type can run Python code that changes the dict, so both passes read one copy of it
 	vector<std::pair<nb::object, nb::object>> declared;
 	for (auto item : columns) {
@@ -580,8 +590,12 @@ void DuckDBPyAppender::Flush() {
 	};
 	DUCKDB_PY_ASSERT_GIL_HELD();
 	nb::gil_scoped_release release;
+	// Taken before the run, so a busy connection refuses with every row kept for a retry, and so does a CONNECT-ed
+	// one, to which the statement over the rows held here would go as its text alone
+	auto connection_claim = session.Claim();
+	engine::RefuseWhileConnected(*held.context, CONNECTED_ERROR);
 	try {
-		session.Run(statement->Copy(), tables, check);
+		session.RunClaimed(statement->Copy(), tables, check);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		// A refused or interrupted flush keeps its rows for a retry, as the stable C++ Appender does
