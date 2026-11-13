@@ -1407,7 +1407,12 @@ class TestFlush:
         app.flush()
         assert table_rows(con) in ([(1, "first")], [(1, "second")])
 
-    def test_a_key_repeated_within_one_merge_applies_one_of_its_rows(self, con):
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the engine updates a target row once per matching source row instead of refusing the repeated "
+        "match, a trade of correctness for speed it means to undo in 2.1",
+    )
+    def test_a_key_repeated_within_one_merge_raises(self, con):
         con.execute("INSERT INTO t VALUES (1, 'old')")
         app = con.query_appender(
             "MERGE INTO t USING appender_data d ON t.k = d.k "
@@ -1415,8 +1420,8 @@ class TestFlush:
             KV,
         )
         app.append_rows([(1, "first"), (1, "second")])
-        app.flush()
-        assert table_rows(con) in ([(1, "first")], [(1, "second")])
+        with pytest.raises(duckdb.InvalidInputException, match="more than once"):
+            app.flush()
 
 
 class TestFlushFailures:

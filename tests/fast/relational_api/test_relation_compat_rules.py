@@ -538,6 +538,55 @@ class TestUserTextIsValidatedNotRewritten:
             base.project("1" + " + 1" * 60 + " AS d")
 
 
+def refused_subquery(outer: str) -> str:
+    return f"(SELECT b FROM inner_rows POSITIONAL JOIN (SELECT {outer}.a AS c) s)"
+
+
+POSITIONAL = "Positional join in correlated subqueries is not"
+
+
+class TestErrorsOfThePlanningAfterTheBind:
+    """A statement that binds describes its columns and types; what the later planning refuses fails at the run."""
+
+    @pytest.fixture
+    def tables(self, con):
+        con.execute("CREATE TABLE outer_rows(a INTEGER)")
+        con.execute("CREATE TABLE inner_rows(a INTEGER, b VARCHAR)")
+
+    @pytest.mark.parametrize(
+        ("suffix", "params"),
+        [("", None), (" WHERE a = ?", [1]), (" WHERE a = $x", {"x": 1})],
+        ids=["none", "qmark", "named"],
+    )
+    def test_a_correlated_subquery_that_decorrelation_refuses(self, con, tables, suffix, params):
+        rel = con.sql(f"SELECT {refused_subquery('outer_rows')} AS r FROM outer_rows{suffix}", params=params)
+        assert (rel.columns, rel.types) == (["r"], [duckdb.sqltypes.VARCHAR])
+        with pytest.raises(duckdb.BinderException, match=POSITIONAL):
+            rel.fetchall()
+
+    @pytest.mark.parametrize(("suffix", "params"), [("", None), (" AND a >= ?", [0])], ids=["none", "qmark"])
+    def test_a_plan_deeper_than_the_depth_limit(self, con, suffix, params):
+        con.execute("SET max_expression_depth = 50")
+        # 30 nested subqueries stay below the depth limit of the parser, while their plan, a projection and a filter
+        # per level, is about 60 operators deep
+        sql = "SELECT 1 AS a"
+        for i in range(30):
+            sql = f"SELECT a FROM ({sql}) WHERE a >= {i}"
+        rel = con.sql(sql + suffix, params=params)
+        assert (rel.columns, rel.types) == (["a"], [duckdb.sqltypes.INTEGER])
+        with pytest.raises(duckdb.ParserException, match="Maximum tree depth of 50 exceeded in logical planner"):
+            rel.fetchall()
+
+    def test_a_query_appender_is_accepted_and_refused_at_the_flush(self, con, tables):
+        con.execute("CREATE TABLE sink(r VARCHAR)")
+        app = con.query_appender(
+            f"INSERT INTO sink SELECT {refused_subquery('d')} FROM appender_data d", {"a": "INTEGER"}
+        )
+        app.append_rows([(1,)])
+        with pytest.raises(duckdb.BinderException, match=POSITIONAL):
+            app.flush()
+
+
 class TestAMarkerInAVerbsText:
     """A parameter marker in a verb's text is refused at the call; it never reads another relation's value."""
 

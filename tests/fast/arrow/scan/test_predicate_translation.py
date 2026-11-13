@@ -107,6 +107,7 @@ SHAPES = [
     p("n::VARCHAR NOT IN ('5', '7')", ("(NOT (n IN (5, 7)))", '(NOT ("n" IN (5, 7)))'), id="text-cast-not-in-dropped"),
     p("n::BIGINT IN (1, 2)", ("(n IN (1, 2))", '("n" IN (1, 2))'), id="widening-cast-in-dropped"),
     p("ti IN (1, 300)", ("(ti IN (1))", '("ti" IN (1))'), id="widening-cast-in-dropped-with-its-out-of-range-member"),
+    p("n IN (1, 2.5)", ("(n IN (1))", '("n" IN (1))'), id="decimal-cast-in-dropped-with-its-fractional-member"),
     p(
         "ti NOT IN (1, 300)",
         ("(NOT (ti IN (1)))", '(NOT ("ti" IN (1)))'),
@@ -267,7 +268,6 @@ REFUSALS = [
     p("n IS NOT DISTINCT FROM 3", ("(n IS NOT DISTINCT FROM 3)", REFUSED), id="not-distinct-from"),
     p("n = x", ("(n = x)", REFUSED), id="column-against-column"),
     p("n IN (1, x)", ("(n IN (1, x))", REFUSED), id="in-with-a-column"),
-    p("n IN (1, 2.5)", ("(n IN (1))", '("n" IN (1))'), id="in-dropping-the-literal-no-integer-equals"),
     p("b", ("b", REFUSED), id="bare-boolean-column"),
     p("NOT b", ("(NOT b)", REFUSED), id="not-bare-boolean-column"),
     p("rowid = 1", ("(rowid = 1)", REFUSED), id="row-id"),

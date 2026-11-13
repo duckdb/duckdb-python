@@ -415,8 +415,9 @@ StatementSignature Session::Bind(unique_ptr<SQLStatement> statement, ResolvedTab
 			    if (expanded.statements.size() > 1) {
 				    throw InvalidInputException(ClientContext::EXPANDING_PARAMETERS_ERROR);
 			    }
-			    // The planner types each parameter from its value, as a rebind for the values run with does
-			    Planner planner(*context);
+			    // The planner types each parameter from its value, as a rebind for the values run with does; a
+			    // describe binds only, as BindStatement does without values
+			    Planner planner(*context, PlanningMode::BIND_ONLY);
 			    planner.parameter_data = values;
 			    planner.CreatePlan(std::move(expanded.statements[0]));
 			    signature.names = planner.names;
