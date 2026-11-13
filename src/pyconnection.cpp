@@ -34,6 +34,7 @@
 #include "duckdb_python/nb/conversions/exception_handling_enum.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb_python/python_replacement_scan.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
@@ -1543,21 +1544,15 @@ static void SetDefaultConfigArguments(ClientContext &context) {
 	}
 
 	auto &config = ClientConfig::GetConfig(context);
-	config.enable_progress_bar = true;
-
-	if (!DuckDBPyConnection::IsJupyter()) {
-		return;
+	if (DuckDBPyConnection::IsJupyter()) {
+		if (!HasJupyterProgressBarDependencies()) {
+			config.system_progress_bar_disable_reason =
+			    "required package 'ipywidgets' is missing, which is needed to render progress bars in Jupyter";
+			return;
+		}
+		config.display_create_func = JupyterProgressBarDisplay::Create;
 	}
-	if (!HasJupyterProgressBarDependencies()) {
-		// Disable progress bar altogether
-		config.system_progress_bar_disable_reason =
-		    "required package 'ipywidgets' is missing, which is needed to render progress bars in Jupyter";
-		config.enable_progress_bar = false;
-		return;
-	}
-
-	// Set the function used to create the display for the progress bar
-	config.display_create_func = JupyterProgressBarDisplay::Create;
+	Settings::Set<EnableProgressBarSetting>(context, SetScope::SESSION, Value::BOOLEAN(true));
 }
 
 void InstantiateNewInstance(DuckDB &db) {
