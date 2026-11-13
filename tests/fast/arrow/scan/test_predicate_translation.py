@@ -107,6 +107,7 @@ SHAPES = [
     p("n::VARCHAR NOT IN ('5', '7')", ("(NOT (n IN (5, 7)))", '(NOT ("n" IN (5, 7)))'), id="text-cast-not-in-dropped"),
     p("n::BIGINT IN (1, 2)", ("(n IN (1, 2))", '("n" IN (1, 2))'), id="widening-cast-in-dropped"),
     p("ti IN (1, 300)", ("(ti IN (1))", '("ti" IN (1))'), id="widening-cast-in-dropped-with-its-out-of-range-member"),
+    p("n IN (1, 2.5)", ("(n IN (1))", '("n" IN (1))'), id="decimal-cast-in-dropped-with-its-fractional-member"),
     p(
         "ti NOT IN (1, 300)",
         ("(NOT (ti IN (1)))", '(NOT ("ti" IN (1)))'),
@@ -237,7 +238,8 @@ REFUSALS = [
     p("ti > 300", ("(CAST(ti AS INTEGER) > 300)", REFUSED), id="cast-to-a-wider-integer"),
     p("ti = 300", ("constant_or_null(false, ti)", REFUSED), id="out-of-range-equality-folded"),
     p("n::VARCHAR = '05'", ("constant_or_null(false, n)", REFUSED), id="text-cast-equality-no-integer-matches-folded"),
-    p("dec = 1.505", ("(CAST(dec AS DECIMAL(11,3)) = 1.505)", REFUSED), id="cast-to-a-wider-decimal"),
+    p("dec > 1.505", ("(CAST(dec AS DECIMAL(11,3)) > 1.505)", REFUSED), id="cast-to-a-wider-decimal"),
+    p("dec = 1.505", ("constant_or_null(false, dec)", REFUSED), id="decimal-equality-no-value-matches-folded"),
     p(
         "tms > TIMESTAMP '2024-05-06'",
         ("(CAST(tms AS TIMESTAMP) > '2024-05-06 00:00:00'::TIMESTAMP)", REFUSED),
@@ -266,7 +268,6 @@ REFUSALS = [
     p("n IS NOT DISTINCT FROM 3", ("(n IS NOT DISTINCT FROM 3)", REFUSED), id="not-distinct-from"),
     p("n = x", ("(n = x)", REFUSED), id="column-against-column"),
     p("n IN (1, x)", ("(n IN (1, x))", REFUSED), id="in-with-a-column"),
-    p("n IN (1, 2.5)", ("(CAST(n AS DECIMAL(11,1)) IN (1.0, 2.5))", REFUSED), id="in-casting-the-column"),
     p("b", ("b", REFUSED), id="bare-boolean-column"),
     p("NOT b", ("(NOT b)", REFUSED), id="not-bare-boolean-column"),
     p("rowid = 1", ("(rowid = 1)", REFUSED), id="row-id"),

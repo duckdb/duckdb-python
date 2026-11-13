@@ -96,10 +96,86 @@ sys.modules.update({"IPython": ipython, "IPython.display": display, "ipywidgets"
 import duckdb
 
 con = duckdb.connect()
+print("enabled", con.execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
 con.execute("SET progress_bar_time = 0")
 con.execute("SELECT sum(a.range * b.range) FROM range(1000000) a, range(4) b").fetchall()
 print("shown", [type(widget).__name__ for widget in shown])
 """
+
+
+def _reported(stdout: str) -> list[str]:
+    # The editable build prints its own lines in a child process
+    return [
+        line
+        for line in stdout.splitlines()
+        if line.startswith(("enabled", "cursor", "after set", "after reset", "refused"))
+    ]
+
+
+_READ_AND_SET = """
+import duckdb
+
+con = duckdb.connect()
+print("enabled", con.execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
+print("cursor", con.cursor().execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
+con.execute("SET enable_progress_bar = false")
+print("after set", con.execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
+con.execute("RESET enable_progress_bar")
+print("after reset", con.execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
+"""
+
+
+def test_an_interactive_session_enables_the_progress_bar(tmp_path):
+    # The client treats a __main__ without __file__ as an interactive session, so a child run from -c is one and a
+    # child run from a script is not. The value is the session's own: a cursor, which gets no default, reads the
+    # engine's default, and a RESET returns to it.
+    interactive = subprocess.run(
+        [sys.executable, "-c", _READ_AND_SET], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert interactive.returncode == 0, interactive.stderr
+    assert _reported(interactive.stdout) == ["enabled True", "cursor False", "after set False", "after reset False"]
+
+    script = tmp_path / "script.py"
+    script.write_text(_READ_AND_SET)
+    plain = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, timeout=60, check=False)
+    assert plain.returncode == 0, plain.stderr
+    assert _reported(plain.stdout) == ["enabled False", "cursor False", "after set False", "after reset False"]
+
+
+_KERNEL_WITHOUT_IPYWIDGETS = """
+import sys
+import types
+
+ipython = types.ModuleType("IPython")
+
+
+class Shell:
+    config = {"IPKernelApp": {}}
+
+
+ipython.get_ipython = Shell
+sys.modules.update({"IPython": ipython, "ipywidgets": None})
+import duckdb
+
+con = duckdb.connect()
+print("enabled", con.execute("SELECT current_setting('enable_progress_bar')").fetchone()[0])
+try:
+    con.execute("SET enable_progress_bar = true")
+except duckdb.InvalidInputException as error:
+    print("refused", str(error))
+"""
+
+
+def test_a_jupyter_kernel_without_ipywidgets_refuses_the_progress_bar():
+    child = subprocess.run(
+        [sys.executable, "-c", _KERNEL_WITHOUT_IPYWIDGETS], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert child.returncode == 0, child.stderr
+    lines = _reported(child.stdout)
+    assert len(lines) == 2
+    assert lines[0] == "enabled False"
+    assert lines[1].startswith("refused")
+    assert "required package 'ipywidgets' is missing" in lines[1]
 
 
 def test_a_jupyter_kernel_shows_the_progress_bar_as_a_widget():
@@ -108,4 +184,6 @@ def test_a_jupyter_kernel_shows_the_progress_bar_as_a_widget():
         [sys.executable, "-c", _JUPYTER_KERNEL], capture_output=True, text=True, timeout=60, check=False
     )
     assert child.returncode == 0, child.stderr
+    # Read before the SET of progress_bar_time, which switches the bar on by itself
+    assert "enabled True" in child.stdout.splitlines(), child.stdout
     assert "shown ['FloatProgress']" in child.stdout.splitlines(), child.stdout

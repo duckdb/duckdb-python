@@ -518,6 +518,7 @@ PUSHED = [
     "n > 1 AND n < 8",
     "CAST(ts AS DATE) = DATE '2021-01-01'",
     # The engine drops a cast that is invertible for equality, so these reach the source as comparisons on the column.
+    "n IN (1, 3.5)",
     "n::VARCHAR = '5'",
     "n::VARCHAR <> '5'",
     "n::VARCHAR IN ('5', '8')",
@@ -539,7 +540,6 @@ KEPT = [
     "lower(s) = '4'",
     "s = n",
     "n IN (1, NULL)",
-    "n IN (1, 3.5)",
     "flag",
     "ts_ns >= TIMESTAMP '2021-01-01 00:00:00'",
     "f = 'nan'::DOUBLE",
@@ -791,12 +791,15 @@ class TestLazyFramePushdownShapes:
         for where, pushed in (
             ("money > 1.5", True),
             ("money = -1.51", True),
-            ("money = 1.505", False),
             ("money > 1.499", False),
         ):
             expected = rows(con, f"SELECT money FROM now WHERE {where}")
             assert rows(con, f"SELECT money FROM late WHERE {where}") == expected, where
             assert bool(source.applied[-1]) is pushed, where
+        # No DECIMAL(10, 2) equals 1.505, so the engine folds the comparison and never reads the source
+        asked = len(source.applied)
+        assert rows(con, "SELECT money FROM late WHERE money = 1.505") == []
+        assert len(source.applied) == asked
 
 
 class TestPolarsShapes:

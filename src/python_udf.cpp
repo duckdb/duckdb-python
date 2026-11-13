@@ -238,7 +238,7 @@ static void VerifyVectorizedNullHandling(Vector &result, idx_t count) {
 //! Runs a UDF's body with the GIL and the callback scope; a Python error the body raises leaves as an engine error
 static scalar_function_t RunsPython(scalar_function_t body) {
 	return [body](DataChunk &input, ExpressionState &state, Vector &result) {
-		optional_ptr<ClientContext> context = state.HasContext() ? &state.GetContext() : nullptr;
+		optional_ptr<ClientContext> context = state.HasClientContext() ? &state.GetClientContext() : nullptr;
 		PyUtil::QueryGil gil(context);
 		std::optional<engine::CallbackScope> callback;
 		if (context) {
@@ -262,12 +262,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		nb::object python_object;
 		// Convert the input datachunk to pyarrow
-		//		ClientProperties options;
-
-		//		if (state.HasContext()) {
-		auto &context = state.GetContext();
-		auto options = context.GetClientProperties();
-		//		}
+		auto options = state.GetClientContext().GetClientProperties();
 
 		SelectionVector selvec(input.size());
 		idx_t input_size = input.size();
@@ -297,7 +292,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 		}
 
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options, state.GetContext());
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options, state.GetClientContext());
 		// pyarrow Table.columns is a list; PyObject_CallObject below needs a real tuple. nanobind's accessor->tuple
 		// only reinterprets (borrows), so convert explicitly via the tuple(handle) ctor (PySequence_Tuple).
 		nb::object columns_obj = pyarrow_table.attr("columns");
@@ -339,7 +334,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			// We filtered out some NULLs, now we need to reconstruct the final result by adding the nulls back
 			Vector temp(result.GetType(), count);
 			// Convert the table into a temporary Vector
-			ConvertArrowTableToVector(python_object, temp, state.GetContext(), count);
+			ConvertArrowTableToVector(python_object, temp, state.GetClientContext(), count);
 			if (!exception_occurred) {
 				VerifyVectorizedNullHandling(temp, count);
 			}
@@ -373,7 +368,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 			result.Verify();
 		} else {
-			ConvertArrowTableToVector(python_object, result, state.GetContext(), count);
+			ConvertArrowTableToVector(python_object, result, state.GetClientContext(), count);
 			if (default_null_handling && !exception_occurred) {
 				VerifyVectorizedNullHandling(result, count);
 			}
@@ -434,7 +429,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					    throw InvalidInputException(NullHandlingError());
 				    }
 			    }
-			    TransformPythonObject(state.GetContext(), ret, result, row);
+			    TransformPythonObject(state.GetClientContext(), ret, result, row);
 		    }
 
 		    if (input.size() == 1) {
