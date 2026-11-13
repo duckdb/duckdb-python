@@ -1028,13 +1028,13 @@ class TestPrepareScript:
     def test_runs_all_but_the_last(self, con):
         kept, text, kind = con._prepare_script("SELECT 42; CREATE TABLE u AS SELECT 1 AS x;\n  FROM u", None)
         assert kept.fetchall() == [(42,)]
-        assert (text, kind) == ("FROM u", "select")
+        assert (text, kind) == ("\n  FROM u", "select")
         assert con.execute("SELECT * FROM u").fetchall() == [(1,)]
 
     def test_last_statement_is_not_run(self, con):
         kept, text, kind = con._prepare_script("CREATE TABLE u (i INTEGER); INSERT INTO u VALUES (1);", None)
         assert kept is None
-        assert (text, kind) == ("INSERT INTO u VALUES (1)", "insert")
+        assert (text, kind) == (" INSERT INTO u VALUES (1)", "insert")
         assert con.execute("SELECT count(*) FROM u").fetchall() == [(0,)]
 
     @pytest.mark.parametrize(
@@ -1051,7 +1051,7 @@ class TestPrepareScript:
         assert con._prepare_script(sql, None) == expected
 
     def test_parameters_only_on_the_last(self, con):
-        assert con._prepare_script("SELECT 1; SELECT ?", [1])[1:] == ("SELECT ?", "select")
+        assert con._prepare_script("SELECT 1; SELECT ?", [1])[1:] == (" SELECT ?", "select")
         with pytest.raises(duckdb.NotImplementedException, match="only supported for the last statement"):
             con._prepare_script("SELECT ?; SELECT 1", [1])
         with pytest.raises(duckdb.InvalidInputException, match="Parameters were given"):
