@@ -1,5 +1,3 @@
-import platform
-
 import pytest
 from conftest import is_string_dtype
 
@@ -16,7 +14,6 @@ def assert_nullness(items, null_indices):
             assert not pd.isna(items[i])
 
 
-@pytest.mark.skipif(platform.system() == "Emscripten", reason="Pandas interaction is broken in Pyodide 3.11")
 class TestPandasNA:
     @pytest.mark.parametrize("rows", [100, duckdb.__standard_vector_size__, 5000, 1000000])
     def test_pandas_string_null(self, duckdb_cursor, rows):

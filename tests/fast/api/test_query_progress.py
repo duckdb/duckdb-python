@@ -1,5 +1,4 @@
 import contextlib
-import platform
 import subprocess
 import sys
 import threading
@@ -11,10 +10,6 @@ import duckdb
 
 
 class TestQueryProgress:
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten",
-        reason="threads not allowed on Emscripten",
-    )
     def test_query_progress(self, reraise):
         conn = duckdb.connect()
         conn.sql("set enable_progress_bar_print=false")

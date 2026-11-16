@@ -7,17 +7,11 @@ it those calls raise ``TypeError: cannot create weak reference``. This guards th
 every publicly handed-out bound type (Connection, Relation, Expression, Type, Statement).
 """
 
-import platform
 import weakref
 
 import pytest
 
 import duckdb
-
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="Extensions are not supported on Emscripten",
-)
 
 
 @pytest.fixture

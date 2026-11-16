@@ -1,4 +1,3 @@
-import platform
 import queue as Queue
 import threading
 from pathlib import Path
@@ -8,11 +7,6 @@ import pytest
 import duckdb
 import numpy as np
 import pandas as pd
-
-pytestmark = pytest.mark.xfail(
-    condition=platform.system() == "Emscripten",
-    reason="Emscripten builds cannot use threads",
-)
 
 
 def connect_duck(duckdb_conn):

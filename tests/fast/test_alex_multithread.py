@@ -1,15 +1,8 @@
-import platform
 from threading import Thread, current_thread
 
 import pytest
 
 import duckdb
-
-pytestmark = pytest.mark.xfail(
-    condition=platform.system() == "Emscripten",
-    reason="Emscripten builds cannot use threads",
-    raises=RuntimeError,
-)
 
 
 @pytest.fixture(scope="session")

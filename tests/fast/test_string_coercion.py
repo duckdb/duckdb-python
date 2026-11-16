@@ -6,16 +6,7 @@ the lenient behavior (str as-is, bytes UTF-8 decoded, anything else stringified 
 std::bad_cast regression and confirm the realistic cases still match pybind11.
 """
 
-import platform
-
-import pytest
-
 import duckdb
-
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="Extensions are not supported on Emscripten",
-)
 
 
 def test_execute_int_param_key():

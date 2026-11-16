@@ -1,5 +1,4 @@
 import _thread as thread
-import platform
 import threading
 import time
 
@@ -21,10 +20,6 @@ def send_keyboard_interrupt():
 
 
 class TestQueryInterruption:
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten",
-        reason="Emscripten builds cannot use threads",
-    )
     def test_query_interruption(self):
         con = duckdb.connect()
         thread = threading.Thread(target=send_keyboard_interrupt)
@@ -40,10 +35,6 @@ class TestQueryInterruption:
             pytest.fail("Interrupted by user")
         thread.join()
 
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten",
-        reason="Emscripten builds cannot use threads",
-    )
     @pytest.mark.timeout(120)
     def test_streaming_fetch_interruption(self):
         con = duckdb.connect()
@@ -59,10 +50,6 @@ class TestQueryInterruption:
             drain(con)
         interrupter.join()
 
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten",
-        reason="Emscripten builds cannot use threads",
-    )
     @pytest.mark.timeout(120)
     def test_materializing_fetch_interruption(self):
         con = duckdb.connect()

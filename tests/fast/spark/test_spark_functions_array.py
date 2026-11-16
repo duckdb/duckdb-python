@@ -1,5 +1,4 @@
 import datetime
-import platform
 import re
 
 import pytest
@@ -18,12 +17,6 @@ if USE_ACTUAL_SPARK:
 
 def _arrays(spark, rows, *columns):
     return spark.createDataFrame(rows, StructType([StructField(c, ArrayType(LongType())) for c in columns]))
-
-
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="This Spark experimental test is not supported on Emscripten",
-)
 
 
 class TestSparkFunctionsArray:

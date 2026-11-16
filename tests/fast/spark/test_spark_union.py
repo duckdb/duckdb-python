@@ -1,5 +1,4 @@
 import datetime
-import platform
 from decimal import Decimal
 
 import pytest
@@ -62,7 +61,6 @@ class TestDataFrameUnion:
         res2 = unionDF.collect()
         assert res == res2
 
-    @pytest.mark.xfail(condition=platform.system() == "Emscripten", reason="Broken on Pyodide")
     def test_merge_without_duplicates(self, df, df2):
         # 'sort' has been added to make the result deterministic
         disDF = df.union(df2).distinct().sort(col("employee_name"))

@@ -1,6 +1,4 @@
 import datetime
-import os
-import platform
 
 import pytest
 from conftest import pandas_2_or_higher
@@ -69,10 +67,6 @@ class TestPandasTimestamps:
         # Check values match without strict dtype comparison
         pd.testing.assert_frame_equal(df_from_duck, df, check_dtype=False)
 
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten" and os.environ.get("TZ") != "UTC",
-        reason="time zones other than UTC don't seem to work on Pyodide",
-    )
     def test_timestamp_timezone(self, duckdb_cursor):
         rel = duckdb_cursor.query(
             """
