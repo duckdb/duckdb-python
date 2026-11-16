@@ -2,7 +2,6 @@
 import datetime
 import decimal
 import math
-import platform
 import re
 from decimal import Decimal
 
@@ -490,10 +489,6 @@ class TestResolveObjectColumns:
         double_dtype = np.dtype("float64")
         assert isinstance(converted_col["0"].dtype, double_dtype.__class__)
 
-    @pytest.mark.xfail(
-        condition=platform.system() == "Emscripten",
-        reason="older numpy raises a warning when running with Pyodide",
-    )
     def test_numpy_object_with_stride(self, duckdb_cursor):
         # Create 2D array in C-order (row-major)
         data = np.zeros((10, 3), dtype=np.int64)

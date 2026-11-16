@@ -16,11 +16,6 @@ from duckdb import (
 from duckdb.sqltypes import INTEGER, TIMESTAMP, TINYINT, VARCHAR
 from duckdb.value.constant import IntegerValue, Value
 
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="Extensions are not supported on Emscripten",
-)
-
 
 @pytest.fixture
 def schema_join():

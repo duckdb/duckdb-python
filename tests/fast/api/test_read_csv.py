@@ -1,5 +1,4 @@
 import datetime
-import platform
 import sys
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -449,7 +448,6 @@ class TestReadCSV:
         res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
-    @pytest.mark.xfail(condition=platform.system() == "Emscripten", reason="time zones not working")
     def test_read_csv_combined(self, duckdb_cursor):
         CSV_FILE = TestFile("stress_test.csv")
         COLUMNS = {

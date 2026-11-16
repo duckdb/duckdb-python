@@ -10,7 +10,6 @@ Key semantics:
 
 import datetime
 import decimal
-import platform
 import uuid
 
 import pytest
@@ -21,11 +20,6 @@ from duckdb import (
     CoalesceOperator,
     ColumnExpression,
     FunctionExpression,
-)
-
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="Extensions are not supported on Emscripten",
 )
 
 # ---------------------------------------------------------------------------

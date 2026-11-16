@@ -1,16 +1,10 @@
 import os
-import platform
 import subprocess
 import sys
 
 import pytest
 
 import duckdb
-
-pytestmark = pytest.mark.skipif(
-    platform.system() == "Emscripten",
-    reason="Extensions are not supported on Emscripten",
-)
 
 
 def test_extension_loading(require):

@@ -1,23 +1,8 @@
-import platform
-
 import pytest
 
 
 class TestMaterializedRelationSlow:
-    @pytest.mark.parametrize(
-        "num_rows",
-        [
-            1000000,
-            pytest.param(
-                10000000,
-                marks=pytest.mark.skipif(
-                    condition=platform.system() == "Emscripten",
-                    reason="Emscripten/Pyodide builds run out of memory at this scale, and error might not "
-                    "thrown reliably",
-                ),
-            ),
-        ],
-    )
+    @pytest.mark.parametrize("num_rows", [1000000, 10000000])
     def test_materialized_relation(self, duckdb_cursor, num_rows):
         # Anything that is not a SELECT statement becomes a materialized relation, so we use `CALL`
         query = f"call repeat_row(42, 'test', 'this is a long string', true, num_rows={num_rows})"
