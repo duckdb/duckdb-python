@@ -14,7 +14,6 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
-#include "duckdb/main/client_context_wrapper.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/statement_iterator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
