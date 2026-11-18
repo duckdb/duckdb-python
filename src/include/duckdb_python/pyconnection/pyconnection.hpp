@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+
+#include <thread>
 #include "duckdb.hpp"
 #include "duckdb_python/nb/casters.hpp"
 #include "duckdb_python/import_cache/python_import_cache.hpp"
@@ -88,8 +90,9 @@ public:
 	void Supersede();
 	//! Every row the result still holds, under names, which leaves it read out as a consuming fetch does; null
 	//! when the rows were used up already. The rows are gone even when the take fails, since it ran the
-	//! statement to its end or ended it.
-	unique_ptr<ColumnDataCollection> TakeRows(vector<Identifier> &names);
+	//! statement to its end or ended it. The caller holds the connection's claim, so nothing can refuse the take
+	//! once it has begun.
+	unique_ptr<ColumnDataCollection> TakeRowsClaimed(vector<Identifier> &names);
 	shared_ptr<engine::Result> EngineResult() const {
 		return result ? result->EngineResult() : nullptr;
 	}
@@ -266,38 +269,77 @@ private:
 	};
 
 public:
-	// RAII guard for the connection mutex (see py_connection_lock below). Constructing
-	// one releases the GIL while waiting for the mutex and reacquires it before
-	// returning, so callers always come out of the constructor with the GIL held
-	// and the mutex locked. The mutex is released when the guard goes out of scope.
-	// Holding the GIL while blocked on this mutex would deadlock against a thread
-	// that holds the mutex and is mid-way through a GIL-releasing native call —
-	// see duckdb-python#435.
+	//! What a call does about other calls on the connection mutex
+	enum class IfHeld : uint8_t {
+		//! Waits for the mutex, with the GIL released: the holder may be inside a native call that needs the GIL back
+		WAIT,
+		//! For the calls that submit a statement. One of them is in flight at a time: a second one arriving is refused
+		//! as busy at once, before any wait, since the first may be in the stretch of its call outside any claim
+		//! (parsing, superseding the old result, converting its parameters, installing the result), where a caller
+		//! that passed the busy check would otherwise wait for the whole call and then replace its result. Behind
+		//! any other holder of the mutex it waits as every call does
+		REFUSE
+	};
+
+	//! Holds the connection mutex (py_connection_lock below) for one call; the GIL is held on return. The mutex is
+	//! recursive, so a call from the thread that holds it enters once it passed the busy check; a submitting call
+	//! from that thread also needs the mark to be its own, which it is unless another thread's submitting call
+	//! arrived first and waits for the mutex
 	class ConnectionLockGuard {
 	public:
-		explicit ConnectionLockGuard(DuckDBPyConnection &conn) : lock_(conn.py_connection_lock, std::defer_lock) {
+		explicit ConnectionLockGuard(DuckDBPyConnection &conn_p, IfHeld if_held = IfHeld::WAIT)
+		    : conn(conn_p), lock_(conn_p.py_connection_lock, std::defer_lock) {
 			DUCKDB_PY_ASSERT_GIL_HELD();
 			// The holder of the mutex may be running a query that is waiting for this very call
 			conn.con.ThrowIfBusy();
+			if (if_held == IfHeld::REFUSE) {
+				MarkSubmitting();
+			}
 			nb::gil_scoped_release release;
 			DUCKDB_PY_ASSERT_GIL_RELEASED();
 			lock_.lock();
 		}
+		~ConnectionLockGuard() {
+			DropSubmittingMark();
+		}
+
+		//! Ends the stretch during which other submitting calls are refused, for a call whose last claim is over
+		//! while it still holds the mutex, so the rest of the call is waited for like any other holder
+		void DropSubmittingMark() {
+			if (marks_submitting_call) {
+				conn.submitting_thread.store(std::thread::id());
+				marks_submitting_call = false;
+			}
+		}
 
 	private:
+		//! Decided on arrival, before any wait, so the loser never waits for the winner's call; a nested call of the
+		//! submitting thread itself passes, as it does the recursive mutex
+		void MarkSubmitting() {
+			std::thread::id nobody;
+			auto self = std::this_thread::get_id();
+			if (conn.submitting_thread.compare_exchange_strong(nobody, self)) {
+				marks_submitting_call = true;
+				return;
+			}
+			if (nobody != self) {
+				engine::ThrowBusy();
+			}
+		}
+
+		DuckDBPyConnection &conn;
 		std::unique_lock<std::recursive_mutex> lock_;
+		bool marks_submitting_call = false;
 	};
 
 	ConnectionGuard con;
 	Cursors cursors;
-	// Recursive so that the outer lock taken at the top of execute/fetch
-	// methods (while still holding the GIL) does not deadlock against the
-	// inner lock taken by PrepareQuery / ExecuteInternal /
-	// PrepareAndSubmitInternal (after releasing the GIL). Serialises every
-	// path that touches `con.result` so concurrent calls on a single
-	// DuckDBPyConnection cannot dereference an already-freed result — see
-	// duckdb-python#435.
+	//! Serialises every path that touches con.result, so concurrent calls on one connection cannot dereference a
+	//! freed result (duckdb-python#435). Recursive, so the lock taken at the top of execute and the fetches does not
+	//! deadlock against the one PrepareQuery and ExecuteInternal take after releasing the GIL
 	std::recursive_mutex py_connection_lock;
+	//! The thread whose call that submits a statement (IfHeld::REFUSE) is in flight, or no thread
+	std::atomic<std::thread::id> submitting_thread {std::thread::id()};
 	//! The database's store of file-like objects for reading, kept once this connection has found it
 	shared_ptr<ObjectStore> object_store;
 	case_insensitive_map_t<unique_ptr<ExternalDependency>> registered_functions;
@@ -374,12 +416,11 @@ public:
 	engine::Prepared PrepareQuery(unique_ptr<SQLStatement> statement);
 	shared_ptr<engine::Result> ExecuteInternal(engine::Prepared &prep, nb::object params,
 	                                           engine::StatementGroup &statements);
-	//! Binds the parameters and submits the statement. The result is returned undriven.
-	shared_ptr<engine::Result> PrepareAndSubmitInternal(unique_ptr<SQLStatement> statement,
-	                                                    nb::object params = nb::list());
 	engine::Session EngineSession();
 
 	std::shared_ptr<DuckDBPyConnection> Execute(const nb::object &query, nb::object params = nb::list());
+	//! Makes the result the connection's DB-API result, with the GIL released; false when there is none
+	bool RegisterResult(shared_ptr<engine::Result> res);
 	std::shared_ptr<DuckDBPyConnection> ExecuteFromString(const string &query);
 
 	std::shared_ptr<DuckDBPyConnection> Append(const string &name, const PandasDataFrame &value, bool by_name);

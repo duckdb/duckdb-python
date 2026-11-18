@@ -52,9 +52,10 @@ private:
 class ConnectionState;
 class ConnectionClaim;
 
-//! A submitted statement. Retention is settled by the first consumer: a fetch opens a stream, Retain and the
-//! Take calls keep every row. Every call that drives the query claims the connection, takes the client context
-//! lock and may wait for running tasks, so callers must not hold a lock those tasks need.
+//! A submitted statement. Retention is settled by the first consumer: a fetch opens a stream, RetainClaimed and
+//! the Take calls keep every row. Every call that drives the query runs under the connection's claim, its own or
+//! the caller's, takes the client context lock and may wait for running tasks, so callers must not hold a lock
+//! those tasks need.
 class Result : public enable_shared_from_this<Result> {
 public:
 	//! written_type is the submitted statement's own type, since the handle of a prepared execution reports EXECUTE
@@ -105,14 +106,11 @@ public:
 	shared_ptr<ClientContext> TryGetContext() const;
 	//! The database whose buffers hold the rows, null once it is gone. Weak for the same reason as the context.
 	shared_ptr<DatabaseInstance> TryGetDatabase() const;
-	//! Keeps every row: drives the query to its end unless it already ended. A failure ends the query.
-	void Retain(const InterruptCheck &check);
-	//! Retain for a caller that already holds the connection's claim. A failure ends the query.
+	//! Keeps every row: drives the query to its end unless it already ended, for a caller that holds the
+	//! connection's claim. A failure ends the query.
 	void RetainClaimed(const InterruptCheck &check);
-	//! Runs the statement until its first unit is ready or it ends, without deciding how its rows are read,
-	//! and throws the error it ended with. A failure ends the query.
-	void Settle(const InterruptCheck &check);
-	//! Settle for a caller that already holds the connection's claim. A failure ends the query.
+	//! Runs the statement until its first unit is ready or it ends, without deciding how its rows are read, and
+	//! throws the error it ended with, for a caller that holds the connection's claim. A failure ends the query.
 	void SettleClaimed(const InterruptCheck &check);
 	//! Rows of a retained result. Materializes it first.
 	idx_t RowCount(const InterruptCheck &check);
@@ -122,12 +120,16 @@ public:
 	unique_ptr<ArrowArrayWrapper> FetchArray(const InterruptCheck &check);
 	//! Every remaining row, the result is empty afterwards
 	unique_ptr<ColumnDataCollection> TakeChunks(const InterruptCheck &check);
+	//! TakeChunks for a caller that already holds the connection's claim
+	unique_ptr<ColumnDataCollection> TakeChunksClaimed(const InterruptCheck &check);
 	//! Every remaining array, the result is empty afterwards
 	vector<unique_ptr<ArrowArrayWrapper>> TakeArrays(const InterruptCheck &check);
 	//! A copy of the result's Arrow schema, owned by the caller. Arrow results only.
 	void CopyArrowSchema(ArrowSchema &out) const;
 	//! An Arrow schema for the result's types under the given names, built in a transaction on its connection
 	void BuildArrowSchema(const vector<string> &names, ArrowSchema &out) const;
+	//! BuildArrowSchema for a caller that already holds the connection's claim
+	void BuildArrowSchemaClaimed(const vector<string> &names, ArrowSchema &out) const;
 	//! Renders the rows of a retained result
 	string ToBox(BoxRendererContext &context, const BoxRendererConfig &config);
 

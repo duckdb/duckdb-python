@@ -114,16 +114,16 @@ unique_ptr<DataChunk> DuckDBPyResult::TakeBufferedRows() {
 	return remainder;
 }
 
-unique_ptr<ColumnDataCollection> DuckDBPyResult::TakeRows(const engine::InterruptCheck &check) {
+unique_ptr<ColumnDataCollection> DuckDBPyResult::TakeRowsClaimed(const engine::InterruptCheck &check) {
 	if (Empty()) {
-		throw InternalException("TakeRows called without a result object");
+		throw InternalException("TakeRowsClaimed called without a result object");
 	}
 	auto buffered = TakeBufferedRows();
 	unique_ptr<ColumnDataCollection> rows;
 	{
 		DUCKDB_PY_ASSERT_GIL_HELD();
 		nb::gil_scoped_release release;
-		auto taken = result->TakeChunks(check);
+		auto taken = result->TakeChunksClaimed(check);
 		if (!buffered) {
 			return taken;
 		}
@@ -480,23 +480,32 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(const idx_t rows_per_batc
 	}
 	RequireArrowFormat(*result);
 	return RunWithArrowSchema<duckdb::pyarrow::Table>(
-	    [&](const ArrowSchema &schema) -> duckdb::pyarrow::Table {
-		    auto pyarrow_schema = pyarrow::ToPyArrowSchema(schema);
-		    vector<unique_ptr<ArrowArrayWrapper>> arrays;
-		    {
-			    DUCKDB_PY_ASSERT_GIL_HELD();
-			    nb::gil_scoped_release release;
-			    arrays = result->TakeArrays(DuckDBPyConnection::CheckSignals);
-		    }
-		    nb::list batches;
-		    for (auto &array : arrays) {
-			    ArrowArray data;
-			    array->MoveTo(data);
-			    TransformDuckToArrowChunk(pyarrow_schema, data, batches);
-		    }
-		    return pyarrow::ToArrowTable(std::move(batches), pyarrow_schema);
-	    },
-	    to_polars);
+	    [&](const ArrowSchema &schema) -> duckdb::pyarrow::Table { return ConvertToArrowTable(schema); }, to_polars);
+}
+
+duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(ArrowSchema &schema) {
+	if (Empty()) {
+		throw InvalidInputException("There is no query result");
+	}
+	RequireArrowFormat(*result);
+	return ConvertToArrowTable(schema);
+}
+
+duckdb::pyarrow::Table DuckDBPyResult::ConvertToArrowTable(const ArrowSchema &schema) {
+	auto pyarrow_schema = pyarrow::ToPyArrowSchema(schema);
+	vector<unique_ptr<ArrowArrayWrapper>> arrays;
+	{
+		DUCKDB_PY_ASSERT_GIL_HELD();
+		nb::gil_scoped_release release;
+		arrays = result->TakeArrays(DuckDBPyConnection::CheckSignals);
+	}
+	nb::list batches;
+	for (auto &array : arrays) {
+		ArrowArray data;
+		array->MoveTo(data);
+		TransformDuckToArrowChunk(pyarrow_schema, data, batches);
+	}
+	return pyarrow::ToArrowTable(std::move(batches), pyarrow_schema);
 }
 
 void DuckDBPyResult::CheckBatchSize(idx_t rows_per_batch) {
@@ -631,13 +640,18 @@ struct ArrowArrayStreamGuard {
 
 } // namespace
 
-ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
+ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch, ArrowSchema *prebuilt) {
 	RequireArrowFormat(*result);
 	auto state = make_uniq<ArrowStreamState>();
-	if (names_override.empty()) {
-		result->CopyArrowSchema(state->cached_schema);
+	if (prebuilt) {
+		state->cached_schema = *prebuilt;
+		prebuilt->release = nullptr;
 	} else {
-		result->BuildArrowSchema(IdentifiersToStrings(names_override), state->cached_schema);
+		// A result with its own names comes with a prebuilt schema, see ResultAsArrow
+		if (!names_override.empty()) {
+			throw InternalException("Arrow stream over a result with its own names and no schema built for them");
+		}
+		result->CopyArrowSchema(state->cached_schema);
 	}
 	state->result = std::move(result);
 	current_chunk.reset();
@@ -653,13 +667,22 @@ ArrowArrayStream DuckDBPyResult::FetchArrowArrayStream(idx_t rows_per_batch) {
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
+	return ImportRecordBatchReader(nullptr, rows_per_batch);
+}
+
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(ArrowSchema &schema, idx_t rows_per_batch) {
+	return ImportRecordBatchReader(&schema, rows_per_batch);
+}
+
+duckdb::pyarrow::RecordBatchReader DuckDBPyResult::ImportRecordBatchReader(ArrowSchema *prebuilt,
+                                                                           idx_t rows_per_batch) {
 	if (Empty()) {
 		throw InvalidInputException("There is no query result");
 	}
 	CheckBatchSize(rows_per_batch);
 	auto pyarrow_lib_module = nb::module_::import_("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
-	ArrowArrayStreamGuard guard {FetchArrowArrayStream(rows_per_batch)};
+	ArrowArrayStreamGuard guard {FetchArrowArrayStream(rows_per_batch, prebuilt)};
 	nb::object record_batch_reader = record_batch_reader_func((uint64_t)&guard.stream); // NOLINT
 	return nb::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
@@ -680,7 +703,7 @@ nb::object DuckDBPyResult::FetchArrowCapsule(const idx_t rows_per_batch) {
 		throw InvalidInputException("There is no query result");
 	}
 	CheckBatchSize(rows_per_batch);
-	auto inner_stream = FetchArrowArrayStream(rows_per_batch);
+	auto inner_stream = FetchArrowArrayStream(rows_per_batch, nullptr);
 	auto arrow_stream = new ArrowArrayStream();
 	*arrow_stream = inner_stream;
 	return nb::capsule(arrow_stream, "arrow_array_stream", ArrowArrayStreamPyCapsuleDestructor);

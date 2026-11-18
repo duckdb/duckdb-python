@@ -86,6 +86,10 @@ public:
 	bool AdmittedDuringExit() const {
 		return admitted_during_exit;
 	}
+	//! Whether a call holds the connection's claim right now
+	bool Claimed() const {
+		return busy;
+	}
 
 private:
 	friend class ConnectionClaim;
@@ -168,6 +172,9 @@ private:
 	std::deque<string> released_order;
 };
 
+//! The refusal of a call that finds the connection taken by another call
+[[noreturn]] void ThrowBusy();
+
 //! Holds the connection for one stretch of engine work. A second claim, and any claim from a callback of the
 //! connection's queries, is refused instead of waiting: the work it would wait for may be waiting for it.
 class ConnectionClaim {
@@ -205,15 +212,16 @@ public:
 		return *context;
 	}
 	Prepared Prepare(unique_ptr<SQLStatement> statement);
-	shared_ptr<Result> Submit(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &values,
-	                          const Format &format);
-	//! Submit for a caller that already holds the connection's claim
+	//! Submits a statement whose result the caller reads later, for a caller that holds the connection's claim;
+	//! the caller keeps its claim until the result is settled or retained, so no other call finds the statement
+	//! pending. Run and RunClaimed below submit and complete a statement in one go.
 	shared_ptr<Result> SubmitClaimed(unique_ptr<SQLStatement> statement, identifier_map_t<BoundParameterData> &values,
 	                                 const Format &format);
-	shared_ptr<Result> Submit(Prepared &prepared, identifier_map_t<BoundParameterData> &values, const Format &format);
+	shared_ptr<Result> SubmitClaimed(Prepared &prepared, identifier_map_t<BoundParameterData> &values,
+	                                 const Format &format);
 	//! Scans a collection, for example to read rows a result already holds in another format
-	shared_ptr<Result> Submit(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
-	                          const Format &format);
+	shared_ptr<Result> SubmitClaimed(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
+	                                 const Format &format);
 	//! Binds a statement without running it, keeping the tables its replacement scans resolved in tables
 	StatementSignature Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables);
 	//! Binds a statement with values for its parameters, as the engine rebinds a prepared statement for the values it
@@ -267,6 +275,8 @@ public:
 	shared_ptr<Result> Choose(shared_ptr<Result> last);
 	//! Throws for parameters given to a group whose text after the statements that ran held no statement
 	[[noreturn]] void RefuseParameters();
+	//! RefuseParameters for a caller that already holds the connection's claim
+	[[noreturn]] void RefuseParametersClaimed();
 
 private:
 	bool HasMore();
