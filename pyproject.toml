@@ -43,7 +43,7 @@ Changelog = "https://github.com/duckdb/duckdb-python/releases"
 
 [project.optional-dependencies]
 all = [ # users can install duckdb with 'duckdb[all]', which will install this list
-    "ipython", # used in duckdb.query_graph
+    "ipython", # used by the Jupyter progress bar and the relation display in duckdb/_relation.py
     "fsspec",  # used in duckdb.filesystem
     "numpy",   # used in duckdb.fetchnumpy()
     "pandas",  # used for pandas dataframes all over the place
@@ -390,7 +390,6 @@ pretty = true
 python_version = "3.12"
 exclude = [
     "duckdb/experimental/", # not checking the pyspark API
-    "duckdb/query_graph/",  # old and unmaintained (should probably remove)
     "tests", "scripts",
 ]
 
