@@ -775,6 +775,7 @@ NB_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	      "used for e.g., syntax highlighting",
 	      nb::arg("query"));
 	m.def("_set_arrow_sources", &DuckDBPyConnection::SetArrowSources, nb::arg("sources"));
+	m.def("_set_extension_search_path", &DuckDBPyConnection::SetExtensionSearchPath, nb::arg("hook"));
 	m.def("_translate_predicate", &TranslatePredicateForTesting, nb::arg("connection"), nb::arg("predicate"),
 	      nb::arg("columns").none() = nb::none(), nb::arg("schema").none() = nb::none(), nb::arg("select") = "*");
 	nb::enum_<PySQLTokenType>(m, "token_type")
