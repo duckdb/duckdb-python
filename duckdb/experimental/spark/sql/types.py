@@ -20,6 +20,7 @@ from duckdb.sqltypes import DuckDBPyType
 
 from ..errors import ParseException, PySparkNotImplementedError, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
+from . import _type_cache
 
 T = TypeVar("T")
 U = TypeVar("U")
@@ -67,11 +68,31 @@ __all__ = [
 ]
 
 
+def _parsed(text: str) -> DuckDBPyType:
+    # Parsing runs on the default connection, so each text is parsed once, into a dict another module owns: a type held
+    # by a singleton would outlive finalization.
+    if text not in _type_cache.TYPES:
+        _type_cache.TYPES[text] = DuckDBPyType(text)
+    return _type_cache.TYPES[text]
+
+
 class DataType:
     """Base class for data types."""
 
-    def __init__(self, duckdb_type: DuckDBPyType) -> None:  # noqa: D107
-        self.duckdb_type = duckdb_type
+    def __init__(self, duckdb_type: DuckDBPyType | str) -> None:  # noqa: D107
+        # A name is parsed here, once, and read from the cache; a type a subclass composed needs no parse and stays on
+        # the instance, which is never a singleton.
+        if isinstance(duckdb_type, str):
+            self._duckdb_type_name, self._duckdb_type = duckdb_type, None
+            _parsed(duckdb_type)
+        else:
+            self._duckdb_type_name, self._duckdb_type = None, duckdb_type
+
+    @property
+    def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
+        if self._duckdb_type is not None:
+            return self._duckdb_type
+        return _type_cache.TYPES[self._duckdb_type_name]
 
     def __repr__(self) -> str:  # noqa: D105
         return self.__class__.__name__ + "()"
@@ -134,7 +155,7 @@ class NullType(DataType, metaclass=DataTypeSingleton):
     """
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("NULL"))
+        super().__init__("NULL")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -163,49 +184,49 @@ class StringType(AtomicType, metaclass=DataTypeSingleton):
     """String data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("VARCHAR"))
+        super().__init__("VARCHAR")
 
 
 class BitstringType(AtomicType, metaclass=DataTypeSingleton):
     """Bitstring data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("BIT"))
+        super().__init__("BIT")
 
 
 class UUIDType(AtomicType, metaclass=DataTypeSingleton):
     """UUID data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("UUID"))
+        super().__init__("UUID")
 
 
 class BinaryType(AtomicType, metaclass=DataTypeSingleton):
     """Binary (byte array) data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("BLOB"))
+        super().__init__("BLOB")
 
 
 class BooleanType(AtomicType, metaclass=DataTypeSingleton):
     """Boolean data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("BOOLEAN"))
+        super().__init__("BOOLEAN")
 
 
 class VariantType(AtomicType, metaclass=DataTypeSingleton):
     """Variant (semi-structured) data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("VARIANT"))
+        super().__init__("VARIANT")
 
 
 class DateType(AtomicType, metaclass=DataTypeSingleton):
     """Date (datetime.date) data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("DATE"))
+        super().__init__("DATE")
 
     EPOCH_ORDINAL = datetime.datetime(1970, 1, 1).toordinal()
 
@@ -225,7 +246,7 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMPTZ"))
+        super().__init__("TIMESTAMPTZ")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -245,7 +266,7 @@ class TimestampNanosecondType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type with timezone information with nanosecond precision."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMPTZ_NS"))
+        super().__init__("TIMESTAMPTZ_NS")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -265,7 +286,7 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with microsecond precision."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMP"))
+        super().__init__("TIMESTAMP")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -289,7 +310,7 @@ class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with second precision."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMP_S"))
+        super().__init__("TIMESTAMP_S")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -309,7 +330,7 @@ class TimestampMillisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with millisecond precision."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMP_MS"))
+        super().__init__("TIMESTAMP_MS")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -329,7 +350,7 @@ class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with nanosecond precision."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMESTAMP_NS"))
+        super().__init__("TIMESTAMP_NS")
 
     def needConversion(self) -> bool:  # noqa: D102
         return True
@@ -371,6 +392,14 @@ class DecimalType(FractionalType):
         self.scale = scale
         self.hasPrecisionInfo = True  # this is a public API
 
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.decimal_type(self.precision, self.scale)
+
     def simpleString(self) -> str:  # noqa: D102
         return f"decimal({int(self.precision):d},{int(self.scale):d})"
 
@@ -384,21 +413,21 @@ class DoubleType(FractionalType, metaclass=DataTypeSingleton):
     """Double data type, representing double precision floats."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("DOUBLE"))
+        super().__init__("DOUBLE")
 
 
 class FloatType(FractionalType, metaclass=DataTypeSingleton):
     """Float data type, representing single precision floats."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("FLOAT"))
+        super().__init__("FLOAT")
 
 
 class ByteType(IntegralType):
     """Byte data type, i.e. a signed integer in a single byte."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TINYINT"))
+        super().__init__("TINYINT")
 
     def simpleString(self) -> str:  # noqa: D102
         return "tinyint"
@@ -408,7 +437,7 @@ class UnsignedByteType(IntegralType):
     """Unsigned byte data type, i.e. a unsigned integer in a single byte."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("UTINYINT"))
+        super().__init__("UTINYINT")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -419,7 +448,7 @@ class ShortType(IntegralType):
     """Short data type, i.e. a signed 16-bit integer."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("SMALLINT"))
+        super().__init__("SMALLINT")
 
     def simpleString(self) -> str:  # noqa: D102
         return "smallint"
@@ -429,7 +458,7 @@ class UnsignedShortType(IntegralType):
     """Unsigned short data type, i.e. a unsigned 16-bit integer."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("USMALLINT"))
+        super().__init__("USMALLINT")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -440,7 +469,7 @@ class IntegerType(IntegralType):
     """Int data type, i.e. a signed 32-bit integer."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("INTEGER"))
+        super().__init__("INTEGER")
 
     def simpleString(self) -> str:  # noqa: D102
         return "int"
@@ -450,7 +479,7 @@ class UnsignedIntegerType(IntegralType):
     """Unsigned int data type, i.e. a unsigned 32-bit integer."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("UINTEGER"))
+        super().__init__("UINTEGER")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -465,7 +494,7 @@ class LongType(IntegralType):
     """
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("BIGINT"))
+        super().__init__("BIGINT")
 
     def simpleString(self) -> str:  # noqa: D102
         return "bigint"
@@ -479,7 +508,7 @@ class UnsignedLongType(IntegralType):
     """
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("UBIGINT"))
+        super().__init__("UBIGINT")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -494,7 +523,7 @@ class HugeIntegerType(IntegralType):
     """
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("HUGEINT"))
+        super().__init__("HUGEINT")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -509,7 +538,7 @@ class UnsignedHugeIntegerType(IntegralType):
     """
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("UHUGEINT"))
+        super().__init__("UHUGEINT")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -520,7 +549,7 @@ class TimeType(IntegralType):
     """Time (datetime.time) data type."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIMETZ"))
+        super().__init__("TIMETZ")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -531,7 +560,7 @@ class TimeNTZType(IntegralType):
     """Time (datetime.time) data type without timezone information."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIME"))
+        super().__init__("TIME")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -542,7 +571,7 @@ class TimeNSType(IntegralType):
     """Time NS (datetime.time) data type without timezone information."""
 
     def __init__(self) -> None:  # noqa: D107
-        super().__init__(DuckDBPyType("TIME_NS"))
+        super().__init__("TIME_NS")
 
     @classmethod
     def typeName(cls) -> str:  # noqa: D102
@@ -589,7 +618,7 @@ class DayTimeIntervalType(AtomicType):
         if (self.startField, self.endField) != (DayTimeIntervalType.DAY, DayTimeIntervalType.SECOND):
             msg = f"The Spark type {self.simpleString()} is not supported"
             raise ContributionsAcceptedError(msg)
-        return DuckDBPyType("INTERVAL")
+        return duckdb.sqltypes.INTERVAL
 
     def _str_repr(self) -> str:
         fields = DayTimeIntervalType._fields
@@ -641,6 +670,14 @@ class ArrayType(DataType):
         assert isinstance(elementType, DataType), f"elementType {elementType} should be an instance of {DataType}"
         self.elementType = elementType
         self.containsNull = containsNull
+
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.list_type(self.elementType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"array<{self.elementType.simpleString()}>"
@@ -700,6 +737,14 @@ class MapType(DataType):
         self.keyType = keyType
         self.valueType = valueType
         self.valueContainsNull = valueContainsNull
+
+    def __getstate__(self) -> dict[str, Any]:  # noqa: D105
+        # The engine type does not pickle; the rest of the instance does, and the type is composed again on load.
+        return {key: value for key, value in self.__dict__.items() if key != "_duckdb_type"}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:  # noqa: D105
+        self.__dict__.update(state)
+        self._duckdb_type = duckdb.map_type(self.keyType.duckdb_type, self.valueType.duckdb_type)
 
     def simpleString(self) -> str:  # noqa: D102
         return f"map<{self.keyType.simpleString()},{self.valueType.simpleString()}>"
@@ -839,8 +884,10 @@ class StructType(DataType):
     @property
     def duckdb_type(self) -> DuckDBPyType:  # noqa: D102
         if self.names and not any(self.names):
-            # The struct DuckDB builds without field names, such as the elements of list_zip.
-            return DuckDBPyType(f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})")
+            # The struct DuckDB builds without field names, such as the elements of list_zip, is the one type parsed
+            # on a read: its text needs the engine's parser, and there is no constructor for it. Every DataFrame over a
+            # relation with a tuple column builds such a struct, so the parse waits for the first read of the text.
+            return _parsed(f"TUPLE({', '.join(str(f.duckdb_type) for f in self.fields)})")
         folded = [name.casefold() for name in self.names]
         if len(set(folded)) < len(folded):
             # DuckDB matches struct field names case insensitively, so it cannot hold two fields with one name.
@@ -1177,6 +1224,12 @@ class UserDefinedType(DataType):
     def __eq__(self, other: object) -> bool:
         return type(self) is type(other)
 
+
+# Every singleton is built here, so that building one later parses nothing on the default connection.
+for _singleton in [
+    value for value in list(globals().values()) if isinstance(value, DataTypeSingleton) and "__init__" in vars(value)
+]:
+    _singleton()
 
 _atomic_types: list[type[DataType]] = [
     StringType,

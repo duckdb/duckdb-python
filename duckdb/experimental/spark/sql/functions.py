@@ -21,7 +21,8 @@ from duckdb import (
 if TYPE_CHECKING:
     from .dataframe import DataFrame
 
-from duckdb.sqltypes import BIGINT, DOUBLE, INTEGER, VARCHAR, DuckDBPyType
+from duckdb import sqltypes
+from duckdb.sqltypes import DuckDBPyType
 
 from ..errors import AnalysisException, IllegalArgumentException, PySparkTypeError, PySparkValueError
 from ..exception import ContributionsAcceptedError
@@ -224,7 +225,9 @@ def _rounded_to_integral(function: str, col: "ColumnOrName") -> Column:
     names = sorted(name.upper() for name in _INTEGRAL_TYPE_IDS)
     is_integral = FunctionExpression("typeof", expr).isin(*map(ConstantExpression, names))
     return Column(
-        CaseExpression(is_integral, expr.cast(BIGINT)).otherwise(FunctionExpression(function, expr).cast(BIGINT))
+        CaseExpression(is_integral, expr.cast(sqltypes.BIGINT)).otherwise(
+            FunctionExpression(function, expr).cast(sqltypes.BIGINT)
+        )
     )
 
 
@@ -565,7 +568,7 @@ def left(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     [Row(r='Spa')]
     """  # noqa: D205
     # Spark casts the length to an integer, which truncates it, where DuckDB would round it.
-    str, len = _to_column_expr(str), _truncate(_to_column_expr(len), INTEGER)
+    str, len = _to_column_expr(str), _truncate(_to_column_expr(len), sqltypes.INTEGER)
     return Column(
         CaseExpression(str.isnull(), ConstantExpression(None))
         .when(len <= ConstantExpression(0), ConstantExpression(""))
@@ -600,7 +603,7 @@ def right(str: "ColumnOrName", len: "ColumnOrName") -> Column:
     >>> df.select(right(df.a, df.b).alias("r")).collect()
     [Row(r='SQL')]
     """  # noqa: D205
-    str, len = _to_column_expr(str), _truncate(_to_column_expr(len), INTEGER)
+    str, len = _to_column_expr(str), _truncate(_to_column_expr(len), sqltypes.INTEGER)
     return Column(
         CaseExpression(str.isnull(), ConstantExpression(None))
         .when(len <= ConstantExpression(0), ConstantExpression(""))
@@ -650,7 +653,7 @@ def levenshtein(left: "ColumnOrName", right: "ColumnOrName", threshold: int | No
     >>> df0.select(levenshtein("l", "r", 2).alias("d")).collect()
     [Row(d=-1)]
     """
-    distance = _result_type(_invoke_function_over_columns("levenshtein", left, right), INTEGER)
+    distance = _result_type(_invoke_function_over_columns("levenshtein", left, right), sqltypes.INTEGER)
     if threshold is None:
         return distance
     distance = _to_column_expr(distance)
@@ -2170,9 +2173,9 @@ def char(col: "ColumnOrName") -> Column:
     """  # noqa: D205
     return Column(
         _evaluated_once(
-            _spark_cast(_as_column(col), BIGINT),
+            _spark_cast(_as_column(col), sqltypes.BIGINT),
             lambda n: CaseExpression(n < 0, ConstantExpression("")).otherwise(
-                FunctionExpression("chr", (n % 256).cast(INTEGER))
+                FunctionExpression("chr", (n % 256).cast(sqltypes.INTEGER))
             ),
         )
     )
@@ -2553,7 +2556,8 @@ def regexp_count(str: "ColumnOrName", regexp: "ColumnOrName") -> Column:
     [Row(d=3)]
     """  # noqa: D205
     return _result_type(
-        _invoke_function_over_columns("len", _invoke_function_over_columns("regexp_extract_all", str, regexp)), INTEGER
+        _invoke_function_over_columns("len", _invoke_function_over_columns("regexp_extract_all", str, regexp)),
+        sqltypes.INTEGER,
     )
 
 
@@ -2801,10 +2805,12 @@ def sequence(start: "ColumnOrName", stop: "ColumnOrName", step: Optional["Column
     if step is None:
         # Spark steps by one, or by a day for dates, which DuckDB adds to a date as an integer. Adding an integer zero
         # to stop keeps the distance of a tinyint or smallint sequence from overflowing, and a date a date.
-        distance = (stop_expr + ConstantExpression(0).cast(INTEGER)) - start_expr
+        distance = (stop_expr + ConstantExpression(0).cast(sqltypes.INTEGER)) - start_expr
         offsets = FunctionExpression("generate_series", ConstantExpression(0), FunctionExpression("abs", distance))
         steps = _lambda(
-            lambda k: start_expr + (FunctionExpression("sign", distance) * k).cast(INTEGER), start_expr, stop_expr
+            lambda k: start_expr + (FunctionExpression("sign", distance) * k).cast(sqltypes.INTEGER),
+            start_expr,
+            stop_expr,
         )
         series = FunctionExpression("list_transform", offsets, steps)
         return Column(FunctionExpression("cast_to_type", series, elements))
@@ -2885,9 +2891,9 @@ def sign(col: "ColumnOrName") -> Column:
     |    -1.0|    1.0|
     +--------+-------+
     """
-    x = _to_column_expr(col).cast(DOUBLE)
+    x = _to_column_expr(col).cast(sqltypes.DOUBLE)
     # DuckDB's sign of NaN is 0, Spark's is NaN.
-    signum = FunctionExpression("sign", x).cast(DOUBLE)
+    signum = FunctionExpression("sign", x).cast(sqltypes.DOUBLE)
     return Column(CaseExpression(FunctionExpression("isnan", x), x).otherwise(signum))
 
 
@@ -2976,9 +2982,9 @@ def skewness(col: "ColumnOrName") -> Column:
     """
     x = _to_column_expr(col)
     # DuckDB's moments raise on a NaN or an infinity, which make Spark's NaN, so they see only finite values.
-    finite = FunctionExpression("isfinite", x.cast(DOUBLE))
+    finite = FunctionExpression("isfinite", x.cast(sqltypes.DOUBLE))
     finite_x = CaseExpression(finite, x)
-    n = FunctionExpression("count", finite_x).cast(DOUBLE)
+    n = FunctionExpression("count", finite_x).cast(sqltypes.DOUBLE)
     # DuckDB's skewness is the sample estimate, undefined below 3 values; Spark's is the population skewness.
     population = FunctionExpression("skewness", finite_x) * (n - 2) / FunctionExpression("sqrt", n * (n - 1))
     two_distinct = (n == 2) & (FunctionExpression("var_pop", finite_x) > 0)
@@ -3504,7 +3510,7 @@ def length(col: "ColumnOrName") -> Column:
     >>> spark.createDataFrame([("ABC ",)], ["a"]).select(length("a").alias("length")).collect()
     [Row(length=4)]
     """  # noqa: D205
-    return _result_type(_invoke_function_over_columns("length", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("length", col), sqltypes.INTEGER)
 
 
 def coalesce(*cols: "ColumnOrName") -> Column:
@@ -4012,7 +4018,7 @@ def date_part(field: "ColumnOrName", source: "ColumnOrName") -> Column:
         microseconds = _invoke_function_over_columns("date_part", lit("microseconds"), source)
         return (microseconds.cast(_types.DecimalType(8, 0)) * lit(Decimal("0.000001"))).cast(_types.DecimalType(8, 6))
     extracted = _invoke_function_over_columns("date_part", lit(part), source)
-    return _result_type(extracted + lit(1) if part == "dayofweek" else extracted, INTEGER)
+    return _result_type(extracted + lit(1) if part == "dayofweek" else extracted, sqltypes.INTEGER)
 
 
 def extract(field: "ColumnOrName", source: "ColumnOrName") -> Column:
@@ -4131,7 +4137,7 @@ def date_diff(end: "ColumnOrName", start: "ColumnOrName") -> Column:
     |2015-04-08|2015-05-10|               32|
     +----------+----------+-----------------+
     """
-    return _result_type(_invoke_function_over_columns("date_diff", lit("day"), start, end), INTEGER)
+    return _result_type(_invoke_function_over_columns("date_diff", lit("day"), start, end), sqltypes.INTEGER)
 
 
 def year(col: "ColumnOrName") -> Column:
@@ -4158,7 +4164,7 @@ def year(col: "ColumnOrName") -> Column:
     >>> df.select(year("dt").alias("year")).collect()
     [Row(year=2015)]
     """
-    return _result_type(_invoke_function_over_columns("year", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("year", col), sqltypes.INTEGER)
 
 
 def quarter(col: "ColumnOrName") -> Column:
@@ -4185,7 +4191,7 @@ def quarter(col: "ColumnOrName") -> Column:
     >>> df.select(quarter("dt").alias("quarter")).collect()
     [Row(quarter=2)]
     """
-    return _result_type(_invoke_function_over_columns("quarter", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("quarter", col), sqltypes.INTEGER)
 
 
 def month(col: "ColumnOrName") -> Column:
@@ -4212,7 +4218,7 @@ def month(col: "ColumnOrName") -> Column:
     >>> df.select(month("dt").alias("month")).collect()
     [Row(month=4)]
     """
-    return _result_type(_invoke_function_over_columns("month", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("month", col), sqltypes.INTEGER)
 
 
 def dayofweek(col: "ColumnOrName") -> Column:
@@ -4240,7 +4246,7 @@ def dayofweek(col: "ColumnOrName") -> Column:
     >>> df.select(dayofweek("dt").alias("day")).collect()
     [Row(day=4)]
     """  # noqa: D205
-    return _result_type(_invoke_function_over_columns("dayofweek", col) + lit(1), INTEGER)
+    return _result_type(_invoke_function_over_columns("dayofweek", col) + lit(1), sqltypes.INTEGER)
 
 
 def day(col: "ColumnOrName") -> Column:
@@ -4264,7 +4270,7 @@ def day(col: "ColumnOrName") -> Column:
     >>> df.select(day("dt").alias("day")).collect()
     [Row(day=8)]
     """
-    return _result_type(_invoke_function_over_columns("day", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("day", col), sqltypes.INTEGER)
 
 
 def dayofmonth(col: "ColumnOrName") -> Column:
@@ -4318,7 +4324,7 @@ def dayofyear(col: "ColumnOrName") -> Column:
     >>> df.select(dayofyear("dt").alias("day")).collect()
     [Row(day=98)]
     """
-    return _result_type(_invoke_function_over_columns("dayofyear", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("dayofyear", col), sqltypes.INTEGER)
 
 
 def hour(col: "ColumnOrName") -> Column:
@@ -4346,7 +4352,7 @@ def hour(col: "ColumnOrName") -> Column:
     >>> df.select(hour("ts").alias("hour")).collect()
     [Row(hour=13)]
     """
-    return _result_type(_invoke_function_over_columns("hour", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("hour", col), sqltypes.INTEGER)
 
 
 def minute(col: "ColumnOrName") -> Column:
@@ -4374,7 +4380,7 @@ def minute(col: "ColumnOrName") -> Column:
     >>> df.select(minute("ts").alias("minute")).collect()
     [Row(minute=8)]
     """
-    return _result_type(_invoke_function_over_columns("minute", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("minute", col), sqltypes.INTEGER)
 
 
 def second(col: "ColumnOrName") -> Column:
@@ -4402,7 +4408,7 @@ def second(col: "ColumnOrName") -> Column:
     >>> df.select(second("ts").alias("second")).collect()
     [Row(second=15)]
     """
-    return _result_type(_invoke_function_over_columns("second", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("second", col), sqltypes.INTEGER)
 
 
 def weekofyear(col: "ColumnOrName") -> Column:
@@ -4431,7 +4437,7 @@ def weekofyear(col: "ColumnOrName") -> Column:
     >>> df.select(weekofyear(df.dt).alias("week")).collect()
     [Row(week=15)]
     """  # noqa: D205
-    return _result_type(_invoke_function_over_columns("weekofyear", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("weekofyear", col), sqltypes.INTEGER)
 
 
 def cos(col: "ColumnOrName") -> Column:
@@ -4694,10 +4700,10 @@ def factorial(col: "ColumnOrName") -> Column:
     """
     return Column(
         _evaluated_once(
-            _spark_cast(_as_column(col), INTEGER),
+            _spark_cast(_as_column(col), sqltypes.INTEGER),
             lambda n: CaseExpression(
                 n.between(ConstantExpression(0), ConstantExpression(20)),
-                FunctionExpression("factorial", n).cast(BIGINT),
+                FunctionExpression("factorial", n).cast(sqltypes.BIGINT),
             ),
         )
     )
@@ -5112,7 +5118,7 @@ def octet_length(col: "ColumnOrName") -> Column:
     ...      .select(octet_length('cat')).collect()
         [Row(octet_length(cat)=3), Row(octet_length(cat)=4)]
     """
-    return _result_type(_invoke_function("octet_length", _to_binary(_to_column_expr(col))), INTEGER)
+    return _result_type(_invoke_function("octet_length", _to_binary(_to_column_expr(col))), sqltypes.INTEGER)
 
 
 def hex(col: "ColumnOrName") -> Column:
@@ -5312,7 +5318,9 @@ def array_join(col: "ColumnOrName", delimiter: str, null_replacement: str | None
             "list_transform",
             col,
             _lambda(
-                lambda x: CaseExpression(x.isnull(), ConstantExpression(null_replacement)).otherwise(x.cast(VARCHAR))
+                lambda x: CaseExpression(x.isnull(), ConstantExpression(null_replacement)).otherwise(
+                    x.cast(sqltypes.VARCHAR)
+                )
             ),
         )
     else:
@@ -5355,7 +5363,7 @@ def array_position(col: "ColumnOrName", value: Any) -> Column:  # noqa: ANN401
     """  # noqa: D205
     arr, element = _to_column_expr(col), _get_expr(value)
     position = CoalesceOperator(FunctionExpression("list_position", arr, element), ConstantExpression(0))
-    return _null_if_null(position.cast(BIGINT), arr, element)
+    return _null_if_null(position.cast(sqltypes.BIGINT), arr, element)
 
 
 def array_prepend(col: "ColumnOrName", value: Any) -> Column:  # noqa: ANN401
@@ -5442,7 +5450,7 @@ def array_size(col: "ColumnOrName") -> Column:
     >>> df.select(array_size(df.data).alias("r")).collect()
     [Row(r=3), Row(r=None)]
     """
-    return _result_type(_invoke_function_over_columns("len", col), INTEGER)
+    return _result_type(_invoke_function_over_columns("len", col), sqltypes.INTEGER)
 
 
 def array_sort(col: "ColumnOrName", comparator: Callable[[Column, Column], Column] | None = None) -> Column:
@@ -5887,7 +5895,7 @@ def weekday(col: "ColumnOrName") -> Column:
     |  2|
     +---+
     """
-    return _result_type(_invoke_function_over_columns("isodow", col) - 1, INTEGER)
+    return _result_type(_invoke_function_over_columns("isodow", col) - 1, sqltypes.INTEGER)
 
 
 def zeroifnull(col: "ColumnOrName") -> Column:
@@ -6344,7 +6352,7 @@ def unix_date(col: "ColumnOrName") -> Column:
     [Row(n=1)]
     >>> spark.conf.unset("spark.sql.session.timeZone")
     """
-    return _result_type(_unix_diff(col, "days"), INTEGER)
+    return _result_type(_unix_diff(col, "days"), sqltypes.INTEGER)
 
 
 def unix_micros(col: "ColumnOrName") -> Column:
@@ -6662,7 +6670,7 @@ def concat(*cols: "ColumnOrName") -> Column:
         return lit("")
     # DuckDB's || keeps binary and arrays and propagates NULL like Spark, where its concat makes text and skips NULL;
     # Spark reads a NULL literal as a string, where DuckDB would make the whole result untyped.
-    exprs = [_to_column_expr(c).cast(VARCHAR) if _is_null_literal(c) else _to_column_expr(c) for c in cols]
+    exprs = [_to_column_expr(c).cast(sqltypes.VARCHAR) if _is_null_literal(c) else _to_column_expr(c) for c in cols]
     if len(exprs) == 1:
         (value,) = exprs
         return Column(FunctionExpression("cast_to_type", value, FunctionExpression("||", value, value)))
@@ -6706,7 +6714,7 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     >>> df.select(instr(df.s, "b").alias("s")).collect()
     [Row(s=2)]
     """  # noqa: D205
-    return _result_type(_invoke_function("instr", _to_column_expr(str), ConstantExpression(substr)), INTEGER)
+    return _result_type(_invoke_function("instr", _to_column_expr(str), ConstantExpression(substr)), sqltypes.INTEGER)
 
 
 def expr(str: str) -> Column:

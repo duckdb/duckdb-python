@@ -2543,6 +2543,8 @@ spec = importlib.util.spec_from_file_location("scan_core", {str(Path(__file__))!
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 import duckdb, pyarrow as pa
+import _duckdb
+_duckdb._set_leak_report(True)
 table = pa.table({{"i": list(range(50_000))}})
 con = duckdb.connect(config={{"threads": 4}})
 if {state!r} in ("registered_reader", "reader_read_with_limit"):

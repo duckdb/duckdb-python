@@ -136,7 +136,8 @@ runs:
         CIBW_BEFORE_TEST: >
           uv sync --active --inexact --only-group test --no-install-project --directory {project}
         CIBW_TEST_COMMAND: >
-          uv run -v pytest --confcutdir=. --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
+          uv run python -c "import _duckdb; assert not _duckdb._assertions, 'the wheel was built with assertions'"
+          && uv run -v pytest --confcutdir=. --rootdir . -c {project}/pyproject.toml ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}
 
     # The stable ABI wheel must import nothing outside the stable ABI, which compiling with Py_LIMITED_API does
     # not prove for symbols pulled in by inline functions or dependencies.
