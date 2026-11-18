@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import decimal
 import gc
+import itertools
 import threading
 import time
 import uuid
@@ -285,6 +286,7 @@ class TestStreams:
         with pytest.raises(duckdb.InvalidInputException, match=r"registered as 'bad' failed: .*no more rows for you"):
             rows(con, "SELECT sum(a) FROM bad")
 
+    @pytest.mark.timeout(60)
     @pytest.mark.parametrize("pull_under_gil", [False, True])
     def test_a_python_error_in_a_pull_on_an_engine_thread_fails_the_query(self, con, pull_under_gil):
         con.execute("SET threads = 4")
@@ -292,8 +294,10 @@ class TestStreams:
         submitting = threading.get_ident()
         raised_on = []
 
+        # The submitting thread drives the query until its first result and can pull every batch of a finite stream
+        # while the worker threads wait for a CPU, so only an engine thread's error may end this one.
         def batches():
-            for i in range(2000):
+            for i in itertools.count():
                 if threading.get_ident() != submitting:
                     raised_on.append(threading.get_ident())
                     message = "no more rows for you"
@@ -312,9 +316,10 @@ class TestStreams:
                 return pa.RecordBatchReader.from_batches(arrow_schema, batches()).__arrow_c_stream__(), False
 
         con._register_arrow_source("t", scan_source(Pulled))
-        with pytest.raises(duckdb.InvalidInputException, match=r"registered as 't' failed: .*no more rows for you"):
+        with pytest.raises(duckdb.InvalidInputException) as error:
             rows(con, "SELECT sum(a) FROM t")
-        assert raised_on, "every pull ran on the submitting thread, so no engine thread raised"
+        assert raised_on, "no engine thread pulled, so the error was raised on the submitting thread"
+        assert error.match(r"registered as 't' failed: .*no more rows for you")
         assert rows(con, "SELECT 42") == [(42,)]
         con.register("good", pa.table({"a": [1, 2, 3]}))
         assert rows(con, "SELECT sum(a) FROM good") == [(6,)]

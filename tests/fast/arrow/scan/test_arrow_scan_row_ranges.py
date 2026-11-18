@@ -8,15 +8,14 @@ come from the numpy, pyarrow or polars values in Python.
 
 from __future__ import annotations
 
-import ctypes
 import gc
-import json
 import re
 import sys
 import threading
 import time
 
 import pytest
+from _gil_stall import ROUNDS, ScanTimings
 from conftest import PANDAS_GE_3
 
 import duckdb
@@ -811,7 +810,6 @@ class TestVerifyParallelism:
             assert np.array_equal(con.execute("SELECT n FROM src").fetchnumpy()["n"], arange(LARGE))
 
 
-HOLD_SECONDS = 0.2
 HOLD_ROWS = 1_000_000
 
 
@@ -829,30 +827,9 @@ def _hold_source(source):
     return table
 
 
-def _scan_seconds(obj, udf, hold):
-    query = (
-        "SELECT count(x), sum(CASE WHEN i = 0 THEN hold_gil(i) ELSE i END) FROM src"
-        if hold
-        else "SELECT count(x), sum(i) FROM src"
-    )
-    with duckdb.connect(config={"threads": THREADS}) as con:
-        con.create_function("hold_gil", udf, ["BIGINT"], "BIGINT")
-        con.register("src", obj)
-        con.execute("PRAGMA enable_profiling = 'no_output'")
-        con.execute(query).fetchall()
-        info = json.loads(con.get_profiling_information())
-    total = 0.0
-    stack = list(info["operator"])
-    while stack:
-        node = stack.pop()
-        if node.get("type") == "TABLE_SCAN":
-            total += node["timing"]
-        stack.extend(node.get("children", []))
-    return total
-
-
 class TestGil:
-    @pytest.mark.skipif(sys.platform == "win32", reason="holds the GIL through ctypes.PyDLL(None)")
+    # Linux only until a test-only counter of GIL acquisitions replaces the timing.
+    @pytest.mark.skipif(sys.platform != "linux", reason="the GIL release does not vary by platform; its timing does")
     @pytest.mark.skipif(not getattr(sys, "_is_gil_enabled", lambda: True)(), reason="needs an interpreter with a GIL")
     @pytest.mark.timeout(120)
     @pytest.mark.parametrize(
@@ -865,27 +842,15 @@ class TestGil:
         ],
     )
     def test_scanning_threads_keep_reading_while_another_holds_the_gil(self, source, takes_gil):
-        libc = ctypes.PyDLL(None)
-        libc.usleep.argtypes = [ctypes.c_uint]
-        calls = []
-
-        # A call through PyDLL keeps the GIL for the whole sleep.
-        def hold_gil(x):
-            calls.append(x)
-            libc.usleep(int(HOLD_SECONDS * 1_000_000))
-            return x
-
         obj = _hold_source(source)
-        rounds = 3 if takes_gil else 1
-        holds = max(
-            (_scan_seconds(obj, hold_gil, hold=True) - _scan_seconds(obj, hold_gil, hold=False)) / HOLD_SECONDS
-            for _ in range(rounds)
-        )
-        assert calls == [0] * rounds
+        timings = ScanTimings(THREADS)
+        for _ in range(ROUNDS):
+            timings.add_round(obj)
+        assert timings.calls == {(1, 0)}
         if takes_gil:
-            assert holds >= 1, holds
+            assert timings.best_round_in_holds() >= 1, timings.best_round_in_holds()
         else:
-            assert holds < 0.5, holds
+            assert timings.growth_in_holds() < 0.5, timings.growth_in_holds()
 
 
 STRUCT_VALUES = [{"i": 1, "s": "a"}, {"i": 2, "s": "b"}, {"i": 3, "s": "c"}]
