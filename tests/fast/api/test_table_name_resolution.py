@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 import duckdb
@@ -332,6 +334,110 @@ def test_reads_a_file_by_absolute_path(files, in_transaction):
 def test_name_with_an_empty_part_reads_the_file_not_the_table_its_parts_name():
     with connect([WRITES, 'CREATE SCHEMA "/people"', "CREATE TABLE \"/people\".csv AS SELECT 'decoy' AS k"]) as con:
         assert con.table("./people.csv").fetchall() == [("file people.csv",)]
+
+
+STRAY_QUOTES = [
+    WRITES,
+    "CREATE SCHEMA s",
+    "CREATE TABLE abc AS SELECT 'abc' AS k",
+    "CREATE TABLE ab AS SELECT 'ab' AS k",
+    "CREATE TABLE s.ab AS SELECT 's.ab' AS k",
+    """CREATE TABLE "a""b""c" AS SELECT 'table a"b"c' AS k""",
+    """CREATE TABLE \"\"\"a\"\"b" AS SELECT 'table "a"b' AS k""",
+    """CREATE TABLE "s.""a""b" AS SELECT 'table s."a"b' AS k""",
+    """CREATE VIEW "v""w" AS SELECT 'view v"w' AS k""",
+]
+
+
+@pytest.mark.parametrize(
+    ("name", "row"),
+    [
+        pytest.param('a"b"c', 'table a"b"c', id="quote_inside_a_bare_part"),
+        pytest.param('"a"b', 'table "a"b', id="text_after_a_closing_quote"),
+        pytest.param('s."a"b', 'table s."a"b', id="text_after_a_closing_quote_in_the_second_part"),
+    ],
+)
+def test_name_with_a_stray_quote_reads_the_literal_name(name, row):
+    # SQL refuses the spelling, so the whole string is one name, as for a file path; neither abc nor s.ab is read.
+    with connect(STRAY_QUOTES) as con:
+        assert con.table(name).fetchall() == [(row,)]
+        assert con.sql(f'FROM "{name.replace(chr(34), chr(34) * 2)}"').fetchall() == [(row,)]
+
+
+def test_view_with_a_stray_quote_reads_the_literal_name():
+    with connect(STRAY_QUOTES) as con:
+        assert con.view('v"w').fetchall() == [('view v"w',)]
+
+
+def test_trailing_dot_is_dropped_as_the_engine_reads_it():
+    with connect(BASE) as con:
+        assert con.table("s.t.").fetchall() == [("s.t",)]
+        assert con.view("s.v.").fetchall() == [("s.v",)]
+
+
+class TestTupleNames:
+    @pytest.mark.parametrize(
+        ("name", "row"),
+        [
+            (("t",), "t"),
+            (("s", "t"), "s.t"),
+            (("memory", "s", "t"), "s.t"),
+            (("other", "ot"), "other.ot"),
+            (("a.b",), "table a.b"),
+            (("shadow",), "temp view shadow"),
+        ],
+    )
+    def test_table_reads_the_parts(self, name, row):
+        with connect(BASE) as con:
+            rel = con.table(name)
+            assert rel.fetchall() == [(row,)]
+            assert rel.alias == name[-1]
+            assert duckdb.table(name, connection=con).fetchall() == [(row,)]
+
+    @pytest.mark.parametrize(
+        ("name", "row"), [(("v",), "v"), (("s", "v"), "s.v"), (("other", "main", "ov"), "other.ov")]
+    )
+    def test_view_reads_the_parts(self, name, row):
+        with connect(BASE) as con:
+            assert con.view(name).fetchall() == [(row,)]
+            assert duckdb.view(name, connection=con).fetchall() == [(row,)]
+
+    @pytest.mark.parametrize("name", ["t", (), ("s", ""), ("s", 1), 5])
+    def test_closed_connection_is_refused_first(self, name):
+        con = duckdb.connect()
+        con.close()
+        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
+            con.table(name)
+        with pytest.raises(duckdb.ConnectionException, match="Connection has already been closed"):
+            con.view(name)
+
+    def test_parts_are_not_one_literal_name(self):
+        # A string whose first part names neither a schema nor a database is one name; a tuple says its parts.
+        with connect(BASE) as con:
+            assert con.table("a.b").fetchall() == [("table a.b",)]
+            with pytest.raises(duckdb.CatalogException, match=r'schema "a" does not exist'):
+                con.table(("a", "b"))
+
+    def test_parts_are_never_joined(self):
+        # With a table st beside s.t, the tuple reads s.t.
+        with connect([*BASE, "CREATE TABLE st AS SELECT 'joined' AS k"]) as con:
+            assert con.table(("s", "t")).fetchall() == [("s.t",)]
+
+    @pytest.mark.parametrize(
+        ("name", "error", "message"),
+        [
+            ((), duckdb.InvalidInputException, "A name must have at least one part"),
+            (("s", 1), duckdb.InvalidInputException, "Every part of a name must be a string"),
+            (5, duckdb.InvalidInputException, "A name is given as a string, or as a tuple of its parts"),
+            (("s", ""), duckdb.ParserException, 'Zero-length identifier in qualified name! (input: "s"."")'),
+        ],
+    )
+    def test_refused(self, name, error, message):
+        with connect(BASE) as con:
+            begin(con)
+            with pytest.raises(error, match=re.escape(message)):
+                con.table(name)
+            assert writes_after_second_insert(con, in_transaction=True) == [(1,), (2,)]
 
 
 def test_module_function_reads_a_qualified_view():

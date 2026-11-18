@@ -221,7 +221,8 @@ static string StatementTypeName(StatementType type) {
 //! list is the parts of a qualified name, outermost first
 static QualifiedName NameFromParts(const nb::object &name) {
 	if (nb::isinstance<nb::str>(name)) {
-		return QualifiedName(Identifier(nb::cast<std::string>(nb::str(name))));
+		// The text of the str itself, so a str subclass such as an Enum member is read by its value
+		return QualifiedName(Identifier(nb::cast<std::string>(name)));
 	}
 	if (!nb::isinstance<nb::tuple>(name) && !nb::isinstance<nb::list>(name)) {
 		throw InvalidInputException("A name is given as a string, or as a tuple of its parts");
@@ -231,12 +232,28 @@ static QualifiedName NameFromParts(const nb::object &name) {
 		if (!nb::isinstance<nb::str>(part)) {
 			throw InvalidInputException("Every part of a name must be a string");
 		}
-		path.emplace_back(nb::cast<std::string>(nb::str(part)));
+		path.emplace_back(nb::cast<std::string>(part));
 	}
 	if (path.empty()) {
 		throw InvalidInputException("A name must have at least one part");
 	}
 	return QualifiedName::FromPath(std::move(path));
+}
+
+//! The parts of a qualified name string, read by the engine's own reader of such strings, the one the appender and
+//! pragma show use; a string it refuses raises its ParserException
+static nb::list NameComponents(const string &text) {
+	QualifiedName parsed;
+	string error;
+	if (!QualifiedName::TryParse(text, parsed, error)) {
+		throw ParserException(error);
+	}
+	nb::list result;
+	for (auto &part : parsed.Path()) {
+		auto &name = part.GetIdentifierName();
+		result.append(nb::str(name.c_str(), name.size()));
+	}
+	return result;
 }
 
 //! The view register() made under this name, or null for any other name. Call in a transaction.
@@ -1335,6 +1352,9 @@ void DuckDBPySeam::Initialize(nb::module_ &m) {
 	m.def("_parse_expressions", &ParseExpressions, "Each expression of a SQL expression list, rendered back",
 	      nb::arg("text"));
 	m.def("_column_reference", &ColumnReference, "The parts of the column reference a text is, or None",
+	      nb::arg("text"));
+	m.def("_name_components", &NameComponents,
+	      "The parts of a qualified name string as the engine reads one; a ParserException for a string it refuses",
 	      nb::arg("text"));
 }
 
