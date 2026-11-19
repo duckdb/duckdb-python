@@ -91,6 +91,7 @@ jobs:
           import _duckdb
           print(_duckdb.__file__)
           assert "abi3" not in _duckdb.__file__, "expected a full-API module, got " + _duckdb.__file__
+          assert _duckdb._assertions, "expected a build with assertions, which keeps nanobind's exit leak report"
           EOF
 
       - name: Run the tests
