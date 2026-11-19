@@ -422,6 +422,7 @@ line-length = 120
 indent-width = 4
 target-version = "py310"
 fix = true
+per-file-target-version = { "tests/fast/api/test_template_strings.py" = "py314" }
 exclude = ['external/duckdb', 'sqllogic']
 
 [tool.ruff.lint]

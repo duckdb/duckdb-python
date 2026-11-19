@@ -293,10 +293,13 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
 	      nb::arg("key"), nb::arg("value"));
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
-	m.def("execute", &DuckDBPyConnection::Execute,
-	      "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
-	      "its first rows are ready, so an error there raises here; every other statement runs to its end",
-	      nb::arg("query"), nb::arg("parameters") = nb::none());
+	m.def(
+	    "execute", &DuckDBPyConnection::Execute,
+	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
+	    "its first rows are ready, so an error there raises here; every other statement runs to its end. A template "
+	    "string, t\"...\", binds each of its values as a parameter; {name:i} writes a name and {template:q} splices a "
+	    "template",
+	    nb::arg("query"), nb::arg("parameters") = nb::none());
 	m.def("executemany", &DuckDBPyConnection::ExecuteMany,
 	      "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	      nb::arg("query"), nb::arg("parameters") = nb::none());
@@ -601,6 +604,13 @@ static bool ExpandedToNothing(const engine::Result &result) {
 	       result.Names().empty();
 }
 
+static bool IsTemplate(const nb::handle &query) {
+	if (nb::isinstance<nb::str>(query) || nb::isinstance<DuckDBPyStatement>(query)) {
+		return false;
+	}
+	return nb::cast<bool>(nb::module_::import_("duckdb._template").attr("is_template")(query));
+}
+
 void DuckDBPyConnection::SupersedeResult(bool cancel) {
 	if (!con.HasResult()) {
 		return;
@@ -622,6 +632,10 @@ void DuckDBPyConnection::SupersedeResult(bool cancel) {
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteMany(const nb::object &query, nb::object params_p) {
 	nb::gil_scoped_acquire gil;
+	if (IsTemplate(query)) {
+		throw InvalidInputException("executemany() does not take a template string; call execute() with a template for "
+		                            "each row, or pass a str with the parameter sets");
+	}
 	ConnectionLockGuard conn_lock(*this);
 	if (params_p.is_none()) {
 		params_p = nb::list();
@@ -870,6 +884,10 @@ std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::ExecuteFromString(const 
 
 std::shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const nb::object &query, nb::object params) {
 	nb::gil_scoped_acquire gil;
+	if (IsTemplate(query)) {
+		auto run = nb::module_::import_("duckdb._template").attr("execute");
+		return nb::cast<std::shared_ptr<DuckDBPyConnection>>(run(shared_from_this(), query, params));
+	}
 	ConnectionLockGuard conn_lock(*this);
 
 	auto statements = GetStatements(query);

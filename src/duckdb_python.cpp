@@ -322,7 +322,9 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 		    return conn->Execute(query, params);
 	    },
 	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
-	    "its first rows are ready, so an error there raises here; every other statement runs to its end",
+	    "its first rows are ready, so an error there raises here; every other statement runs to its end. A template "
+	    "string, t\"...\", binds each of its values as a parameter; {name:i} writes a name and {template:q} splices a "
+	    "template",
 	    nb::arg("query"), nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
 	    "executemany",

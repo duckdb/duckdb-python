@@ -3479,6 +3479,12 @@ def sql(
     The last statement is lazy when it parses as a SELECT and the binder describes it; any other statement runs now
     and the relation holds what it returned.
     """
+    if not isinstance(query, (str, _duckdb.Statement)):
+        # The template module imports this one.
+        from duckdb import _template
+
+        if _template.is_template(query):
+            return _template.sql(con, query, alias, params)
     given = _has_values(params)
     params = _copied(params) if given else None
     _refuse_one_name_twice(params)
@@ -4341,7 +4347,8 @@ def from_arrow(con: _duckdb.DuckDBPyConnection, arrow_object: object) -> DuckDBP
 _SQL_DOC = (
     "Run a SQL query. A statement that only reads returns a relation that runs the query each time it is read, "
     "parameter values bound at every run. Any other statement runs once, now, and gives a relation over what it "
-    "returned. Statements before the last one run immediately."
+    'returned. Statements before the last one run immediately. A template string, t"...", binds each of its '
+    "values as a parameter; {name:i} writes a name and {template:q} splices a template."
 )
 
 

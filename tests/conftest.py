@@ -1,4 +1,5 @@
 import os
+import sys
 import warnings
 from importlib import import_module
 from pathlib import Path
@@ -17,6 +18,10 @@ try:
 except ImportError:
     pandas = None
     pyarrow_dtype = None
+
+
+# Template string syntax does not parse before Python 3.14.
+collect_ignore = [] if sys.version_info >= (3, 14) else ["fast/api/test_template_strings.py"]
 
 
 # Version-aware helpers for Pandas 2.x vs 3.0 compatibility
