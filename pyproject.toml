@@ -110,7 +110,7 @@ DUCKDB_PY_LTO = ""
 # The version this branch releases next. A release forces exactly this version, a
 # dev build appends .dev<yymmddhhmm> of the latest commit across this repository
 # and the DuckDB submodule. Bump it right after every release from this branch.
-release_version = "2.0.1"
+release_version = "2.0.2"
 
 [[tool.scikit-build.overrides]]
 if.env.CIBUILDWHEEL_BUILD_IDENTIFIER = true
