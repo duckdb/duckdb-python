@@ -185,6 +185,15 @@ private:
 
 //! The engine's check that no result holds the connection, with its refusal named as ConnectionState::NameRefusal does
 void VerifyNoOpenResult(ClientContext &context);
+constexpr const char *CONNECTED_REFUSAL =
+    "The relational API, register(), append() and unregister() are not available while CONNECT-ed, since the engine "
+    "sends every statement but DISCONNECT to the connected database; use con.execute(query) with fetchall(), "
+    "fetchdf() or fetchnumpy() for queries, or DISCONNECT first";
+//! Throws CONNECTED_REFUSAL when the connection is CONNECT-ed, unless the statement is a DISCONNECT; call it under the
+//! connection's claim, the only place the flag is read.
+void RefuseWhileConnected(ClientContext &context, StatementType type = StatementType::INVALID_STATEMENT);
+//! The same refusal with a message of the caller's, for work outside the relational API
+void RefuseWhileConnected(ClientContext &context, const char *refusal);
 //! Names the refusal in an error from engine work that runs outside a Session, as ConnectionState::NameRefusal does
 void NameRefusal(ClientContext &context, const std::exception &error);
 
@@ -214,18 +223,19 @@ public:
 	//! Scans a collection, for example to read rows a result already holds in another format
 	shared_ptr<Result> Submit(unique_ptr<ColumnDataCollection> collection, const vector<Identifier> &names,
 	                          const Format &format);
-	//! Binds a statement without running it, keeping the tables its replacement scans resolved in tables
-	StatementSignature Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables);
+	//! Binds a statement without running it, keeping the tables its replacement scans resolved in tables, for a caller
+	//! that already holds the connection's claim
+	StatementSignature BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables);
 	//! Binds a statement with values for its parameters, as the engine rebinds a prepared statement for the values it
-	//! runs with, so the names and types are those of the statement that runs; nothing runs
-	StatementSignature Bind(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
-	                        const identifier_map_t<BoundParameterData> &values);
-	//! Runs a statement to its end and drops its rows
-	void Run(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
-	//! Run for a caller that already holds the connection's claim
+	//! runs with, so the names and types are those of the statement that runs; nothing runs. For a caller that already
+	//! holds the connection's claim.
+	StatementSignature BindClaimed(unique_ptr<SQLStatement> statement, ResolvedTables &tables,
+	                               const identifier_map_t<BoundParameterData> &values);
+	//! Runs a statement to its end and drops its rows, for a caller that already holds the connection's claim
 	void RunClaimed(unique_ptr<SQLStatement> statement, const InterruptCheck &check);
-	//! Runs a statement to its end and drops its rows, its replacement scans answered from tables and nothing else
-	void Run(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check);
+	//! Runs a statement to its end and drops its rows, its replacement scans answered from tables and nothing else, for
+	//! a caller that already holds the connection's claim
+	void RunClaimed(unique_ptr<SQLStatement> statement, const ResolvedTables &tables, const InterruptCheck &check);
 	ConnectionClaim Claim();
 
 private:
@@ -267,6 +277,10 @@ public:
 	shared_ptr<Result> Choose(shared_ptr<Result> last);
 	//! Throws for parameters given to a group whose text after the statements that ran held no statement
 	[[noreturn]] void RefuseParameters();
+	//! From now on RunAllButLast refuses each statement RefuseWhileConnected refuses, under the claim it would run in
+	void LocalOnly() {
+		local_only = true;
+	}
 
 private:
 	bool HasMore();
@@ -285,6 +299,7 @@ private:
 	//! Parsed by First, not yet returned by Next
 	unique_ptr<SQLStatement> upcoming;
 	shared_ptr<Result> kept;
+	bool local_only = false;
 };
 
 } // namespace engine
