@@ -551,12 +551,15 @@ class ArrowStreamOnly:
 def table_kinds():
     """Each kind of table a field can hold, as a factory of a fresh object with column a holding 1 and 2."""
     kinds = {"relation": lambda con: con.sql("SELECT * FROM (VALUES (1), (2)) t(a)")}
+    # A pandas Series and the polars objects are read through pyarrow, which some platforms lack (Windows ARM64).
+    arrow = importlib.util.find_spec("pyarrow") is not None
     if importlib.util.find_spec("pandas"):
         import pandas as pd
 
         kinds["pandas DataFrame"] = lambda con: pd.DataFrame({"a": [1, 2]})
-        kinds["pandas Series"] = lambda con: pd.Series([1, 2], name="a")
-    if importlib.util.find_spec("polars"):
+        if arrow:
+            kinds["pandas Series"] = lambda con: pd.Series([1, 2], name="a")
+    if arrow and importlib.util.find_spec("polars"):
         import polars as pl
 
         kinds["polars DataFrame"] = lambda con: pl.DataFrame({"a": [1, 2]})
