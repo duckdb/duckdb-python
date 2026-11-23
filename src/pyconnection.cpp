@@ -293,13 +293,13 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 	m.def("map_type", &DuckDBPyConnection::MapType, "Create a map type object from 'key_type' and 'value_type'",
 	      nb::arg("key"), nb::arg("value"));
 	m.def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection");
-	m.def(
-	    "execute", &DuckDBPyConnection::Execute,
-	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
-	    "its first rows are ready, so an error there raises here; every other statement runs to its end. A template "
-	    "string, t\"...\", binds each of its values as a parameter; {name:i} writes a name and {template:q} splices a "
-	    "template",
-	    nb::arg("query"), nb::arg("parameters") = nb::none());
+	m.def("execute", &DuckDBPyConnection::Execute,
+	      "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
+	      "its first rows are ready, so an error there raises here; every other statement runs to its end. A template "
+	      "string, t\"...\", binds each of its values as a parameter and reads a field that holds a relation, a pandas "
+	      "DataFrame or Series, or an Arrow object as that table; {name:i} writes a name and {template:q} splices a "
+	      "template",
+	      nb::arg("query"), nb::arg("parameters") = nb::none());
 	m.def("executemany", &DuckDBPyConnection::ExecuteMany,
 	      "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	      nb::arg("query"), nb::arg("parameters") = nb::none());

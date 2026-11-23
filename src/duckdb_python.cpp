@@ -323,7 +323,8 @@ static void InitializeConnectionMethods(nb::module_ &m) {
 	    },
 	    "Execute the given SQL query, optionally using prepared statements with parameters set. A query runs until "
 	    "its first rows are ready, so an error there raises here; every other statement runs to its end. A template "
-	    "string, t\"...\", binds each of its values as a parameter; {name:i} writes a name and {template:q} splices a "
+	    "string, t\"...\", binds each of its values as a parameter and reads a field that holds a relation, a pandas "
+	    "DataFrame or Series, or an Arrow object as that table; {name:i} writes a name and {template:q} splices a "
 	    "template",
 	    nb::arg("query"), nb::arg("parameters") = nb::none(), nb::kw_only(), nb::arg("connection").none() = nb::none());
 	m.def(
