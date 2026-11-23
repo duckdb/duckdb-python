@@ -310,15 +310,20 @@ touches the GIL against all five.
 4. **A Python error never leaves an engine task as a Python object.** Convert it under the GIL with `AsDuckDBError`
    (map, UDFs, the numpy scans, the Python file system do). The engine stores and formats errors later on any thread
    without the GIL; a `nb::python_error` there needs the GIL at a moment nobody can give it.
-5. **Shutdown has an order.** The atexit hook (`OnInterpreterExit`) calls `engine::BeginExit`, then ends every live
-   result (`engine::Result::Live`, `EndIfRunning`) with the GIL released so their tasks can finish. From then on only
+5. **Shutdown has an order.** The atexit hook (`OnInterpreterExit`) calls `engine::BeginExit`, then ends the live
+   results (`engine::Result::Live`, `engine::Result::EndAtExit`) with the GIL released so their tasks can finish: it
+   interrupts the query of every running result, retries the claims of their connections without blocking until
+   none is refused or one second has passed, closes each result still running once its claim is taken and clears
+   that connection's interrupt, and leaves the others open. From then on only
    the exit thread's own queries may enter Python; a query another thread starts late fails at the gate with "the
    Python interpreter is shutting down". Once `Py_IsInitialized()` is false, CPython still lets the exit thread in and so
    does the gate, but what that thread opens then admits no other thread; every other thread is refused. Results join
    the registry through `Result::Register` at submit and leave in their destructor.
 
-Known gaps: five destructors reach Python through nanobind's cleanup guard during finalization; before Python 3.13 a
-daemon thread woken after finalization aborts through the engine's frames (tests skip those cases on 3.12).
+Known gaps: five destructors reach Python through nanobind's cleanup guard during finalization; the close of a
+running result waits for every task of its query, so an engine worker stuck in a read no interrupt reaches holds
+up the exit until the read returns; before Python 3.13 a daemon thread woken after finalization aborts through the
+engine's frames (tests skip those cases on 3.12).
 
 ## Project structure
 

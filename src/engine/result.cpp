@@ -5,6 +5,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -507,37 +508,67 @@ void Result::Close() {
 	state = State::CLOSED;
 }
 
-void Result::EndIfRunning() {
+void Result::EndAtExit(const vector<shared_ptr<Result>> &results) {
 	DUCKDB_PY_ASSERT_GIL_RELEASED();
-	auto context = context_owner.lock();
-	if (!context) {
-		return;
-	}
-	// A claim another thread holds is waited for one second after interrupting its query; past that, closing
-	// unclaimed beats hanging the exit
-	unique_ptr<ConnectionClaim> claim;
-	auto try_claim = [&]() {
-		try {
-			claim = make_uniq<ConnectionClaim>(*connection_state, *context);
-		} catch (ResourceInUseException &) { // NOLINT: another thread holds the claim
-		}
-		return claim != nullptr;
+	struct Ending {
+		Result &result;
+		shared_ptr<ClientContext> context;
+		bool unclaimable = false;
 	};
-	if (!try_claim()) {
-		if (!Running()) {
-			return;
+	vector<Ending> running;
+	for (auto &result : results) {
+		auto context = result->context_owner.lock();
+		if (!context) {
+			continue;
 		}
-		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-		do {
+		if (result->state == State::PENDING || result->state == State::STREAMING) {
+			// Only a query that may still run; a compare and swap without a lock, so it reaches a query whose thread
+			// holds the context lock in a task
 			context->Interrupt();
-			if (std::chrono::steady_clock::now() >= deadline) {
-				break;
-			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		} while (!try_claim());
+			running.push_back({*result, std::move(context), false});
+		}
 	}
-	if (Running()) {
-		Close();
+	// One claim per connection, since its results share it; one second for the whole hook, since a claim another
+	// thread holds frees only when that thread's call ends
+	unordered_map<ConnectionState *, unique_ptr<ConnectionClaim>> claims;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+	while (true) {
+		bool waiting = false;
+		for (auto &entry : running) {
+			auto &claim = claims[entry.result.connection_state.get()];
+			if (claim || entry.unclaimable) {
+				continue;
+			}
+			try {
+				claim = make_uniq<ConnectionClaim>(*entry.result.connection_state, *entry.context);
+			} catch (ResourceInUseException &) { // NOLINT: another thread holds the claim
+				waiting = true;
+			} catch (...) { // NOLINT: a result that cannot be claimed must not keep the others from ending
+				entry.unclaimable = true;
+			}
+		}
+		if (!waiting || std::chrono::steady_clock::now() >= deadline) {
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	for (auto &entry : running) {
+		// Left open when its claim never freed: closing would wait for the context lock, held through a task that no
+		// interrupt reaches, such as a blocking read
+		if (!claims[entry.result.connection_state.get()]) {
+			continue;
+		}
+		// Under the claim no other call can complete the query, so a result that completed while the hook waited is
+		// not closed
+		if (entry.result.state == State::PENDING || entry.result.state == State::STREAMING) {
+			try {
+				entry.result.Close();
+			} catch (...) { // NOLINT: a result that fails to end must not keep the others running
+			}
+		}
+		// The engine clears the flag only when a statement or a transaction begins, and a later exit handler can bind
+		// inside an open transaction before either
+		entry.context->ClearInterrupt();
 	}
 }
 

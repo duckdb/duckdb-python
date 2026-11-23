@@ -93,12 +93,7 @@ void OnInterpreterExit() {
 	auto results = engine::Result::Live();
 	{
 		nb::gil_scoped_release release;
-		for (auto &result : results) {
-			try {
-				result->EndIfRunning();
-			} catch (...) { // NOLINT: a result that fails to end must not keep the others running
-			}
-		}
+		engine::Result::EndAtExit(results);
 		// Not bounded: a call let in may need the GIL again before it returns, which it never gets once the
 		// interpreter finalizes, so a slow source delays the exit instead of hanging it.
 		while (calls_in_flight.load() > 0) {
