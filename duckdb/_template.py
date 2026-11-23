@@ -1,6 +1,7 @@
 """Template strings (PEP 750) as the query of `execute()` and `sql()`.
 
-Every interpolated value is bound as a parameter, or quoted as a name with `:i`, and never written into the SQL text.
+Every interpolated value is bound as a parameter, quoted as a name with `:i`, or read as a table when it is one, and
+never written into the SQL text.
 """
 
 from __future__ import annotations
@@ -15,9 +16,9 @@ from typing import TYPE_CHECKING, Any
 
 import _duckdb
 
-from duckdb import _relation
-from duckdb._expression import identifier, text_tokens
-from duckdb._relation import DuckDBPyRelation, _encodable, _error, _has_values, _markers
+from duckdb import _relation, _seam
+from duckdb._expression import _NATIVE, identifier, quote, text_tokens
+from duckdb._relation import DuckDBPyRelation, _arrow_shaped, _encodable, _error, _has_values, _is_dataframe, _markers
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -26,8 +27,8 @@ if sys.version_info >= (3, 14):
     from string.templatelib import Template
 
     def is_template(query: object) -> bool:
-        """Whether a query is a template string."""
-        return isinstance(query, Template)
+        """Whether a query is a template string, judged from its class, so none of its own code runs."""
+        return issubclass(type(query), Template)
 
 else:
 
@@ -63,12 +64,17 @@ class _Field:
 
 @dataclasses.dataclass(frozen=True)
 class _Slot:
-    """An interpolation's place in the statement: a parameter marker, or a name when `number` is None."""
+    """An interpolation's place in the statement: a parameter marker, a name or a table, as `kind` says."""
 
     start: int
     end: int
     number: int | None
     field: _Field
+    kind: str
+
+    @property
+    def what(self) -> str:
+        return f"a {self.kind}"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -84,15 +90,37 @@ class _Run:
 
 @dataclasses.dataclass(frozen=True)
 class _Compiled:
-    text: str
+    pieces: list[str]
     values: list[object]
     template: Any
     slots: list[_Slot]
+    tables: list[tuple[object, str]]
+    table_pieces: list[tuple[int, int]]
+    #: The registered name of each table, filled as each registers, so a note names those registered so far.
+    names: list[str] = dataclasses.field(default_factory=list)
+
+    def statement(self, con: _duckdb.DuckDBPyConnection) -> tuple[str, tuple[_seam.SourceHandle, ...]]:
+        """The statement with each table registered and named; the handles keep the tables readable while held."""
+        handles = []
+        for value, expression in self.tables:
+            handles.append(_seam.register_source(con, value, expression))
+            self.names.append(handles[-1].name)
+        pieces = list(self.pieces)
+        for piece, table in self.table_pieces:
+            pieces[piece] = quote(self.names[table])
+        return "".join(pieces), tuple(handles)
 
     def note(self) -> str:
-        """Which field each marker of the statement came from, with the template as written."""
-        origins = ", ".join(f"${slot.number} is {slot.field.named()}" for slot in self.slots if slot.number is not None)
-        head = "The statement came from a template" + (f"; {origins}" if origins else "") + ":"
+        """Which field each marker and each table name of the statement came from, with the template as written."""
+        origins: list[str] = []
+        tables = iter(self.table_pieces)
+        for slot in self.slots:
+            if slot.kind == "parameter":
+                origins.append(f"${slot.number} is {slot.field.named()}")
+            elif slot.kind == "table" and (table := next(tables)[1]) < len(self.names):
+                origins.append(f"{quote(self.names[table])} is {slot.field.named()}")
+        listed = ", ".join(dict.fromkeys(origins))
+        head = "The statement came from a template" + (f"; {listed}" if listed else "") + ":"
         return head + "".join(f"\n    {line}" for line in _LINE_BREAK.split(_written(self.template)[0]))
 
 
@@ -174,10 +202,30 @@ def _quoted_name(value: object, field: _Field) -> str:
     return identifier(tuple(str.__str__(part) for part in parts))
 
 
+def _is_table(value: object) -> bool:
+    """Whether a value is a table: a relation, a pandas DataFrame or Series, or an Arrow shaped object.
+
+    Judged from its class alone, so none of its own code runs before it is registered. A numpy array, a list, a tuple
+    and a dict stay values even when they also export Arrow, as the replacement scan reads no Arrow from them.
+    """
+    kind = type(value)
+    if kind in _NATIVE or issubclass(kind, (list, tuple, dict)):
+        return False
+    if issubclass(kind, DuckDBPyRelation):
+        return True
+    if any(c.__module__ == "numpy" and c.__name__ == "ndarray" for c in kind.__mro__):
+        return False
+    return _is_dataframe(value, series=True) or _arrow_shaped(value, probe=False)
+
+
 class _Builder:
     """The statement a template compiles to, built one template string and one field at a time."""
 
     def __init__(self) -> None:
+        #: Each table field's object, by the object's identity, so an object read twice is one table.
+        self.table_index: dict[int, int] = {}
+        self.tables: list[tuple[object, str]] = []
+        self.table_pieces: list[tuple[int, int]] = []
         self.pieces: list[str] = []
         self.length = 0
         self.values: list[object] = []
@@ -190,9 +238,9 @@ class _Builder:
         self.length += len(text)
         return start
 
-    def _slot(self, text: str, number: int | None, field: _Field) -> None:
+    def _slot(self, text: str, number: int | None, field: _Field, kind: str) -> None:
         start = self._append(text)
-        self.slots.append(_Slot(start, self.length, number, field))
+        self.slots.append(_Slot(start, self.length, number, field, kind))
 
     def add(self, template: Any, within: tuple[str, ...]) -> None:  # noqa: ANN401
         written, string_offsets, field_spans = _written(template)
@@ -222,22 +270,24 @@ class _Builder:
                 )
                 raise _refuse_at(field, message)
             elif spec == "i":
-                self._slot(_quoted_name(value, field), None, field)
+                self._slot(_quoted_name(value, field), None, field, "name")
             elif spec:
                 message = (
                     f"{field.named()} has the format spec '{spec}', which a query does not take; write "
                     f"{{{expression}}} for a value, {{{expression}:i}} for a name, or {{{expression}:q}} for a template"
                 )
                 raise _refuse_at(field, message)
-            elif isinstance(value, DuckDBPyRelation):
-                message = (
-                    f"{field.named()} is a relation, which a template cannot take as a value; write the name of a "
-                    "variable that holds it in the query text"
-                )
-                raise _refuse_at(field, message)
+            elif _is_table(value):
+                table = self.table_index.setdefault(id(value), len(self.tables))
+                if table == len(self.tables):
+                    # Never empty, which the registry would take for a source without a name and read otherwise.
+                    self.tables.append((value, expression or field.text))
+                self.table_pieces.append((len(self.pieces), table))
+                # A quoted name like the one the table is registered under, which reads as the same tokens.
+                self._slot(quote(f"__duckdb_template_table_{table}"), None, field, "table")
             else:
                 self.values.append(value)
-                self._slot(f"${len(self.values)}", len(self.values), field)
+                self._slot(f"${len(self.values)}", len(self.values), field, "parameter")
 
     def text(self) -> str:
         return "".join(self.pieces)
@@ -248,20 +298,20 @@ def _misplaced(text: str, tokens: list[tuple[int, _duckdb.token_type]], slot: _S
     starts = [offset for offset, _ in tokens]
     index = bisect.bisect_right(starts, slot.start) - 1
     offset, kind = tokens[index] if index >= 0 else (slot.start, None)
-    what = "a parameter" if slot.number is not None else "a name"
+    what = slot.what
     named = slot.field.named()
     expression = slot.field.expression
     if offset < slot.start and kind == _duckdb.token_type.string_const:
         advice = (
             "make the whole literal the value, or join the value to the literal with ||"
-            if slot.number is not None
+            if slot.kind == "parameter"
             else "take it out of the literal"
         )
         message = f"{named} is inside a string literal, where it would be text, not {what}; {advice}"
     elif offset < slot.start and kind == _duckdb.token_type.comment:
         message = f"{named} is inside a comment, where it would be ignored; take it out of the comment"
     elif offset < slot.start and kind == _duckdb.token_type.identifier and text[offset] in '"`':
-        if slot.number is not None:
+        if slot.kind == "parameter":
             message = (
                 f"{named} is inside a quoted identifier, where it would be part of the name, not a parameter; "
                 f"write {{{expression}:i}} for a name"
@@ -274,9 +324,9 @@ def _misplaced(text: str, tokens: list[tuple[int, _duckdb.token_type]], slot: _S
 
 
 def _glued(slot: _Slot) -> Exception:
-    what = "a parameter" if slot.number is not None else "a name"
     message = (
-        f"{slot.field.named()} touches the text next to it, so it is not {what} of its own; put a space between them"
+        f"{slot.field.named()} touches the text next to it, so it is not {slot.what} of its own; put a space between "
+        "them"
     )
     return _refuse_at(slot.field, message)
 
@@ -305,6 +355,16 @@ def _touches_word(text: str, tokens: list[tuple[int, _duckdb.token_type]], start
     return after < len(starts) and starts[after] == slot.end and tokens[after][1] in _WORDS
 
 
+def _qualified(text: str, tokens: list[tuple[int, _duckdb.token_type]], starts: list[int], slot: _Slot) -> bool:
+    """Whether the token before the slot, comments aside, is a `.`, which makes the field part of a qualified name."""
+    before = bisect.bisect_left(starts, slot.start) - 1
+    while before >= 0 and tokens[before][1] == _duckdb.token_type.comment:
+        before -= 1
+    if before < 0 or tokens[before][1] != _duckdb.token_type.operator:
+        return False
+    return text[tokens[before][0] : starts[before + 1]].strip() == "."
+
+
 def _stands_alone(text: str, starts: list[int], start: int, end: int) -> bool:
     """Whether the tokens from `start` to `end` are those of that text alone, so no neighbour merges into them."""
     first = bisect.bisect_left(starts, start)
@@ -325,7 +385,10 @@ def _check_places(builder: _Builder, text: str) -> None:
             raise _misplaced(text, tokens, slot)
         if slot.start in slot_ends or slot.end in slot_starts or _touches_word(text, tokens, starts, slot):
             raise _glued(slot)
-    taken = {slot.start for slot in builder.slots if slot.number is not None}
+        if slot.kind == "table" and _qualified(text, tokens, starts, slot):
+            message = f"{slot.field.named()} is qualified, but a table field is a whole table; take away the qualifier"
+            raise _refuse_at(slot.field, message)
+    taken = {slot.start for slot in builder.slots if slot.kind == "parameter"}
     for marker in _markers(text):
         if marker.start in taken:
             continue
@@ -345,9 +408,8 @@ def _compiled(query: Any, params: object) -> _Compiled:  # noqa: ANN401
         raise _refusal(WITH_PARAMS)
     builder = _Builder()
     builder.add(query, ())
-    text = _encodable(builder.text())
-    _check_places(builder, text)
-    return _Compiled(text, builder.values, query, builder.slots)
+    _check_places(builder, _encodable(builder.text()))
+    return _Compiled(builder.pieces, builder.values, query, builder.slots, builder.tables, builder.table_pieces)
 
 
 @contextlib.contextmanager
@@ -361,10 +423,12 @@ def _noted(compiled: _Compiled) -> Iterator[None]:
 
 
 def execute(con: _duckdb.DuckDBPyConnection, query: Any, params: object) -> _duckdb.DuckDBPyConnection:  # noqa: ANN401
-    """Run a template string as `execute()` runs a str, its values bound as the statement's parameters."""
+    """Run a template string as `execute()` runs a str: its values bound as parameters, its tables read as tables."""
     compiled = _compiled(query, params)
     with _noted(compiled):
-        return con.execute(compiled.text, compiled.values)
+        # Held for the call only: the bound statement keeps the tables it reads.
+        text, _handles = compiled.statement(con)
+        return con.execute(text, compiled.values)
 
 
 def sql(
@@ -373,7 +437,8 @@ def sql(
     alias: str,
     params: object,
 ) -> DuckDBPyRelation | None:
-    """The relation `sql()` makes of a template string, its values bound as the statement's parameters."""
+    """The relation `sql()` makes of a template string: its values bound as parameters, its tables read as tables."""
     compiled = _compiled(query, params)
     with _noted(compiled):
-        return _relation.sql(con, compiled.text, alias, compiled.values)
+        text, handles = compiled.statement(con)
+        return _relation.sql(con, text, alias, compiled.values, handles)

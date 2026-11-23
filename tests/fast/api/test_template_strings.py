@@ -1,7 +1,10 @@
 import datetime
 import decimal
+import gc
 import importlib.util
+import re
 import uuid
+import weakref
 from string.templatelib import Interpolation, Template
 
 import pytest
@@ -9,6 +12,8 @@ import pytest
 import duckdb
 
 needs_pandas = pytest.mark.skipif(importlib.util.find_spec("pandas") is None, reason="pandas not installed")
+needs_polars = pytest.mark.skipif(importlib.util.find_spec("polars") is None, reason="polars not installed")
+needs_pyarrow = pytest.mark.skipif(importlib.util.find_spec("pyarrow") is None, reason="pyarrow not installed")
 
 STRING_LITERAL = (
     "is inside a string literal, where it would be text, not a parameter; make the whole literal the value, "
@@ -533,33 +538,500 @@ WHERE 'bob' = '{name}'"""
     refused(lambda: con.execute(query), f"{{name}} {STRING_LITERAL}" + excerpt("WHERE 'bob' = '{name}'", "{name}", 3))
 
 
-RELATION = (
-    "is a relation, which a template cannot take as a value; write the name of a variable that holds it in the "
-    "query text"
-)
+class ArrowStreamOnly:
+    """An object that is a table only through the Arrow C stream protocol."""
+
+    def __init__(self, table) -> None:
+        self.table = table
+
+    def __arrow_c_stream__(self, requested_schema=None):  # noqa: ANN204
+        return self.table.__arrow_c_stream__(requested_schema)
 
 
-def test_relation_value_refused(con):
-    relation = con.sql("SELECT 1 AS a")
-    line = "SELECT * FROM {relation}"
-    refused(lambda: con.execute(t"SELECT * FROM {relation}"), f"{{relation}} {RELATION}" + excerpt(line, "{relation}"))
-    refused(lambda: con.sql(t"SELECT * FROM {relation}"), f"{{relation}} {RELATION}" + excerpt(line, "{relation}"))
-    relations = [relation]
-    line = "SELECT * FROM {relations[0]}"
+def table_kinds():
+    """Each kind of table a field can hold, as a factory of a fresh object with column a holding 1 and 2."""
+    kinds = {"relation": lambda con: con.sql("SELECT * FROM (VALUES (1), (2)) t(a)")}
+    if importlib.util.find_spec("pandas"):
+        import pandas as pd
+
+        kinds["pandas DataFrame"] = lambda con: pd.DataFrame({"a": [1, 2]})
+        kinds["pandas Series"] = lambda con: pd.Series([1, 2], name="a")
+    if importlib.util.find_spec("polars"):
+        import polars as pl
+
+        kinds["polars DataFrame"] = lambda con: pl.DataFrame({"a": [1, 2]})
+        kinds["polars LazyFrame"] = lambda con: pl.LazyFrame({"a": [1, 2]})
+    if importlib.util.find_spec("pyarrow"):
+        import pyarrow as pa
+        import pyarrow.dataset as ds
+
+        kinds["pyarrow Table"] = lambda con: pa.table({"a": [1, 2]})
+        kinds["pyarrow RecordBatch"] = lambda con: pa.record_batch({"a": [1, 2]})
+        kinds["pyarrow Dataset"] = lambda con: ds.dataset(pa.table({"a": [1, 2]}))
+        kinds["Arrow stream object"] = lambda con: ArrowStreamOnly(pa.table({"a": [1, 2]}))
+    return kinds
+
+
+TABLE_KINDS = table_kinds()
+
+
+@pytest.mark.parametrize("kind", TABLE_KINDS)
+def test_table_field_reads_the_object_as_by_name(con, kind):
+    source = TABLE_KINDS[kind](con)
+    by_name = con.execute("SELECT * FROM source ORDER BY 1")
+    expected = by_name.description, by_name.fetchall()
+    by_field = con.execute(t"SELECT * FROM {source} ORDER BY 1")
+    assert (by_field.description, by_field.fetchall()) == expected
+    relation = con.sql(t"SELECT * FROM {source} ORDER BY 1")
+    assert (relation.columns, relation.fetchall()) == ([column[0] for column in expected[0]], expected[1])
+
+
+@needs_pyarrow
+def test_one_shot_reader_is_read_once(con):
+    import pyarrow as pa
+
+    reader = pa.RecordBatchReader.from_batches(pa.schema({"a": pa.int64()}), [pa.record_batch({"a": [1, 2]})])
+    assert con.execute(t"SELECT * FROM {reader}").fetchall() == [(1,), (2,)]
+
+
+@needs_pandas
+def test_table_field_reads_that_object_not_a_table_of_the_same_name(con):
+    import pandas as pd
+
+    con.execute("CREATE TABLE frame AS SELECT 'table' AS origin")
+    frame = pd.DataFrame({"origin": ["frame"]})
+    assert con.execute("SELECT origin FROM frame").fetchall() == [("table",)]
+    assert con.execute(t"SELECT origin FROM {frame}").fetchall() == [("frame",)]
+    assert con.sql(t"SELECT origin FROM {frame}").fetchall() == [("frame",)]
+
+
+@needs_pandas
+def test_relation_keeps_the_object_alive(con):
+    import pandas as pd
+
+    def build():
+        frame = pd.DataFrame({"a": [1, 2]})
+        return con.sql(t"SELECT sum(a) FROM {frame}")
+
+    relation = build()
+    gc.collect()
+    assert relation.fetchall() == [(3,)]
+    assert relation.fetchall() == [(3,)]
+
+
+@needs_pandas
+def test_execute_result_streams_after_the_object_is_gone(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": range(100_000)})
+    con.execute(t"SELECT a FROM {frame}")
+    del frame
+    gc.collect()
+    first = con.fetchmany(10)
+    assert len(first) + len(con.fetchall()) == 100_000
+
+
+@needs_pandas
+def test_same_object_twice_is_one_source(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"k": [1, 2], "v": ["a", "b"]})
+    relation = con.sql(t"SELECT l.v, r.v FROM {frame} l JOIN {frame} r USING (k) ORDER BY 1")
+    assert relation.fetchall() == [("a", "a"), ("b", "b")]
+    assert len(set(re.findall(r"__duckdb_source_[0-9a-f_]+", relation.sql_query()))) == 1
+
+
+def test_relation_field_with_parameters(con):
+    low = 1
+    numbers = con.sql(t"SELECT * FROM range(5) t(a) WHERE a > {low}")
+    assert con.execute(t"SELECT count(*) FROM {numbers}").fetchall() == [(3,)]
+    assert con.sql(t"SELECT count(*) FROM {numbers}").fetchall() == [(3,)]
+
+
+def test_relations_chain(con):
+    step = con.sql("SELECT * FROM range(5) t(a)")
+    step = con.sql(t"SELECT a + 1 AS a FROM {step}")
+    step = con.sql(t"SELECT a FROM {step} WHERE a > 3 ORDER BY a")
+    assert step.fetchall() == [(4,), (5,)]
+
+
+def test_table_field_with_values_and_in_a_nested_template(con):
+    numbers = con.sql("SELECT * FROM range(5) t(a)")
+    low = 2
+    source = t"FROM {numbers}"
+    assert con.execute(t"SELECT a {source:q} WHERE a > {low} ORDER BY a").fetchall() == [(3,), (4,)]
+
+
+@pytest.mark.parametrize("closed", [False, True], ids=["another database", "closed connection"])
+def test_relation_of_another_connection_fails_as_by_name(con, closed):
+    other = duckdb.connect()
+    elsewhere = other.sql("SELECT 1 AS a")
+    if closed:
+        other.close()
+    with pytest.raises(duckdb.InvalidInputException) as by_name:
+        con.execute("SELECT * FROM elsewhere")
+    with pytest.raises(duckdb.InvalidInputException) as by_field:
+        con.execute(t"SELECT * FROM {elsewhere}")
+    assert str(by_field.value) == str(by_name.value)
+    with pytest.raises(duckdb.InvalidInputException) as by_field:
+        con.sql(t"SELECT * FROM {elsewhere}")
+    assert str(by_field.value) == str(by_name.value)
+
+
+def test_cursor_reads_a_relation_as_by_name(con):
+    con.execute("CREATE TABLE items AS SELECT 1 AS a")
+    cursor = con.cursor()
+    cursor.execute("CREATE TEMP TABLE items AS SELECT 2 AS a")
+    source = con.sql("SELECT a FROM items")
+    by_name = cursor.execute("SELECT a FROM source").fetchall()
+    assert cursor.execute(t"SELECT a FROM {source}").fetchall() == by_name
+    assert cursor.sql(t"SELECT a FROM {source}").fetchall() == by_name
+
+
+@needs_pandas
+def test_numpy_array_list_tuple_and_dict_stay_values(con):
+    import numpy as np
+
+    class ArrowArray(np.ndarray):
+        def __arrow_c_array__(self, requested_schema=None):  # noqa: ANN204
+            raise AssertionError
+
+    class ArrowList(list):
+        def __arrow_c_stream__(self, requested_schema=None):  # noqa: ANN204
+            raise AssertionError
+
+    values = np.array([1, 2]), np.array([1, 2]).view(ArrowArray), [1, 2], ArrowList([1, 2]), (1, 2), {"a": 1}
+    for value in values:
+        expected = con.execute("SELECT $1 AS v", [value]).fetchall()
+        assert con.execute(t"SELECT {value} AS v").fetchall() == expected
+
+
+@needs_pandas
+def test_table_field_placement_refused(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
     refused(
-        lambda: con.execute(t"SELECT * FROM {relations[0]}"),
-        f"{{relations[0]}} {RELATION}" + excerpt(line, "{relations[0]}"),
+        lambda: con.execute(t"SELECT * FROM x{frame}"),
+        "{frame} touches the text next to it, so it is not a table of its own; put a space between them"
+        + excerpt("SELECT * FROM x{frame}", "{frame}"),
+    )
+    refused(
+        lambda: con.execute(t"SELECT 'x{frame}'"),
+        "{frame} is inside a string literal, where it would be text, not a table; take it out of the literal"
+        + excerpt("SELECT 'x{frame}'", "{frame}"),
+    )
+    refused(
+        lambda: con.execute(t'SELECT * FROM "x{frame}"'),
+        "{frame} is inside a quoted identifier, and quotes itself; take away the quotes around it"
+        + excerpt('SELECT * FROM "x{frame}"', "{frame}"),
+    )
+    refused(
+        lambda: con.execute(t"SELECT 1 /* {frame} */"),
+        "{frame} is inside a comment, where it would be ignored; take it out of the comment"
+        + excerpt("SELECT 1 /* {frame} */", "{frame}"),
     )
 
 
 @needs_pandas
-def test_dataframe_value_fails_as_a_parameter(con):
+def test_table_field_where_sql_reads_no_table_fails_in_the_engine_with_the_note(con):
     import pandas as pd
 
     frame = pd.DataFrame({"a": [1]})
-    with pytest.raises(duckdb.NotImplementedException, match="Unable to transform python value") as info:
-        con.execute(t"SELECT {frame}")
-    assert info.value.__notes__ == ["The statement came from a template; $1 is {frame}:\n    SELECT {frame}"]
+    with pytest.raises(duckdb.BinderException, match="not found") as info:
+        con.execute(t"SELECT {frame}, {frame}")
+    [note] = info.value.__notes__
+    origin = r'"__duckdb_source_[0-9a-f_]+" is \{frame\}'
+    assert re.fullmatch(rf"The statement came from a template; {origin}:\n    SELECT \{{frame\}}, \{{frame\}}", note)
+
+
+@needs_polars
+def test_table_that_cannot_be_read_fails_as_a_table(con):
+    import polars as pl
+
+    objects = pl.DataFrame({"o": pl.Series([object()], dtype=pl.Object)})
+    with pytest.raises(duckdb.InvalidInputException, match="holds Python objects"):
+        con.execute("SELECT * FROM objects")
+    with pytest.raises(duckdb.InvalidInputException, match="holds Python objects"):
+        con.execute(t"SELECT * FROM {objects}")
+
+
+@needs_polars
+def test_unreadable_table_fails_the_call_before_any_statement_runs(con):
+    import polars as pl
+
+    objects = pl.DataFrame({"o": pl.Series([object()], dtype=pl.Object)})
+    for run in (con.execute, con.sql):
+        with pytest.raises(duckdb.InvalidInputException, match="holds Python objects"):
+            run(t"CREATE TABLE earlier (i INTEGER); SELECT * FROM {objects}")
+        assert con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = 'earlier'").fetchall() == [(0,)]
+
+
+@needs_pandas
+def test_table_failing_at_bind_fails_its_statement(con):
+    import pandas as pd
+
+    empty = pd.DataFrame()
+    for name, run in (("by_execute", con.execute), ("by_sql", con.sql)):
+        with pytest.raises(duckdb.InvalidInputException, match="at least one column"):
+            run(Template(f"CREATE TABLE {name} (i INTEGER); SELECT * FROM ", Interpolation(empty, "empty")))
+    tables = con.execute("SELECT table_name FROM duckdb_tables() ORDER BY 1").fetchall()
+    assert tables == [("by_execute",), ("by_sql",)]
+
+
+@needs_pyarrow
+def test_object_the_scan_does_not_read_is_a_value(con):
+    import pyarrow as pa
+    import pyarrow.dataset as ds
+
+    class Scanner:
+        def __init__(self, inner) -> None:
+            self.inner = inner
+            self.projected_schema = inner.projected_schema
+
+        def to_reader(self):
+            return self.inner.to_reader()
+
+    source = Scanner(ds.dataset(pa.table({"a": [1]})).scanner())
+    with pytest.raises(duckdb.InvalidInputException, match="not suitable for replacement scans"):
+        con.execute("SELECT * FROM source")
+    with pytest.raises(duckdb.ParserException) as info:
+        con.execute(t"SELECT * FROM {source}")
+    assert info.value.__notes__ == ["The statement came from a template; $1 is {source}:\n    SELECT * FROM {source}"]
+
+
+@needs_pyarrow
+def test_object_code_runs_under_the_connection_guard(con):
+    import pyarrow as pa
+
+    con.execute("CREATE TABLE audit (a INTEGER)")
+    table = pa.table({"a": [1]})
+
+    class Source:
+        @property
+        def schema(self):
+            con.execute("INSERT INTO audit VALUES (1)")
+            return table.schema
+
+        def __arrow_c_stream__(self, requested_schema=None):  # noqa: ANN204
+            return table.__arrow_c_stream__(requested_schema)
+
+    source = Source()
+    for query in ("SELECT * FROM source", t"SELECT * FROM {source}"):
+        with pytest.raises(duckdb.Error):
+            con.execute(query)
+    assert con.execute("SELECT count(*) FROM audit").fetchall() == [(0,)]
+
+
+@needs_pyarrow
+@pytest.mark.parametrize("entry", ["execute", "sql"])
+def test_export_property_runs_only_under_the_connection_guard(con, entry):
+    import pyarrow as pa
+
+    con.execute("CREATE TABLE audit (a INTEGER)")
+    table = pa.table({"a": [1]})
+
+    class Source:
+        @property
+        def __arrow_c_stream__(self):  # noqa: ANN204
+            con.execute("INSERT INTO audit VALUES (1)")
+            return table.__arrow_c_stream__
+
+    source = Source()
+    run = con.execute if entry == "execute" else con.sql
+    with pytest.raises(duckdb.InvalidInputException, match="inside a string literal"):
+        run(t"SELECT 'x{source}'")
+    with pytest.raises(duckdb.Error):
+        run(t"SELECT * FROM {source}")
+    assert con.execute("SELECT count(*) FROM audit").fetchall() == [(0,)]
+
+
+@needs_pyarrow
+def test_class_property_runs_no_code_before_the_guard(con):
+    calls = []
+
+    class Source:
+        @property
+        def __class__(self):  # noqa: ANN204
+            calls.append("ran")
+            return type(self)
+
+        def __arrow_c_stream__(self, requested_schema=None):  # noqa: ANN204
+            raise AssertionError
+
+    source = Source()
+    with pytest.raises(duckdb.InvalidInputException, match="inside a string literal"):
+        con.execute(t"SELECT 'x{source}'")
+    assert calls == []
+
+
+@needs_pyarrow
+def test_exporter_whose_class_has_no_module_is_a_table(con):
+    import pyarrow as pa
+
+    table = pa.table({"a": [1]})
+
+    class Exporter:
+        __module__ = None
+
+        def __arrow_c_stream__(self, requested_schema=None):  # noqa: ANN204
+            return table.__arrow_c_stream__(requested_schema)
+
+    source = Exporter()
+    assert con.execute(t"SELECT * FROM {source}").fetchall() == con.execute("SELECT * FROM source").fetchall()
+
+
+@needs_pandas
+def test_qualified_table_field_refused(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    refused(
+        lambda: con.execute(t"SELECT * FROM main.{frame}"),
+        "{frame} is qualified, but a table field is a whole table; take away the qualifier"
+        + excerpt("SELECT * FROM main.{frame}", "{frame}"),
+    )
+    refused(
+        lambda: con.execute(t"SELECT * FROM main./* c */{frame}"),
+        "{frame} is qualified, but a table field is a whole table; take away the qualifier"
+        + excerpt("SELECT * FROM main./* c */{frame}", "{frame}"),
+    )
+    assert con.execute(t"SELECT {frame}.a FROM {frame}").fetchall() == [(1,)]
+    assert con.execute(t"SELECT * FROM /* the frame. */ {frame}").fetchall() == [(1,)]
+
+
+@needs_pyarrow
+def test_field_without_an_expression_reads_as_a_named_one(con):
+    import pyarrow as pa
+
+    batch = pa.record_batch({"a": [1]})
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, batch.schema) as writer:
+        writer.write_batch(batch)
+    outcomes = []
+    for expression in ("reader", ""):
+        reader = pa.ipc.MessageReader.open_stream(sink.getvalue())
+        with pytest.raises(duckdb.Error) as info:
+            con.execute(Template("SELECT * FROM ", Interpolation(reader, expression)))
+        outcomes.append(type(info.value))
+    assert outcomes[0] is outcomes[1]
+
+
+@needs_pandas
+def test_relation_lets_the_object_go_when_it_dies(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    gone = weakref.ref(frame)
+    relation = con.sql(t"SELECT a FROM {frame}")
+    del frame
+    gc.collect()
+    assert gone() is not None
+    assert relation.fetchall() == [(1,)]
+    del relation
+    gc.collect()
+    assert gone() is None
+
+
+@needs_pandas
+def test_execute_lets_the_object_go_with_its_result(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    gone = weakref.ref(frame)
+    con.execute(t"SELECT a FROM {frame}")
+    del frame
+    gc.collect()
+    assert con.fetchall() == [(1,)]
+    con.execute("SELECT 1").fetchall()
+    gc.collect()
+    assert gone() is None
+
+
+@needs_pandas
+def test_derived_relation_and_its_view_keep_the_object(con):
+    import pandas as pd
+
+    def build():
+        frame = pd.DataFrame({"a": [1, 2, 3]})
+        return con.sql(t"SELECT a FROM {frame}").filter("a > 1")
+
+    derived = build()
+    gc.collect()
+    assert derived.order("a").fetchall() == [(2,), (3,)]
+    derived.create_view("kept")
+    del derived
+    gc.collect()
+    assert con.execute("SELECT sum(a) FROM kept").fetchall() == [(5,)]
+
+
+@needs_pandas
+def test_table_field_reads_with_replacement_scans_off(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    con.execute("SET python_enable_replacements = false")
+    with pytest.raises(duckdb.CatalogException):
+        con.execute("SELECT a FROM frame")
+    assert con.execute(t"SELECT a FROM {frame}").fetchall() == [(1,)]
+
+
+@needs_pandas
+def test_table_field_in_statements_that_run_now(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1, 2]})
+    con.execute("CREATE TABLE target (a BIGINT)")
+    con.sql(t"INSERT INTO target SELECT a FROM {frame}")
+    assert con.execute("SELECT sum(a) FROM target").fetchall() == [(3,)]
+    for run in (con.execute, con.sql):
+        con.execute("DROP TABLE IF EXISTS copied")
+        result = run(t"CREATE TABLE copied AS SELECT a FROM {frame}; SELECT sum(a) FROM copied")
+        assert result.fetchall() == [(3,)]
+
+
+@needs_pandas
+def test_chain_keeps_the_object_after_the_inner_names_are_gone(con):
+    import pandas as pd
+
+    def build():
+        frame = pd.DataFrame({"a": [1, 2]})
+        inner = con.sql(t"SELECT a FROM {frame}")
+        return con.sql(t"SELECT sum(a) AS s FROM {inner}")
+
+    outer = build()
+    gc.collect()
+    assert outer.fetchall() == [(3,)]
+    assert con.execute(t"SELECT s FROM {outer}").fetchall() == [(3,)]
+
+
+@needs_pandas
+def test_same_object_in_a_nested_template_is_one_source(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"k": [1]})
+    inner = t"SELECT k FROM {frame}"
+    relation = con.sql(t"SELECT * FROM {frame} WHERE k IN ({inner:q})")
+    assert relation.fetchall() == [(1,)]
+    assert len(set(re.findall(r"__duckdb_source_[0-9a-f_]+", relation.sql_query()))) == 1
+
+
+@needs_pandas
+def test_view_over_a_table_field_fails_once_the_call_ends(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    con.execute(t"CREATE TEMP VIEW v AS SELECT a FROM {frame}")
+    with pytest.raises(duckdb.InvalidInputException, match="which was released"):
+        con.execute("SELECT a FROM v")
+
+
+@needs_pandas
+def test_sql_query_shows_the_generated_name(con):
+    import pandas as pd
+
+    frame = pd.DataFrame({"a": [1]})
+    assert re.search(r'FROM "__duckdb_source_[0-9a-f_]+"', con.sql(t"SELECT a FROM {frame}").sql_query())
 
 
 def test_sql_template_statement_that_writes_runs_now(con):

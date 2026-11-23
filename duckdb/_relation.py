@@ -3414,8 +3414,11 @@ def _reading_source(
     values: list[Any] | dict[str, Any] | None,
     alias: str,
     parsed: _duckdb.Statement | None = None,
+    handles: tuple[_seam.SourceHandle, ...] = (),
 ) -> DuckDBPyRelation | None:
     """A lazy relation over a query that reads, or None when the binder says it must run now.
+
+    `handles` keep the sources the text reads under their registered names readable while the relation lives.
 
     A SELECT the engine says changes a database, through a common table expression that writes or a sequence's
     nextval, runs at the call, because a relation over it would write again on every read.
@@ -3428,7 +3431,7 @@ def _reading_source(
         Sql(text, markers),
         alias=alias or _unnamed(),
         params=values,
-        handles=tuple(handle for _, handle in signature.captured),
+        handles=tuple(handle for _, handle in signature.captured) + handles,
         captured=tuple((name, handle.name) for name, handle in signature.captured),
         schema=(signature.names, signature.types),
     )
@@ -3472,12 +3475,17 @@ def _run_now(
 
 
 def sql(
-    con: _duckdb.DuckDBPyConnection, query: object, alias: str = "", params: object = None
+    con: _duckdb.DuckDBPyConnection,
+    query: object,
+    alias: str = "",
+    params: object = None,
+    handles: tuple[_seam.SourceHandle, ...] = (),
 ) -> DuckDBPyRelation | None:
     """A relation over the last statement of a query; the statements before it run now.
 
     The last statement is lazy when it parses as a SELECT and the binder describes it; any other statement runs now
-    and the relation holds what it returned.
+    and the relation holds what it returned. `handles` keep sources the text reads by their registered names: a lazy
+    relation holds them, a statement that runs now needs them only during the call.
     """
     if not isinstance(query, (str, _duckdb.Statement)):
         # The template module imports this one.
@@ -3504,7 +3512,7 @@ def sql(
             values = _parameter_values(markers, params)
         elif markers:
             _parameter_values(markers, [] if markers[0].positional else {})
-        relation = _reading_source(con, text, markers, values, alias, parsed)
+        relation = _reading_source(con, text, markers, values, alias, parsed, handles)
         if relation is not None:
             return relation
     return _run_now(con, text, params, alias, kept)
@@ -4293,22 +4301,33 @@ def read_parquet(
     return _reader(con, "parquet_scan", "SUBQUERY_RELATION", (files, handles), options)
 
 
-def _is_dataframe(obj: object) -> bool:
-    return any(c.__module__.startswith("pandas") and c.__name__ == "DataFrame" for c in type(obj).__mro__)
+def _is_dataframe(obj: object, *, series: bool = False) -> bool:
+    """Whether an object is a pandas DataFrame, or with `series` also a Series, judged from its class."""
+    names = ("DataFrame", "Series") if series else ("DataFrame",)
+    return any(
+        isinstance(c.__module__, str) and c.__module__.startswith("pandas") and c.__name__ in names
+        for c in type(obj).__mro__
+    )
 
 
-def _arrow_shaped(obj: object) -> bool:
-    """Whether an object could be an Arrow source, judged from its class alone, so none of its own code runs."""
+def _arrow_shaped(obj: object, *, probe: bool = True) -> bool:
+    """Whether an object could be an Arrow source, judged from its class.
+
+    With `probe`, an export defined as a property is read to see whether it is there; without it, none of the
+    object's own code runs.
+    """
     kind = type(obj)
     if kind.__name__ == "PyCapsule":
         return True
-    if any(c.__module__.partition(".")[0] in ("pyarrow", "polars") for c in kind.__mro__):
+    if any(
+        isinstance(c.__module__, str) and c.__module__.partition(".")[0] in ("pyarrow", "polars") for c in kind.__mro__
+    ):
         return True
     for name in ("__arrow_c_stream__", "__arrow_c_array__"):
         found = inspect.getattr_static(kind, name, None)
         if found is None:
             continue
-        if isinstance(found, property):
+        if isinstance(found, property) and probe:
             try:
                 getattr(obj, name)
             except AttributeError:
@@ -4348,7 +4367,8 @@ _SQL_DOC = (
     "Run a SQL query. A statement that only reads returns a relation that runs the query each time it is read, "
     "parameter values bound at every run. Any other statement runs once, now, and gives a relation over what it "
     'returned. Statements before the last one run immediately. A template string, t"...", binds each of its '
-    "values as a parameter; {name:i} writes a name and {template:q} splices a template."
+    "values as a parameter and reads a field that holds a relation, a pandas DataFrame or Series, or an Arrow object "
+    "as that table; {name:i} writes a name and {template:q} splices a template."
 )
 
 
