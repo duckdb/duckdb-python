@@ -133,7 +133,9 @@ public:
 
 	//! Ends the query if it is still running. Idempotent, and safe while another thread is fetching.
 	void Close();
-	void EndIfRunning();
+	//! For the exit hook: interrupts every running result's query, then ends each one whose connection comes free
+	//! within one second; the others are left open
+	static void EndAtExit(const vector<shared_ptr<Result>> &results);
 	//! Called once the shared owner exists, which Live needs
 	static void Register(const shared_ptr<Result> &result);
 	static vector<shared_ptr<Result>> Live();
