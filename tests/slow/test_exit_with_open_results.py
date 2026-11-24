@@ -135,6 +135,28 @@ OPEN_RESULT_CASES = [
 ]
 
 
+FAILED_FETCHES = {
+    "dbapi_fetch": """
+        con.execute("SELECT * FROM range(1_000_000)")
+        con.fetchone()
+        con.interrupt()
+        try:
+            con.fetchall()
+        except duckdb.InterruptException:
+            print("FETCH_FAILED", flush=True)
+    """,
+    "arrow_reader": """
+        failed = con.sql("SELECT * FROM range(10_000_000) t(i)").to_arrow_reader(1000)
+        failed.read_next_batch()
+        con.interrupt()
+        try:
+            failed.read_all()
+        except OSError:
+            print("FETCH_FAILED", flush=True)
+    """,
+}
+
+
 class TestOpenResultAtExit:
     @pytest.mark.parametrize("body", OPEN_RESULT_CASES)
     def test_exits_with_an_open_result_over_an_object_column(self, body: str) -> None:
@@ -209,6 +231,59 @@ class TestOpenResultAtExit:
         assert "WORKERS_SORT" in proc.stdout.splitlines(), proc.stdout
         returned = next(float(line.split()[1]) for line in proc.stdout.splitlines() if line.startswith("MAIN_RETURNS"))
         assert exited - returned < 2.5, f"exit took {exited - returned:.1f} s after the main thread"
+
+    @pytest.mark.skipif(importlib.util.find_spec("pyarrow") is None, reason="needs pyarrow")
+    @pytest.mark.parametrize("failed_fetch", list(FAILED_FETCHES))
+    def test_a_sort_left_open_beside_a_failed_fetch_of_its_connection_is_interrupted_before_its_close(
+        self, failed_fetch: str
+    ) -> None:
+        # A fetch that fails while streaming must end its result: one left counted as running gives the hook two
+        # results of one connection, and the second closes after the first cleared the interrupt. The order the hook
+        # meets them in follows the registry's hash layout, which Python cannot choose; the cursor counts change that
+        # layout, so both orders occur.
+        body = """
+        import time
+
+        # A sort key slow to compute keeps the workers from seeing an interrupt that is set only for a moment
+        query = (
+            "SELECT * FROM range(3) t(i) UNION ALL "
+            "(SELECT i FROM range(20_000_000) t(i) ORDER BY hash(repeat(i::VARCHAR, 200)))"
+        )
+        for _ in range(5):
+            con = duckdb.connect(config={{"threads": 4, "memory_limit": "2GB"}})
+            con.execute("SET enable_progress_bar = false")
+{failed_fetch}
+            started = time.time()
+            reader = con.sql(query).to_arrow_reader(1)
+            reader.read_next_batch()
+            # A first batch as slow as the sort means the fetching thread ran it itself and left nothing to interrupt
+            if time.time() - started < 5:
+                print("WORKERS_SORT", flush=True)
+                break
+            con.close()
+        else:
+            raise SystemExit("the fetching thread ran the sort in every attempt")
+        cursors = []
+        for _ in range({cursors}):
+            cursor = con.cursor()
+            cursor.execute("SELECT 1")
+            cursors.append(cursor)
+        time.sleep(1)
+        print("MAIN_RETURNS", time.time(), flush=True)
+        """
+        step = textwrap.indent(textwrap.dedent(FAILED_FETCHES[failed_fetch]).strip("\n"), " " * 12)
+        waits = {}
+        for cursors in range(10, 28, 2):
+            proc = _run(body.format(cursors=cursors, failed_fetch=step), head="import duckdb\n", timeout=120)
+            exited = time.time()
+            _assert_exit(proc)
+            lines = proc.stdout.splitlines()
+            assert "FETCH_FAILED" in lines, proc.stdout
+            assert "WORKERS_SORT" in lines, proc.stdout
+            returned = next(float(line.split()[1]) for line in lines if line.startswith("MAIN_RETURNS"))
+            waits[cursors] = round(exited - returned, 1)
+        slow = {cursors: wait for cursors, wait in waits.items() if wait >= 2.5}
+        assert not slow, f"seconds from the main thread's return to the exit, by cursor count: {slow}"
 
 
 NEEDS_FIFO = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs a FIFO")

@@ -176,6 +176,50 @@ class TestStreamingSemantics:
         with pytest.raises(duckdb.ConversionException):
             drain(duckdb_cursor)
 
+    FAILS_AFTER_ITS_FIRST_ROWS = f"""
+        SELECT CASE WHEN i < {ROW_COUNT} THEN i ELSE concat('hello', i::VARCHAR)::INT END AS i
+        FROM range({ROW_COUNT} + 1) t(i)
+    """
+
+    @pytest.mark.parametrize("failure", ["engine_error", "interrupt"])
+    def test_a_later_fetch_after_a_failed_streaming_fetch_raises_the_same_error(self, duckdb_cursor, failure):
+        duckdb_cursor.execute(f"SET max_streaming_buffer_size='{SMALL_BUFFER}'")
+        if failure == "engine_error":
+            duckdb_cursor.execute(self.FAILS_AFTER_ITS_FIRST_ROWS)
+        else:
+            duckdb_cursor.execute("SELECT i FROM range(100_000_000) t(i)")
+        assert duckdb_cursor.fetchone() == (0,)
+        if failure == "interrupt":
+            duckdb_cursor.interrupt()
+        with pytest.raises(duckdb.Error) as first:
+            duckdb_cursor.fetchall()
+        for later in (
+            lambda: duckdb_cursor.fetch_df_chunk(0),
+            duckdb_cursor.fetchall,
+            duckdb_cursor.fetchone,
+            duckdb_cursor.fetchnumpy,
+        ):
+            with pytest.raises(type(first.value)) as again:
+                later()
+            assert str(again.value) == str(first.value)
+        assert duckdb_cursor.execute("SELECT 42").fetchall() == [(42,)]
+
+    def test_a_later_read_of_a_failed_arrow_reader_raises_the_same_error(self, duckdb_cursor):
+        pytest.importorskip("pyarrow")
+        duckdb_cursor.execute(f"SET max_streaming_buffer_size='{SMALL_BUFFER}'")
+        reader = duckdb_cursor.sql(self.FAILS_AFTER_ITS_FIRST_ROWS).to_arrow_reader(1024)
+        assert len(reader.read_next_batch()) == 1024
+        with pytest.raises(OSError, match="hello") as first:
+            reader.read_all()
+        with pytest.raises(OSError, match="hello") as again:
+            reader.read_next_batch()
+        assert str(again.value) == str(first.value)
+
+        duckdb_cursor.close()
+        with pytest.raises(OSError, match="hello") as after_close:
+            reader.read_next_batch()
+        assert str(after_close.value) == str(first.value)
+
     def test_a_returning_write_applies_when_its_rows_are_read(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE t (i INTEGER)")
 
