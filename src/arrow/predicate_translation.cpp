@@ -442,7 +442,7 @@ struct PredicateProbe : public TableFunctionInfo {
 	unordered_set<string> offered;
 };
 
-void CaptureOfferedPredicates(ClientContext &context, LogicalGet &get, FunctionData *,
+void CaptureOfferedPredicates(ClientContext &context, LogicalGet &get, optional_ptr<const FunctionData>,
                               vector<unique_ptr<Expression>> &filters) {
 	engine::CallbackScope callback(context);
 	auto &probe = get.function.function_info->Cast<PredicateProbe>();

@@ -72,6 +72,8 @@ _REMOVED_METHODS = {
     "fetch_df_chunk": "rel.to_arrow_reader() to read in batches, or rel.limit(n).df()",
     "execute": "rel.materialize() to run it once and keep its rows, or a method such as fetchall()",
 }
+_POLARS_DECIMAL_DIGITS = 38
+_NESTED_TYPE_IDS = frozenset({"list", "array", "struct", "tuple", "map", "union"})
 _BARE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # The keywords match ASCII letters only, so a look-alike letter is not a keyword; the whitespace stays Unicode, as the
 # engine's parser reads a no-break space between the words as a space.
@@ -93,6 +95,28 @@ def _error(kind: type[Exception], message: str) -> Exception:
     """An engine exception class with the engine's prefix on its message, as the C++ relation raised them."""
     prefix = _ERROR_NAMES.get(kind.__name__)
     return kind(f"{prefix} Error: {message}" if prefix else message)
+
+
+def _refuse_wide_decimals_for_polars(types: Iterable[DuckDBPyType]) -> None:
+    """Raise for a decimal wider than polars holds, at any depth, before an export that polars meets with a panic."""
+    from duckdb.sqltypes import DuckDBPyType
+
+    def check(kind: DuckDBPyType) -> None:
+        if kind.id == "decimal":
+            precision, scale = (cast("int", value) for _, value in kind.children)
+            if precision > _POLARS_DECIMAL_DIGITS:
+                message = (
+                    f"Converting DECIMAL({precision},{scale}) to polars is not supported: polars holds at most "
+                    f"{_POLARS_DECIMAL_DIGITS} digits; cast the column to DOUBLE or VARCHAR"
+                )
+                raise _error(_duckdb.NotImplementedException, message)
+        elif kind.id in _NESTED_TYPE_IDS:
+            for _, child in kind.children:
+                if isinstance(child, DuckDBPyType):
+                    check(child)
+
+    for kind in types:
+        check(kind)
 
 
 def _name_text(name: str) -> str:
@@ -2560,6 +2584,7 @@ class DuckDBPyRelation:
         import polars
 
         if not lazy:
+            _refuse_wide_decimals_for_polars(self.types)
             table = self._submit("arrow", int(batch_size)).arrow_table(to_polars=True)
             return polars.from_arrow(table, rechunk=False)
         from duckdb.polars_io import duckdb_source
@@ -2568,6 +2593,7 @@ class DuckDBPyRelation:
         # reads it that way too and its rows carry the names the schema promises.
         text = _wrap(_render(self, literals=True)[0], _unnamed())
         unique = DuckDBPyRelation._make(self._con, Sql(text), alias=_unnamed(), handles=(self,))
+        _refuse_wide_decimals_for_polars(unique.types)
         schema = polars.DataFrame(_seam.arrow_schema(self._con, unique.columns, unique.types).empty_table()).schema
         return duckdb_source(unique, schema)
 

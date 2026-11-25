@@ -68,7 +68,7 @@ public:
 	static void PandasBackendScanSwitch(ClientContext &context, PandasColumnBindData &bind_data, idx_t count,
 	                                    idx_t offset, Vector &out);
 
-	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	static void PandasSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
 	                            const BoundTableFunction &function);
 
 	static unique_ptr<FunctionData> PandasDeserialize(Deserializer &deserializer, BoundTableFunction &function);

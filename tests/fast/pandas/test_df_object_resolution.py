@@ -843,8 +843,9 @@ class TestResolveObjectColumns:
         print(reference)
         print(conversion)
 
-    def test_numeric_decimal_fallback_to_double(self, duckdb_cursor):
-        # The widths of these decimal values are bigger than the max supported width for DECIMAL
+    def test_numeric_decimal_wider_than_38_digits_is_exact(self, duckdb_cursor):
+        # These values once fell back to DOUBLE, when no DECIMAL held more than 38 digits; each is now the exact
+        # DECIMAL it needs, up to max_decimal_width, as the engine reads the same literals.
         data = [
             Decimal("1.234567890123456789012345678901234567890123456789"),
             Decimal("123456789012345678901234567890123456789012345678.0"),
@@ -861,9 +862,11 @@ class TestResolveObjectColumns:
         reference = duckdb_cursor.sql("select * from tbl").fetchall()
         conversion = duckdb.query_df(decimals, "x", "select * from x").fetchall()
         assert conversion == reference
-        assert isinstance(conversion[0][0], float)
+        assert conversion == [(value,) for value in data]
 
-    def test_numeric_decimal_double_mixed(self, duckdb_cursor):
+    def test_numeric_decimal_mixed_widths_are_exact(self, duckdb_cursor):
+        # The object column is the one DECIMAL that holds every value exactly; the SQL literal 123.5e300 has an
+        # exponent, which makes it a DOUBLE in the engine, so the values themselves are the reference.
         data = [
             Decimal("1.234"),
             Decimal("1.234567891234567890123456789012345678901234567890123456789"),
@@ -875,24 +878,9 @@ class TestResolveObjectColumns:
             Decimal("123.5e300"),
         ]
         decimals = pd.DataFrame(data={"0": data})
-        reference_query = """
-            CREATE TABLE tbl AS SELECT * FROM (
-                VALUES
-                    (1.234),
-                    (1.234567891234567890123456789012345678901234567890123456789),
-                    (0.00000000000345),
-                    (0.00000000000000000000000000000000000000000000000000000000000123456789),
-                    (1234543534535213412342342.2345456),
-                    (123456789123456789123456789123456789123456789123456789123456789123456789),
-                    (1232354.000000000000000000000000000035),
-                    (123.5e300)
-            ) tbl(a);
-        """
-        duckdb_cursor.execute(reference_query)
-        reference = duckdb_cursor.sql("select * from tbl").fetchall()
-        conversion = duckdb_cursor.sql("select * from decimals").fetchall()
-        assert conversion == reference
-        assert isinstance(conversion[0][0], float)
+        rel = duckdb_cursor.sql("select * from decimals")
+        assert [str(t) for t in rel.types] == ["DECIMAL(371,68)"]
+        assert rel.fetchall() == [(value,) for value in data]
 
     def test_numeric_decimal_out_of_range(self, duckdb_cursor):
         data = [Decimal("1.234567890123456789012345678901234567"), Decimal("123456789012345678901234567890123456.0")]

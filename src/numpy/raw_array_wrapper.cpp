@@ -64,6 +64,7 @@ static idx_t GetNumpyTypeWidth(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::SQLNULL:
 		return sizeof(PyObject *);
 	default:
@@ -131,6 +132,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::ARRAY:
 	case LogicalTypeId::VARIANT:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 	case LogicalTypeId::SQLNULL:
 		return "object";
 	case LogicalTypeId::ENUM: {

@@ -66,7 +66,8 @@ class TestTypes:
                 fixed_array_of_int_list,
                 list_of_fixed_int_array,
                 bignum,
-                geometry
+                geometry,
+                geography
 			) from test_all_types()
 		"""
         )

@@ -1193,10 +1193,10 @@ class TestTemporalAndBinaryTypes:
 class TestUnsupportedAndUnusualSchemas:
     """Registering or first reading an object reports what the importer cannot take."""
 
-    def test_decimal256_is_refused(self, con):
-        wide = pa.table({"d": pa.array([decimal.Decimal("1.5")], pa.decimal256(12, 4))})
-        with pytest.raises(duckdb.NotImplementedException, match="Decimal"):
-            register_and_read(con, "wide", wide)
+    def test_decimal256_is_read(self, con):
+        wide = pa.table({"d": pa.array([decimal.Decimal("1.5"), None], pa.decimal256(12, 4))})
+        assert register_and_read(con, "wide", wide) == [(decimal.Decimal("1.5000"),), (None,)]
+        assert types(con, "wide") == ["DECIMAL(12,4)"]
 
     def test_a_dense_union_is_refused(self, con):
         union = pa.UnionArray.from_dense(

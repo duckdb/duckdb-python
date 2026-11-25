@@ -614,7 +614,7 @@ def _rendered(value: object) -> str:
     if isinstance(value, decimal.Decimal):
         shape = _decimal_shape(value)
         if shape is None:
-            # No DECIMAL holds it, so it is what binding it as a parameter makes of it, a DOUBLE or a FLOAT.
+            # Past 38 digits, or as an infinity or a NaN, it is what binding it as a parameter makes of it.
             return _seam.value_literal(value)
         width, scale = shape
         # Written out in full: DuckDB reads '1E-38' as a decimal string only into a type one digit wider.
