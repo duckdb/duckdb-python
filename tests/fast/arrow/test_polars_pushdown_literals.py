@@ -30,6 +30,7 @@ UNIT_RESOLUTION = {"ms": 0, "us": 1, "ns": 2}
 COLUMN_UNITS = {"TIMESTAMP_S": "ms", "TIMESTAMP_MS": "ms", "TIMESTAMP": "us", "TIMESTAMP_NS": "ns"}
 SERIALIZED_UNITS = {"Milliseconds": "ms", "Microseconds": "us", "Nanoseconds": "ns"}
 POLARS_2 = parse_version(pl.__version__) >= parse_version("2")
+POLARS_2_2 = parse_version(pl.__version__) >= parse_version("2.2")
 INTEGER_RANGES = {
     "TINYINT": (-(2**7), 2**7 - 1),
     "SMALLINT": (-(2**15), 2**15 - 1),
@@ -880,6 +881,115 @@ class TestBooleanOperatorPushdown:
             (pl.col("p") | (pl.col("q") & (pl.col("i") > 2))) & pl.col("s").str.contains("x"),
         ):
             assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed="partly")
+
+
+class TestTernaryPushdown:
+    # polars' when/then/otherwise sends a NULL condition to its otherwise branch as CASE sends it to ELSE; polars 2.2
+    # also turns an integer column compared with a value none of its values equals into one, alike for each non NULL row
+    @pytest.fixture
+    def lazy_df(self, duckdb_cursor):
+        duckdb_cursor.execute("CREATE TABLE t (a TINYINT, b TINYINT, x DOUBLE, s VARCHAR)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?, ?, ?)",
+            list(itertools.product([-128, -1, 0, 1, 127, None], [2, None], [1.0, -1.0, None], ["x", None])),
+        )
+        return duckdb_cursor.table("t").pl(lazy=True)
+
+    @pytest.mark.parametrize("literal", [1000, 1.5, 200.5, -126.99999999999999])
+    def test_an_equality_no_value_meets_is_pushed(self, lazy_df, pushdowns, literal):
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, pl.col("a") == literal, pushed=True)
+        # polars 2 before 2.2 compares a float with the column's Float64 cast, polars 1 an integer with a wider cast
+        assert ("Ternary" in tree) == (POLARS_2_2 or (POLARS_2 and isinstance(literal, int)))
+
+    @pytest.mark.parametrize("literal", [1000, 1.5])
+    def test_an_inequality_no_value_meets_is_pushed_where_polars_folds_it(self, lazy_df, pushdowns, literal):
+        # The translator has no !=, which polars 2 before 2.2 sends for a float and polars 1 for both
+        pushed = POLARS_2_2 or (POLARS_2 and isinstance(literal, int))
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, pl.col("a") != literal, pushed=pushed)
+        assert ("Ternary" in tree) == pushed
+
+    @pytest.mark.parametrize("literal", [1000, 1.5])
+    def test_a_fold_under_or_is_pushed(self, lazy_df, pushdowns, literal):
+        # The fold is never TRUE, so x above 0 alone keeps a row, one with a NULL a included
+        predicate = (pl.col("a") == literal) | (pl.col("x") > 0)
+        assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+
+    def test_when_then_otherwise_is_pushed(self, lazy_df, pushdowns):
+        predicate = pl.when(pl.col("x") > 0).then(pl.col("a") > 0).otherwise(pl.col("a") < 0)
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+        assert "Ternary" in tree
+        # A NULL condition takes the otherwise branch
+        assert (-1, None) in lazy_df.filter(predicate).select("a", "x").collect().rows()
+        # Without otherwise, polars sends the last branch as a NULL cast to Boolean
+        [tree] = assert_pushdown_matches_polars(
+            lazy_df, pushdowns, pl.when(pl.col("x") > 0).then(pl.col("a") > 0), pushed=True
+        )
+        assert "Ternary" in tree
+        # A chained when/then is a Ternary in the last branch, which a NULL first condition falls through to
+        predicate = (
+            pl.when(pl.col("x") > 0)
+            .then(pl.col("a") > 0)
+            .when(pl.col("a") < 0)
+            .then(pl.col("b").is_null())
+            .otherwise(pl.col("a") == 0)
+        )
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+        assert "Ternary" in tree["Ternary"]["falsy"]
+        assert (-1, None, None) in lazy_df.filter(predicate).select("a", "b", "x").collect().rows()
+
+    @pytest.mark.parametrize(
+        "predicate",
+        [
+            pytest.param(pl.when(pl.col("a")).then(pl.col("x") > 0).otherwise(pl.col("x") < 0), id="integer_condition"),
+            pytest.param(pl.when(pl.col("x") > 0).then(pl.lit(1)).otherwise(pl.lit(0)), id="integer_branches"),
+            pytest.param(
+                pl.when(pl.col("a") & pl.col("b")).then(pl.col("x") > 0).otherwise(pl.col("x") < 0),
+                id="bitwise_and_condition",
+            ),
+        ],
+    )
+    def test_a_when_then_polars_does_not_type_boolean_is_not_pushed(self, lazy_df, pushdowns, predicate):
+        # polars types the parts only when it evaluates them, and pushed, the engine would read a nonzero integer as
+        # true where polars raises
+        with pytest.raises(pl.exceptions.PolarsError):
+            lazy_df.filter(predicate).collect()
+        [(tree, expression, error)] = pushdowns
+        assert "Ternary" in tree
+        assert expression is None
+        assert error is NotImplementedError
+
+    def test_a_when_then_of_an_and_and_a_boolean_column_is_pushed(self, duckdb_cursor, pushdowns):
+        duckdb_cursor.execute("CREATE TABLE t (f BOOLEAN, a TINYINT, x DOUBLE)")
+        duckdb_cursor.executemany(
+            "INSERT INTO t VALUES (?, ?, ?)",
+            list(itertools.product([True, False, None], [-1, 0, 1, None], [1.0, -1.0, None])),
+        )
+        lazy_df = duckdb_cursor.table("t").pl(lazy=True)
+        predicate = pl.when(pl.col("f") & (pl.col("a") > 0)).then(pl.col("f")).otherwise(pl.col("x") < 0)
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=True)
+        assert "Ternary" in tree
+
+    @pytest.mark.parametrize(
+        "predicate",
+        [
+            pytest.param(
+                pl.when(pl.col("x") > 0).then(pl.col("a")).otherwise(pl.col("b")) > 0, id="operand_of_a_comparison"
+            ),
+            pytest.param(
+                pl.when(pl.col("x") > 0).then(pl.col("s").str.contains("x")).otherwise(pl.col("a") > 0),
+                id="branch_that_does_not_translate",
+            ),
+        ],
+    )
+    def test_a_ternary_that_does_not_translate_is_not_pushed(self, lazy_df, pushdowns, predicate):
+        # CASE and polars type branches that are not Boolean differently, and a part that does not translate stays
+        [tree] = assert_pushdown_matches_polars(lazy_df, pushdowns, predicate, pushed=False)
+        assert "Ternary" in json.dumps(tree)
+
+    def test_only_a_boolean_null_literal_translates(self):
+        assert _pl_tree_to_sql({"Literal": {"Scalar": {"Null": "Boolean"}}}) == "CAST(NULL AS BOOLEAN)"
+        with pytest.raises(NotImplementedError):
+            _pl_tree_to_sql({"Literal": {"Scalar": {"Null": "Int32"}}})
 
 
 class TestDecimalLiteralPushdown:

@@ -331,12 +331,72 @@ def _comparison_to_sql(
     return f"({_operand_to_sql(lhs, schema)} {sql_op} {_operand_to_sql(rhs, schema)})"
 
 
+_COMPARISONS = frozenset({"Eq", "NotEq", "Lt", "LtEq", "Gt", "GtEq"})
+_BOOLEAN_SCALARS = ({"Boolean": True}, {"Boolean": False}, {"Null": "Boolean"})
+
+
+def _is_null_cast_to_boolean(tree: _ExpressionTree) -> bool:
+    """Whether the node is the cast of an untyped NULL to Boolean that ends a when/then without otherwise."""
+    cast = tree.get("Cast")
+    return (
+        isinstance(cast, dict)
+        and cast.get("dtype") == {"Literal": "Boolean"}
+        and cast.get("expr") == {"Literal": {"Scalar": {"Null": "Null"}}}
+    )
+
+
+def _is_boolean(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | None) -> bool:
+    """Whether polars types the node Boolean before it evaluates it.
+
+    That is a comparison, an And or Or of Booleans, a null test, a Boolean literal or column, the cast of an untyped
+    NULL to Boolean, or a Ternary of Booleans.
+    """
+    ternary = tree.get("Ternary")
+    if isinstance(ternary, dict):
+        return all(isinstance(part, dict) and _is_boolean(part, schema) for part in ternary.values())
+    bin_expr = tree.get("BinaryExpr")
+    if isinstance(bin_expr, dict):
+        lhs, op, rhs = bin_expr.get("left"), bin_expr.get("op"), bin_expr.get("right")
+        if op in ("And", "Or"):
+            return (
+                isinstance(lhs, dict)
+                and isinstance(rhs, dict)
+                and _is_boolean(lhs, schema)
+                and _is_boolean(rhs, schema)
+            )
+        return op in _COMPARISONS
+    function = tree.get("Function")
+    if isinstance(function, dict):
+        return function.get("function") in ({"Boolean": "IsNull"}, {"Boolean": "IsNotNull"})
+    column = tree.get("Column")
+    if isinstance(column, str):
+        return schema is not None and schema.get(column) == pl.Boolean
+    literal = tree.get("Literal")
+    if isinstance(literal, dict):
+        return literal.get("Scalar") in _BOOLEAN_SCALARS
+    return _is_null_cast_to_boolean(tree)
+
+
 def _predicate_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | None = None) -> str:
     """Convert a Boolean polars expression tree, a filter predicate or a conjunct of one, to a SQL string.
 
     polars applies And and Or bitwise to integers but types them Boolean only between Boolean operands, and a filter
-    predicate is Boolean, so an And or Or is SQL's AND or OR here and in its operands, and nowhere below.
+    predicate is Boolean, so an And or Or is SQL's AND or OR here and in its operands, and nowhere below. A Ternary is a
+    CASE here, where both send a NULL condition to the last branch, but only when polars types its condition and
+    branches Boolean: polars checks them only when it evaluates them, which it never does for a predicate the source
+    took, and the engine reads a nonzero integer as true.
     """
+    ternary = tree.get("Ternary")
+    if isinstance(ternary, dict):
+        if not _is_boolean(tree, schema):
+            msg = "A when/then that polars does not type Boolean throughout cannot be pushed down"
+            raise NotImplementedError(msg)
+        when, then, otherwise = ternary["predicate"], ternary["truthy"], ternary["falsy"]
+        assert isinstance(when, dict), f"The predicate of a Ternary should be a dict but got {type(when)}"
+        assert isinstance(then, dict), f"The truthy branch of a Ternary should be a dict but got {type(then)}"
+        assert isinstance(otherwise, dict), f"The falsy branch of a Ternary should be a dict but got {type(otherwise)}"
+        when_sql, then_sql = _predicate_to_sql(when, schema), _predicate_to_sql(then, schema)
+        return f"(CASE WHEN {when_sql} THEN {then_sql} ELSE {_predicate_to_sql(otherwise, schema)} END)"
     bin_expr = tree.get("BinaryExpr")
     if isinstance(bin_expr, dict) and bin_expr.get("op") in ("And", "Or"):
         lhs, op, rhs = bin_expr["left"], bin_expr["op"], bin_expr["right"]
@@ -455,6 +515,9 @@ def _pl_tree_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | N
         ):
             # No cast option changes how such a cast compares, so the bare column compares the same
             return _pl_tree_to_sql(cast_expr, schema)
+        if _is_null_cast_to_boolean(tree):
+            # A when/then without otherwise ends in this cast, which polars does not fold, and a cast NULL is NULL
+            return "CAST(NULL AS BOOLEAN)"
         # Any other cast of a column can truncate, turn an overflow into NULL or change the type the comparison runs
         # in, and the bare column carries none of that
         if "Literal" not in cast_expr:
@@ -517,6 +580,14 @@ def _pl_tree_to_sql(tree: _ExpressionTree, schema: Mapping[str, pl.DataType] | N
                 return f"'{dt_timestamp!s}'::TIMESTAMP"
             # The value is UTC; compare as an instant so the session TimeZone does not shift it
             return f"'{dt_timestamp!s}+00'::TIMESTAMPTZ"
+
+        if dtype == "Null":
+            # A folded comparison gives its NULL rows a Boolean NULL; polars folds a comparison of a column with a NULL
+            # of another type before a scan sees it
+            if value["Null"] != "Boolean":
+                msg = f"A NULL literal of type {value['Null']!r} cannot be pushed down"
+                raise NotImplementedError(msg)
+            return "CAST(NULL AS BOOLEAN)"
 
         # Match simple numeric/boolean types
         if dtype in (
