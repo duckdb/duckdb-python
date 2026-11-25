@@ -197,7 +197,13 @@ unique_ptr<typename FORMAT::T> Result::FetchStreamUnit(const InterruptCheck &che
 			return nullptr;
 		}
 		if (query_state == QueryResultState::EXECUTION_ERROR) {
-			typed.GetErrorObject().Throw();
+			// An engine error ends the query, as on the other paths that drive it; its stream already closed itself
+			try {
+				typed.GetErrorObject().Throw();
+			} catch (...) {
+				CloseAfterFailure(std::current_exception());
+				throw;
+			}
 		}
 		check();
 		query_state = typed.ExecuteTask();
