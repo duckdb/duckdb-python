@@ -208,9 +208,9 @@ void DuckDBPyConnection::DetectEnvironment() {
 	int minor = nb::cast<int>(version_info.attr("minor"));
 	GetModuleState().formatted_python_version = std::to_string(major) + "." + std::to_string(minor);
 
-	// If __main__ does not have a __file__ attribute, we are in interactive mode
-	auto main_module = nb::module_::import_("__main__");
-	if (nb::hasattr(main_module, "__file__")) {
+	// Embedded hosts may remove __main__; its absence does not imply an interactive session.
+	auto main_module = sys.attr("modules").attr("get")("__main__");
+	if (main_module.is_none() || nb::hasattr(main_module, "__file__")) {
 		return;
 	}
 	GetModuleState().environment = PythonEnvironmentType::INTERACTIVE;
