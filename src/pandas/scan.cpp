@@ -287,7 +287,7 @@ nb::object PandasScanFunction::PandasWithBoundNames(const nb::object &df) {
 	return df;
 }
 
-void PandasScanFunction::PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+void PandasScanFunction::PandasSerialize(Serializer &serializer, const optional_ptr<const FunctionData> bind_data,
                                          const BoundTableFunction &function) {
 	throw NotImplementedException("PandasScan function cannot be serialized");
 }

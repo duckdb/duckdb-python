@@ -37,6 +37,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb_python/python_replacement_scan.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/parser/statement/load_statement.hpp"
 #include "duckdb_python/nb/conversions/python_csv_line_terminator_enum.hpp"
 
@@ -363,9 +364,7 @@ static void InitializeConnectionMethods(nb::class_<DuckDBPyConnection> &m) {
 } // END_OF_CONNECTION_METHODS
 
 void DuckDBPyConnection::UnregisterFilesystem(const nb::str &name) {
-	auto &database = con.GetDatabase();
-	auto &fs = database.GetFileSystem();
-
+	auto &fs = VirtualFileSystem::Get(*con.GetDatabase().instance);
 	fs.ExtractSubSystem(nb::cast<std::string>(name));
 }
 
@@ -380,7 +379,7 @@ void DuckDBPyConnection::RegisterFilesystem(nb::object filesystem) {
 		throw InvalidInputException("Bad filesystem instance");
 	}
 
-	auto &fs = database.GetFileSystem();
+	auto &fs = VirtualFileSystem::Get(*database.instance);
 
 	// nb::object (not auto, which deduces an accessor): nb::str(protocol) below is an ambiguous overload on MSVC.
 	nb::object protocol = filesystem.attr("protocol");
@@ -401,8 +400,7 @@ void DuckDBPyConnection::RegisterFilesystem(nb::object filesystem) {
 }
 
 nb::list DuckDBPyConnection::ListFilesystems() {
-	auto &database = con.GetDatabase();
-	auto subsystems = database.GetFileSystem().ListSubSystems();
+	auto subsystems = VirtualFileSystem::Get(*con.GetDatabase().instance).ListSubSystems();
 	nb::list names;
 	for (auto &name : subsystems) {
 		names.append(nb::str(name.c_str(), name.size()));
@@ -457,8 +455,7 @@ nb::list DuckDBPyConnection::ExtractStatements(const string &query) {
 }
 
 bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
-	auto &database = con.GetDatabase();
-	auto subsystems = database.GetFileSystem().ListSubSystems();
+	auto subsystems = VirtualFileSystem::Get(*con.GetDatabase().instance).ListSubSystems();
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
 }
 

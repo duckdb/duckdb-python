@@ -430,7 +430,7 @@ LogicalType PandasAnalyzer::GetItemType(nb::object ele, bool &can_convert) {
 	case PythonObjectType::Decimal: {
 		PyDecimal decimal(ele);
 		LogicalType type;
-		if (!decimal.TryGetType(type)) {
+		if (!decimal.TryGetType(type, context)) {
 			can_convert = false;
 		}
 		return type;

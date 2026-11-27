@@ -177,7 +177,7 @@ class TestAnUnfinishedCase:
 
 
 class TestDecimalsTheParameterPathHolds:
-    """A Decimal the parameter path types, as DOUBLE when DECIMAL(38) cannot hold it, renders on every path."""
+    """A Decimal renders on every path as the parameter path types it."""
 
     def parameter_answer(self, con, value):
         return con.execute("SELECT ? AS d", [value]).fetchall()
@@ -217,13 +217,14 @@ class TestDecimalsTheParameterPathHolds:
 
 
 class TestDecimalWidthAtTheEdges:
-    """The width counts the leading zero of a fraction as the parameter path does, and past 38 the value is DOUBLE."""
+    """The width counts the leading zero of a fraction as the parameter path does, past 38 digits as well."""
 
     @pytest.mark.parametrize(
         ("text", "kind"),
         [
-            pytest.param("1e-38", "DOUBLE", id="smallest_scale_38"),
+            pytest.param("1e-38", "DECIMAL(39,38)", id="smallest_scale_38"),
             pytest.param("9" * 38, "DECIMAL(38,0)", id="largest_integral"),
+            pytest.param("9" * 39, "DECIMAL(39,0)", id="smallest_wide_integral"),
             pytest.param("0." + "9" * 38, "DECIMAL(38,38)", id="largest_fraction"),
         ],
     )

@@ -992,3 +992,13 @@ class TestMapsWithNestedKeys:
         if USE_ACTUAL_SPARK:
             pytest.skip("DuckDB SQL")
         assert spark.sql("select map([{'a': 1}], [2]) m").collect() == [Row(m={Row(a=1): 2})]
+
+
+class TestWideDecimals:
+    def test_a_python_decimal_of_more_than_38_digits_is_exact(self, spark):
+        if USE_ACTUAL_SPARK:
+            pytest.skip("Spark has no DECIMAL wider than 38 digits")
+        schema = StructType([StructField("d", DecimalType(50, 10))])
+        wide = decimal.Decimal("123456789012345678901234567890.1234567890")
+        df = spark.createDataFrame([(wide,), (None,), (decimal.Decimal("-1.25"),)], schema)
+        assert df.collect() == [Row(d=wide), Row(d=None), Row(d=decimal.Decimal("-1.2500000000"))]

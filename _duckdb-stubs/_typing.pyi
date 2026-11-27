@@ -102,6 +102,7 @@ Builtins: TypeAlias = Literal[
     "date",
     "double",
     "float",
+    "geography",
     "geometry",
     "hugeint",
     "integer",

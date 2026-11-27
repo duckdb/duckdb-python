@@ -179,8 +179,8 @@ SHAPES = [
             "(((n = 1) AND (x = 2)) OR ((n = 3) AND (x = 4)))",
             '((("n" = 1) AND ("x" = 2)) OR (("n" = 3) AND ("x" = 4)))',
         ),
-        ("((n = 1) OR (n = 3))", '(("n" = 1) OR ("n" = 3))'),
         ("((x = 2) OR (x = 4))", '(("x" = 2) OR ("x" = 4))'),
+        ("((n = 1) OR (n = 3))", '(("n" = 1) OR ("n" = 3))'),
         id="and-inside-or-with-derived-predicates",
     ),
     # a predicate naming one column twice
@@ -234,11 +234,12 @@ REFUSALS = [
     p("s ILIKE 'ab%'", ("(s ~~* 'ab%')", REFUSED), id="ilike"),
     p("s NOT LIKE 'a%'", ("(NOT prefix(s, 'a'))", REFUSED), id="not-like"),
     # casts around the column, and functions
-    p("n > 3.5", ("(CAST(n AS DECIMAL(11,1)) > 3.5)", REFUSED), id="cast-to-decimal"),
+    # The engine drops the cast of a range comparison with a more precise constant.
+    p("n > 3.5", ("(n >= 4)", '("n" >= 4)'), id="cast-to-decimal"),
     p("ti > 300", ("(CAST(ti AS INTEGER) > 300)", REFUSED), id="cast-to-a-wider-integer"),
     p("ti = 300", ("constant_or_null(false, ti)", REFUSED), id="out-of-range-equality-folded"),
     p("n::VARCHAR = '05'", ("constant_or_null(false, n)", REFUSED), id="text-cast-equality-no-integer-matches-folded"),
-    p("dec > 1.505", ("(CAST(dec AS DECIMAL(11,3)) > 1.505)", REFUSED), id="cast-to-a-wider-decimal"),
+    p("dec > 1.505", ("(dec >= 1.51)", "(\"dec\" >= CAST('1.51' AS DECIMAL(10, 2)))"), id="cast-to-a-wider-decimal"),
     p("dec = 1.505", ("constant_or_null(false, dec)", REFUSED), id="decimal-equality-no-value-matches-folded"),
     p(
         "tms > TIMESTAMP '2024-05-06'",

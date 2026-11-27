@@ -714,7 +714,7 @@ struct PythonValueConversion {
 		switch (object_type) {
 		case PythonObjectType::Decimal: {
 			PyDecimal decimal(ele);
-			return decimal.ToDuckValue();
+			return decimal.ToDuckValue(context);
 		}
 		case PythonObjectType::Uuid: {
 			auto string_val = nb::cast<string>(nb::str(ele));

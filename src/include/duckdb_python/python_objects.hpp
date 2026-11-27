@@ -84,12 +84,12 @@ public:
 	int64_t exponent_value;
 
 public:
-	bool TryGetType(LogicalType &type);
-	Value ToDuckValue();
+	//! The exact DECIMAL of the value, or BinderException when it is wider than the session's max_decimal_width
+	bool TryGetType(LogicalType &type, optional_ptr<ClientContext> context);
+	Value ToDuckValue(optional_ptr<ClientContext> context);
 
 private:
 	void SetExponent(nb::handle &exponent);
-	nb::handle &obj;
 };
 
 struct PyTimeDelta {

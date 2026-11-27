@@ -469,9 +469,9 @@ unique_ptr<NodeStatistics> PythonArrowScanCardinality(ClientContext &context, co
 
 //! Offers each predicate the walker can carry exactly to the source; one it accepts leaves the plan, which is why only
 //! a True answer accepts. The optimizer may call this more than once, each time with the predicates still in the plan.
-void PythonArrowScanPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+void PythonArrowScanPushdown(ClientContext &context, LogicalGet &get, optional_ptr<const FunctionData>,
                              vector<unique_ptr<Expression>> &filters) {
-	auto &bind_data = bind_data_p->Cast<PythonArrowScanBindData>();
+	auto &bind_data = get.bind_data.write().Cast<PythonArrowScanBindData>();
 	if (filters.empty()) {
 		return;
 	}

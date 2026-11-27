@@ -519,6 +519,9 @@ PUSHED = [
     "CAST(ts AS DATE) = DATE '2021-01-01'",
     # The engine drops a cast that is invertible for equality, so these reach the source as comparisons on the column.
     "n IN (1, 3.5)",
+    # The engine drops the cast in a range comparison with a more precise constant: these reach it as n >= 2 and n >= 4.
+    "n > 1.5",
+    "n > 3.5",
     "n::VARCHAR = '5'",
     "n::VARCHAR <> '5'",
     "n::VARCHAR IN ('5', '8')",
@@ -535,8 +538,6 @@ PUSHED = [
 ]
 
 KEPT = [
-    "n > 1.5",
-    "n > 3.5",
     "lower(s) = '4'",
     "s = n",
     "n IN (1, NULL)",
@@ -791,7 +792,8 @@ class TestLazyFramePushdownShapes:
         for where, pushed in (
             ("money > 1.5", True),
             ("money = -1.51", True),
-            ("money > 1.499", False),
+            # The engine rounds the constant of a range comparison to the column's scale: money >= 1.50.
+            ("money > 1.499", True),
         ):
             expected = rows(con, f"SELECT money FROM now WHERE {where}")
             assert rows(con, f"SELECT money FROM late WHERE {where}") == expected, where

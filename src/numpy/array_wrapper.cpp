@@ -1,6 +1,8 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/function/cast/wide_decimal_cast.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
@@ -548,6 +550,31 @@ static bool ConvertDecimalInternal(NumpyAppendData &append_data, double division
 	}
 }
 
+//! A DECIMAL wider than 38 digits becomes a double by the engine's own cast, which rounds once and raises for a value
+//! beyond the range of a double
+static bool ConvertWideDecimal(NumpyAppendData &append_data, uint32_t width, uint32_t scale) {
+	auto &idata = append_data.idata;
+	auto src_ptr = UnifiedVectorFormat::GetData<string_t>(idata);
+	auto out_ptr = reinterpret_cast<double *>(append_data.target_data);
+	// The cast's formatting buffers are kept across the vector instead of built for every value.
+	WideDecimalCastState state(nullptr);
+	CastParameters parameters(nullptr, false, nullptr, &state);
+	bool requires_mask = false;
+	for (idx_t i = 0; i < append_data.count; i++) {
+		idx_t src_idx = idata.sel->get_index(i + append_data.source_offset);
+		idx_t offset = append_data.target_offset + i;
+		if (!idata.validity.RowIsValid(src_idx)) {
+			out_ptr[offset] = 0;
+			requires_mask = true;
+			append_data.target_mask[offset] = true;
+			continue;
+		}
+		TryCastFromDecimal::Operation(bignum_t(src_ptr[src_idx]), out_ptr[offset], parameters, width, scale);
+		append_data.target_mask[offset] = false;
+	}
+	return requires_mask;
+}
+
 static bool ConvertDecimal(NumpyAppendData &append_data) {
 	auto &decimal_type = append_data.input.GetType();
 	auto dec_scale = DecimalType::GetScale(decimal_type);
@@ -561,6 +588,8 @@ static bool ConvertDecimal(NumpyAppendData &append_data) {
 		return ConvertDecimalInternal<int64_t>(append_data, division);
 	case PhysicalType::INT128:
 		return ConvertDecimalInternal<hugeint_t>(append_data, division);
+	case PhysicalType::VARCHAR:
+		return ConvertWideDecimal(append_data, DecimalType::GetWidth(decimal_type), dec_scale);
 	default:
 		throw NotImplementedException("Unimplemented internal type for DECIMAL");
 	}
@@ -689,6 +718,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t source_size
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::GEOMETRY:
+	case LogicalTypeId::GEOGRAPHY:
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(append_data);
 		break;
 	case LogicalTypeId::BIT:

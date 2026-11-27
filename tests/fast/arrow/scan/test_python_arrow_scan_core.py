@@ -236,7 +236,7 @@ EXPECTED = {
     "decimal32": ("DECIMAL(5,2)", PARQUET),
     "decimal64": ("DECIMAL(12,2)", PARQUET),
     "decimal128": ("DECIMAL(38,2)", PARQUET),
-    "decimal256": (None, (duckdb.NotImplementedException, "Unsupported Internal Arrow Type for Decimal d:20,2,256")),
+    "decimal256": ("DECIMAL(20,2)", PARQUET),
     "string": ("VARCHAR", PARQUET),
     "large_string": ("VARCHAR", PARQUET),
     "string_view": ("VARCHAR", PARQUET),
